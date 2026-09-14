@@ -69,7 +69,8 @@ On the always-on machine (Python 3.10+):
 git clone https://github.com/carnold713/caseta-hack && cd caseta-hack/agent
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-python pair.py 192.168.1.50        # your bridge's IP; press the button on the back when asked
+python find_bridge.py              # prints the bridge's IP
+python pair.py <ip>                # press the button on the back of the bridge when asked
 cp .env.example .env               # fill in BRIDGE_HOST, HUB_URL, AGENT_TOKEN
 set -a; . ./.env; set +a; python agent.py
 ```
