@@ -5,7 +5,7 @@ VIEWS.scenes = {
   top() { return `<h1>Scenes</h1><button class="iconbtn" data-act="scene-new" title="New scene">${ICON('plus')}</button>`; },
   body() {
     const mine = presets(); const theirs = lutronScenes();
-    if (!mine.length && !theirs.length) return `<button class="block blush" data-act="scene-new" style="margin-top:8px"><div class="grow"><div class="t">Set the lights the way you like them, then save that look</div><div class="d">A remote button can run it later.</div></div><span class="go">${ICON('plus', 'sm')}</span></button>`;
+    if (!mine.length && !theirs.length) return `<button class="infoblock blush" data-act="scene-new" style="margin-top:8px"><div class="grow"><div class="t">Set the lights the way you like them, then save that look</div><div class="d">A remote button can run it later.</div></div><span class="go">${ICON('plus', 'sm')}</span></button>`;
     let h = '';
     const row = (t, name, sub, extra) => `<div class="item"><button class="ic" data-act="run-scene" data-t="${t}" title="Run">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(name)}</div><div class="d">${esc(sub)}</div></div><button class="iconbtn plain ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="fav" data-t="${t}">${ICON('star', 'sm')}</button>${extra || ''}</div>`;
     if (mine.length) h += `<div class="h2">Your scenes</div><div class="card pad0 list">${mine.map(p => row('p:' + p.id, p.name, `${Object.keys(p.levels).length} lights${p.fade ? ` · fades over ${fmtDur(p.fade)}` : ''}`, `<button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}">${ICON('edit', 'sm')}</button>`)).join('')}</div>`;
@@ -41,7 +41,7 @@ function openSceneEditor(id, fresh = false) {
   }).join('');
   const body = `<label class="field"><span>Name</span><input class="input" id="scene-name" value="${esc(p.name)}" ${fresh ? 'autofocus' : ''} style="height:56px;font-weight:700;font-size:16px"></label>
     <label class="field"><span>Change gradually over</span><select class="input" id="scene-fade">${[['', 'Default'], [0, 'Instantly'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [30, '30 seconds'], [300, '5 minutes'], [900, '15 minutes'], [1800, '30 minutes']].map(([v, l]) => `<option value="${v}" ${String(p.fade == null ? '' : p.fade) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-    <div class="row wrap"><button class="btn" data-act="scene-capture">${ICON('copy', 'sm')} Use the lights as they are now</button><button class="btn" data-act="run-scene" data-t="p:${p.id}">${ICON('play', 'sm')} Try it</button></div>
+    <div class="btnpair"><button class="btn" data-act="scene-capture">${ICON('copy', 'sm')} Use the lights as they are</button><button class="btn" data-act="run-scene" data-t="p:${p.id}">${ICON('play', 'sm')} Try it</button></div>
     ${rows}<div class="spacer"></div><button class="btn danger block" data-act="scene-delete" data-id="${p.id}">Delete this scene</button>
     <div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`;
   sheet.open(fresh ? 'What should your lights do?' : 'Edit scene', body, { question: true, sub: 'Turn lights on, off or set them to a level.' });

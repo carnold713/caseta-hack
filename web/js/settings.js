@@ -12,7 +12,7 @@ VIEWS.settings = {
     <div class="h2">Home connection</div>
     ${S.agent.online ? `<div class="card"><div class="row"><div class="ic black lg">${ICON('link')}</div><div class="grow"><div class="t">Connected to your home</div><div class="muted small">${plural(nd, 'light')} · ${plural(np, 'remote')}${(info.bridge || {}).host ? ` · bridge at ${esc(info.bridge.host)}` : ''}</div></div></div>
       <div class="row" style="margin-top:12px"><button class="btn sm" data-act="refresh">${ICON('refresh', 'sm')} Look for new lights</button></div><p class="faint small" style="margin:8px 0 0">Added or renamed something in the Lutron app? Look again to pick it up.</p></div>`
-    : `<div class="block lemon" style="align-items:flex-start"><div class="grow"><div class="t">${everConnected ? 'Not connected right now' : 'Not connected yet'}</div><div class="d">${everConnected ? `Last seen with ${plural(nd, 'light')} and ${plural(np, 'remote')}.` : 'Follow the steps below.'}</div>${everConnected ? `<div class="d" style="margin-top:8px">Is the computer running the connector on and awake?<br>Is it on the same Wi-Fi as your Lutron bridge?<br>Is the internet working there?</div><div class="d" style="margin-top:8px">Your remotes keep working from their last saved settings while disconnected.</div>` : ''}</div></div>`}
+    : `<div class="infoblock lemon" style="align-items:flex-start"><div class="grow"><div class="t">${everConnected ? 'Not connected right now' : 'Not connected yet'}</div><div class="d">${everConnected ? `Last seen with ${plural(nd, 'light')} and ${plural(np, 'remote')}.` : 'Follow the steps below.'}</div>${everConnected ? `<div class="d" style="margin-top:8px">Is the computer running the connector on and awake?<br>Is it on the same Wi-Fi as your Lutron bridge?<br>Is the internet working there?</div><div class="d" style="margin-top:8px">Your remotes keep working from their last saved settings while disconnected.</div>` : ''}</div></div>`}
     ${setupSteps(everConnected)}
     <div class="h2">Night-time</div>
     <div class="card">
@@ -30,7 +30,7 @@ VIEWS.settings = {
         <div style="font-weight:600;margin-bottom:4px">Timing</div>
         <label class="field"><span>How fast is a double press? <span id="dv" class="faint">${s.double_ms} ms</span></span><input class="slider" type="range" min="200" max="800" step="10" value="${s.double_ms}" style="--p:${(s.double_ms - 200) / 6}%" data-setting="double_ms"><div class="row tiny faint" style="justify-content:space-between"><span>Quick</span><span>Relaxed</span></div></label>
         <label class="field"><span>How long is a hold? <span id="hv" class="faint">${s.hold_ms} ms</span></span><input class="slider" type="range" min="300" max="1500" step="10" value="${s.hold_ms}" style="--p:${(s.hold_ms - 300) / 12}%" data-setting="hold_ms"><div class="row tiny faint" style="justify-content:space-between"><span>Short</span><span>Long</span></div></label>
-        <div class="block steel" style="min-height:0;margin-top:8px" id="tester">Press a button on any remote to test the timing.</div>
+        <div class="infoblock steel" style="min-height:0;margin-top:8px" id="tester">Press a button on any remote to test the timing.</div>
         <label class="field"><span>Default brightness for "on" (%)</span><input class="input" type="number" min="1" max="100" value="${s.group_on_level}" data-setting="group_on_level"></label>
       </div>
       <div class="card" style="margin-top:10px">

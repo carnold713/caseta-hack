@@ -146,6 +146,19 @@ function targetOptions(opts = {}) {
 
 // Room colours (docs/design-spec.md): flat fills, a soft variant, black text on all. Keys stored per room in settings.room_colors.
 const ROOM_PALETTE = { mustard: { bg: '#E3A82B', soft: '#F7E6BE', ink: '#111111' }, steel: { bg: '#5C8CA8', soft: '#D3E1EA', ink: '#111111' }, sky: { bg: '#8FBDD6', soft: '#DCEBF3', ink: '#111111' }, meadow: { bg: '#4B9B5E', soft: '#C9E3CF', ink: '#111111' }, lemon: { bg: '#FFD400', soft: '#FFF2A8', ink: '#111111' }, blush: { bg: '#F2B8BC', soft: '#FADFE1', ink: '#111111' }, clay: { bg: '#C99B6C', soft: '#EAD8C3', ink: '#111111' }, sand: { bg: '#D9CDB5', soft: '#EFE9DD', ink: '#111111' } };
+// A recognisable icon per room, by name. Falls back to the house.
+function roomIcon(name) {
+  const n = (name || '').toLowerCase();
+  if (/bed|nursery|guest/.test(n)) return 'bed';
+  if (/kitchen|dining|pantry|breakfast/.test(n)) return 'kitchen';
+  if (/living|family|den|lounge|great|media|tv/.test(n)) return 'sofa';
+  if (/outside|outdoor|patio|garden|porch|deck|yard|exterior|pool/.test(n)) return 'tree';
+  if (/bath|powder|shower|laundry|utility/.test(n)) return 'bath';
+  if (/office|study|desk|library|work/.test(n)) return 'desk';
+  if (/hall|entry|foyer|closet|mud|stairs|landing/.test(n)) return 'hanger';
+  if (/garage|shop|basement|workshop/.test(n)) return 'car';
+  return 'house';
+}
 function roomColor(areaId) {
   const keys = Object.keys(ROOM_PALETTE);
   const chosen = (S.config && S.config.settings.room_colors || {})[areaId || 'none'];
@@ -164,7 +177,7 @@ const LAYOUTS = {
 };
 const modelName = d => MODEL_NAMES[d.type] || 'Remote';
 const buttonLabel = (pid, n) => { const d = dev(pid); const l = d && LAYOUTS[d.type]; return (l && l[n]) || `Button ${n + 1}`; };
-const buttonTitle = (pid, n) => { const l = buttonLabel(pid, n); return /^\d$/.test(l) ? `button ${l}` : `${l.toLowerCase()} button`; };
+const buttonTitle = (pid, n) => { const l = buttonLabel(pid, n); return /^\d$/.test(l) ? `button ${l}` : `${l} button`; };
 
 // ---------- bindings ----------
 const bindings = () => (S.config && S.config.bindings) || [];
@@ -201,7 +214,7 @@ function describe(actions) {
       default: return a.type;
     }
   });
-  return cap(parts.join(', then '));
+  return cap(parts.filter((x, i) => i === 0 || x !== parts[i - 1]).join(', then '));
 }
 function fmtDur(s) { return s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`; }
 function fanName(s) { return { Off: 'off', Low: 'low', Medium: 'medium', MediumHigh: 'medium-high', High: 'high' }[s] || s; }

@@ -10,12 +10,11 @@ VIEWS.home = {
     const hasDevices = controllable().length > 0;
     if (!hasDevices && !S.agent.online) return setupEmpty();
     let h = `<p class="statusline" id="statusline">${statusLine()}</p>`;
-    if (!S.agent.online) h += `<button class="block lemon" data-act="nav" data-view="settings" style="margin-bottom:16px"><div class="grow"><div class="t">Not connected to your home</div><div class="d">Showing the last known state. Your remotes keep working from their saved settings.</div></div><span class="go">${ICON('chev', 'sm')}</span></button>`;
+    if (!S.agent.online) h += `<button class="infoblock lemon" data-act="nav" data-view="settings" style="margin-bottom:16px"><div class="grow"><div class="t">Not connected to your home</div><div class="d">Showing the last known state. Your remotes keep working from their saved settings.</div></div><span class="go">${ICON('chev', 'sm')}</span></button>`;
     const sc = [...presets().map(p => ({ id: 'p:' + p.id, name: p.name, sub: `${Object.keys(p.levels).length} lights` })), ...lutronScenes().map(s => ({ id: 's:' + s.scene_id, name: s.name, sub: 'From the Lutron app' }))];
-    h += `<div class="tiles"><button class="tile new" data-act="scene-new"><div class="ic white">${ICON('plus', 'sm')}</div><div class="n">New scene</div></button>${sc.map(s => `<button class="tile" data-act="run-scene" data-t="${s.id}"><div class="ic">${ICON('scene', 'sm')}</div><div><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></button>`).join('')}</div>`;
     const favs = S.config.favorites.filter(targetExists).filter(t => !/^[ps]:/.test(t));
-    if (favs.length) h += `<div class="tiles" style="margin-top:8px">${favs.map(favTile).join('')}</div>`;
-    h += `<div class="spacer"></div><button class="alloff" data-act="alloff">${ICON('power', 'sm')}<span>All off</span><div class="hold"></div></button><p class="faint small" style="margin:6px 0 0;text-align:center">Hold to also close shades and stop fans</p>`;
+    h += `<div class="tiles"><button class="tile new" data-act="scene-new"><div class="ic white">${ICON('plus', 'sm')}</div><div class="n">New scene</div></button>${sc.map(s => `<button class="tile" data-act="run-scene" data-t="${s.id}"><div class="ic">${ICON('scene', 'sm')}</div><div><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></button>`).join('')}${favs.map(favTile).join('')}</div>`;
+    h += `<div class="spacer"></div><button class="alloff" data-act="alloff">${ICON('power', 'sm')}<span>All off</span><span class="d">Hold for shades and fans</span><div class="hold"></div></button>`;
     const timers = Object.entries(S.timers || {});
     if (timers.length) h += '<div class="spacer"></div>' + timers.map(([t, v]) => `<div class="timerbar">${ICON('clock')}<div class="grow"><div class="t">${esc(cap(targetName(t.includes('|') ? t.split('|') : t)))} ${v.level ? 'to ' + v.level + '%' : 'off'} <span data-countdown="${v.ends_at}"></span></div><div class="d">Sleep timer</div></div><button class="btn sm" data-act="cancel-timer" data-t="${esc(t)}">Cancel</button></div>`).join('');
     h += '<div class="h2">Rooms</div>';
@@ -26,7 +25,7 @@ VIEWS.home = {
 };
 
 function setupEmpty() {
-  return `<button class="block blush" data-act="nav" data-view="settings" style="margin-top:8px"><div class="grow"><div class="t">Let's connect your home</div><div class="d">A small helper program on a computer in your house links this app to your Lutron bridge. About ten minutes, once.</div></div><span class="go">${ICON('chev', 'sm')}</span></button>`;
+  return `<button class="infoblock blush" data-act="nav" data-view="settings" style="margin-top:8px"><div class="grow"><div class="t">Let's connect your home</div><div class="d">A small helper program on a computer in your house links this app to your Lutron bridge. About ten minutes, once.</div></div><span class="go">${ICON('chev', 'sm')}</span></button>`;
 }
 function favTile(t) {
   const d = t.startsWith('d:') ? dev(t.slice(2)) : null;
@@ -41,7 +40,7 @@ function roomCard(a) {
   const c = roomColor(a.id);
   const hasToggle = ds.some(d => d.domain !== 'cover');
   return `<div class="room ${open ? 'open' : ''}" data-tgt="${t}" data-room="${a.id}" style="--room:${c.bg};--room-soft:${c.soft}">
-    <div class="head"><button class="info" data-act="room-open" data-id="${a.id}">${ICON('house')}<div class="n">${esc(a.name)}</div><div class="s">${esc(roomSummary(a.id))}</div><div class="onchip ${targetOn(t) ? '' : 'hidden'}" data-onchip="${t}">${ICON('bulb', 'sm')}</div></button>
+    <div class="head"><button class="info" data-act="room-open" data-id="${a.id}">${ICON(roomIcon(a.name))}<div class="n">${esc(a.name)}</div><div class="s">${esc(roomSummary(a.id))}</div><div class="onchip ${targetOn(t) ? '' : 'hidden'}" data-onchip="${t}">${ICON('bulb', 'sm')}</div></button>
       <div class="side"><button class="chev" data-act="room-open" data-id="${a.id}">${ICON('chev', 'sm')}</button>${hasToggle ? `<button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}"></button>` : ''}</div></div>
     <div class="body"><div><div class="lights">${ds.map(lightRow).join('')}</div></div></div></div>`;
 }

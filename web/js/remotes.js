@@ -22,7 +22,7 @@ function remoteCard(d) {
   const n = new Set(bs.map(b => b.button_number)).size;
   const broken = bs.some(b => bindingBroken(b));
   const sub = n ? `${n} ${n === 1 ? 'button' : 'buttons'} set up` : 'Not set up yet';
-  return `<button class="remote-card" data-act="remote-open" data-id="${d.device_id}"><div class="remote-thumb">${picoArt(d, { width: 36 })}</div><div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(areaName(d.area))} · ${esc(sub)}</div>${broken ? `<div class="badge">Needs attention</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+  return `<button class="remote-card" data-act="remote-open" data-id="${d.device_id}"><div class="remote-thumb">${picoArt(d, { width: 44 })}</div><div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(areaName(d.area))} · ${esc(sub)}</div>${broken ? `<div class="badge">Needs attention</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
 }
 function bindingBroken(b) {
   const acts = [...(b.actions || []), ...((b.night && b.night.actions) || [])];
@@ -32,7 +32,9 @@ function remoteDetail(d) {
   const rows = picoSlots(d).filter(s => s.real).map(s => {
     const n = s.n;
     const lines = ['single', 'double', 'hold'].map(g => { const acts = gestureActions(d.device_id, n, g); return acts.length ? `<span class="faint">${GESTURE_LABEL[g]}:</span> ${esc(describe(acts))}` : null; }).filter(Boolean);
-    return `<button class="item" data-act="button-open" data-n="${n}"><div class="ic" style="font-weight:700;font-size:13px">${esc(buttonLabel(d.device_id, n) === 'Round' ? '●' : buttonLabel(d.device_id, n))}</div><div class="grow"><div class="t">${esc(buttonTitleCap(d.device_id, n))}</div><div class="d ${lines.length ? '' : 'none'}">${lines.length ? lines.join('<br>') : 'Nothing yet'}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+    const lbl = buttonLabel(d.device_id, n);
+    const glyph = lbl === 'On' ? ICON('sun', 'sm') : lbl === 'Off' ? ICON('circle', 'sm') : lbl === 'Raise' ? '▲' : lbl === 'Lower' ? '▼' : lbl === 'Round' ? '●' : esc(lbl);
+    return `<button class="item" data-act="button-open" data-n="${n}"><div class="ic">${glyph}</div><div class="grow"><div class="t">${esc(buttonTitleCap(d.device_id, n))}</div><div class="d ${lines.length ? '' : 'none'}">${lines.length ? lines.join('<br>') : 'Nothing yet'}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
   return `<div class="remote-hero"><div class="hero-disc" style="--room:${roomColor(d.area).bg}">${picoArt(d, { width: 100, interactive: true })}</div><p class="hint">Tap a button on the picture, or press it on the real remote.</p><button class="btn ghost" data-act="remote-look">${ICON('edit', 'sm')} Not your remote? Change the picture</button></div>
     <div class="card pad0 list">${rows}</div>
@@ -41,7 +43,7 @@ function remoteDetail(d) {
 function openLookSheet() {
   const d = dev(S.remote); if (!d) return;
   const cur = picoModelFor(d), fin = picoFinishFor(d);
-  const models = Object.entries(PICO_MODELS).map(([k, m]) => `<button class="item" data-act="look-model" data-m="${k}"><div class="look-thumb">${picoSVG(d, { width: 26, model: k, finish: fin })}</div><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${k}${m.types.includes(d.type) ? ' · what the bridge reports' : ''}</div></div>${cur === k ? ICON('check', 'sm') : ''}</button>`).join('');
+  const models = Object.entries(PICO_MODELS).map(([k, m]) => `<button class="item" data-act="look-model" data-m="${k}"><div class="look-thumb">${picoSVG(d, { width: 40, model: k, finish: fin })}</div><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${k}${m.types.includes(d.type) ? ' · what the bridge reports' : ''}</div></div>${cur === k ? ICON('check', 'sm') : ''}</button>`).join('');
   const fins = Object.keys(PICO_FINISHES).map(f => `<button class="chip ${fin === f ? 'sel' : ''}" data-act="look-finish" data-f="${f}">${cap(f)}</button>`).join('');
   sheet.open('Which remote is this?', `<div class="h2">Layout</div><div class="list">${models}</div><div class="h2">Colour</div><div class="chips">${fins}</div><p class="faint small" style="margin-top:16px">The bridge already knows the layout. Change it only if the picture does not match what is on your wall.</p>`, { question: true, sub: 'So the picture matches what is on your wall.' });
 }
@@ -131,11 +133,11 @@ function renderRecipeSheet() {
   const nightNote = night ? `<div class="nightpanel"><p style="margin:0">Between ${fmtTime(S.config.settings.night_start)} and ${fmtTime(S.config.settings.night_end)} this button does this instead. <a data-act="nav" data-view="settings" href="#settings">Change the hours</a></p></div>` : '';
   const sel = S.pickTargets;
   const chipsT = [defaultTarget(pid), ...sel, 'h:all', ...areas().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
-  const which = `<div class="h2" style="margin-top:0">Which lights? <span class="link faint" style="font-weight:500;color:var(--text-3)">tap to add or remove</span></div><div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="pick-target" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(cap(targetName(t)))}</button>`).join('')}<button class="chip outline" data-act="pick-target-more">${ICON('dots', 'sm')}Specific lights…</button></div><div class="small muted" style="margin:6px 2px 0">${esc(cap(targetName(T)))}${sel.length > 1 ? ` · ${targetDevices(T).length} lights` : ''}</div>`;
+  const which = `<div class="h2">Which lights? <span class="faint">tap to add or remove</span></div><div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="pick-target" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(cap(targetName(t)))}</button>`).join('')}<button class="chip outline" data-act="pick-target-more">${ICON('dots', 'sm')}Specific lights…</button></div>${sel.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Controls ${esc(targetName(T))} · ${plural(targetDevices(T).length, 'light')}</p>` : ''}`;
   const chk = `<span class="chk">${ICON('check', 'sm')}</span>`;
   const list = RECIPES.filter(r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any)).map(r => `<button class="recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${r.d ? `<div class="d">${r.d}</div>` : ''}</div>${selected === r.id ? chk : ''}</button>`).join('');
   const nothing = `<button class="recipe ${selected === 'nothing' ? 'sel' : ''}" data-act="recipe" data-r="nothing"><div class="grow"><div class="t">Nothing</div>${night ? '<div class="d">Same as normally</div>' : ''}</div>${selected === 'nothing' ? chk : ''}</button>`;
-  const custom = selected === 'custom' ? `<div class="block sand" style="margin-top:12px"><div class="grow"><div class="t">Custom</div><div class="d">${esc(describe(acts))}</div></div></div>` : '';
+  const custom = selected === 'custom' ? `<div class="infoblock sand" style="margin-top:12px"><div class="grow"><div class="t">Custom</div><div class="d">${esc(describe(acts))}</div></div></div>` : '';
   const more = `<details class="more"><summary>More options${ICON('chev', 'sm')}</summary><div><button class="btn block" data-act="advanced">Fine-tune: fade times, several steps, timers…</button></div></details>`;
   const test = acts.length ? `<button class="btn block" data-act="try-actions" style="margin-top:12px">${ICON('play', 'sm')} Try it now</button>` : '';
   sheet.open(GESTURE_LABEL[g], `${seg}${nightNote}${which}<div class="h2">What should happen?</div>${nothing}${list}${custom}${more}${test}`, { back: true, sub: buttonTitleCap(pid, n), onBack: () => openButtonSheet(n) });
@@ -207,7 +209,7 @@ function renderTargetPicker() {
   const rooms = areas().map(a => {
     const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return '';
     const c = roomColor(a.id); const open = p.open.has(a.id);
-    return `<div class="roomrow ${open ? 'open' : ''}" style="--room:${c.bg}"><button class="chev" data-act="picker-expand" data-id="${a.id}">${ICON('chev', 'sm')}</button><label class="grow row" style="min-height:40px"><div class="grow"><div class="n">${esc(a.name)}</div><div class="s">${plural(ds.length, 'light')}, the whole room</div></div>${cb('a:' + a.id)}</label></div><div class="roomlights ${open ? 'open' : ''}" data-roomlights="${a.id}">${ds.map(lightRow).join('')}</div>`;
+    return `<div class="roomrow ${open ? 'open' : ''}" style="--room:${c.bg}">${ICON(roomIcon(a.name))}<label class="grow row" style="min-height:40px"><div class="grow"><div class="n">${esc(a.name)}</div><div class="s">${plural(ds.length, 'light')}, the whole room</div></div></label><button class="chev" data-act="picker-expand" data-id="${a.id}">${ICON('chev', 'sm')}</button><label style="display:flex">${cb('a:' + a.id)}</label></div><div class="roomlights ${open ? 'open' : ''}" data-roomlights="${a.id}">${ds.map(lightRow).join('')}</div>`;
   }).join('');
   const all = `<label class="roomrow" style="--room:#F5F5F5;margin-bottom:8px"><div class="grow"><div class="n">Everything</div><div class="s">Every light in the house</div></div>${cb('h:all')}</label>`;
   const sets = groups().length ? `<div class="h2">Your sets</div>${groups().map(g => `<label class="roomrow" style="--room:#F5F5F5;margin-bottom:8px"><div class="grow"><div class="n">${esc(g.name)}</div><div class="s">${g.device_ids.length} lights</div></div>${cb('g:' + g.id)}</label>`).join('')}` : '';
@@ -234,11 +236,11 @@ function renderAdvanced() {
   const body = `${rows}<div class="row" style="margin-top:12px"><button class="btn" data-act="adv-add">${ICON('plus', 'sm')} Add a step</button><button class="btn" data-act="try-actions">${ICON('play', 'sm')} Try it</button></div>
   ${b.gesture === 'hold_start' ? `<p class="faint small" style="margin-top:14px">This runs when the hold begins; "Stop" is sent automatically when you let go.</p>` : ''}
   <div class="sfoot"><button class="btn primary lg block" data-act="adv-done">Done</button></div>`;
-  sheet.open(`Fine-tune: ${GESTURE_LABEL[S.gesture].toLowerCase()}${S.night ? ' at night' : ''}`, body, { back: true, onBack: renderRecipeSheet });
+  sheet.open(`Fine-tune ${GESTURE_LABEL[S.gesture].toLowerCase()}${S.night ? ' at night' : ''}`, body, { back: true, sub: buttonTitle(S.remote, S.button), onBack: renderRecipeSheet });
 }
 function actionEditor(a, i) {
   const sel = (k, opts) => `<select class="input" data-adv="${i}" data-k="${k}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(a[k]) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  const tgt = () => `<button class="btn block" style="justify-content:space-between" data-act="adv-target" data-i="${i}"><span class="ellip">${esc(cap(targetName(a.target)))}</span>${ICON('chev', 'sm')}</button>`;
+  const tgt = () => `<button class="btn block field-btn" data-act="adv-target" data-i="${i}"><span class="ellip">${esc(cap(targetName(a.target)))}</span>${ICON('chev', 'sm')}</button>`;
   const fade = () => `<label class="field"><span>Change gradually over</span>${sel('fade', [['', 'Default'], [0, 'Instantly'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [30, '30 seconds'], [120, '2 minutes'], [600, '10 minutes'], [1200, '20 minutes'], [1800, '30 minutes']])}</label>`;
   let body = `<label class="field"><span>Step ${i + 1}</span>${sel('type', Object.entries(ACTION_LABELS).filter(([k]) => k !== 'preset'))}</label>`;
   switch (a.type) {
