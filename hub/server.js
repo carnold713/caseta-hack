@@ -313,3 +313,13 @@ setInterval(() => {
 }, 25000).unref();
 
 server.listen(PORT, () => console.log(`[hub] listening on ${PORT}, data in ${store.DATA_DIR}`));
+
+// Railway swaps containers with SIGTERM; exit cleanly so the old deploy is not labelled crashed.
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    console.log(`[hub] ${sig}, shutting down`);
+    if (activityDirty) { try { store.write('activity', activity); } catch (_) { /* ignore */ } }
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 3000).unref();
+  });
+}
