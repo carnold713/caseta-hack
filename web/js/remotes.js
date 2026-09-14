@@ -142,10 +142,33 @@ function renderRecipeSheet() {
   const test = acts.length ? `<button class="btn block" data-act="try-actions" style="margin-top:12px">${ICON('play', 'sm')} Try it now</button>` : '';
   sheet.open(GESTURE_LABEL[g], `${seg}${nightNote}${which}<div class="h2">What should happen?</div>${nothing}${list}${custom}${more}${test}`, { back: true, sub: buttonTitleCap(pid, n), onBack: () => openButtonSheet(n) });
 }
+// Keep the picked list sensible: a room replaces its own lights, a light replaces its room, "everything" stands alone.
+function normalizeTargets(list, added) {
+  let out = [...new Set(list)];
+  if (!added) return out;
+  if (added === 'h:all') return ['h:all'];
+  out = out.filter(t => t !== 'h:all');
+  if (added.startsWith('a:')) out = out.filter(t => !(t.startsWith('d:') && (dev(t.slice(2)) || {}).area === added.slice(2) && t !== added));
+  if (added.startsWith('d:')) { const area = (dev(added.slice(2)) || {}).area; out = out.filter(t => t !== `a:${area || 'none'}`); }
+  return out;
+}
 function toggleTargetChip(t) {
   const i = S.pickTargets.indexOf(t);
-  if (i >= 0) { if (S.pickTargets.length > 1) S.pickTargets.splice(i, 1); } else S.pickTargets.push(t);
+  if (i >= 0) { if (S.pickTargets.length > 1) S.pickTargets.splice(i, 1); } else S.pickTargets = normalizeTargets([...S.pickTargets, t], t);
+  retargetCurrent();
   renderRecipeSheet();
+}
+// When the lights change after a recipe is already chosen, move the saved actions to the new lights.
+function retargetCurrent() {
+  const pid = S.remote, n = S.button, g = S.gesture, night = S.night;
+  const T = packTarget(S.pickTargets);
+  const bs = g === 'hold' ? [binding(pid, n, 'hold_start'), binding(pid, n, 'hold_end'), binding(pid, n, 'hold')].filter(Boolean) : [binding(pid, n, g)].filter(Boolean);
+  let changed = false;
+  for (const b of bs) {
+    const list = night ? ((b.night && b.night.actions) || []) : b.actions;
+    for (const a of list) { if (a.target && a.target !== 'h:all' && JSON.stringify(a.target) !== JSON.stringify(T)) { a.target = Array.isArray(T) ? [...T] : T; changed = true; } }
+  }
+  if (changed) { const acts = gestureActions(pid, n, g, night); save({ msg: describe(acts), render: true }); }
 }
 function applyRecipe(rid) {
   const pid = S.remote, n = S.button, g = S.gesture, night = S.night, T = packTarget(S.pickTargets);

@@ -26,7 +26,7 @@ document.addEventListener('click', async e => {
     case 'gesture-open': S.pickTargets = null; openRecipeSheet(d.g, false); break;
     case 'recipe-mode': S.night = d.night === '1'; renderRecipeSheet(); break;
     case 'pick-target': toggleTargetChip(d.t); break;
-    case 'pick-target-more': openTargetPicker(S.pickTargets, list => { S.pickTargets = list; renderRecipeSheet(); }, renderRecipeSheet); break;
+    case 'pick-target-more': openTargetPicker(S.pickTargets, list => { S.pickTargets = list; retargetCurrent(); renderRecipeSheet(); }, renderRecipeSheet); break;
     case 'picker-done': { const p = S.targetPick; if (p.selected.length) p.onDone(p.selected); break; }
     case 'picker-expand': { const p = S.targetPick; if (p.open.has(d.id)) p.open.delete(d.id); else p.open.add(d.id); el.closest('.roomrow').classList.toggle('open'); const rl = document.querySelector(`[data-roomlights="${d.id}"]`); if (rl) rl.classList.toggle('open'); break; }
     case 'adv-target': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; const i = Number(d.i); openTargetPicker(tlist(list[i].target), sel => { list[i].target = packTarget(sel); saveSoon(); renderAdvanced(); }, renderAdvanced); break; }
@@ -62,7 +62,15 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', e => {
   const el = e.target; const d = el.dataset;
   if (d.act === 'scene-inc') sceneInclude(d.id, el.checked);
-  else if (d.act === 'picker-toggle') { const p = S.targetPick; const i = p.selected.indexOf(d.t); if (el.checked && i < 0) p.selected.push(d.t); if (!el.checked && i >= 0) p.selected.splice(i, 1); const btn = document.querySelector('[data-act="picker-done"]'); if (btn) btn.disabled = !p.selected.length; const sum = document.querySelector('#picker-summary'); if (sum) sum.textContent = p.selected.length ? `${cap(targetName(packTarget(p.selected)))} · ${targetDevices(p.selected).length} lights` : 'Nothing picked yet'; }
+  else if (d.act === 'picker-toggle') {
+    const p = S.targetPick; const i = p.selected.indexOf(d.t);
+    if (el.checked && i < 0) p.selected = normalizeTargets([...p.selected, d.t], d.t);
+    if (!el.checked && i >= 0) p.selected.splice(i, 1);
+    // reflect exclusivity in the other checkboxes without rebuilding the sheet
+    document.querySelectorAll('[data-act="picker-toggle"]').forEach(c => { c.checked = p.selected.includes(c.dataset.t); });
+    const btn = document.querySelector('[data-act="picker-done"]'); if (btn) btn.disabled = !p.selected.length;
+    const sum = document.querySelector('#picker-summary'); if (sum) sum.textContent = p.selected.length ? `${cap(targetName(packTarget(p.selected)))} · ${plural(targetDevices(p.selected).length, 'light')}` : 'Nothing picked yet';
+  }
   else if (d.act === 'group-inc') { const g = groups().find(x => x.id === S.groupEdit); if (!g) return; g.device_ids = el.checked ? [...new Set([...g.device_ids, d.id])] : g.device_ids.filter(x => x !== d.id); saveSoon(); }
   else if (d.sceneLvl) sceneLevel(d.sceneLvl, el.tagName === 'SELECT' ? el.value : Number(el.value));
   else if (d.adv != null) advEdit(Number(d.adv), d.k, el.value);
