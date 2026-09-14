@@ -94,8 +94,10 @@ const groups = () => (S.config && S.config.groups) || [];
 const presets = () => (S.config && S.config.presets) || [];
 const lutronScenes = () => Object.values(S.inv.scenes || {});
 
-// Targets: d:<device> a:<area> g:<group> h:all; favorites also allow p:<preset> s:<lutron scene>
+// Targets: d:<device> a:<area> g:<group> h:all, or a list of those; favorites also allow p:<preset> s:<lutron scene>
+const tlist = t => (Array.isArray(t) ? t : t ? [t] : []);
 function targetDevices(t) {
+  if (Array.isArray(t)) return [...new Set(t.flatMap(targetDevices))];
   if (!t) return [];
   const [k, id] = [t.slice(0, 1), t.slice(2)];
   if (k === 'd') return dev(id) ? [id] : [];
@@ -105,6 +107,7 @@ function targetDevices(t) {
   return [];
 }
 function targetName(t) {
+  if (Array.isArray(t)) { const names = t.map(targetName); return names.length > 3 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more` : names.join(', '); }
   if (!t) return 'nothing';
   if (t === 'h:all') return 'everything';
   const [k, id] = [t.slice(0, 1), t.slice(2)];
@@ -117,6 +120,7 @@ function targetName(t) {
 }
 function targetOn(t) { return targetDevices(t).some(isOn); }
 function targetExists(t) {
+  if (Array.isArray(t)) return t.length > 0 && t.every(targetExists);
   if (t === 'h:all') return true;
   const [k, id] = [t.slice(0, 1), t.slice(2)];
   if (k === 'd') return !!dev(id);
@@ -140,6 +144,16 @@ function targetOptions(opts = {}) {
   return out;
 }
 
+// Room colours (docs/design-spec.md): flat fills, a soft variant, black text on all. Keys stored per room in settings.room_colors.
+const ROOM_PALETTE = { mustard: { bg: '#E3A82B', soft: '#F7E6BE', ink: '#111111' }, steel: { bg: '#5C8CA8', soft: '#D3E1EA', ink: '#111111' }, sky: { bg: '#8FBDD6', soft: '#DCEBF3', ink: '#111111' }, meadow: { bg: '#4B9B5E', soft: '#C9E3CF', ink: '#111111' }, lemon: { bg: '#FFD400', soft: '#FFF2A8', ink: '#111111' }, blush: { bg: '#F2B8BC', soft: '#FADFE1', ink: '#111111' }, clay: { bg: '#C99B6C', soft: '#EAD8C3', ink: '#111111' }, sand: { bg: '#D9CDB5', soft: '#EFE9DD', ink: '#111111' } };
+function roomColor(areaId) {
+  const keys = Object.keys(ROOM_PALETTE);
+  const chosen = (S.config && S.config.settings.room_colors || {})[areaId || 'none'];
+  if (chosen && ROOM_PALETTE[chosen]) return ROOM_PALETTE[chosen];
+  const idx = areas().findIndex(a => a.id === (areaId || 'none'));
+  return ROOM_PALETTE[keys[(idx < 0 ? 0 : idx) % keys.length]];
+}
+// Pico button labels by LEAP button number (what the bridge reports). Cosmetic only.
 const MODEL_NAMES = { Pico1Button: '1-button remote', Pico2Button: '2-button remote', Pico2ButtonRaiseLower: '2-button remote with dimming', Pico3Button: '3-button remote', Pico3ButtonRaiseLower: '3-button remote with dimming', Pico4Button: '4-button remote', Pico4ButtonScene: '4-button scene remote', Pico4ButtonZone: '4-button remote', Pico4Button2Group: '4-button remote', PaddleSwitchPico: 'Paddle remote' };
 const LAYOUTS = {
   Pico2Button: { 0: 'On', 2: 'Off' }, PaddleSwitchPico: { 0: 'On', 2: 'Off' },
@@ -232,10 +246,11 @@ function paintState() {
     const t = el.dataset.tgt; const on = targetOn(t);
     if (el.classList.contains('sw')) el.classList.toggle('on', on);
     else if (el.classList.contains('room')) { el.classList.toggle('on', on); const s = el.querySelector('.head .s'); if (s) s.textContent = roomSummary(t.slice(2)); }
-    else if (el.classList.contains('tile')) { el.classList.toggle('on', on); const ds = targetDevices(t); const avg = ds.length ? Math.round(ds.reduce((a, d) => a + (level(d) || 0), 0) / ds.length) : 0; el.style.setProperty('--p', `${avg}%`); const s = el.querySelector('.s'); if (s) s.textContent = tileSub(t); }
+    else if (el.classList.contains('tile')) { el.classList.toggle('on', on); const s = el.querySelector('.s'); if (s) s.textContent = tileSub(t); }
   });
   const st = $('#statusline'); if (st) st.innerHTML = statusLine();
-  $('#glow').classList.toggle('on', controllable().some(d => isOn(d.device_id)));
+  document.querySelectorAll('[data-onchip]').forEach(el => el.classList.toggle('hidden', !targetOn(el.dataset.onchip)));
+  document.querySelectorAll('[data-act-lvl]').forEach(el => el.classList.toggle('on', isOn(el.dataset.actLvl)));
 }
 function roomSummary(aid) {
   const ds = controllable().filter(d => (d.area || 'none') === aid);
@@ -260,7 +275,9 @@ const sheet = {
   el: null,
   open(title, body, opts = {}) {
     const root = $('#sheet-root');
-    root.querySelector('.sh').innerHTML = `${opts.back ? `<button class="iconbtn" data-act="sheet-back">${ICON('back')}</button>` : ''}<div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div><button class="iconbtn" data-act="sheet-close">${ICON('x')}</button>`;
+    const sh = root.querySelector('.sh');
+    sh.className = 'sh' + (opts.question ? ' q' : '');
+    sh.innerHTML = `${opts.back ? `<button class="iconbtn plain" data-act="sheet-back">${ICON('back')}</button>` : ''}<div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div><button class="iconbtn plain" data-act="sheet-close">${ICON('x')}</button>`;
     root.querySelector('.sb').innerHTML = body;
     root.querySelector('.sb').scrollTop = 0;
     root.classList.add('open'); requestAnimationFrame(() => root.classList.add('in'));
@@ -295,7 +312,7 @@ function render() {
   const v = $('#view'); const top = $('#top');
   if (!S.token) { top.innerHTML = ''; v.innerHTML = loginHTML(); $('#nav').style.display = 'none'; return; }
   $('#nav').style.display = '';
-  if (!S.ready || !S.config) { top.innerHTML = ''; v.innerHTML = '<div class="empty"><div class="ring"></div></div>'; return; }
+  if (!S.ready || !S.config) { top.innerHTML = ''; v.innerHTML = '<p class="muted" style="padding:24px 0">Loading…</p>'; return; }
   const view = VIEWS[S.view] || VIEWS.home;
   top.innerHTML = view.top ? view.top() : '';
   v.innerHTML = view.body();
@@ -306,6 +323,6 @@ function connPill() {
   return `<button class="pill ${S.agent.online ? 'on' : 'off'}" data-act="conn"><span class="dot"></span>${S.agent.online ? 'Connected' : 'Not connected'}</button>`;
 }
 function loginHTML() {
-  return `<div class="login enter"><div class="mark">${ICON('bulb', 'lg')}</div><h1>Pico Hack</h1><p>Enter your home's password.</p>
-  <form data-form="login"><input class="input" type="password" id="pw" placeholder="Password" autofocus autocomplete="current-password" style="text-align:center;font-size:17px"><div class="spacer"></div><button class="btn primary lg block">Sign in</button></form></div>`;
+  return `<div class="login"><div class="mark">${ICON('bulb', 'lg')}</div><h1>Welcome home</h1><p>Enter your home's password to get started.</p>
+  <form data-form="login"><input class="input" type="password" id="pw" placeholder="Password" autofocus autocomplete="current-password" style="height:56px;font-size:16px"><div class="spacer"></div><button class="btn primary lg block">Sign in</button></form></div>`;
 }

@@ -5,15 +5,15 @@ VIEWS.remotes = {
   top() {
     if (S.remote && dev(S.remote)) {
       const d = dev(S.remote);
-      return `<div class="row"><button class="iconbtn" data-act="remote-back">${ICON('back')}</button><div><h1 style="font-size:22px">${esc(d.name)}</h1><div class="sub">${esc(areaName(d.area))} · ${esc(modelName(d))}</div></div></div>${connPill()}`;
+      return `<button class="iconbtn plain" data-act="remote-back">${ICON('back')}</button><div class="center-title">${esc(d.name)}</div>${connPill()}`;
     }
-    return `<div><h1>Remotes</h1><div class="sub">Press a button on any remote to open it here</div></div>${connPill()}`;
+    return `<h1>Remotes</h1>${connPill()}`;
   },
   body() {
     if (S.remote && dev(S.remote)) return remoteDetail(dev(S.remote));
     const list = remotes();
-    if (!list.length) return controllable().length ? `<div class="empty enter"><div class="ill">${ICON('remote', 'lg')}</div><h3>No remotes found</h3><p>Pair a Pico in the Lutron app, then look again.</p><button class="btn" data-act="refresh">${ICON('refresh', 'sm')}Look again</button></div>` : setupEmpty();
-    return list.map(remoteCard).join('');
+    if (!list.length) return controllable().length ? `<div class="empty"><h3>No remotes found</h3><p>Pair a Pico in the Lutron app, then look again.</p><button class="btn" data-act="refresh">${ICON('refresh', 'sm')}Look again</button></div>` : setupEmpty();
+    return `<p class="muted" style="margin:0 0 16px">Press a button on any remote to open it here.</p>` + list.map(remoteCard).join('');
   },
 };
 
@@ -22,31 +22,33 @@ function remoteCard(d) {
   const n = new Set(bs.map(b => b.button_number)).size;
   const broken = bs.some(b => bindingBroken(b));
   const sub = n ? `${n} ${n === 1 ? 'button' : 'buttons'} set up` : 'Not set up yet';
-  return `<button class="remote-card enter" data-act="remote-open" data-id="${d.device_id}">${picoHTML(d, 'mini')}<div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(areaName(d.area))} · ${esc(sub)}</div>${broken ? `<div class="badge">Needs attention</div>` : ''}</div>${ICON('chev', 'sm')}</button>`;
+  return `<button class="remote-card" data-act="remote-open" data-id="${d.device_id}"><div class="remote-thumb">${picoArt(d, { width: 36 })}</div><div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(areaName(d.area))} · ${esc(sub)}</div>${broken ? `<div class="badge">Needs attention</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
 }
 function bindingBroken(b) {
   const acts = [...(b.actions || []), ...((b.night && b.night.actions) || [])];
   return acts.some(a => (a.target && !targetExists(a.target)) || (a.type === 'scene' && !targetExists('s:' + a.scene_id)) || (a.type === 'preset' && !targetExists('p:' + a.preset_id)));
 }
-function picoHTML(d, cls = '') {
-  const btns = buttonsOf(d.device_id);
-  const set = new Set(bindings().filter(b => b.device_id === d.device_id).map(b => b.button_number));
-  return `<div class="pico ${cls}">${btns.map(b => {
-    const n = b.button_number; const lbl = buttonLabel(d.device_id, n);
-    const round = lbl === 'Round'; const half = /Raise|Lower/.test(lbl);
-    return `<button class="pb ${round ? 'round' : ''} ${half ? 'half' : ''} ${set.has(n) ? 'set' : ''}" data-live="${d.device_id}/${n}" ${cls ? 'tabindex="-1"' : `data-act="button-open" data-n="${n}"`}>${cls ? '' : esc(round ? '●' : lbl)}</button>`;
-  }).join('')}</div>`;
-}
 function remoteDetail(d) {
-  const btns = buttonsOf(d.device_id);
-  const rows = btns.map(b => {
-    const n = b.button_number;
+  const rows = picoSlots(d).filter(s => s.real).map(s => {
+    const n = s.n;
     const lines = ['single', 'double', 'hold'].map(g => { const acts = gestureActions(d.device_id, n, g); return acts.length ? `<span class="faint">${GESTURE_LABEL[g]}:</span> ${esc(describe(acts))}` : null; }).filter(Boolean);
-    return `<button class="item" data-act="button-open" data-n="${n}"><div class="ic">${esc(buttonLabel(d.device_id, n) === 'Round' ? '●' : buttonLabel(d.device_id, n))}</div><div class="grow"><div class="t">${esc(buttonTitleCap(d.device_id, n))}</div><div class="d ${lines.length ? '' : 'none'}">${lines.length ? lines.join('<br>') : 'Nothing yet'}</div></div>${ICON('chev', 'sm')}</button>`;
+    return `<button class="item" data-act="button-open" data-n="${n}"><div class="ic" style="font-weight:700;font-size:13px">${esc(buttonLabel(d.device_id, n) === 'Round' ? '●' : buttonLabel(d.device_id, n))}</div><div class="grow"><div class="t">${esc(buttonTitleCap(d.device_id, n))}</div><div class="d ${lines.length ? '' : 'none'}">${lines.length ? lines.join('<br>') : 'Nothing yet'}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
-  return `<div class="remote-hero enter">${picoHTML(d)}<div class="hint">Tap a button on the picture, or press it on the real remote.</div></div>
-    <div class="card pad0 list enter">${rows}</div>
-    <details class="more"><summary>${ICON('chev', 'sm')}This remote may still do what the Lutron app set up</summary><div class="muted small">Both things happen: what the Lutron app programmed and what you set here. To make a remote fully yours, open the Lutron app, tap this remote, and remove the lights it controls (keep it paired). Leave it as is if you only want to add a double press or a hold on top.</div></details>`;
+  return `<div class="remote-hero"><div class="hero-disc" style="--room:${roomColor(d.area).bg}">${picoArt(d, { width: 100, interactive: true })}</div><p class="hint">Tap a button on the picture, or press it on the real remote.</p><button class="btn ghost" data-act="remote-look">${ICON('edit', 'sm')} Not your remote? Change the picture</button></div>
+    <div class="card pad0 list">${rows}</div>
+    <details class="more"><summary>This remote may still do what the Lutron app set up${ICON('chev', 'sm')}</summary><div class="muted">Both things happen: what the Lutron app programmed and what you set here. To make a remote fully yours, open the Lutron app, tap this remote, and remove the lights it controls (keep it paired). Leave it as is if you only want to add a double press or a hold on top.</div></details>`;
+}
+function openLookSheet() {
+  const d = dev(S.remote); if (!d) return;
+  const cur = picoModelFor(d), fin = picoFinishFor(d);
+  const models = Object.entries(PICO_MODELS).map(([k, m]) => `<button class="item" data-act="look-model" data-m="${k}"><div class="look-thumb">${picoSVG(d, { width: 26, model: k, finish: fin })}</div><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${k}${m.types.includes(d.type) ? ' · what the bridge reports' : ''}</div></div>${cur === k ? ICON('check', 'sm') : ''}</button>`).join('');
+  const fins = Object.keys(PICO_FINISHES).map(f => `<button class="chip ${fin === f ? 'sel' : ''}" data-act="look-finish" data-f="${f}">${cap(f)}</button>`).join('');
+  sheet.open('Which remote is this?', `<div class="h2">Layout</div><div class="list">${models}</div><div class="h2">Colour</div><div class="chips">${fins}</div><p class="faint small" style="margin-top:16px">The bridge already knows the layout. Change it only if the picture does not match what is on your wall.</p>`, { question: true, sub: 'So the picture matches what is on your wall.' });
+}
+function setLook(k, v) {
+  const looks = S.config.settings.remote_looks || (S.config.settings.remote_looks = {});
+  const cur = looks[S.remote] || {}; cur[k] = v; looks[S.remote] = cur;
+  save({ quiet: true, render: true }); openLookSheet();
 }
 function buttonTitleCap(pid, n) { const t = buttonTitle(pid, n); return t.charAt(0).toUpperCase() + t.slice(1); }
 
@@ -61,14 +63,14 @@ function gestureActions(pid, n, g, night = false) {
 // ----- gesture sheet -----
 function openButtonSheet(n) {
   const pid = S.remote; S.button = n;
-  const title = buttonTitleCap(pid, n);
+  const title = `What should the ${buttonTitle(pid, n)} do?`;
   const body = ['single', 'double', 'hold'].map(g => {
     const acts = gestureActions(pid, n, g); const night = gestureActions(pid, n, g, true);
     const b = g === 'hold' ? (binding(pid, n, 'hold_start') || binding(pid, n, 'hold')) : binding(pid, n, g);
     const broken = b && bindingBroken(b);
-    return `<button class="item" data-act="gesture-open" data-g="${g}" data-grow="${n}/${g}"><div class="ic ${acts.length ? 'amber' : ''}">${ICON(g === 'single' ? 'bolt' : g === 'double' ? 'copy' : 'clock', 'sm')}</div><div class="grow"><div class="t">${GESTURE_LABEL[g]}</div><div class="d ${acts.length ? '' : 'none'}">${acts.length ? esc(describe(acts)) : 'Nothing yet'}</div>${night.length ? `<div class="d">${ICON('moon', 'sm')} At night: ${esc(describe(night))}</div>` : ''}${broken ? `<div class="d" style="color:var(--amber)">Points at something that is gone. Pick again.</div>` : ''}</div>${ICON('chev', 'sm')}</button>`;
+    return `<button class="item" data-act="gesture-open" data-g="${g}" data-grow="${n}/${g}"><div class="ic ${acts.length ? 'black' : ''}">${ICON(g === 'single' ? 'bolt' : g === 'double' ? 'copy' : 'clock', 'sm')}</div><div class="grow"><div class="t">${GESTURE_LABEL[g]}</div><div class="d ${acts.length ? '' : 'none'}">${acts.length ? esc(describe(acts)) : 'Nothing yet'}</div>${night.length ? `<div class="d">At night: ${esc(describe(night))}</div>` : ''}${broken ? `<div class="d" style="color:var(--text)">● Points at something that is gone. Pick again.</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
-  sheet.open(title, `<div class="card pad0 list gestures">${body}</div><p class="faint tiny" style="margin:12px 4px 0">A press on a button that also has "press twice" waits a moment to tell them apart.</p>`, { sub: 'What should each kind of press do?' });
+  sheet.open(title, `<div class="list gestures">${body}</div><p class="faint small" style="margin:12px 0 0">A press on a button that also has "press twice" waits a moment to tell them apart.</p>`, { question: true, sub: 'Pick a kind of press.' });
 }
 
 // ----- recipe sheet -----
@@ -106,36 +108,45 @@ function recipeOf(actions) {
   return 'custom';
 }
 function defaultTarget(pid) { const d = dev(pid); return d && d.area && targetDevices(`a:${d.area}`).length ? `a:${d.area}` : (controllable()[0] ? `a:${controllable()[0].area || 'none'}` : 'h:all'); }
+// The chooser holds a list; one entry is stored as a plain string, several as a list.
+const packTarget = list => (list.length === 1 ? list[0] : list.slice());
 
 function openRecipeSheet(g, night = false) {
   const pid = S.remote, n = S.button; S.gesture = g; S.night = night;
   const acts = gestureActions(pid, n, g, night);
-  const cur = acts.find(a => a.target && !a.target.startsWith('h:'));
-  if (!S.pickTarget) S.pickTarget = (cur && cur.target) || defaultTarget(pid);
+  const cur = acts.find(a => a.target && a.target !== 'h:all');
+  if (!S.pickTargets || !S.pickTargets.length) S.pickTargets = cur ? tlist(cur.target).filter(targetExists) : [defaultTarget(pid)];
+  if (!S.pickTargets.length) S.pickTargets = [defaultTarget(pid)];
   renderRecipeSheet();
 }
 function renderRecipeSheet() {
   const pid = S.remote, n = S.button, g = S.gesture, night = S.night;
   const acts = gestureActions(pid, n, g, night);
   const selected = recipeOf(acts);
-  const T = S.pickTarget;
-  const tdev = T.startsWith('d:') ? dev(T.slice(2)) : null;
-  const isFan = tdev && tdev.domain === 'fan';
+  const T = packTarget(S.pickTargets);
+  const tdevs = targetDevices(T).map(dev).filter(Boolean);
+  const isFan = tdevs.length > 0 && tdevs.every(x => x.domain === 'fan');
   const hasNormal = gestureActions(pid, n, g).length > 0;
-  const seg = hasNormal ? `<div class="seg" style="margin-bottom:14px"><button class="${night ? '' : 'on'}" data-act="recipe-mode" data-night="0">${ICON('sun', 'sm')} Normally</button><button class="${night ? 'on' : ''}" data-act="recipe-mode" data-night="1">${ICON('moon', 'sm')} At night</button></div>` : '';
-  const nightNote = night ? `<p class="muted small" style="margin:0 0 12px">Between ${fmtTime(S.config.settings.night_start)} and ${fmtTime(S.config.settings.night_end)} this button does this instead. <a data-act="nav" data-view="settings" href="#settings">Change the hours</a></p>` : '';
-  const chipsT = [defaultTarget(pid), 'h:all', ...areas().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
-  if (!chipsT.includes(T)) chipsT.splice(1, 0, T);
-  const which = `<div class="h2" style="margin-top:0">Which lights?</div><div class="chips scroll">${chipsT.map(t => `<button class="chip ${t === T ? 'sel' : ''}" data-act="pick-target" data-t="${esc(t)}">${esc(cap(targetName(t)))}</button>`).join('')}<button class="chip" data-act="pick-target-more">${ICON('dots', 'sm')}Specific lights</button></div>`;
-  const list = RECIPES.filter(r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any)).map(r => `<button class="recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${r.d ? `<div class="d">${r.d}</div>` : ''}</div>${selected === r.id ? ICON('check', 'sm') : ''}</button>`).join('');
-  const nothing = `<button class="recipe ${selected === 'nothing' ? 'sel' : ''}" data-act="recipe" data-r="nothing"><div class="grow"><div class="t">Nothing</div>${night ? '<div class="d">Same as normally</div>' : ''}</div></button>`;
-  const custom = selected === 'custom' ? `<div class="banner" style="margin-top:12px">${ICON('bolt')}<div><b>Custom:</b> ${esc(describe(acts))}</div></div>` : '';
-  const more = `<details class="more"><summary>${ICON('chev', 'sm')}More options</summary><div><button class="btn block" data-act="advanced">Fine-tune: fade times, several steps, timers…</button></div></details>`;
-  const test = acts.length ? `<button class="btn ghost block" data-act="try-actions" style="margin-top:8px">${ICON('play', 'sm')} Try it now</button>` : '';
+  const seg = hasNormal ? `<div class="seg" style="margin:8px 0 4px"><button class="${night ? '' : 'on'}" data-act="recipe-mode" data-night="0">${ICON('sun', 'sm')} Normally</button><button class="${night ? 'on' : ''}" data-act="recipe-mode" data-night="1">${ICON('moon', 'sm')} At night</button></div>` : '';
+  const nightNote = night ? `<div class="nightpanel"><p style="margin:0">Between ${fmtTime(S.config.settings.night_start)} and ${fmtTime(S.config.settings.night_end)} this button does this instead. <a data-act="nav" data-view="settings" href="#settings">Change the hours</a></p></div>` : '';
+  const sel = S.pickTargets;
+  const chipsT = [defaultTarget(pid), ...sel, 'h:all', ...areas().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
+  const which = `<div class="h2" style="margin-top:0">Which lights? <span class="link faint" style="font-weight:500;color:var(--text-3)">tap to add or remove</span></div><div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="pick-target" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(cap(targetName(t)))}</button>`).join('')}<button class="chip outline" data-act="pick-target-more">${ICON('dots', 'sm')}Specific lights…</button></div><div class="small muted" style="margin:6px 2px 0">${esc(cap(targetName(T)))}${sel.length > 1 ? ` · ${targetDevices(T).length} lights` : ''}</div>`;
+  const chk = `<span class="chk">${ICON('check', 'sm')}</span>`;
+  const list = RECIPES.filter(r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any)).map(r => `<button class="recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${r.d ? `<div class="d">${r.d}</div>` : ''}</div>${selected === r.id ? chk : ''}</button>`).join('');
+  const nothing = `<button class="recipe ${selected === 'nothing' ? 'sel' : ''}" data-act="recipe" data-r="nothing"><div class="grow"><div class="t">Nothing</div>${night ? '<div class="d">Same as normally</div>' : ''}</div>${selected === 'nothing' ? chk : ''}</button>`;
+  const custom = selected === 'custom' ? `<div class="block sand" style="margin-top:12px"><div class="grow"><div class="t">Custom</div><div class="d">${esc(describe(acts))}</div></div></div>` : '';
+  const more = `<details class="more"><summary>More options${ICON('chev', 'sm')}</summary><div><button class="btn block" data-act="advanced">Fine-tune: fade times, several steps, timers…</button></div></details>`;
+  const test = acts.length ? `<button class="btn block" data-act="try-actions" style="margin-top:12px">${ICON('play', 'sm')} Try it now</button>` : '';
   sheet.open(GESTURE_LABEL[g], `${seg}${nightNote}${which}<div class="h2">What should happen?</div>${nothing}${list}${custom}${more}${test}`, { back: true, sub: buttonTitleCap(pid, n), onBack: () => openButtonSheet(n) });
 }
+function toggleTargetChip(t) {
+  const i = S.pickTargets.indexOf(t);
+  if (i >= 0) { if (S.pickTargets.length > 1) S.pickTargets.splice(i, 1); } else S.pickTargets.push(t);
+  renderRecipeSheet();
+}
 function applyRecipe(rid) {
-  const pid = S.remote, n = S.button, g = S.gesture, night = S.night, T = S.pickTarget;
+  const pid = S.remote, n = S.button, g = S.gesture, night = S.night, T = packTarget(S.pickTargets);
   const r = RECIPES.find(x => x.id === rid);
   if (r && r.pick) { openScenePicker(); return; }
   let actions = [];
@@ -183,12 +194,25 @@ function pickScene(i) {
   save({ msg: `Runs the ${it.n} scene` });
   renderRecipeSheet();
 }
-function openTargetPicker(onPick) {
-  const opts = targetOptions();
-  S.targetPick = { opts, onPick };
-  const body = `<div class="card pad0 list">${opts.map((o, i) => `<button class="item" data-act="pick-target-item" data-i="${i}"><div class="ic ${o.kind === 'room' || o.kind === 'all' ? 'amber' : ''}">${ICON(o.kind === 'room' ? 'house' : o.kind === 'all' ? 'power' : o.kind === 'group' ? 'copy' : domainIcon(o.kind), 'sm')}</div><div class="grow"><div class="t">${esc(o.name)}</div><div class="d">${esc(o.sub)}</div></div></button>`).join('')}</div>
-    <p class="faint small" style="margin:12px 4px 0">Want a few specific lights together? Make a set under Settings › Light sets.</p>`;
-  sheet.open('Which lights?', body, { back: true, onBack: renderRecipeSheet });
+// Multi-select picker: rooms, everything, each light, and any hand-made sets. Used by the recipe sheet and the fine-tune editor.
+function openTargetPicker(selected, onDone, onBack) {
+  S.targetPick = { selected: [...selected], onDone, onBack };
+  renderTargetPicker();
+}
+function renderTargetPicker() {
+  const p = S.targetPick; const { selected, onBack } = p;
+  p.open = p.open || new Set(areas().filter(a => selected.some(t => t.startsWith('d:') && (dev(t.slice(2)) || {}).area === a.id)).map(a => a.id));
+  const cb = t => `<input type="checkbox" class="cb" data-act="picker-toggle" data-t="${esc(t)}" ${selected.includes(t) ? 'checked' : ''}>`;
+  const lightRow = d => `<label class="item"><div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(cap(d.domain))}</div></div>${cb('d:' + d.device_id)}</label>`;
+  const rooms = areas().map(a => {
+    const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return '';
+    const c = roomColor(a.id); const open = p.open.has(a.id);
+    return `<div class="roomrow ${open ? 'open' : ''}" style="--room:${c.bg}"><button class="chev" data-act="picker-expand" data-id="${a.id}">${ICON('chev', 'sm')}</button><label class="grow row" style="min-height:40px"><div class="grow"><div class="n">${esc(a.name)}</div><div class="s">${plural(ds.length, 'light')}, the whole room</div></div>${cb('a:' + a.id)}</label></div><div class="roomlights ${open ? 'open' : ''}" data-roomlights="${a.id}">${ds.map(lightRow).join('')}</div>`;
+  }).join('');
+  const all = `<label class="roomrow" style="--room:#F5F5F5;margin-bottom:8px"><div class="grow"><div class="n">Everything</div><div class="s">Every light in the house</div></div>${cb('h:all')}</label>`;
+  const sets = groups().length ? `<div class="h2">Your sets</div>${groups().map(g => `<label class="roomrow" style="--room:#F5F5F5;margin-bottom:8px"><div class="grow"><div class="n">${esc(g.name)}</div><div class="s">${g.device_ids.length} lights</div></div>${cb('g:' + g.id)}</label>`).join('')}` : '';
+  const summary = selected.length ? `${cap(targetName(packTarget(selected)))} · ${targetDevices(selected).length} lights` : 'Nothing picked yet';
+  sheet.open('Which lights should this control?', `${all}<div class="stack" style="margin-top:8px">${rooms}</div>${sets}<div class="sfoot"><div class="small muted" style="margin-bottom:8px" id="picker-summary">${esc(summary)}</div><button class="btn primary lg block" data-act="picker-done" ${selected.length ? '' : 'disabled'}>Done</button></div>`, { back: !!onBack, onBack, question: true, sub: 'Tick a whole room, single lights, or both.' });
 }
 
 // ----- advanced editor -----
@@ -207,14 +231,14 @@ function renderAdvanced() {
   const b = currentBindingForEdit(); if (!b) return renderRecipeSheet();
   const list = S.night ? b.night.actions : b.actions;
   const rows = list.map((a, i) => actionEditor(a, i)).join('') || '<p class="muted">No steps yet.</p>';
-  const body = `${rows}<div class="row" style="margin-top:12px"><button class="btn" data-act="adv-add">${ICON('plus', 'sm')} Add a step</button><button class="btn ghost" data-act="try-actions">${ICON('play', 'sm')} Try it</button></div>
+  const body = `${rows}<div class="row" style="margin-top:12px"><button class="btn" data-act="adv-add">${ICON('plus', 'sm')} Add a step</button><button class="btn" data-act="try-actions">${ICON('play', 'sm')} Try it</button></div>
   ${b.gesture === 'hold_start' ? `<p class="faint small" style="margin-top:14px">This runs when the hold begins; "Stop" is sent automatically when you let go.</p>` : ''}
-  <div class="spacer"></div><button class="btn primary block" data-act="adv-done">Done</button>`;
-  sheet.open(`Fine-tune: ${GESTURE_LABEL[S.gesture]}${S.night ? ' at night' : ''}`, body, { back: true, onBack: renderRecipeSheet });
+  <div class="sfoot"><button class="btn primary lg block" data-act="adv-done">Done</button></div>`;
+  sheet.open(`Fine-tune: ${GESTURE_LABEL[S.gesture].toLowerCase()}${S.night ? ' at night' : ''}`, body, { back: true, onBack: renderRecipeSheet });
 }
 function actionEditor(a, i) {
   const sel = (k, opts) => `<select class="input" data-adv="${i}" data-k="${k}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(a[k]) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  const tgt = (fans) => sel('target', targetOptions({ fansOnly: fans }).map(o => [o.id, o.kind === 'room' ? `${o.name} (room)` : o.name]));
+  const tgt = () => `<button class="btn block" style="justify-content:space-between" data-act="adv-target" data-i="${i}"><span class="ellip">${esc(cap(targetName(a.target)))}</span>${ICON('chev', 'sm')}</button>`;
   const fade = () => `<label class="field"><span>Change gradually over</span>${sel('fade', [['', 'Default'], [0, 'Instantly'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [30, '30 seconds'], [120, '2 minutes'], [600, '10 minutes'], [1200, '20 minutes'], [1800, '30 minutes']])}</label>`;
   let body = `<label class="field"><span>Step ${i + 1}</span>${sel('type', Object.entries(ACTION_LABELS).filter(([k]) => k !== 'preset'))}</label>`;
   switch (a.type) {
@@ -222,13 +246,13 @@ function actionEditor(a, i) {
     case 'step': body += `<label class="field"><span>Which lights</span>${tgt(false)}</label><label class="field"><span>Amount</span>${sel('delta', [[25, 'Much brighter'], [10, 'A little brighter'], [5, 'Slightly brighter'], [1, 'Fan: one speed faster'], [-1, 'Fan: one speed slower'], [-5, 'Slightly dimmer'], [-10, 'A little dimmer'], [-25, 'Much dimmer']])}</label>`; break;
     case 'cycle': body += `<label class="field"><span>Which lights</span>${tgt(false)}</label><label class="field"><span>Levels, in order</span><input class="input" data-adv="${i}" data-k="levels" value="${esc((a.levels || []).join(', '))}" placeholder="100, 50, 20, 0"></label>`; break;
     case 'raise': case 'lower': case 'stop': body += `<label class="field"><span>Which lights</span>${tgt(false)}</label>`; break;
-    case 'fan': body += `<label class="field"><span>Which fan</span>${tgt(true)}</label><label class="field"><span>Speed</span>${sel('speed', [['Off', 'Off'], ['Low', 'Low'], ['Medium', 'Medium'], ['MediumHigh', 'Medium-high'], ['High', 'High']])}</label>`; break;
+    case 'fan': body += `<label class="field"><span>Which fan</span>${tgt()}</label><label class="field"><span>Speed</span>${sel('speed', [['Off', 'Off'], ['Low', 'Low'], ['Medium', 'Medium'], ['MediumHigh', 'Medium-high'], ['High', 'High']])}</label>`; break;
     case 'scene': case 'preset': { const items = [...presets().map(p => ['p:' + p.id, p.name]), ...lutronScenes().map(s => ['s:' + s.scene_id, s.name + ' (Lutron)'])]; const cur = a.type === 'preset' ? 'p:' + a.preset_id : 's:' + a.scene_id; body += `<label class="field"><span>Scene</span><select class="input" data-adv="${i}" data-k="scene_ref">${items.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`; break; }
     case 'timer': body += `<label class="field"><span>Which lights</span>${tgt(false)}</label><label class="field"><span>After</span>${sel('minutes', [5, 10, 15, 20, 30, 45, 60, 90, 120].map(m => [m, m + ' minutes']))}</label><label class="field"><span>Then set to</span>${sel('level', [[0, 'Off'], [5, '5%'], [10, '10%'], [30, '30%']])}</label>${fade()}`; break;
     case 'cancel_timer': body += `<label class="field"><span>Which lights</span>${tgt(false)}</label>`; break;
     case 'delay': body += `<label class="field"><span>Wait</span>${sel('ms', [[250, '¼ second'], [500, '½ second'], [1000, '1 second'], [2000, '2 seconds'], [5000, '5 seconds'], [15000, '15 seconds'], [30000, '30 seconds']])}</label>`; break;
   }
-  return `<div class="card" style="margin-bottom:10px">${body}<button class="btn sm ghost danger" data-act="adv-remove" data-i="${i}">${ICON('trash', 'sm')} Remove step</button></div>`;
+  return `<div class="card" style="margin-bottom:12px">${body}<button class="btn ghost" data-act="adv-remove" data-i="${i}">${ICON('trash', 'sm')} Remove step</button></div>`;
 }
 function advEdit(i, k, v) {
   const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; const a = list[i];

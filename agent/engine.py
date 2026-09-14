@@ -142,7 +142,14 @@ class ActionRunner:
         return out
 
     # ----- helpers -----
-    def _resolve(self, target: str) -> List[str]:
+    def _resolve(self, target) -> List[str]:
+        if isinstance(target, list):
+            seen: List[str] = []
+            for t in target:
+                for d in self._resolve(t):
+                    if d not in seen:
+                        seen.append(d)
+            return seen
         kind, _, ident = target.partition(":")
         bridge = self._bridge()
         if kind == "d":
@@ -161,7 +168,9 @@ class ActionRunner:
                     if d.get("zone") and d.get("type") in _LIGHT_TYPES | _SWITCH_TYPES]
         return []
 
-    def _group_on_level(self, target: str) -> int:
+    def _group_on_level(self, target) -> int:
+        if isinstance(target, list):
+            return int(self._config().get("settings", {}).get("group_on_level", 100))
         kind, _, ident = target.partition(":")
         if kind == "g":
             for g in self._config().get("groups", []):
@@ -208,7 +217,12 @@ class ActionRunner:
             await bridge.set_value(device_id, int(level))
 
     # ----- timers -----
-    def cancel_timer(self, target: str) -> None:
+    @staticmethod
+    def _tkey(target) -> str:
+        return "|".join(target) if isinstance(target, list) else target
+
+    def cancel_timer(self, target) -> None:
+        target = self._tkey(target)
         t = self._timers.pop(target, None)
         if t and not t.done():
             t.cancel()
@@ -217,11 +231,13 @@ class ActionRunner:
 
     def _cancel_timers_touching(self, device_ids: List[str]) -> None:
         touched = set(device_ids)
-        for target in list(self._timers):
-            if touched & set(self._resolve(target)):
-                self.cancel_timer(target)
+        for key in list(self._timers):
+            if touched & set(self._resolve(key.split("|") if "|" in key else key)):
+                self.cancel_timer(key)
 
-    def start_timer(self, target: str, minutes: int, level: int, fade: Optional[float]) -> None:
+    def start_timer(self, target, minutes: int, level: int, fade: Optional[float]) -> None:
+        raw = target
+        target = self._tkey(target)
         self.cancel_timer(target)
         ends_at = time.time() + minutes * 60
 
@@ -234,7 +250,7 @@ class ActionRunner:
             if self._on_timer:
                 self._on_timer(target, None, level)
             try:
-                await self.run_one({"type": "level", "target": target, "level": level, "fade": fade if fade is not None else 3})
+                await self.run_one({"type": "level", "target": raw, "level": level, "fade": fade if fade is not None else 3})
             except Exception as exc:  # noqa: BLE001
                 LOG.error("timer on %s failed: %s", target, exc)
 

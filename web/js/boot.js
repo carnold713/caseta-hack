@@ -9,7 +9,7 @@ document.addEventListener('click', async e => {
     case 'conn': S.view = 'settings'; location.hash = 'settings'; render(); break;
     case 'toggle': toggleTarget(d.t); break;
     case 'fav': toggleFav(d.t); break;
-    case 'run-scene': { const t = d.t; el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 600); await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
+    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
     case 'cmd': command(JSON.parse(d.cmd)); break;
     case 'fan': S.states[d.id] = { ...(S.states[d.id] || {}), fan_speed: d.s, level: d.s === 'Off' ? 0 : 100 }; paintState(); command({ type: 'fan', target: `d:${d.id}`, speed: d.s }); break;
     case 'room-open': toggleRoom(d.id); break;
@@ -17,18 +17,23 @@ document.addEventListener('click', async e => {
     case 'cancel-timer': command({ type: 'cancel_timer', target: d.t }); break;
     case 'timer': sheet.close(); await command({ type: 'timer', target: d.t, minutes: Number(d.m), fade: 5 }); toast(`${targetName(d.t)} turns off in ${d.m} min`); break;
     case 'refresh': el.classList.add('dim'); try { await api('/api/refresh', { method: 'POST' }); toast('Looked again'); } catch (err) { toast(err.message, { err: true }); } el.classList.remove('dim'); break;
-    case 'remote-open': S.remote = d.id; render(); window.scrollTo(0, 0); break;
+    case 'remote-open': S.remote = d.id; render(); window.scrollTo(0, 0); picoPhotoAvailable(dev(d.id)).then(u => { if (u) render(); }); break;
     case 'remote-back': S.remote = null; render(); break;
-    case 'button-open': S.pickTarget = null; openButtonSheet(Number(d.n)); break;
-    case 'gesture-open': S.pickTarget = null; openRecipeSheet(d.g, false); break;
+    case 'remote-look': openLookSheet(); break;
+    case 'look-model': setLook('model', d.m); break;
+    case 'look-finish': setLook('finish', d.f); break;
+    case 'button-open': S.pickTargets = null; openButtonSheet(Number(d.n)); break;
+    case 'gesture-open': S.pickTargets = null; openRecipeSheet(d.g, false); break;
     case 'recipe-mode': S.night = d.night === '1'; renderRecipeSheet(); break;
-    case 'pick-target': S.pickTarget = d.t; renderRecipeSheet(); break;
-    case 'pick-target-more': openTargetPicker(); break;
-    case 'pick-target-item': S.pickTarget = S.targetPick.opts[Number(d.i)].id; renderRecipeSheet(); break;
+    case 'pick-target': toggleTargetChip(d.t); break;
+    case 'pick-target-more': openTargetPicker(S.pickTargets, list => { S.pickTargets = list; renderRecipeSheet(); }, renderRecipeSheet); break;
+    case 'picker-done': { const p = S.targetPick; if (p.selected.length) p.onDone(p.selected); break; }
+    case 'picker-expand': { const p = S.targetPick; if (p.open.has(d.id)) p.open.delete(d.id); else p.open.add(d.id); el.closest('.roomrow').classList.toggle('open'); const rl = document.querySelector(`[data-roomlights="${d.id}"]`); if (rl) rl.classList.toggle('open'); break; }
+    case 'adv-target': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; const i = Number(d.i); openTargetPicker(tlist(list[i].target), sel => { list[i].target = packTarget(sel); saveSoon(); renderAdvanced(); }, renderAdvanced); break; }
     case 'recipe': applyRecipe(d.r); break;
     case 'pick-scene': pickScene(Number(d.i)); break;
     case 'advanced': openAdvanced(); break;
-    case 'adv-add': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; list.push({ type: 'level', target: S.pickTarget || defaultTarget(S.remote), level: 'toggle' }); renderAdvanced(); saveSoon(); break; }
+    case 'adv-add': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; list.push({ type: 'level', target: S.pickTargets && S.pickTargets.length ? packTarget(S.pickTargets) : defaultTarget(S.remote), level: 'toggle' }); renderAdvanced(); saveSoon(); break; }
     case 'adv-remove': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; list.splice(Number(d.i), 1); renderAdvanced(); saveSoon(); break; }
     case 'adv-done': { const b = currentBindingForEdit(); if (b && !b.actions.length && !(b.night && b.night.actions.length)) S.config.bindings = S.config.bindings.filter(x => x.id !== b.id); if (b && b.night && !b.night.actions.length) b.night = null; await save({ msg: 'Saved' }); renderRecipeSheet(); break; }
     case 'try-actions': tryActions(); break;
@@ -57,6 +62,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', e => {
   const el = e.target; const d = el.dataset;
   if (d.act === 'scene-inc') sceneInclude(d.id, el.checked);
+  else if (d.act === 'picker-toggle') { const p = S.targetPick; const i = p.selected.indexOf(d.t); if (el.checked && i < 0) p.selected.push(d.t); if (!el.checked && i >= 0) p.selected.splice(i, 1); const btn = document.querySelector('[data-act="picker-done"]'); if (btn) btn.disabled = !p.selected.length; const sum = document.querySelector('#picker-summary'); if (sum) sum.textContent = p.selected.length ? `${cap(targetName(packTarget(p.selected)))} · ${targetDevices(p.selected).length} lights` : 'Nothing picked yet'; }
   else if (d.act === 'group-inc') { const g = groups().find(x => x.id === S.groupEdit); if (!g) return; g.device_ids = el.checked ? [...new Set([...g.device_ids, d.id])] : g.device_ids.filter(x => x !== d.id); saveSoon(); }
   else if (d.sceneLvl) sceneLevel(d.sceneLvl, el.tagName === 'SELECT' ? el.value : Number(el.value));
   else if (d.adv != null) advEdit(Number(d.adv), d.k, el.value);
@@ -69,6 +75,7 @@ let slideTimer = null;
 document.addEventListener('input', e => {
   const el = e.target; if (el.type !== 'range') return;
   el.style.setProperty('--p', `${el.value}%`);
+  const wrap = el.closest('.sliderwrap'); if (wrap) { wrap.classList.add('drag'); wrap.style.setProperty('--p', `${el.value}%`); const tip = wrap.querySelector('.tip'); if (tip) tip.textContent = `${el.value}%`; clearTimeout(wrap._t); wrap._t = setTimeout(() => wrap.classList.remove('drag'), 900); }
   if (el.dataset.slide) {
     el.dataset.drag = '1';
     const t = el.dataset.slide; const v = Number(el.value);
@@ -109,7 +116,7 @@ document.addEventListener('submit', async e => {
     const b = await r.json();
     if (!r.ok) throw new Error(b.error === 'wrong password' ? "That's not the password" : b.error || 'Could not sign in');
     S.token = b.token; localStorage.setItem('token', b.token); connectWS(); render();
-  } catch (err) { toast(err.message, { err: true }); $('#pw').classList.add('shake'); setTimeout(() => $('#pw').classList.remove('shake'), 500); }
+  } catch (err) { toast(err.message, { err: true }); }
 });
 $('#sheet-root .scrim').addEventListener('click', () => sheet.close());
 document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; if (S.view !== 'remotes') S.remote = null; location.hash = S.view; render(); window.scrollTo(0, 0); }));

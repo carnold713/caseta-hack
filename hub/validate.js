@@ -11,11 +11,15 @@ function fail(msg) { const e = new Error(msg); e.status = 400; throw e; }
 function isId(v) { return typeof v === 'string' && v.length > 0 && v.length <= 64; }
 function isLevel(v) { return Number.isInteger(v) && v >= 0 && v <= 100; }
 // d:<device> a single device, a:<area> a room, g:<group> a custom group, h:all every light and switch.
-function isTarget(v) { return typeof v === 'string' && (/^(d|a|g):[A-Za-z0-9_-]+$/.test(v) || v === 'h:all'); }
+function isOneTarget(v) { return typeof v === 'string' && (/^(d|a|g):[A-Za-z0-9_-]+$/.test(v) || v === 'h:all'); }
+// A target is one id or a list of them (several specific lights under one command, no named set needed).
+function isTarget(v) { return isOneTarget(v) || (Array.isArray(v) && v.length >= 1 && v.length <= 64 && v.every(isOneTarget)); }
+function targetList(v) { return Array.isArray(v) ? v : [v]; }
 function isClock(v) { return typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }
 
 function validateAction(a, where) {
   if (!a || typeof a !== 'object') fail(`${where}: action must be an object`);
+  if (Array.isArray(a.target)) { const u = [...new Set(a.target)]; a.target = u.length === 1 ? u[0] : u; }
   if (!ACTION_TYPES.has(a.type)) fail(`${where}: unknown action type "${a.type}"`);
   switch (a.type) {
     case 'level':
@@ -73,6 +77,16 @@ function validateConfig(cfg) {
   out.settings.night_end = isClock(s.night_end) ? s.night_end : '06:30';
   out.settings.night_level = clampInt(s.night_level, 1, 100, 30);
   out.settings.home_name = typeof s.home_name === 'string' ? s.home_name.trim().slice(0, 40) : '';
+  // Per-room colour keys and per-remote appearance overrides (model layout and finish), set from the app.
+  out.settings.room_colors = {};
+  for (const [k, v] of Object.entries(s.room_colors || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && typeof v === 'string' && /^[a-z]+$/.test(v)) out.settings.room_colors[k] = v;
+  out.settings.remote_looks = {};
+  for (const [k, v] of Object.entries(s.remote_looks || {})) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(k) || !v || typeof v !== 'object') continue;
+    const model = typeof v.model === 'string' && /^[A-Za-z0-9-]+$/.test(v.model) ? v.model : null;
+    const finish = ['white', 'black', 'ivory', 'gray'].includes(v.finish) ? v.finish : null;
+    if (model || finish) out.settings.remote_looks[k] = { model, finish };
+  }
 
   const groupIds = new Set();
   for (const g of arr(cfg.groups, 'groups')) {
@@ -113,7 +127,7 @@ function validateConfig(cfg) {
       const acts = list.map((a, i) => validateAction(a, `${label} action ${i + 1}`));
       for (const a of acts) {
         if (a.type === 'preset' && !presetIds.has(a.preset_id)) fail(`${label}: unknown preset ${a.preset_id}`);
-        if (a.target && a.target.startsWith('g:') && !groupIds.has(a.target.slice(2))) fail(`${label}: unknown group ${a.target.slice(2)}`);
+        for (const t of (a.target ? targetList(a.target) : [])) if (t.startsWith('g:') && !groupIds.has(t.slice(2))) fail(`${label}: unknown group ${t.slice(2)}`);
       }
       return acts;
     };
@@ -127,7 +141,7 @@ function validateConfig(cfg) {
     out.bindings.push({ id: b.id, device_id: b.device_id, button_number: b.button_number, gesture: b.gesture, actions, night, enabled: b.enabled !== false, name: typeof b.name === 'string' ? b.name.slice(0, 60) : '' });
   }
   for (const f of arr(cfg.favorites, 'favorites')) {
-    if (typeof f === 'string' && (isTarget(f) || /^(p|s):[A-Za-z0-9_-]+$/.test(f))) out.favorites.push(f);
+    if (typeof f === 'string' && (isOneTarget(f) || /^(p|s):[A-Za-z0-9_-]+$/.test(f))) out.favorites.push(f);
   }
   out.favorites = [...new Set(out.favorites)].slice(0, 24);
   return out;
