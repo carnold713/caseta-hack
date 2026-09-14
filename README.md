@@ -24,7 +24,14 @@ Pico bindings from its cached config.
   press and a hold do. One-sentence choices: turn the room on or off,
   nightlight, movie mode, brighten while holding, sleep timer, run a
   scene, everything off. "More options" opens the full editor: fade
-  times, several steps in a row, waits, timers.
+  times, several steps in a row, waits, timers. The picture is drawn
+  with the real button layout for every Pico model; a "Not your remote?"
+  link switches layout and colour, and Lutron's own product photos can be
+  dropped into `web/img/picos/` (see the README there) to replace the
+  drawings.
+- **Any mix of lights per command.** "Which lights?" takes whole rooms,
+  single lights, or both, so On can drive three lights while Off drives
+  one, without making a named set first.
 - **Night-time versions:** any button can do something else between the
   hours you set, like turning on dim instead of bright.
 - **Rooms come from the bridge.** No groups to build; "Kitchen" is already
@@ -136,6 +143,12 @@ A worked example, a 3-button Pico in the kitchen:
 Single click on a button that also has a double click binding waits the
 double window (default 350 ms) before firing. A button with no double
 binding fires instantly.
+
+## Look and feel
+
+`docs/design-spec.md` is the visual spec the interface follows: white
+ground, flat room colour blocks, black and grey everything else, Noto
+Sans, no gradients or glows. Read it before changing styles.
 
 ## Layout
 
