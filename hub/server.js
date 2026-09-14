@@ -25,6 +25,8 @@ if (!AGENT_TOKEN) console.warn('[hub] AGENT_TOKEN is not set: any agent can conn
 let config = validateConfig(store.read('config', store.DEFAULT_CONFIG));
 let inventory = store.read('inventory', () => ({ devices: {}, buttons: {}, scenes: {}, areas: {}, bridge: null, updated: null }));
 let states = {}; // device_id -> {level, fan_speed}
+let timers = {}; // target -> {ends_at, level}
+let activity = store.read('activity', () => []); // newest first, capped
 let agent = null;   // the single connected agent socket
 let agentInfo = null;
 const appClients = new Set();
@@ -70,6 +72,7 @@ app.post('/api/login', (req, res) => {
 });
 
 app.get('/api/snapshot', requireAuth, (req, res) => res.json(snapshot()));
+app.get('/api/activity', requireAuth, (req, res) => res.json({ activity }));
 
 app.put('/api/config', requireAuth, (req, res) => {
   try {
@@ -90,6 +93,7 @@ app.post('/api/command', requireAuth, async (req, res) => {
     const action = validateAction(req.body, 'command');
     if (action.type === 'preset' && !config.presets.some(p => p.id === action.preset_id)) throw Object.assign(new Error('unknown preset'), { status: 400 });
     const result = await sendCommand(action);
+    record({ kind: 'app', action });
     res.json(result);
   } catch (e) {
     res.status(e.status || 502).json({ error: e.message });
@@ -173,7 +177,13 @@ wssAgent.on('connection', (ws, req) => {
     handleAgentMessage(ws, msg);
   });
   ws.on('close', () => {
-    if (agent === ws) { agent = null; agentInfo = null; broadcast({ type: 'agent', online: false }); console.log('[hub] agent disconnected'); }
+    if (agent === ws) {
+      agent = null; agentInfo = null; timers = {};
+      broadcast({ type: 'agent', online: false });
+      broadcast({ type: 'timers', timers });
+      record({ kind: 'agent', online: false });
+      console.log('[hub] agent disconnected');
+    }
   });
   ws.on('error', e => console.warn('[hub] agent socket error', e.message));
   ws.send(JSON.stringify({ type: 'config', config }));
@@ -185,8 +195,16 @@ function handleAgentMessage(ws, msg) {
       agentInfo = { version: msg.version || null, bridge: msg.bridge || null, since: new Date().toISOString() };
       if (msg.inventory) setInventory(msg.inventory);
       if (msg.states) mergeStates(msg.states);
+      timers = msg.timers || {};
       broadcast({ type: 'agent', online: true, info: agentInfo });
       broadcast({ type: 'state', states });
+      broadcast({ type: 'timers', timers });
+      record({ kind: 'agent', online: true });
+      break;
+    case 'timer':
+      if (msg.ends_at) timers[msg.target] = { ends_at: msg.ends_at, level: msg.level || 0 };
+      else delete timers[msg.target];
+      broadcast({ type: 'timers', timers });
       break;
     case 'inventory':
       setInventory(msg.inventory);
@@ -196,8 +214,11 @@ function handleAgentMessage(ws, msg) {
       broadcast({ type: 'state', states: msg.states });
       break;
     case 'button':   // raw press/release, for the "listen" screen
+      broadcast(msg);
+      break;
     case 'gesture':  // resolved single/double/hold
       broadcast(msg);
+      record({ kind: 'pico', device_id: msg.device_id, button_number: msg.button_number, gesture: msg.gesture, bound: !!msg.bound });
       break;
     case 'result': {
       const p = pending.get(msg.id);
@@ -234,8 +255,17 @@ function mergeStates(s) {
   for (const [k, v] of Object.entries(s || {})) states[k] = { ...(states[k] || {}), ...v };
 }
 function snapshot() {
-  return { inventory, states, config, agent: { online: !!agent, info: agentInfo } };
+  return { inventory, states, config, timers, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo } };
 }
+let activityDirty = false;
+function record(entry) {
+  const e = { ...entry, at: new Date().toISOString() };
+  activity.unshift(e);
+  if (activity.length > 300) activity.length = 300;
+  activityDirty = true;
+  broadcast({ type: 'activity', entry: e });
+}
+setInterval(() => { if (activityDirty) { activityDirty = false; store.write('activity', activity); } }, 5000).unref();
 function broadcast(msg) {
   const data = JSON.stringify(msg);
   for (const c of appClients) if (c.readyState === WebSocket.OPEN) c.send(data);

@@ -3,14 +3,16 @@
 // is where a malformed document gets rejected.
 
 const GESTURES = new Set(['single', 'double', 'hold_start', 'hold_end', 'hold']);
-const ACTION_TYPES = new Set(['level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle']);
+const ACTION_TYPES = new Set(['level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer']);
 const FAN_SPEEDS = new Set(['Off', 'Low', 'Medium', 'MediumHigh', 'High']);
 
 function fail(msg) { const e = new Error(msg); e.status = 400; throw e; }
 
 function isId(v) { return typeof v === 'string' && v.length > 0 && v.length <= 64; }
 function isLevel(v) { return Number.isInteger(v) && v >= 0 && v <= 100; }
-function isTarget(v) { return typeof v === 'string' && /^(d|g):[A-Za-z0-9_-]+$/.test(v); }
+// d:<device> a single device, a:<area> a room, g:<group> a custom group, h:all every light and switch.
+function isTarget(v) { return typeof v === 'string' && (/^(d|a|g):[A-Za-z0-9_-]+$/.test(v) || v === 'h:all'); }
+function isClock(v) { return typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }
 
 function validateAction(a, where) {
   if (!a || typeof a !== 'object') fail(`${where}: action must be an object`);
@@ -45,18 +47,32 @@ function validateAction(a, where) {
       if (!isTarget(a.target)) fail(`${where}: cycle needs a target`);
       if (!Array.isArray(a.levels) || a.levels.length < 2 || !a.levels.every(isLevel)) fail(`${where}: cycle needs at least two levels`);
       break;
+    case 'timer':
+      // After `minutes`, set target to `level` (default off). A new timer on the same target replaces the old one.
+      if (!isTarget(a.target)) fail(`${where}: timer needs a target`);
+      if (!(Number.isInteger(a.minutes) && a.minutes >= 1 && a.minutes <= 1440)) fail(`${where}: timer minutes must be 1-1440`);
+      if (a.level != null && !isLevel(a.level)) fail(`${where}: timer level must be 0-100`);
+      if (a.fade != null && !(typeof a.fade === 'number' && a.fade >= 0 && a.fade <= 3600)) fail(`${where}: fade must be seconds`);
+      break;
+    case 'cancel_timer':
+      if (!isTarget(a.target)) fail(`${where}: cancel_timer needs a target`);
+      break;
   }
   return a;
 }
 
 function validateConfig(cfg) {
   if (!cfg || typeof cfg !== 'object') fail('config must be an object');
-  const out = { version: 1, settings: {}, groups: [], presets: [], bindings: [] };
+  const out = { version: 2, settings: {}, groups: [], presets: [], bindings: [], favorites: [] };
   const s = cfg.settings || {};
   out.settings.double_ms = clampInt(s.double_ms, 150, 1500, 350);
   out.settings.hold_ms = clampInt(s.hold_ms, 250, 3000, 500);
   out.settings.group_on_level = clampInt(s.group_on_level, 1, 100, 100);
   out.settings.default_fade = typeof s.default_fade === 'number' && s.default_fade >= 0 && s.default_fade <= 60 ? s.default_fade : 0.5;
+  out.settings.night_start = isClock(s.night_start) ? s.night_start : '22:00';
+  out.settings.night_end = isClock(s.night_end) ? s.night_end : '06:30';
+  out.settings.night_level = clampInt(s.night_level, 1, 100, 30);
+  out.settings.home_name = typeof s.home_name === 'string' ? s.home_name.trim().slice(0, 40) : '';
 
   const groupIds = new Set();
   for (const g of arr(cfg.groups, 'groups')) {
@@ -93,13 +109,27 @@ function validateConfig(cfg) {
     if (seen.has(key)) fail(`two bindings for ${key}`);
     seen.add(key);
     if (!Array.isArray(b.actions)) fail(`binding ${b.id}: actions must be a list`);
-    const actions = b.actions.map((a, i) => validateAction(a, `binding ${b.id} action ${i + 1}`));
-    for (const a of actions) {
-      if (a.type === 'preset' && !presetIds.has(a.preset_id)) fail(`binding ${b.id}: unknown preset ${a.preset_id}`);
-      if (a.target && a.target.startsWith('g:') && !groupIds.has(a.target.slice(2))) fail(`binding ${b.id}: unknown group ${a.target.slice(2)}`);
+    const checkActions = (list, label) => {
+      const acts = list.map((a, i) => validateAction(a, `${label} action ${i + 1}`));
+      for (const a of acts) {
+        if (a.type === 'preset' && !presetIds.has(a.preset_id)) fail(`${label}: unknown preset ${a.preset_id}`);
+        if (a.target && a.target.startsWith('g:') && !groupIds.has(a.target.slice(2))) fail(`${label}: unknown group ${a.target.slice(2)}`);
+      }
+      return acts;
+    };
+    const actions = checkActions(b.actions, `binding ${b.id}`);
+    // Optional night-time alternative: between night_start and night_end run these instead.
+    let night = null;
+    if (b.night && typeof b.night === 'object') {
+      if (!Array.isArray(b.night.actions)) fail(`binding ${b.id}: night.actions must be a list`);
+      night = { actions: checkActions(b.night.actions, `binding ${b.id} (night)`) };
     }
-    out.bindings.push({ id: b.id, device_id: b.device_id, button_number: b.button_number, gesture: b.gesture, actions, name: typeof b.name === 'string' ? b.name.slice(0, 60) : '' });
+    out.bindings.push({ id: b.id, device_id: b.device_id, button_number: b.button_number, gesture: b.gesture, actions, night, enabled: b.enabled !== false, name: typeof b.name === 'string' ? b.name.slice(0, 60) : '' });
   }
+  for (const f of arr(cfg.favorites, 'favorites')) {
+    if (typeof f === 'string' && (isTarget(f) || /^(p|s):[A-Za-z0-9_-]+$/.test(f))) out.favorites.push(f);
+  }
+  out.favorites = [...new Set(out.favorites)].slice(0, 24);
   return out;
 }
 

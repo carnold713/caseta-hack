@@ -23,15 +23,16 @@ import logging
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import websockets
 from pylutron_caseta.smartbridge import Smartbridge
 
-from engine import ActionRunner, GestureEngine
+from engine import ActionRunner, GestureEngine, in_night_window
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -71,7 +72,7 @@ class Agent:
         self._bindings: Dict[str, Dict[str, list]] = {}  # "device/button" -> gesture -> actions
         self._button_keys: Dict[str, str] = {}  # button_id -> "device/button"
         self.gestures = GestureEngine(self._on_gesture, self._has_double)
-        self.runner = ActionRunner(lambda: self.bridge, lambda: self.config)
+        self.runner = ActionRunner(lambda: self.bridge, lambda: self.config, on_timer=self._on_timer)
         self._index_bindings()
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}
@@ -102,11 +103,22 @@ class Agent:
                  len(cfg.get("bindings", [])), len(cfg.get("groups", [])), len(cfg.get("presets", [])))
 
     def _index_bindings(self) -> None:
-        idx: Dict[str, Dict[str, list]] = {}
+        idx: Dict[str, Dict[str, dict]] = {}
         for b in self.config.get("bindings", []):
+            if b.get("enabled") is False:
+                continue
             key = f"{b['device_id']}/{b['button_number']}"
-            idx.setdefault(key, {})[b["gesture"]] = b.get("actions", [])
+            idx.setdefault(key, {})[b["gesture"]] = b
         self._bindings = idx
+
+    def _actions_for(self, binding: dict) -> list:
+        night = binding.get("night")
+        if night and night.get("actions"):
+            s = self.config.get("settings", {})
+            now_hm = time.strftime("%H:%M")
+            if in_night_window(now_hm, s.get("night_start", "22:00"), s.get("night_end", "06:30")):
+                return night["actions"]
+        return binding.get("actions", [])
 
     def _has_double(self, key: str) -> bool:
         return "double" in self._bindings.get(key, {})
@@ -193,11 +205,16 @@ class Agent:
 
     def _on_gesture(self, key: str, gesture: str) -> None:
         device_id, _, num = key.partition("/")
-        LOG.info("gesture %s on pico %s button %s", gesture, device_id, num)
-        self.send({"type": "gesture", "device_id": device_id, "button_number": int(num), "gesture": gesture})
-        actions = self._bindings.get(key, {}).get(gesture)
+        binding = self._bindings.get(key, {}).get(gesture)
+        actions = self._actions_for(binding) if binding else []
+        LOG.info("gesture %s on pico %s button %s (%s)", gesture, device_id, num, "bound" if actions else "unbound")
+        self.send({"type": "gesture", "device_id": device_id, "button_number": int(num), "gesture": gesture,
+                   "bound": bool(actions), "binding_id": binding.get("id") if binding else None})
         if actions:
             asyncio.create_task(self._run_bound(actions, key, gesture))
+
+    def _on_timer(self, target: str, ends_at: Optional[float], level: int) -> None:
+        self.send({"type": "timer", "target": target, "ends_at": ends_at, "level": level})
 
     async def _run_bound(self, actions: list, key: str, gesture: str) -> None:
         try:
@@ -239,6 +256,7 @@ class Agent:
                     await ws.send(json.dumps({
                         "type": "hello", "version": VERSION, "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
+                        "timers": self.runner.timers,
                     }))
                     LOG.info("hub connected")
                     sender = asyncio.create_task(self._pump(ws))

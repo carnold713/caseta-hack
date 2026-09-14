@@ -121,14 +121,30 @@ FAN_ORDER = ["Off", "Low", "Medium", "MediumHigh", "High"]
 class ActionRunner:
     """Executes action lists against a pylutron-caseta Smartbridge."""
 
-    def __init__(self, bridge_getter: Callable[[], Any], config_getter: Callable[[], dict]) -> None:
+    def __init__(
+        self,
+        bridge_getter: Callable[[], Any],
+        config_getter: Callable[[], dict],
+        on_timer: Optional[Callable[[str, Optional[float], int], None]] = None,
+    ) -> None:
         self._bridge = bridge_getter
         self._config = config_getter
         self._cycle_pos: Dict[str, int] = {}
+        self._timers: Dict[str, asyncio.Task] = {}   # target -> pending sleep timer
+        self._on_timer = on_timer                     # (target, ends_at epoch or None, level)
+
+    @property
+    def timers(self) -> Dict[str, dict]:
+        out = {}
+        for target, task in self._timers.items():
+            if not task.done():
+                out[target] = getattr(task, "timer_info", {})
+        return out
 
     # ----- helpers -----
     def _resolve(self, target: str) -> List[str]:
         kind, _, ident = target.partition(":")
+        bridge = self._bridge()
         if kind == "d":
             return [ident]
         if kind == "g":
@@ -136,6 +152,13 @@ class ActionRunner:
                 if g.get("id") == ident:
                     return list(g.get("device_ids", []))
             LOG.warning("unknown group %s", ident)
+            return []
+        if kind == "a" and bridge:   # every controllable device in a room
+            return [d["device_id"] for d in bridge.devices.values()
+                    if d.get("zone") and d.get("area") == ident and d.get("type") not in _COVER_TYPES]
+        if kind == "h" and ident == "all" and bridge:   # every light and switch in the house
+            return [d["device_id"] for d in bridge.devices.values()
+                    if d.get("zone") and d.get("type") in _LIGHT_TYPES | _SWITCH_TYPES]
         return []
 
     def _group_on_level(self, target: str) -> int:
@@ -184,6 +207,43 @@ class ActionRunner:
         else:
             await bridge.set_value(device_id, int(level))
 
+    # ----- timers -----
+    def cancel_timer(self, target: str) -> None:
+        t = self._timers.pop(target, None)
+        if t and not t.done():
+            t.cancel()
+            if self._on_timer:
+                self._on_timer(target, None, 0)
+
+    def _cancel_timers_touching(self, device_ids: List[str]) -> None:
+        touched = set(device_ids)
+        for target in list(self._timers):
+            if touched & set(self._resolve(target)):
+                self.cancel_timer(target)
+
+    def start_timer(self, target: str, minutes: int, level: int, fade: Optional[float]) -> None:
+        self.cancel_timer(target)
+        ends_at = time.time() + minutes * 60
+
+        async def fire() -> None:
+            try:
+                await asyncio.sleep(minutes * 60)
+            except asyncio.CancelledError:
+                return
+            self._timers.pop(target, None)
+            if self._on_timer:
+                self._on_timer(target, None, level)
+            try:
+                await self.run_one({"type": "level", "target": target, "level": level, "fade": fade if fade is not None else 3})
+            except Exception as exc:  # noqa: BLE001
+                LOG.error("timer on %s failed: %s", target, exc)
+
+        task = asyncio.create_task(fire())
+        task.timer_info = {"ends_at": ends_at, "level": level}  # type: ignore[attr-defined]
+        self._timers[target] = task
+        if self._on_timer:
+            self._on_timer(target, ends_at, level)
+
     # ----- public -----
     async def run(self, actions: List[dict]) -> None:
         for action in actions:
@@ -211,6 +271,7 @@ class ActionRunner:
             if preset is None:
                 raise RuntimeError(f"unknown preset {a['preset_id']}")
             fade = preset.get("fade")
+            self._cancel_timers_touching(list(preset.get("levels", {}).keys()))
             coros = []
             for device_id, level in preset.get("levels", {}).items():
                 if device_id not in bridge.devices:
@@ -223,11 +284,19 @@ class ActionRunner:
             await asyncio.gather(*coros)
             return None
 
+        if t == "cancel_timer":
+            self.cancel_timer(a["target"])
+            return None
+        if t == "timer":
+            self.start_timer(a["target"], int(a["minutes"]), int(a.get("level", 0) or 0), a.get("fade"))
+            return None
+
         targets = self._resolve(a.get("target", ""))
         if not targets:
             raise RuntimeError(f"target {a.get('target')} resolves to nothing")
 
         if t == "level":
+            self._cancel_timers_touching(targets)
             level = a.get("level")
             fade = a.get("fade")
             if level == "toggle":
@@ -286,3 +355,22 @@ _LIGHT_TYPES = {
     "WallDimmer", "PlugInDimmer", "InLineDimmer", "SunnataDimmer", "TempInWallPaddleDimmer",
     "WallDimmerWithPreset", "Dimmed", "DivaSmartDimmer", "PowPak0-10V",
 }
+_SWITCH_TYPES = {
+    "WallSwitch", "OutdoorPlugInSwitch", "PlugInSwitch", "InLineSwitch", "PowPakSwitch",
+    "SunnataSwitch", "TempInWallPaddleSwitch", "Switched", "DivaSmartSwitch",
+}
+_COVER_TYPES = {
+    "SerenaHoneycombShade", "SerenaRollerShade", "TriathlonHoneycombShade", "TriathlonEssentialsRollerShade",
+    "TriathlonRollerShade", "TriathlonTiltOnlyWoodBlind", "QsWirelessShade", "QsWirelessHorizontalSheerBlind",
+    "QsWirelessWoodBlind", "RightDrawDrape", "Shade", "Tilt", "SerenaTiltOnlyWoodBlind", "PalladiomWireFreeShade",
+    "SerenaEssentialsRollerShade",
+}
+
+
+def in_night_window(now_hm: str, start: str, end: str) -> bool:
+    """True when the clock time (HH:MM) falls in [start, end); the window may wrap midnight."""
+    if start == end:
+        return False
+    if start < end:
+        return start <= now_hm < end
+    return now_hm >= start or now_hm < end
