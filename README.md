@@ -58,7 +58,8 @@ the service:
 | `DATA_DIR` | `/data`, with a volume mounted there so config survives deploys |
 | `ANDROID_PACKAGE_NAME`, `ANDROID_CERT_SHA256` | optional, after PWABuilder packaging (see below) |
 
-Then generate a domain. `/healthz` is the health check.
+Then generate a domain. `/healthz` is the health check. The current
+deployment lives at https://hub-production-fa07.up.railway.app.
 
 ### 2. Agent at home
 
