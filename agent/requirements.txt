@@ -1,0 +1,2 @@
+pylutron-caseta>=0.24
+websockets>=12

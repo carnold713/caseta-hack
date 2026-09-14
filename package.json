@@ -1,0 +1,20 @@
+{
+  "name": "caseta-hack",
+  "version": "0.1.0",
+  "description": "Pico remote superpowers for Lutron Caseta: a Railway-hosted hub + PWA and a small local agent that talks LEAP to the Smart Bridge.",
+  "private": true,
+  "main": "hub/server.js",
+  "scripts": {
+    "start": "node hub/server.js",
+    "dev": "APP_PASSWORD=dev AGENT_TOKEN=dev node hub/server.js",
+    "icons": "node scripts/make-icons.js",
+    "test": "node --test hub/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

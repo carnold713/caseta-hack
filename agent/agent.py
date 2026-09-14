@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""caseta-hack agent: the in-home half.
+
+Connects to the Caseta Smart Bridge over LEAP (TLS, port 8081) using the
+certificates from pair.py, listens to every Pico button, resolves gestures
+(single / double / hold), and runs the bound actions locally. It also dials
+out to the hub on Railway over a WebSocket so the phone app can control
+lights and edit bindings from anywhere. If the hub is unreachable the agent
+keeps working from the last config it cached on disk.
+
+Environment:
+    BRIDGE_HOST   IP of the Smart Bridge (required)
+    HUB_URL       wss://<your-app>.up.railway.app/ws/agent (optional, local-only without it)
+    AGENT_TOKEN   must match the hub's AGENT_TOKEN
+    DATA_DIR      where the certs and config cache live (default ./data)
+    LOG_LEVEL     debug|info|warning (default info)
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import signal
+import sys
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import websockets
+from pylutron_caseta.smartbridge import Smartbridge
+
+from engine import ActionRunner, GestureEngine
+
+VERSION = "0.1.0"
+LOG = logging.getLogger("agent")
+
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
+BRIDGE_HOST = os.environ.get("BRIDGE_HOST", "")
+HUB_URL = os.environ.get("HUB_URL", "").strip()
+AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "")
+CONFIG_CACHE = DATA_DIR / "config.cache.json"
+
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "version": 1,
+    "settings": {"double_ms": 350, "hold_ms": 500, "group_on_level": 100, "default_fade": 0.5},
+    "groups": [],
+    "presets": [],
+    "bindings": [],
+}
+
+
+class Agent:
+    def __init__(self) -> None:
+        self.bridge: Optional[Smartbridge] = None
+        self.config: Dict[str, Any] = self._load_cached_config()
+        self.ws = None  # hub socket
+        self._send_q: asyncio.Queue = asyncio.Queue()
+        self._bindings: Dict[str, Dict[str, list]] = {}  # "device/button" -> gesture -> actions
+        self._button_keys: Dict[str, str] = {}  # button_id -> "device/button"
+        self.gestures = GestureEngine(self._on_gesture, self._has_double)
+        self.runner = ActionRunner(lambda: self.bridge, lambda: self.config)
+        self._index_bindings()
+        self._state_flush: Optional[asyncio.Task] = None
+        self._dirty_states: Dict[str, dict] = {}
+
+    # ---------- config ----------
+    def _load_cached_config(self) -> Dict[str, Any]:
+        try:
+            cfg = json.loads(CONFIG_CACHE.read_text())
+            LOG.info("loaded cached config with %d bindings", len(cfg.get("bindings", [])))
+            return cfg
+        except FileNotFoundError:
+            return dict(DEFAULT_CONFIG)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("config cache unreadable (%s), starting empty", exc)
+            return dict(DEFAULT_CONFIG)
+
+    def apply_config(self, cfg: Dict[str, Any]) -> None:
+        self.config = cfg
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            CONFIG_CACHE.write_text(json.dumps(cfg))
+        except OSError as exc:
+            LOG.warning("could not cache config: %s", exc)
+        self._index_bindings()
+        s = cfg.get("settings", {})
+        self.gestures.configure(int(s.get("double_ms", 350)), int(s.get("hold_ms", 500)))
+        LOG.info("config applied: %d bindings, %d groups, %d presets",
+                 len(cfg.get("bindings", [])), len(cfg.get("groups", [])), len(cfg.get("presets", [])))
+
+    def _index_bindings(self) -> None:
+        idx: Dict[str, Dict[str, list]] = {}
+        for b in self.config.get("bindings", []):
+            key = f"{b['device_id']}/{b['button_number']}"
+            idx.setdefault(key, {})[b["gesture"]] = b.get("actions", [])
+        self._bindings = idx
+
+    def _has_double(self, key: str) -> bool:
+        return "double" in self._bindings.get(key, {})
+
+    # ---------- bridge ----------
+    async def connect_bridge(self) -> None:
+        key, crt, ca = (DATA_DIR / "caseta.key", DATA_DIR / "caseta.crt", DATA_DIR / "caseta-bridge.crt")
+        for p in (key, crt, ca):
+            if not p.exists():
+                LOG.error("missing %s. Run:  python pair.py %s", p, BRIDGE_HOST or "<bridge-ip>")
+                sys.exit(1)
+        self.bridge = Smartbridge.create_tls(BRIDGE_HOST, str(key), str(crt), str(ca), on_connect_callback=self._on_bridge_connect)
+        LOG.info("connecting to bridge at %s ...", BRIDGE_HOST)
+        await self.bridge.connect()
+        LOG.info("bridge connected: %d devices, %d buttons, %d scenes",
+                 len(self.bridge.devices), len(self.bridge.buttons), len(self.bridge.scenes))
+        self._wire_subscriptions()
+
+    def _on_bridge_connect(self) -> None:
+        # pylutron-caseta reconnects on its own; re-announce the inventory when it does.
+        LOG.info("bridge (re)connected")
+        if self.bridge and self.bridge.devices:
+            self._wire_subscriptions()
+            self.send({"type": "inventory", "inventory": self.inventory()})
+            self.send({"type": "state", "states": self.all_states()})
+
+    def _wire_subscriptions(self) -> None:
+        assert self.bridge
+        for button_id, btn in self.bridge.buttons.items():
+            key = f"{btn['parent_device']}/{btn['button_number']}"
+            self._button_keys[button_id] = key
+            self.bridge.add_button_subscriber(button_id, lambda ev, b=button_id: self._on_button(b, ev))
+        for device_id, dev in self.bridge.devices.items():
+            if dev.get("zone"):
+                self.bridge.add_subscriber(device_id, lambda d=device_id: self._on_zone(d))
+
+    def inventory(self) -> Dict[str, Any]:
+        assert self.bridge
+        b = self.bridge
+        devices = {}
+        for did, d in b.devices.items():
+            devices[did] = {
+                "device_id": did,
+                "name": d.get("device_name") or d.get("name"),
+                "full_name": d.get("name"),
+                "type": d.get("type"),
+                "model": d.get("model"),
+                "serial": d.get("serial"),
+                "zone": d.get("zone"),
+                "area": d.get("area"),
+                "domain": _domain(d.get("type")),
+            }
+        buttons = {}
+        for bid, bt in b.buttons.items():
+            buttons[bid] = {
+                "button_id": bid,
+                "device_id": bt.get("parent_device"),
+                "button_number": bt.get("button_number"),
+            }
+        areas = {aid: {"id": aid, "name": a.get("name"), "parent_id": a.get("parent_id")} for aid, a in b.areas.items()}
+        scenes = {sid: {"scene_id": sid, "name": s.get("name")} for sid, s in b.scenes.items()}
+        return {"devices": devices, "buttons": buttons, "areas": areas, "scenes": scenes,
+                "bridge": {"host": BRIDGE_HOST}}
+
+    def all_states(self) -> Dict[str, dict]:
+        assert self.bridge
+        out = {}
+        for did, d in self.bridge.devices.items():
+            if d.get("zone"):
+                out[did] = _state_of(d)
+        return out
+
+    # ---------- events ----------
+    def _on_button(self, button_id: str, event: str) -> None:
+        key = self._button_keys.get(button_id)
+        if key is None:
+            return
+        device_id, _, num = key.partition("/")
+        self.send({"type": "button", "device_id": device_id, "button_number": int(num), "event": event})
+        if event == "Press":
+            self.gestures.press(key)
+        elif event == "Release":
+            self.gestures.release(key)
+
+    def _on_gesture(self, key: str, gesture: str) -> None:
+        device_id, _, num = key.partition("/")
+        LOG.info("gesture %s on pico %s button %s", gesture, device_id, num)
+        self.send({"type": "gesture", "device_id": device_id, "button_number": int(num), "gesture": gesture})
+        actions = self._bindings.get(key, {}).get(gesture)
+        if actions:
+            asyncio.create_task(self._run_bound(actions, key, gesture))
+
+    async def _run_bound(self, actions: list, key: str, gesture: str) -> None:
+        try:
+            await self.runner.run(actions)
+        except Exception as exc:  # noqa: BLE001
+            self.send({"type": "log", "level": "error", "msg": f"{gesture} on {key}: {exc}"})
+
+    def _on_zone(self, device_id: str) -> None:
+        assert self.bridge
+        self._dirty_states[device_id] = _state_of(self.bridge.devices[device_id])
+        if self._state_flush is None or self._state_flush.done():
+            self._state_flush = asyncio.create_task(self._flush_states())
+
+    async def _flush_states(self) -> None:
+        await asyncio.sleep(0.05)  # coalesce bursts (a group fade updates many zones at once)
+        batch, self._dirty_states = self._dirty_states, {}
+        self.send({"type": "state", "states": batch})
+
+    # ---------- hub link ----------
+    def send(self, msg: dict) -> None:
+        if HUB_URL:
+            self._send_q.put_nowait(json.dumps(msg))
+
+    async def hub_loop(self) -> None:
+        if not HUB_URL:
+            LOG.warning("HUB_URL not set: running local-only (bindings still work)")
+            return
+        url = HUB_URL + ("&" if "?" in HUB_URL else "?") + "token=" + AGENT_TOKEN
+        backoff = 1
+        while True:
+            try:
+                LOG.info("connecting to hub %s", HUB_URL)
+                async with websockets.connect(url, ping_interval=20, ping_timeout=20, max_size=4 * 1024 * 1024) as ws:
+                    self.ws = ws
+                    backoff = 1
+                    # Drop anything queued while offline; a fresh hello carries the current truth.
+                    while not self._send_q.empty():
+                        self._send_q.get_nowait()
+                    await ws.send(json.dumps({
+                        "type": "hello", "version": VERSION, "bridge": {"host": BRIDGE_HOST},
+                        "inventory": self.inventory(), "states": self.all_states(),
+                    }))
+                    LOG.info("hub connected")
+                    sender = asyncio.create_task(self._pump(ws))
+                    try:
+                        async for raw in ws:
+                            await self._on_hub_message(json.loads(raw))
+                    finally:
+                        sender.cancel()
+                        self.ws = None
+            except (OSError, websockets.WebSocketException, asyncio.TimeoutError) as exc:
+                LOG.warning("hub link down: %s (retry in %ss)", exc, backoff)
+            except Exception as exc:  # noqa: BLE001
+                LOG.exception("hub loop error: %s", exc)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60)
+
+    async def _pump(self, ws) -> None:
+        while True:
+            msg = await self._send_q.get()
+            await ws.send(msg)
+
+    async def _on_hub_message(self, msg: dict) -> None:
+        t = msg.get("type")
+        if t == "config":
+            self.apply_config(msg["config"])
+        elif t == "command":
+            cid = msg.get("id")
+            action = msg.get("action") or {}
+            try:
+                if action.get("type") == "refresh":
+                    await self._refresh()
+                    detail = {"devices": len(self.bridge.devices) if self.bridge else 0}
+                else:
+                    await self.runner.run_one(action)
+                    detail = None
+                self.send({"type": "result", "id": cid, "ok": True, "detail": detail})
+            except Exception as exc:  # noqa: BLE001
+                LOG.error("command %s failed: %s", action, exc)
+                self.send({"type": "result", "id": cid, "ok": False, "error": str(exc)})
+
+    async def _refresh(self) -> None:
+        # Reconnect to re-read /device, /button, /virtualbutton after changes in the Lutron app.
+        assert self.bridge
+        await self.bridge.connect()
+        self._wire_subscriptions()
+        self.send({"type": "inventory", "inventory": self.inventory()})
+        self.send({"type": "state", "states": self.all_states()})
+
+
+def _domain(t: Optional[str]) -> str:
+    if not t:
+        return "other"
+    if t.startswith("Pico") or t == "PaddleSwitchPico":
+        return "pico"
+    if t in ("WallDimmer", "PlugInDimmer", "InLineDimmer", "SunnataDimmer", "TempInWallPaddleDimmer",
+             "WallDimmerWithPreset", "Dimmed", "DivaSmartDimmer", "PowPak0-10V", "SpectrumTune", "WhiteTune", "ColorTune"):
+        return "light"
+    if t in ("WallSwitch", "OutdoorPlugInSwitch", "PlugInSwitch", "InLineSwitch", "PowPakSwitch",
+             "SunnataSwitch", "TempInWallPaddleSwitch", "Switched", "DivaSmartSwitch"):
+        return "switch"
+    if t in ("CasetaFanSpeedController", "MaestroFanSpeedController", "FanSpeed"):
+        return "fan"
+    if "Shade" in t or "Blind" in t or "Drape" in t or t in ("Shade", "Tilt"):
+        return "cover"
+    if t == "SmartBridge":
+        return "bridge"
+    return "other"
+
+
+def _state_of(d: dict) -> dict:
+    lvl = d.get("current_state", -1)
+    return {"level": int(lvl) if isinstance(lvl, (int, float)) and lvl >= 0 else None, "fan_speed": d.get("fan_speed")}
+
+
+async def main() -> None:
+    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "info").upper(), format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    logging.getLogger("pylutron_caseta").setLevel(logging.WARNING)
+    if not BRIDGE_HOST:
+        LOG.error("BRIDGE_HOST is required (the Smart Bridge's IP; give it a DHCP reservation)")
+        sys.exit(2)
+    agent = Agent()
+    await agent.connect_bridge()
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            pass
+    hub = asyncio.create_task(agent.hub_loop())
+    await stop.wait()
+    hub.cancel()
+    if agent.bridge:
+        await agent.bridge.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

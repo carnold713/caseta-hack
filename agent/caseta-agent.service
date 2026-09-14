@@ -1,0 +1,19 @@
+# systemd unit for a Raspberry Pi or any always-on Linux box.
+#   sudo cp caseta-agent.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now caseta-agent
+[Unit]
+Description=caseta-hack agent (Pico gestures for Lutron Caseta)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/caseta-hack/agent
+EnvironmentFile=/home/pi/caseta-hack/agent/.env
+ExecStart=/home/pi/caseta-hack/agent/.venv/bin/python agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
