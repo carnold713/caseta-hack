@@ -40,8 +40,9 @@ def main() -> int:
     (data_dir / "caseta.crt").write_text(result["cert"])
     (data_dir / "caseta-bridge.crt").write_text(result["ca"])
     os.chmod(data_dir / "caseta.key", 0o600)
+    (data_dir / "bridge_host").write_text(host + "\n")  # agent.py reads this when BRIDGE_HOST is unset
     print(f"Paired. Bridge LEAP version {result['version']}. Certificates written to {data_dir}/")
-    print(f"Now run:  BRIDGE_HOST={host} python agent.py")
+    print(f"Bridge address {host} saved. Now run:  python agent.py")
     return 0
 
 

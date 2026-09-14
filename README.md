@@ -71,13 +71,13 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python find_bridge.py              # prints the bridge's IP
 python pair.py <ip>                # press the button on the back of the bridge when asked
-cp .env.example .env               # fill in BRIDGE_HOST, HUB_URL, AGENT_TOKEN
+cp .env.example .env               # fill in HUB_URL and AGENT_TOKEN
 set -a; . ./.env; set +a; python agent.py
 ```
 
-The bridge IP: give it a DHCP reservation in your router, or find it under
-the Lutron app's Settings › Advanced › Integration. `pair.py` writes
-`caseta.key`, `caseta.crt` and `caseta-bridge.crt` into `agent/data/`.
+`pair.py` writes `caseta.key`, `caseta.crt` and `caseta-bridge.crt` into
+`agent/data/` and remembers the bridge's address there too. Give the bridge
+a DHCP reservation in your router so that address never changes.
 Keep them private: they are full control of your lights.
 
 Run it for good with `caseta-agent.service` (systemd) or the `Dockerfile`

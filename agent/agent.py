@@ -9,7 +9,7 @@ lights and edit bindings from anywhere. If the hub is unreachable the agent
 keeps working from the last config it cached on disk.
 
 Environment:
-    BRIDGE_HOST   IP of the Smart Bridge (required)
+    BRIDGE_HOST   IP of the Smart Bridge (optional: pair.py saves it in DATA_DIR/bridge_host)
     HUB_URL       wss://<your-app>.up.railway.app/ws/agent (optional, local-only without it)
     AGENT_TOKEN   must match the hub's AGENT_TOKEN
     DATA_DIR      where the certs and config cache live (default ./data)
@@ -35,10 +35,23 @@ VERSION = "0.1.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
-BRIDGE_HOST = os.environ.get("BRIDGE_HOST", "")
 HUB_URL = os.environ.get("HUB_URL", "").strip()
 AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "")
 CONFIG_CACHE = DATA_DIR / "config.cache.json"
+
+
+def _bridge_host() -> str:
+    """BRIDGE_HOST env var wins; otherwise the address pair.py saved."""
+    env = os.environ.get("BRIDGE_HOST", "").strip()
+    if env:
+        return env
+    try:
+        return (DATA_DIR / "bridge_host").read_text().strip()
+    except OSError:
+        return ""
+
+
+BRIDGE_HOST = _bridge_host()
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "version": 1,
@@ -304,7 +317,7 @@ async def main() -> None:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "info").upper(), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     logging.getLogger("pylutron_caseta").setLevel(logging.WARNING)
     if not BRIDGE_HOST:
-        LOG.error("BRIDGE_HOST is required (the Smart Bridge's IP; give it a DHCP reservation)")
+        LOG.error("no bridge address: run  python pair.py <bridge-ip>  first, or set BRIDGE_HOST")
         sys.exit(2)
     agent = Agent()
     await agent.connect_bridge()
