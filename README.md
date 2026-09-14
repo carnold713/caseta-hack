@@ -19,19 +19,25 @@ Pico bindings from its cached config.
 
 ## What you get
 
-- **Gestures per Pico button:** single click, double click, hold, hold-begins,
-  hold-ends (the last two make "hold to raise, release to stop" possible).
-- **Actions:** set level / on / off / toggle with a fade, step brightness,
-  cycle through levels, raise / lower / stop, fan speed, run a Lutron scene,
-  run an app scene, wait. Several actions chain on one gesture.
-- **Groups:** any set of devices a button or scene can drive as one, with
-  its own "on" level.
-- **App scenes:** exact levels on any mix of devices with a fade. Capture the
-  current state of the house with one tap.
-- **Live view:** press a Pico button and the app jumps to it and lights up
-  the gesture it detected. Handy for tuning the timing.
-- **Home screen:** dimmer sliders, switch toggles, fan speeds, shade
-  open / stop / close, grouped by room.
+- **Remotes:** tap a button on a picture of the Pico (or press it on the
+  real remote and the app jumps there), then say what a press, a double
+  press and a hold do. One-sentence choices: turn the room on or off,
+  nightlight, movie mode, brighten while holding, sleep timer, run a
+  scene, everything off. "More options" opens the full editor: fade
+  times, several steps in a row, waits, timers.
+- **Night-time versions:** any button can do something else between the
+  hours you set, like turning on dim instead of bright.
+- **Rooms come from the bridge.** No groups to build; "Kitchen" is already
+  a thing a button can control. Hand-picked sets exist under Advanced.
+- **Scenes:** a look for the whole house, saved from the lights as they
+  are right now, with a fade. Lutron's own scenes sit in the same list.
+- **Home:** what is on right now, All off (hold it to close shades and stop
+  fans too), starred favorites, scenes, and rooms that open to sliders,
+  toggles, fan speeds and shade controls. Long-press a favorite for a
+  sleep timer.
+- **Autosave with Undo.** Nothing to remember to save.
+- **Recent activity:** what was pressed and what happened, for "who left
+  the lights on" and for tuning the double-press timing.
 
 Works with the regular Smart Bridge (L-BDG2) and the Pro (L-BDGPRO2).
 
@@ -61,9 +67,17 @@ the service:
 Then generate a domain. `/healthz` is the health check. The current
 deployment lives at https://hub-production-fa07.up.railway.app.
 
-### 2. Agent at home
+### 2. Connector at home
 
-On the always-on machine (Python 3.10+):
+The easy way: sign in to the app, open Settings › Set up › Connect your
+home › Show me how, and paste the one line it gives you into a terminal on
+the always-on machine. The line fetches `/install.sh` with the hub URL and
+token baked in; the script installs Python dependencies, finds and pairs
+the bridge (press its button when asked), and registers a launchd job
+(Mac) or a systemd user service (Linux, Raspberry Pi) so it survives
+reboots.
+
+By hand, on a machine with Python 3.10+:
 
 ```
 git clone https://github.com/carnold713/caseta-hack && cd caseta-hack/agent
@@ -98,13 +112,13 @@ what makes Android trust the app and hide the browser bar.
 
 ## Configure
 
-1. **Picos** tab: press any button on a Pico and its remote opens with that
-   button selected. Add a gesture, add actions, **Save**.
-2. **Groups** tab: name it, tick devices.
-3. **Scenes** tab: new scene, set the lights how you like them in the Lutron
-   app or on the Home tab, then **Capture current levels**.
-4. **Setup** tab: tune the double-click window and hold threshold while
-   watching the live log.
+1. **Remotes** tab: press any button on a Pico and its remote opens. Tap a
+   button, tap Press / Press twice / Hold, pick what should happen. It
+   saves as you go.
+2. **Scenes** tab: set the lights how you like them (Home tab or the real
+   switches), tap +, name it. A remote button can run it.
+3. **Settings**: night hours, and under Advanced the double-press speed
+   and hold length with a live tester.
 
 A worked example, a 3-button Pico in the kitchen:
 
@@ -126,14 +140,14 @@ binding fires instantly.
 ## Layout
 
 ```
-hub/server.js     Express + ws: static PWA, /api/*, /ws/app (phones), /ws/agent (home)
+hub/server.js     Express + ws: static PWA, /api/*, /ws/app (phones), /ws/agent (home), /install.sh
 hub/validate.js   config schema, shared truth for bindings and actions
 hub/store.js      JSON files in DATA_DIR
-web/              the PWA: index.html, app.js, styles.css, manifest, sw.js, icons/
+web/              the PWA: index.html, styles.css, js/{core,home,remotes,scenes,settings,boot}.js, sw.js, icons/
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
-agent/engine.py   gesture state machine + action runner (pylutron-caseta underneath)
-agent/pair.py     one-time certificate pairing
-scripts/          make-icons.js (dependency-free PNG generator)
+agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
+agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
+scripts/          install.sh (served filled-in by the hub), make-icons.js
 ```
 
 ## Local development

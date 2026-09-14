@@ -106,6 +106,21 @@ app.post('/api/refresh', requireAuth, async (req, res) => {
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
+// One-line installer for the home connector, with this hub's URL and token baked in.
+// Requires the app token (as ?token=) so only a signed-in user can fetch it.
+const fs = require('fs');
+const INSTALL_TEMPLATE = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'install.sh'), 'utf8');
+app.get('/install.sh', requireAuth, (req, res) => {
+  const host = req.get('x-forwarded-host') || req.get('host');
+  const proto = (req.get('x-forwarded-proto') || req.protocol) === 'https' ? 'wss' : 'ws';
+  const body = INSTALL_TEMPLATE
+    .replace('__HUB_URL__', `${proto}://${host}/ws/agent`)
+    .replace('__AGENT_TOKEN__', AGENT_TOKEN)
+    .replace('__REPO__', process.env.REPO_URL || 'https://github.com/carnold713/caseta-hack')
+    .replace('__BRANCH__', process.env.REPO_BRANCH || 'claude/loving-fermi-ius0ui');
+  res.type('text/x-shellscript').send(body);
+});
+
 // Digital Asset Links for the PWABuilder Android package (Trusted Web Activity).
 app.get('/.well-known/assetlinks.json', (req, res) => {
   res.type('application/json');
