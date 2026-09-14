@@ -1,6 +1,6 @@
 /* Service worker: caches the app shell so the PWA opens instantly and offline.
    API and WebSocket traffic is never cached. Bump VERSION when shell files change. */
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = ['/', '/index.html', '/styles.css', '/manifest.webmanifest', '/js/core.js', '/js/pico.js', '/js/home.js', '/js/remotes.js', '/js/scenes.js', '/js/settings.js', '/js/boot.js', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png'];
 
 self.addEventListener('install', e => {

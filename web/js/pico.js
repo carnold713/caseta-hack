@@ -5,7 +5,11 @@
 // Physical layouts, top to bottom. Each slot: kind (big, half, round, rocker-top, rocker-bottom, quarter) and
 // which LEAP button number sits there (per model, from what the bridge reports).
 const PICO_MODELS = {
-  'PJ2-3BRL': { name: '5 buttons: on, raise, favorite, lower, off', types: ['Pico3ButtonRaiseLower'], slots: [['big', 0, 'on'], ['half', 3, 'up'], ['round', 1, 'fav'], ['half', 4, 'down'], ['big', 2, 'off']] },
+  'PJ2-3BRL': { name: '5 buttons: on, raise and lower around a round favorite, off', types: ['Pico3ButtonRaiseLower'],
+    slots: [['big', 0, 'on'], ['diag-up', 3, 'up'], ['diag-down', 4, 'down'], ['round-mid', 1, 'fav'], ['big', 2, 'off']],
+    // explicit geometry in the 100 x 212 box, measured from Lutron's product photo
+    geom: { on: [11, 12, 78, 54], mid: [11, 74, 78, 78], off: [11, 160, 78, 40], fav: [50, 113, 15] } },
+  'PJ2-3BRL-classic': { name: '5 buttons, older style: on, raise bar, favorite, lower bar, off', types: [], slots: [['big', 0, 'on'], ['half', 3, 'up'], ['round', 1, 'fav'], ['half', 4, 'down'], ['big', 2, 'off']] },
   'PJ2-2BRL': { name: '4 buttons: on, raise, lower, off', types: ['Pico2ButtonRaiseLower'], slots: [['big', 0, 'on'], ['half', 3, 'up'], ['half', 4, 'down'], ['big', 2, 'off']] },
   'PJ2-3B': { name: '3 buttons: on, favorite, off', types: ['Pico3Button'], slots: [['big', 0, 'on'], ['round', 1, 'fav'], ['big', 2, 'off']] },
   'PJ2-2B': { name: '2 buttons: on, off', types: ['Pico2Button'], slots: [['big', 0, 'on'], ['big', 2, 'off']] },
@@ -41,16 +45,28 @@ function picoSVG(d, opts = {}) {
   const set = new Set(bindings().filter(b => b.device_id === d.device_id).map(b => b.button_number));
   const W = 100, H = 212, PAD = 11, GAP = 5;
   const heights = { big: 30, half: 18, round: 30, quarter: 36, 'rocker-top': 84, 'rocker-bottom': 84 };
-  const total = slots.reduce((a, s) => a + heights[s.kind], 0) + GAP * (slots.length - 1);
+  const modelDef = PICO_MODELS[opts.model || picoModelFor(d)];
+  const geom = modelDef && modelDef.geom;
+  const total = geom ? 0 : slots.reduce((a, s) => a + heights[s.kind], 0) + GAP * (slots.length - 1);
   let y = (H - total) / 2;
   const parts = [];
   for (const s of slots) {
-    const h = heights[s.kind]; const x = PAD, w = W - PAD * 2;
+    let h = heights[s.kind] || 0; let x = PAD, w = W - PAD * 2;
     const cls = `pk ${s.real ? 'real' : 'ghost'} ${set.has(s.n) ? 'set' : ''} ${opts.selected === s.n ? 'sel' : ''}`;
     const attrs = opts.interactive && s.real ? `data-act="button-open" data-n="${s.n}" data-live="${d.device_id}/${s.n}" role="button" tabindex="0"` : `data-live="${d.device_id}/${s.n}"`;
     let shape, glyph = '';
-    const cx = W / 2, cy = y + h / 2, ink = f.ink;
-    if (s.kind === 'round') shape = `<circle cx="${cx}" cy="${cy}" r="${h / 2}" />`;
+    let cx = W / 2, cy = y + h / 2; const ink = f.ink;
+    if (geom) {
+      // fixed geometry: pick the box for this slot
+      if (s.glyph === 'on') { [x, y, w, h] = geom.on; cx = x + w / 2; cy = y + h / 2; shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" />`; }
+      else if (s.glyph === 'off') { [x, y, w, h] = geom.off; cx = x + w / 2; cy = y + h / 2; shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" />`; }
+      else if (s.kind === 'diag-up') { const [mx, my, mw, mh] = geom.mid; shape = `<path d="M${mx + 5},${my} h${mw - 10} a5,5 0 0 1 5,5 L${mx},${my + mh - 5} v-${mh - 10} a5,5 0 0 1 5,-5z" />`; cx = mx + mw * 0.22; cy = my + mh * 0.22; }
+      else if (s.kind === 'diag-down') { const [mx, my, mw, mh] = geom.mid; shape = `<path d="M${mx + mw},${my + 5} v${mh - 10} a5,5 0 0 1 -5,5 h-${mw - 10} a5,5 0 0 1 -5,-5z" />`; cx = mx + mw * 0.78; cy = my + mh * 0.78; }
+      else if (s.kind === 'round-mid') { const [fx, fy, fr] = geom.fav; cx = fx; cy = fy; shape = `<circle cx="${fx}" cy="${fy}" r="${fr}" />`; }
+      if (s.kind === 'diag-up' || s.kind === 'diag-down') { const [mx, my, mw, mh] = geom.mid; x = mx; y = my; w = mw; h = mh; }
+      if (s.kind === 'round-mid') { const [fx, fy, fr] = geom.fav; x = fx - fr; y = fy - fr; w = fr * 2; h = fr * 2; }
+    }
+    else if (s.kind === 'round') shape = `<circle cx="${cx}" cy="${cy}" r="${h / 2}" />`;
     else if (s.kind === 'rocker-top') shape = `<path d="M${x + 6},${y} h${w - 12} a6,6 0 0 1 6,6 v${h - 6} h-${w} v-${h - 6} a6,6 0 0 1 6,-6z" />`;
     else if (s.kind === 'rocker-bottom') shape = `<path d="M${x},${y} h${w} v${h - 6} a6,6 0 0 1 -6,6 h-${w - 12} a6,6 0 0 1 -6,-6z" />`;
     else shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${s.kind === 'half' ? 4 : 6}" />`;
@@ -62,8 +78,9 @@ function picoSVG(d, opts = {}) {
       case 'fav': glyph = `<circle cx="${cx}" cy="${cy}" r="3.2" fill="${ink}"/>`; break;
       default: glyph = `<text x="${cx}" y="${cy + 4.5}" text-anchor="middle" font-size="12" font-weight="700" fill="${ink}" font-family="Noto Sans, Inter, system-ui, sans-serif">${esc(s.glyph)}</text>`;
     }
-    parts.push(`<g class="${cls}" ${attrs}><g class="pk-shape" fill="${f.btn}" stroke="${f.btnEdge}" stroke-width="1">${shape}</g>${glyph}${set.has(s.n) ? `<circle cx="${x + w - 6}" cy="${y + 6}" r="2.6" class="pk-dot"/>` : ''}</g>`);
-    y += h + GAP;
+    const dot = s.kind === 'diag-up' ? [x + 6, y + h - 6] : s.kind === 'round-mid' ? [x + w - 2, y + 2] : [x + w - 6, y + 6];
+    parts.push(`<g class="${cls}" ${attrs}><g class="pk-shape" fill="${f.btn}" stroke="${f.btnEdge}" stroke-width="1">${shape}</g>${glyph}${set.has(s.n) ? `<circle cx="${dot[0]}" cy="${dot[1]}" r="2.6" class="pk-dot"/>` : ''}</g>`);
+    if (!geom) y += h + GAP;
   }
   return `<svg class="pico-svg ${opts.cls || ''}" viewBox="0 0 ${W} ${H}" width="${opts.width || 100}" aria-label="${esc(d.name)} remote">
     <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="16" fill="${f.body}" stroke="${f.edge}" stroke-width="1.5"/>
