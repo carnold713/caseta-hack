@@ -109,6 +109,11 @@ function validateConfig(cfg) {
   // What each light is for. Optional; the app uses it to build room moods.
   out.settings.roles = {};
   for (const [k, v] of Object.entries(s.roles || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && ['ambient', 'task', 'accent', 'decor'].includes(v)) out.settings.roles[k] = v;
+  // The kind of lamp (a picture, not a category); the app derives the role from it.
+  const KINDS = { ceiling: 'ambient', pendant: 'ambient', downlights: 'ambient', desk: 'task', reading: 'task', cabinet: 'task', floor: 'accent', table: 'accent', picture: 'accent' };
+  out.settings.light_kinds = {};
+  for (const [k, v] of Object.entries(s.light_kinds || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && KINDS[v]) { out.settings.light_kinds[k] = v; if (!out.settings.roles[k]) out.settings.roles[k] = KINDS[v]; }
+  out.settings.night_look = ['auto', 'always', 'never'].includes(s.night_look) ? s.night_look : 'auto';
   // Per-room colour keys and per-remote appearance overrides (model layout and finish), set from the app.
   out.settings.room_colors = {};
   for (const [k, v] of Object.entries(s.room_colors || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && typeof v === 'string' && /^[a-z]+$/.test(v)) out.settings.room_colors[k] = v;
