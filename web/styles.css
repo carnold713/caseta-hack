@@ -429,3 +429,8 @@ details.more > div { margin-top: 8px; }
 .wd .wd-time { border: 0; background: transparent; font-size: 17px; line-height: 22px; text-align: right; color: var(--text); padding: 0; width: 120px; flex: none; }
 .wd-home { display: block; margin: -8px 0 16px; padding: 0; color: var(--text-3); font-size: 13px; line-height: 18px; text-align: left; }
 .sheet .check { border-top: 0; }
+
+/* ---------- gestures: sliders are inert to pointers (js/slide.js decides what a touch meant); the page never zooms ---------- */
+html, body { touch-action: pan-x pan-y; }
+input.slider { pointer-events: none; }
+.sliderwrap, .nb-level, .now-level, .field { touch-action: pan-y; }

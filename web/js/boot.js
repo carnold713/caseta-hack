@@ -120,7 +120,6 @@ document.addEventListener('input', e => {
   if (el.dataset.setting === 'double_ms') $('#dv').textContent = `${el.value} ms`;
   if (el.dataset.setting === 'hold_ms') $('#hv').textContent = `${el.value} ms`;
 });
-document.addEventListener('pointerup', e => { const el = e.target; if (el.dataset && (el.dataset.slide || el.dataset.house)) { setTimeout(() => { delete el.dataset.drag; paintState(); }, 800); } });
 
 // Hold-to-do-more on the All off button (also closes shades, stops fans).
 document.addEventListener('pointerdown', e => {
