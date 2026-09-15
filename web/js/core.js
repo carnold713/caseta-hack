@@ -264,6 +264,7 @@ function paintState() {
   const st = $('#statusline'); if (st) st.innerHTML = statusLine();
   document.querySelectorAll('[data-onchip]').forEach(el => el.classList.toggle('hidden', !targetOn(el.dataset.onchip)));
   document.querySelectorAll('[data-act-lvl]').forEach(el => el.classList.toggle('on', isOn(el.dataset.actLvl)));
+  if (typeof paintLight === 'function') paintLight(); // light.js: lamp discs, moods, rings, night look
 }
 function roomSummary(aid) {
   const ds = controllable().filter(d => (d.area || 'none') === aid);

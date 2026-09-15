@@ -1,0 +1,106 @@
+/* Pico Hack: light as a flat disc. Extensions from docs/ui-concepts.md on top of styles.css.
+   Lamp ramp, "Light now" strip, light detail sheet, mood row, lamp kinds, sleep-timer dial, night look. */
+:root { --lamp-10: #FDF1E1; --lamp-25: #FCE3C4; --lamp-50: #F9C489; --lamp-75: #F7A64F; --lamp-100: #F58A1F; --bar: #F7F7F7; }
+
+/* ---------- lamp disc: an opaque circle whose fill (and where there is room, size) is the level ---------- */
+.lamp { display: grid; place-items: center; border-radius: 50%; background: var(--bg-2); color: var(--text); overflow: hidden; flex: none; }
+.lamp.off { color: var(--text-3); }
+.lamp svg { flex: none; }
+/* a 24px symbol drawn large keeps its 1.5px line: stroke-width is in symbol units (24 per box) */
+svg.i.lampart { width: 96px; height: 96px; stroke-width: .375; }
+svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
+
+/* ---------- Light now: the strip on Home ---------- */
+.lightnow { margin: 0 0 16px; }
+.lightnow .ln-line { margin: 0 0 4px; }
+.ln-row { display: flex; align-items: flex-end; gap: 16px; min-height: 72px; overflow-x: auto; margin: 0 -16px; padding: 0 16px 4px; scrollbar-width: none; }
+.ln-row::-webkit-scrollbar { display: none; }
+.ln-row.empty { display: none; }
+.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; padding: 0; transition: transform .12s ease-out; }
+.ln-lamp:active { transform: scale(.96); }
+.ln-lamp .lamp { width: 24px; height: 24px; }
+.ln-name { font-size: 13px; line-height: 18px; color: var(--text-3); white-space: nowrap; }
+
+/* ---------- light rows: the icon opens the kind sheet, the name opens the detail ---------- */
+.light .row .lkind { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; margin: -8px 0 -8px -8px; color: var(--text); transition: transform .12s ease-out, background .16s; }
+.light .row .lkind:active { transform: scale(.96); background: var(--bg-2); }
+.light .row .lopen { display: block; min-width: 0; }
+.tile .lopen { display: block; }
+
+/* ---------- mood row: five scene chips whose circle is a lamp disc at the mood's level ---------- */
+.moodrow { margin-bottom: 4px; }
+.moods { display: flex; gap: 8px; overflow-x: auto; padding: 0 0 4px; scrollbar-width: none; }
+.moods::-webkit-scrollbar { display: none; }
+.mood { flex: none; height: 64px; border-radius: 16px; background: var(--bg-2); padding: 12px 16px 12px 12px; display: flex; align-items: center; gap: 12px; font-size: 16px; line-height: 22px; font-weight: 700; color: var(--text); transition: transform .12s ease-out, background .16s; }
+.mood:active { transform: scale(.98); }
+.mood .lamp { width: 40px; height: 40px; }
+.mood.sel { background: var(--black); color: #fff; }
+.mood.sel .lamp { color: var(--text); }
+.moodfoot { display: flex; justify-content: flex-end; }
+.moodfoot .btn.ghost { height: 32px; font-size: 13px; }
+.sheet .moodrow { margin: 0 -16px; padding: 0 16px; }
+
+/* ---------- light detail sheet ---------- */
+.ld-hero { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.ld-stage { flex: 1; min-width: 0; height: 240px; display: grid; place-items: center; }
+.ld-disc { width: 160px; height: 160px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; }
+.ld-level { text-align: center; margin-top: 12px; }
+.ld-cap { text-align: center; color: var(--text-3); font-size: 13px; line-height: 18px; margin: 2px 0 16px; }
+.ld-swcol { width: 44px; height: 240px; display: grid; place-items: center; flex: none; }
+.ld-actions { display: flex; gap: 8px; margin-top: 16px; }
+.ld-actions .btn { flex: 1; padding: 0 12px; }
+.ld-actions .btn.on { background: var(--black); color: #fff; border-color: var(--black); }
+
+/* vertical tick slider: 44 x 240, ticks 2px on a 6px pitch, right-aligned, filled below the value */
+.vslider { position: relative; width: 44px; height: 240px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; border-radius: 4px; outline: none;
+  background:
+    repeating-linear-gradient(to top, var(--black) 0 2px, transparent 2px 6px) right bottom / 28px var(--p, 0%) no-repeat,
+    repeating-linear-gradient(to top, #D0D0D0 0 2px, transparent 2px 6px) right bottom / 18px 100% no-repeat; }
+.vslider:focus-visible { box-shadow: 0 0 0 2px var(--black); }
+.vslider .vtip { position: absolute; right: 52px; bottom: calc(var(--p, 0%) - 20px); height: 40px; padding: 0 14px; border-radius: 999px; background: var(--black); color: #fff; font-size: 16px; line-height: 40px; font-weight: 700; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; }
+.vslider.drag .vtip { opacity: 1; }
+
+/* ---------- lamp kinds: "What kind of light is this?" ---------- */
+.kind-cap { font-size: 13px; line-height: 18px; color: var(--text-3); margin: 16px 0 8px; }
+.kind-cap:first-child { margin-top: 8px; }
+.kind-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kind { position: relative; min-height: 96px; border-radius: 12px; background: #fff; border: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 8px; color: var(--text); transition: transform .12s ease-out; }
+.kind:active { transform: scale(.96); background: var(--bg-2); }
+.kind .t { font-size: 16px; line-height: 22px; font-weight: 700; }
+.kind.sel { border: 2px solid var(--black); padding: 11px; }
+.kind .chk { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: var(--black); color: #fff; display: grid; place-items: center; }
+.sortblock { margin-top: 24px; }
+.sortblock .btn.ghost { height: 32px; padding: 0; margin-top: 4px; font-size: 13px; }
+
+/* ---------- sleep-timer dial ---------- */
+.td-ring { position: relative; width: 240px; height: 240px; margin: 8px auto 16px; touch-action: none; -webkit-user-select: none; user-select: none; }
+.td-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.ring circle { fill: none; }
+.ring .track { stroke: #D0D0D0; }
+.ring .prog { stroke: var(--black); stroke-linecap: round; }
+.td-ring .track, .td-ring .prog { stroke-width: 12; }
+.td-knob { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); left: 120px; top: 6px; cursor: grab; }
+.td-centre { position: absolute; inset: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; pointer-events: none; }
+.td-cap { font-size: 13px; line-height: 18px; color: var(--text-3); }
+.td-lamp { width: 96px; height: 96px; margin-top: 8px; }
+.td .chips .chip.sel { background: var(--black); color: #fff; }
+.td .btn.primary { margin-top: 16px; }
+/* running timer on Home: the same ring at 40px with the lamp disc inside */
+.ring40 { position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center; }
+.ring40 svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.ring40 .track, .ring40 .prog { stroke-width: 4; }
+.ring40 .lamp { width: 24px; height: 24px; }
+
+/* ---------- night look: the paper dims and warms; text, room fills and the lamp ramp stay ---------- */
+:root[data-night="1"] { --bg: #F6F1E8; --bg-2: #ECE6DB; --card: #FBF8F3; --line: #D9D3C8; --hairline: #E4DED3; --text-3: #6A6A6A; --bar: #F1ECE3; }
+[data-night="1"] #nav { background: var(--bar); }
+[data-night="1"] .light, [data-night="1"] .sheet, [data-night="1"] .sfoot, [data-night="1"] .iconbtn, [data-night="1"] .btn, [data-night="1"] .pill, [data-night="1"] .alloff,
+[data-night="1"] .recipe, [data-night="1"] .remote-card, [data-night="1"] .roomlights .item, [data-night="1"] .input, [data-night="1"] select.input, [data-night="1"] textarea.input,
+[data-night="1"] .tile.new, [data-night="1"] .chip.outline, [data-night="1"] .kind, [data-night="1"] .ic.white, [data-night="1"] .tile .ic, [data-night="1"] .infoblock .go,
+[data-night="1"] .room .head .chev, [data-night="1"] .sw::after, [data-night="1"] .td-knob, [data-night="1"] .kind:active { background-color: var(--card); }
+[data-night="1"] .kind:active, [data-night="1"] .btn:active, [data-night="1"] .iconbtn:active, [data-night="1"] .pill:active, [data-night="1"] .recipe:active { background-color: var(--bg-2); }
+[data-night="1"] .btn.primary, [data-night="1"] .iconbtn.on, [data-night="1"] .tile.running .ic, [data-night="1"] .tile.on .ic, [data-night="1"] .ld-actions .btn.on { background-color: var(--black); }
+[data-night="1"] .btn.primary:active { background-color: #333; }
+[data-night="1"] .btn:disabled { background-color: var(--disabled-bg); }
+[data-night="1"] .btn.ghost, [data-night="1"] .btn.ghost:active { background-color: transparent; }
+[data-night="1"] .room .head .onchip { background-color: var(--card); }

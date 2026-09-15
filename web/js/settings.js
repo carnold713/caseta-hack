@@ -22,6 +22,7 @@ VIEWS.settings = {
     <div class="card">
       <p class="muted small" style="margin:0 0 6px">Buttons can do something different at night, like turning on dim instead of bright.</p>
       <div class="row"><label class="field grow"><span>Night starts</span><input class="input" type="time" value="${s.night_start}" data-setting="night_start"></label><label class="field grow"><span>Night ends</span><input class="input" type="time" value="${s.night_end}" data-setting="night_end"></label></div>
+      ${nightLookRowHTML()}
     </div>
     <div class="h2">This app</div>
     <div class="card pad0 list">
