@@ -65,6 +65,7 @@ function connectWS() {
     const m = JSON.parse(ev.data);
     switch (m.type) {
       case 'snapshot':
+        S.add = m.add || null;
         S.inv = m.inventory; S.states = m.states; S.agent = m.agent; S.timers = m.timers || {}; S.activity = m.activity || [];
         S.sun = m.sun || null; S.nextRuns = m.next_runs || {};
         S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
@@ -79,6 +80,7 @@ function connectWS() {
       case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
       // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
       case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; if (typeof paintSun === 'function') paintSun(); break;
+      case 'add_state': case 'add_heard': case 'add_log': if (window.AddDevice) AddDevice.onMessage(m); break;
       case 'button': case 'gesture': onLive(m); break;
       case 'toast': toast(m.msg, { err: m.level === 'error' }); break;
     }

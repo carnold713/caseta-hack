@@ -35,9 +35,10 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from engine import ActionRunner, GestureEngine, in_night_window
+from adddevice import AddSession
 from sun import sun_times
 
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -103,6 +104,7 @@ class Agent:
         self._button_keys: Dict[str, str] = {}  # button_id -> "device/button"
         self.gestures = GestureEngine(self._on_gesture, self._has_double)
         self.runner = ActionRunner(lambda: self.bridge, lambda: self.config, on_timer=self._on_timer)
+        self.adder = AddSession(lambda: self.bridge, self.send)  # "Add a device" from the app
         self._index_bindings()
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}
@@ -466,9 +468,18 @@ class Agent:
                 await self._update_and_restart(cid)
                 return
             try:
-                if action.get("type") == "refresh":
+                kind = action.get("type")
+                if kind == "refresh":
                     await self._refresh()
                     detail = {"devices": len(self.bridge.devices) if self.bridge else 0}
+                elif kind == "add_start":
+                    detail = await self.adder.start()
+                elif kind == "add_stop":
+                    detail = await self.adder.stop()
+                elif kind == "add_create":
+                    detail = await self.adder.create(action.get("serial"), action.get("name"), action.get("area"))
+                    await self._refresh()  # the bridge now lists the new device
+                    detail["devices"] = len(self.bridge.devices) if self.bridge else 0
                 else:
                     await self.runner.run_one(action)
                     detail = None

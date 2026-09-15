@@ -40,6 +40,7 @@ let states = {}; // device_id -> {level, fan_speed}
 let timers = {}; // target -> {ends_at, level}
 let sun = null;  // {sunrise, sunset, now} from the connector, in the home's zone
 let nextRuns = {}; // schedule id -> next ISO time
+let addSession = { active: false, until: 0, heard: [], log: [] }; // the app's "Add a device" session, mirrored from the connector
 let activity = store.read('activity', () => []); // newest first, capped
 let agent = null;   // the single connected agent socket
 let updating = false;
@@ -124,6 +125,20 @@ app.post('/api/update-connector', requireAuth, async (req, res) => {
 // Ask the agent to re-read the bridge (after adding a device in the Lutron app).
 app.post('/api/refresh', requireAuth, async (req, res) => {
   try { res.json(await sendCommand({ type: 'refresh' })); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+// Add a device to the bridge from the app (experimental; the LEAP steps live in agent/adddevice.py).
+app.post('/api/adddevice', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!['start', 'stop', 'create'].includes(b.op)) return res.status(400).json({ error: 'op must be start, stop or create' });
+  const action = { type: `add_${b.op}` };
+  if (b.op === 'create') {
+    const name = typeof b.name === 'string' ? b.name.trim().slice(0, 60) : '';
+    const serial = String(b.serial || '').trim(); const area = String(b.area || '').trim();
+    if (!name || !/^[0-9A-Za-z-]{1,32}$/.test(serial) || !/^[A-Za-z0-9_-]{1,64}$/.test(area)) return res.status(400).json({ error: 'name, serial and room are required' });
+    Object.assign(action, { name, serial, area });
+  }
+  try { res.json(await sendCommand(action, 30000)); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
@@ -214,7 +229,7 @@ wssAgent.on('connection', (ws, req) => {
   });
   ws.on('close', () => {
     if (agent === ws) {
-      agent = null; agentInfo = null; timers = {};
+      agent = null; agentInfo = null; timers = {}; addSession = { ...addSession, active: false };
       broadcast({ type: 'agent', online: false });
       broadcast({ type: 'timers', timers });
       record({ kind: 'agent', online: false });
@@ -280,6 +295,17 @@ function handleAgentMessage(ws, msg) {
       }
       break;
     }
+    case 'add_heard':
+      if (Array.isArray(msg.heard)) addSession.heard = msg.heard;
+      broadcast({ type: 'add_heard', device: msg.device || null, heard: addSession.heard });
+      break;
+    case 'add_log':
+      if (msg.entry) { addSession.log.push(msg.entry); if (addSession.log.length > 60) addSession.log.splice(0, addSession.log.length - 60); broadcast({ type: 'add_log', entry: msg.entry }); }
+      break;
+    case 'add_state':
+      addSession = { ...addSession, ...(msg.state || {}) };
+      broadcast({ type: 'add_state', state: addSession, reason: msg.reason || null });
+      break;
     case 'log':
       console.log(`[agent] ${msg.level || 'info'}: ${msg.msg}`);
       if (msg.level === 'error' || msg.level === 'warn') broadcast({ type: 'toast', level: msg.level, msg: msg.msg });
@@ -305,7 +331,7 @@ function mergeStates(s) {
   for (const [k, v] of Object.entries(s || {})) states[k] = { ...(states[k] || {}), ...v };
 }
 function snapshot() {
-  return { inventory, states, config, timers, sun, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo } };
+  return { inventory, states, config, timers, sun, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo }, add: addSession };
 }
 let activityDirty = false;
 function record(entry) {

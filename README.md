@@ -56,13 +56,21 @@ Pico bindings from its cached config.
   location, taken from the phone once or picked from a city list; it stays
   on your hub. The **Evening wind-down** makes "on" a little dimmer as the
   night goes on, with one control: when the house goes quiet.
+- **Add a device without the Lutron app (experimental).** Settings ›
+  Add a device puts the bridge into listening mode, you hold the new
+  device's button, the app shows what the bridge heard, you name it and
+  pick a room. It speaks the same undocumented bridge protocol the Lutron
+  app uses (`agent/adddevice.py` lists the four requests) and logs every
+  exchange behind "Show technical details" so a bridge that answers
+  differently can be understood from the phone. New rooms still come from
+  the Lutron app for now.
 - **Autosave with Undo.** Nothing to remember to save.
 - **Recent activity:** what was pressed and what happened, for "who left
   the lights on" and for tuning the double-press timing.
 
 Works with the regular Smart Bridge (L-BDG2) and the Pro (L-BDGPRO2).
 
-## The one Lutron-side caveat
+## The Lutron-side caveats
 
 The bridge still runs whatever the Lutron app programmed a Pico to do,
 in parallel with your bindings. For a Pico you want to fully own, open
@@ -70,6 +78,11 @@ the Lutron app and remove the devices it controls (keep the Pico paired
 to the bridge). It then reports presses and does nothing else, and your
 bindings are the only thing that runs. A Pico can stay half-Lutron too:
 leave its native "On" and "Off", and bind only the double click.
+
+Rooms are still created and renamed in the Lutron app; the app reads them
+from the bridge. Adding a device from the app is experimental (above): the
+bridge's association mode and "device heard" channel are not documented by
+Lutron, so the first try on a bridge is also the test.
 
 ## Setup
 
@@ -196,6 +209,7 @@ hub/store.js      JSON files in DATA_DIR
 web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,remotes,scenes,settings,automations,cities,boot,slide,motion,lightfield}.js, sw.js, icons/
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
+agent/adddevice.py  add a device from the app: association mode, device heard, create (experimental)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js
 ```
@@ -206,6 +220,7 @@ scripts/          install.sh (served filled-in by the hub), make-icons.js
 npm install
 APP_PASSWORD=dev AGENT_TOKEN=dev npm start     # http://localhost:4400
 cd agent && python test_engine.py             # gesture timing tests
+cd agent && python test_adddevice.py          # add-device session against a stub bridge
 ```
 
 Without a bridge, a fake agent that speaks the same protocol is all the
