@@ -74,10 +74,10 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 
 /* ---------- sleep-timer dial ---------- */
 .td-ring { position: relative; width: 240px; height: 240px; margin: 8px auto 16px; touch-action: none; -webkit-user-select: none; user-select: none; }
-.td-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
-.ring circle { fill: none; }
-.ring .track { stroke: #D0D0D0; }
-.ring .prog { stroke: var(--black); stroke-linecap: round; }
+svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
+.tring circle { fill: none; }
+.tring .track { stroke: #D0D0D0; }
+.tring .prog { stroke: var(--black); stroke-linecap: round; }
 .td-ring .track, .td-ring .prog { stroke-width: 12; }
 .td-knob { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); left: 120px; top: 6px; cursor: grab; }
 .td-centre { position: absolute; inset: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; pointer-events: none; }
@@ -87,7 +87,6 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .td .btn.primary { margin-top: 16px; }
 /* running timer on Home: the same ring at 40px with the lamp disc inside */
 .ring40 { position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center; }
-.ring40 svg { position: absolute; inset: 0; transform: rotate(-90deg); }
 .ring40 .track, .ring40 .prog { stroke-width: 4; }
 .ring40 .lamp { width: 24px; height: 24px; }
 

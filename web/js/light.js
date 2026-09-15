@@ -23,6 +23,7 @@ function lampColor(lv) {
   return LAMP_RAMP[LAMP_RAMP.length - 1][1];
 }
 const lvText = v => (v > 0 ? `${v}%` : 'Off');
+const lvLabel = (v, dim) => (dim ? lvText(v) : v > 0 ? 'On' : 'Off'); // a switch is on or off, never a percentage
 const discSize = lv => Math.round(24 + 32 * clamp(lv, 0, 100) / 100);
 const heroSize = lv => Math.round(160 + 80 * clamp(lv, 0, 100) / 100);
 function lampHTML(lv, size, inner, cls = '') { return `<span class="lamp ${lv > 0 ? '' : 'off'} ${cls}" style="width:${size}px;height:${size}px;background:${lampColor(lv)}">${inner || ''}</span>`; }
@@ -223,7 +224,7 @@ function openLightSheet(id) {
   const body = `<div class="ld" id="ld" data-id="${id}">
     <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lampColor(lv)}" role="button" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
       ${dim ? `<div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"><div class="vtip">${lvText(lv)}</div></div>` : `<div class="ld-swcol"><button class="sw ${lv > 0 ? 'on' : ''}" data-act="ld-toggle" aria-label="On or off"></button></div>`}</div>
-    <div class="ld-level display">${lvText(lv)}</div>
+    <div class="ld-level display">${lvLabel(lv, dim)}</div>
     <div class="ld-cap">${esc(areaName(d.area))}${role ? ` · ${ROLE_LABEL[role]}` : ''}</div>
     ${moodRowHTML(d.area || 'none')}
     <div class="ld-actions"><button class="btn" data-act="ld-timer" data-t="${t}">${ICON('clock', 'sm')} Sleep timer</button><button class="btn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}">${ICON('star', 'sm')} Favourite</button></div>
@@ -242,7 +243,7 @@ function wireLightSheet() {
     v = clamp(Math.round(v), 0, 100); LD.lv = v;
     if (animate && window.gsap && MOTION.d > 0) { if (LD.stTween) LD.stTween.kill(); LD.stTween = gsap.to(st, { lv: v, duration: MOTION.d, ease: MOTION.ease, onUpdate: () => apply(st.lv) }); }
     else quick(v);
-    root.querySelector('.ld-level').textContent = lvText(v);
+    root.querySelector('.ld-level').textContent = lvLabel(v, LD.dim);
     if (sl) { sl.style.setProperty('--p', `${v}%`); sl.setAttribute('aria-valuenow', v); sl.querySelector('.vtip').textContent = lvText(v); }
     const sw = root.querySelector('[data-act="ld-toggle"]'); if (sw) sw.classList.toggle('on', v > 0);
   };
@@ -288,7 +289,7 @@ function sleepDialSheet(t, opts = {}) {
   const p = knobPos(min);
   const body = `<div class="td" id="td">
     <div class="td-ring" role="slider" aria-label="Minutes" aria-valuemin="5" aria-valuemax="120" aria-valuenow="${min}" tabindex="0">
-      <svg class="ring" viewBox="0 0 240 240" width="240" height="240" aria-hidden="true"><circle class="track" cx="120" cy="120" r="114"/><circle class="prog" cx="120" cy="120" r="114" style="stroke-dasharray:${RING_C};stroke-dashoffset:${RING_C * (1 - min / 120)}"/></svg>
+      <svg class="tring" viewBox="0 0 240 240" width="240" height="240" aria-hidden="true"><circle class="track" cx="120" cy="120" r="114"/><circle class="prog" cx="120" cy="120" r="114" style="stroke-dasharray:${RING_C};stroke-dashoffset:${RING_C * (1 - min / 120)}"/></svg>
       <div class="td-centre"><div class="td-cap">Off in</div><div class="td-min display">${min} min</div>${lampHTML(lv, 96, timerLampInner(t), 'td-lamp')}</div>
       <div class="td-knob" style="left:${p.x}px;top:${p.y}px"></div>
     </div>
@@ -334,7 +335,7 @@ function timerBlockHTML(t, v) {
   const tgt = t.includes('|') ? t.split('|') : t;
   const total = timerTotal(t, v.ends_at), left = minutesLeft(v.ends_at), f = clamp(left / total, 0, 1);
   const lv = meanLevel(targetDevices(tgt)); const s = 12 + 16 * lv / 100;
-  return `<div class="timerbar"><div class="ring40" data-ring="${esc(t)}" data-ends="${v.ends_at}" data-f="${f.toFixed(3)}"><svg class="ring" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><circle class="track" cx="20" cy="20" r="18"/><circle class="prog" cx="20" cy="20" r="18" style="stroke-dasharray:${RING40_C};stroke-dashoffset:${RING40_C * (1 - f)}"/></svg><span class="lamp" style="width:${s}px;height:${s}px;background:${lampColor(lv)}"></span></div><div class="grow"><div class="t">${esc(cap(targetName(tgt)))} ${v.level ? 'to ' + v.level + '%' : 'off'} <span data-countdown="${v.ends_at}"></span></div><div class="d">Sleep timer</div></div><button class="btn sm" data-act="cancel-timer" data-t="${esc(t)}">Cancel</button></div>`;
+  return `<div class="timerbar"><div class="ring40" data-ring="${esc(t)}" data-ends="${v.ends_at}" data-f="${f.toFixed(3)}"><svg class="tring" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><circle class="track" cx="20" cy="20" r="18"/><circle class="prog" cx="20" cy="20" r="18" style="stroke-dasharray:${RING40_C};stroke-dashoffset:${RING40_C * (1 - f)}"/></svg><span class="lamp" style="width:${s}px;height:${s}px;background:${lampColor(lv)}"></span></div><div class="grow"><div class="t">${esc(cap(targetName(tgt)))} ${v.level ? 'to ' + v.level + '%' : 'off'} <span data-countdown="${v.ends_at}"></span></div><div class="d">Sleep timer</div></div><button class="btn sm" data-act="cancel-timer" data-t="${esc(t)}">Cancel</button></div>`;
 }
 // The Home ring drains once a minute; the disc inside follows the light's level.
 function paintRings() {
