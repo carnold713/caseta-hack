@@ -92,7 +92,8 @@ RestartSec=5
 WantedBy=default.target
 UN
   systemctl --user daemon-reload
-  systemctl --user enable --now picohack-connector
+  systemctl --user enable picohack-connector >/dev/null 2>&1
+  systemctl --user restart picohack-connector
   loginctl enable-linger "$USER" >/dev/null 2>&1 || sudo loginctl enable-linger "$USER" >/dev/null 2>&1 || true
   say "Done. The connector runs in the background and starts on boot."
   echo "Log: journalctl --user -u picohack-connector -f    Stop it: systemctl --user stop picohack-connector"
