@@ -65,7 +65,10 @@ function connectWS() {
     switch (m.type) {
       case 'snapshot':
         S.inv = m.inventory; S.states = m.states; S.agent = m.agent; S.timers = m.timers || {}; S.activity = m.activity || [];
-        S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true; render(); break;
+        S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
+        // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
+        if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); }, 900); break; } }
+        render(); break;
       case 'inventory': S.inv = m.inventory; render(); break;
       case 'state': Object.assign(S.states, m.states); paintState(); break;
       case 'timers': S.timers = m.timers || {}; if (S.view === 'home') render(); break;
@@ -96,6 +99,7 @@ const lutronScenes = () => Object.values(S.inv.scenes || {});
 
 // Targets: d:<device> a:<area> g:<group> h:all, or a list of those; favorites also allow p:<preset> s:<lutron scene>
 const tlist = t => (Array.isArray(t) ? t : t ? [t] : []);
+const tsplit = t => (typeof t === 'string' && t.includes('|') ? t.split('|') : t);
 function targetDevices(t) {
   if (Array.isArray(t)) return [...new Set(t.flatMap(targetDevices))];
   if (!t) return [];
@@ -264,20 +268,20 @@ function paintState() {
     else if (el.classList.contains('room')) { const was = el.classList.contains('on'); el.classList.toggle('on', on); const s = el.querySelector('.head .s'); if (s) s.textContent = roomSummary(t.slice(2)); if (was !== on && window.Motion) Motion.lightChanged(el, roomMeanLevel(t.slice(2)), was); }
     else if (el.classList.contains('tile')) { el.classList.toggle('on', on); const s = el.querySelector('.s'); if (s) s.textContent = tileSub(t); }
   });
-  const st = $('#statusline'); if (st) st.innerHTML = statusLine();
-  document.querySelectorAll('[data-onchip]').forEach(el => el.classList.toggle('hidden', !targetOn(el.dataset.onchip)));
+  document.querySelectorAll('[data-roomsum]').forEach(el => { el.textContent = roomSummary(el.dataset.roomsum); });
   document.querySelectorAll('[data-act-lvl]').forEach(el => { const was = el.classList.contains('on'); const on = isOn(el.dataset.actLvl); el.classList.toggle('on', on); if (was !== on && window.Motion) Motion.lightChanged(el.closest('.light') || el, level(el.dataset.actLvl) || 0, was); });
   if (typeof paintLight === 'function') paintLight(); // light.js: lamp discs, moods, rings, night look
+  paintNowBar();
   if (window.LightField && S.view === 'home') LightField.update();
 }
-// Rooms for the light field: id = area id (matches the room card's data-room), colour, mean level of its lights.
+// Rooms for the light field: id = area id (matches the room card's data-room), the colour of its light, mean level of its lights.
 function roomMeanLevel(aid, overrides = {}) {
   const ds = controllable().filter(d => (d.area || 'none') === aid && d.domain !== 'cover');
   if (!ds.length) return 0;
   return ds.reduce((a, d) => a + (overrides[d.device_id] ?? level(d.device_id) ?? 0), 0) / ds.length;
 }
 function roomsForLight(overrides = {}) {
-  return areas().map(a => ({ id: a.id, color: roomColor(a.id).bg, level: roomMeanLevel(a.id, overrides) }));
+  return areas().map(a => { const lv = roomMeanLevel(a.id, overrides); return { id: a.id, color: typeof lampColor === 'function' ? lampColor(Math.max(1, lv)) : '#F7A64F', level: lv }; });
 }
 function roomSummary(aid) {
   const ds = controllable().filter(d => (d.area || 'none') === aid);
@@ -300,11 +304,13 @@ function statusLine() {
 // ---------- sheet ----------
 const sheet = {
   el: null,
+  // opts: sub, back, onBack, dark (the Now view and the light detail), full (100dvh). `question` is accepted and ignored: every header is the big kind.
   open(title, body, opts = {}) {
     const root = $('#sheet-root');
     const sh = root.querySelector('.sh');
-    sh.className = 'sh' + (opts.question ? ' q' : '');
-    sh.innerHTML = `${opts.back ? `<button class="iconbtn plain" data-act="sheet-back">${ICON('back')}</button>` : ''}<div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div><button class="iconbtn plain" data-act="sheet-close">${ICON('x')}</button>`;
+    root.querySelector('.sheet').className = 'sheet' + (opts.dark ? ' dark' : '') + (opts.full ? ' full' : '');
+    sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
+    sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
     root.querySelector('.sb').innerHTML = body;
     root.querySelector('.sb').scrollTop = 0;
     root.classList.add('open'); requestAnimationFrame(() => { root.classList.add('in'); if (window.Motion) Motion.sheetIn(root); });
@@ -337,28 +343,69 @@ function toast(msg, opts = {}) {
 const VIEWS = {};
 function render() {
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.view === S.view));
-  const v = $('#view'); const top = $('#top');
-  if (!S.token) { top.innerHTML = ''; v.innerHTML = loginHTML(); $('#nav').style.display = 'none'; return; }
+  const v = $('#view'); const top = $('#top'); const app = $('#app'); const nb = $('#nowbar');
+  const plain = () => { top.innerHTML = ''; v.className = 'plain'; app.classList.remove('nested', 'hasbar', 'baroff'); nb.classList.remove('show'); $('#nav').style.display = 'none'; };
+  if (!S.token) { plain(); v.innerHTML = loginHTML(); return; }
+  if (!S.ready || !S.config || S._holdLoading) { plain(); v.innerHTML = loadingHTML(!!S._holdLoading); S._loadingShown = true; return; }
   $('#nav').style.display = '';
-  if (!S.ready || !S.config) { top.innerHTML = ''; v.innerHTML = '<p class="muted" style="padding:24px 0">Loading…</p>'; return; }
   const view = VIEWS[S.view] || VIEWS.home;
+  const nested = !!(view.nested && view.nested());
+  app.classList.toggle('nested', nested);
+  v.className = nested ? 'nested' : '';
   top.innerHTML = view.top ? view.top() : '';
   v.innerHTML = view.body();
+  // the Light now bar: present on every page once the snapshot is here; never rebuilt while its slider is held
+  const held = nb.querySelector('[data-house]') && nb.querySelector('[data-house]').dataset.drag;
+  if (!held) nb.innerHTML = nowBarHTML();
+  nb.classList.add('show'); app.classList.add('hasbar');
   paintState(); paintLive();
   if (S.view === 'home' && window.LightField) { const lf = document.getElementById('lightfield'); if (lf) LightField.init(lf, roomsForLight); }
+  const pageKey = S.view + (nested ? '/' + S.remote : '');
   if (window.Motion) {
     if (!S._launched) { S._launched = true; Motion.pageIn(v, { launch: true }); }
-    else if (S._lastView !== S.view) Motion.pageIn(v);
+    else if (S._lastPage !== pageKey) Motion.pageIn(v);
+    if (!S._barShown) { S._barShown = true; Motion.barIn(nb); }
   }
-  if (S._prevOnline !== undefined && S._prevOnline !== S.agent.online) { const dot = top.querySelector('.pill .dot'); if (dot) dot.classList.add(S.agent.online ? 'm-dot-hello' : 'm-dot-lost'); }
+  if (S._prevOnline !== undefined && S._prevOnline !== S.agent.online) { const dot = top.querySelector('.status .dot'); if (dot) dot.classList.add(S.agent.online ? 'm-dot-hello' : 'm-dot-lost'); }
   S._prevOnline = S.agent.online;
-  S._lastView = S.view;
+  S._lastView = S.view; S._lastPage = pageKey;
   if (view.after) view.after();
 }
-function connPill() {
-  return `<button class="pill ${S.agent.online ? 'on' : 'off'}" data-act="conn"><span class="dot"></span>${S.agent.online ? 'Connected' : 'Not connected'}</button>`;
+// The status circle at the top right: the link glyph with a green or red dot. Tap goes to Settings.
+function statusCircle() {
+  return `<button class="iconbtn status ${S.agent.online ? 'ok' : 'off'}" data-act="conn" title="${S.agent.online ? 'Connected' : 'Not connected'}">${ICON('link')}<span class="dot"></span></button>`;
+}
+const connPill = statusCircle;
+// The nested header: a back circle, the wordmark, the status circle.
+function nestedTop(backAct) {
+  return `<button class="iconbtn sm" data-act="${backAct}" title="Back">${ICON('back')}</button><span class="wordmark">Pico Hack</span>${statusCircle()}`;
 }
 function loginHTML() {
-  return `<div class="login"><div class="mark">${ICON('bulb', 'lg')}</div><h1>Welcome home</h1><p>Enter your home's password to get started.</p>
-  <form data-form="login"><input class="input" type="password" id="pw" placeholder="Password" autofocus autocomplete="current-password" style="height:56px;font-size:16px"><div class="spacer"></div><button class="btn primary lg block">Sign in</button></form></div>`;
+  return `<div class="login"><div class="t1">Welcome</div><p>Enter your home's password to get started.</p>
+  <form data-form="login"><label class="field" id="pwfield"><span>Password</span><input class="input" type="password" id="pw" autofocus autocomplete="current-password"></label>
+  <div class="foot"><button class="btn primary lg block" type="submit" disabled>Continue</button><button class="btn ghost block" type="button" data-act="pw-help">Where do I find it?</button></div></form></div>`;
+}
+function loadingHTML(connected) {
+  return `<div class="loading">${connected ? `${ICON('check', 'xl tick')}<div class="t">Connected to your home</div>` : `<div class="t">Getting your home ready...</div><div class="dots"><i></i><i></i><i></i><i></i></div>`}</div>`;
+}
+
+// ---------- the Light now bar (docs/design-spec-v3.md section 7) ----------
+function nowBarHTML() {
+  const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
+  const name = (S.config && S.config.settings.home_name) || 'Home';
+  return `<div class="nb-row"><button class="nb-main" data-act="now-open" aria-label="Open the Now view"><div class="nb-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', true) : ICON('bulb')}</div><div class="nb-text"><span class="cap">${esc(name)}</span><div class="t" id="nb-head">${lightNowHeadline(rooms)}</div></div></button><button class="nb-off m-hold" data-act="alloff" title="All off. Hold for shades and fans">${ICON('power', 'sm')}</button></div>
+  <div class="nb-level ${on.length ? '' : 'hidden'}">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${lv}" style="--p:${lv}%" data-house="1" aria-label="House brightness"><span class="nb-num">${lv}</span></div>`;
+}
+function paintNowBar() {
+  const nb = $('#nowbar'); if (!nb || !nb.classList.contains('show') || !nb.firstChild) return;
+  const sl = nb.querySelector('[data-house]'); if (sl && sl.dataset.drag) return;
+  const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
+  const head = nb.querySelector('#nb-head'); const h = lightNowHeadline(rooms);
+  if (head && head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
+  const thumb = nb.querySelector('.nb-thumb'); const k = on.length ? String(lv) : 'off';
+  if (thumb && thumb.dataset.k !== k) { thumb.dataset.k = k; thumb.innerHTML = on.length ? lampHTML(lv, 28, '', '', true) : ICON('bulb'); }
+  nb.querySelector('.nb-level').classList.toggle('hidden', !on.length);
+  $('#app').classList.toggle('baroff', !on.length);
+  if (sl) { sl.value = lv; sl.style.setProperty('--p', `${lv}%`); }
+  const num = nb.querySelector('.nb-num'); if (num) num.textContent = lv;
 }

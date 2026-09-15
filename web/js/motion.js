@@ -14,6 +14,8 @@
      sliderFeedback(sliderEl, level)     a slider is being dragged: the light follows the finger
      expand(roomEl, open)          a room card opened or closed
      pulse(el)                     a gesture was detected on a remote
+     textSwap(el, html)            a headline changed: fade out, swap, fade in
+     barIn(el)                     the Light now bar's first appearance: a 16px rise, 120ms after the page
      reduced() -> boolean
    } */
 (function () {
@@ -205,11 +207,30 @@
     if (ic) g.fromTo(ic, { scale: 1.12 }, { scale: 1, duration: 0.5, ease: 'power2.out', overwrite: true, clearProps: 'transform' });
   }
 
+  // ---------- a headline changed: fade out 120ms, swap, fade in 200ms with a 4px rise ----------
+  function textSwap(target, html) {
+    const e = el(target); if (!e) return;
+    if (e.innerHTML === html) return;
+    const g = G(); if (!g) { e.innerHTML = html; return; }
+    g.killTweensOf(e);
+    g.to(e, { opacity: 0, duration: 0.12, ease: 'power1.in', overwrite: true, onComplete: () => {
+      e.innerHTML = html;
+      g.fromTo(e, { opacity: 0, y: 4 }, { opacity: 1, y: 0, duration: 0.2, ease: 'power2.out', clearProps: 'opacity,transform' });
+    } });
+  }
+
+  // ---------- the Light now bar appears: a 16px rise over 360ms, 120ms after the page ----------
+  function barIn(target) {
+    const e = el(target); const g = G(); if (!g || !e) return;
+    g.killTweensOf(e);
+    g.fromTo(e, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.36, delay: 0.12, ease: 'power2.out', clearProps: 'opacity,transform', overwrite: true });
+  }
+
   window.Motion = {
     pageIn: safe(pageIn), sheetIn: safe(sheetIn),
     sheetOut: function (root) { try { return sheetOut(root) || Promise.resolve(); } catch (e) { if (window.console) console.warn('Motion:', e); return Promise.resolve(); } },
     press: safe(press), sceneRun: safe(sceneRun), allOff: safe(allOff),
     lightChanged: safe(lightChanged), sliderFeedback: safe(sliderFeedback),
-    expand: safe(expand), pulse: safe(pulse), reduced,
+    expand: safe(expand), pulse: safe(pulse), textSwap: safe(textSwap), barIn: safe(barIn), reduced,
   };
 })();

@@ -9,13 +9,13 @@ document.addEventListener('click', async e => {
     case 'conn': S.view = 'settings'; location.hash = 'settings'; render(); break;
     case 'toggle': toggleTarget(d.t); break;
     case 'fav': toggleFav(d.t); break;
-    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el); Motion.sceneRun(sceneRooms(t)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
+    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
     case 'cmd': command(JSON.parse(d.cmd)); break;
     case 'fan': S.states[d.id] = { ...(S.states[d.id] || {}), fan_speed: d.s, level: d.s === 'Off' ? 0 : 100 }; paintState(); command({ type: 'fan', target: `d:${d.id}`, speed: d.s }); break;
     case 'room-open': if (window.Motion) Motion.press(el); toggleRoom(d.id); break;
     case 'alloff': if (!el._held) { for (const id of targetDevices('h:all')) S.states[id] = { ...(S.states[id] || {}), level: 0 }; paintState(); command({ type: 'level', target: 'h:all', level: 'off' }); } el._held = false; break;
     case 'cancel-timer': command({ type: 'cancel_timer', target: d.t }); break;
-    case 'timer': sheet.close(); await command({ type: 'timer', target: d.t, minutes: Number(d.m), fade: 5 }); toast(`${targetName(d.t)} turns off in ${d.m} min`); break;
+    case 'timer': sheet.close(); await command({ type: 'timer', target: tsplit(d.t), minutes: Number(d.m), fade: 5 }); toast(`${cap(targetName(tsplit(d.t)))} turns off in ${d.m} min`); break;
     case 'update-connector': el.disabled = true; el.textContent = 'Updating…'; toast('Updating the connector. The dot goes red, then green again in about a minute.'); try { const r = await api('/api/update-connector', { method: 'POST' }); toast(r.detail && r.detail.to ? `Updated to ${r.detail.to}. Restarting…` : 'Updated. Restarting…'); } catch (err) { toast(err.message, { err: true }); render(); } break;
     case 'auto-update': S.config.settings.auto_update = !S.config.settings.auto_update; el.classList.toggle('on', S.config.settings.auto_update); save({ quiet: true, render: false }); break;
     case 'refresh': el.classList.add('dim'); try { await api('/api/refresh', { method: 'POST' }); toast('Looked again'); } catch (err) { toast(err.message, { err: true }); } el.classList.remove('dim'); break;
@@ -56,7 +56,9 @@ document.addEventListener('click', async e => {
     case 'group-delete': S.config.groups = groups().filter(x => x.id !== d.id); for (const b of bindings()) { b.actions = b.actions.filter(a => a.target !== 'g:' + d.id); if (b.night) b.night.actions = b.night.actions.filter(a => a.target !== 'g:' + d.id); } S.config.favorites = S.config.favorites.filter(f => f !== 'g:' + d.id); sheet.close(); save({ msg: 'Set deleted' }); break;
     case 'backup': navigator.clipboard.writeText(JSON.stringify(S.config, null, 2)).then(() => toast('Settings copied to the clipboard')).catch(() => toast('Clipboard blocked', { err: true })); break;
     case 'restore': { const t = prompt('Paste the settings you backed up'); if (!t) break; try { S.config = JSON.parse(t); save({ msg: 'Settings restored' }); } catch (_) { toast('That is not a settings backup', { err: true }); } break; }
-    case 'logout': S.token = ''; localStorage.removeItem('token'); if (S.ws) S.ws.close(); sheet.close(); render(); break;
+    case 'logout': S.token = ''; localStorage.removeItem('token'); if (S.ws) S.ws.close(); S.ready = false; S._everReady = false; S._loadingShown = false; S._barShown = false; sheet.close(); render(); break;
+    case 'pw-help': sheet.open("Your home's password", `<p class="body">It's the password whoever set up your hub chose. It's in the hub's settings under APP_PASSWORD.</p><div class="spacer"></div><button class="btn primary lg block" data-act="sheet-close">Got it</button>`); break;
+    case 'setup-open': openSetupSheet(); break;
   }
 });
 
@@ -92,20 +94,30 @@ document.addEventListener('change', e => {
 });
 let slideTimer = null;
 document.addEventListener('input', e => {
-  const el = e.target; if (el.type !== 'range') return;
+  const el = e.target;
+  if (el.id === 'pw') { const b = document.querySelector('[data-form="login"] .btn.primary'); if (b) b.disabled = !el.value; const f = $('#pwfield'); if (f && f.classList.contains('err')) { f.classList.remove('err'); f.querySelector('span').textContent = 'Password'; } return; }
+  if (el.type !== 'range') return;
   el.style.setProperty('--p', `${el.value}%`);
-  const wrap = el.closest('.sliderwrap'); if (wrap) { wrap.classList.add('drag'); wrap.style.setProperty('--p', `${el.value}%`); const tip = wrap.querySelector('.tip'); if (tip) tip.textContent = `${el.value}%`; clearTimeout(wrap._t); wrap._t = setTimeout(() => wrap.classList.remove('drag'), 900); }
+  const wrap = el.closest('.sliderwrap'); if (wrap) { wrap.classList.add('drag'); wrap.style.setProperty('--p', `${el.value}%`); const tip = wrap.querySelector('.stip'); if (tip) tip.textContent = `${el.value}%`; clearTimeout(wrap._t); wrap._t = setTimeout(() => wrap.classList.remove('drag'), 900); }
   if (el.dataset.slide) {
     el.dataset.drag = '1';
     if (window.Motion) Motion.sliderFeedback(el, Number(el.value));
     const t = el.dataset.slide; const v = Number(el.value);
-    const lv = el.closest('.light') && el.closest('.light').querySelector('.lv'); if (lv) lv.textContent = v === 0 ? 'Off' : `${v}%`;
+    const row = el.closest('.light');
+    const lv = row && row.querySelector('.lv'); if (lv) lv.textContent = v === 0 ? 'Off' : `${v}%`;
+    const disc = row && row.querySelector('[data-ldisc]'); if (disc) { disc.style.backgroundColor = lampColor(v); disc.dataset.fill = lampColor(v); disc.classList.toggle('off', v <= 0); }
     clearTimeout(slideTimer); slideTimer = setTimeout(() => { command({ type: 'level', target: t, level: v, fade: 0 }); }, 120);
+  }
+  if (el.dataset.house) {
+    // the house dimmer on the Light now bar and the Now view: the number follows the finger, one command per 120ms
+    el.dataset.drag = '1';
+    const v = Number(el.value); const num = el.parentElement.querySelector('.nb-num'); if (num) num.textContent = v;
+    setHouseLevel(v);
   }
   if (el.dataset.setting === 'double_ms') $('#dv').textContent = `${el.value} ms`;
   if (el.dataset.setting === 'hold_ms') $('#hv').textContent = `${el.value} ms`;
 });
-document.addEventListener('pointerup', e => { const el = e.target; if (el.dataset && el.dataset.slide) { setTimeout(() => { delete el.dataset.drag; }, 800); } });
+document.addEventListener('pointerup', e => { const el = e.target; if (el.dataset && (el.dataset.slide || el.dataset.house)) { setTimeout(() => { delete el.dataset.drag; paintState(); }, 800); } });
 
 // Hold-to-do-more on the All off button (also closes shades, stops fans).
 document.addEventListener('pointerdown', e => {
@@ -137,8 +149,14 @@ document.addEventListener('submit', async e => {
     const b = await r.json();
     if (!r.ok) throw new Error(b.error === 'wrong password' ? "That's not the password" : b.error || 'Could not sign in');
     S.token = b.token; localStorage.setItem('token', b.token); connectWS(); render();
-  } catch (err) { toast(err.message, { err: true }); }
+  } catch (err) {
+    const f = $('#pwfield');
+    if (/not the password/.test(err.message) && f) { f.classList.add('err'); f.querySelector('span').textContent = err.message; }
+    else toast(err.message, { err: true });
+  }
 });
+// The splash: the brand colour with the wordmark, then a 400ms fade into whatever the first page is.
+setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 450); } }, 400);
 $('#sheet-root .scrim').addEventListener('click', () => sheet.close());
 document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; if (S.view !== 'remotes') S.remote = null; location.hash = S.view; render(); window.scrollTo(0, 0); }));
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1).split('/')[0]; if (v && VIEWS[v] && v !== S.view) { S.view = v; render(); } });

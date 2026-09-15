@@ -4,7 +4,7 @@
 :root { --m-ease: cubic-bezier(.2,.8,.2,1); --m-warm: #FFD9A0; --m-warm-deep: #FFB547; --m-warm-tint: #FCE3C4; }
 
 /* ---------- light field placement (Home) ----------
-   <div class="m-hero"><div class="m-lightfield" id="lightfield"></div> …status line, scene chips, All off…</div>
+   <div class="m-hero"><div class="m-lightfield" id="lightfield"></div> …Light now strip, scene tiles…</div>
    The band is as tall as the wrapper (about 180px with those three inside). The wrapper isolates a
    stacking context so the field, at z-index -1, paints above the page and beneath everything in flow. */
 .m-hero { position: relative; isolation: isolate; margin: -4px -16px 0; padding: 4px 16px 0; }
@@ -37,9 +37,9 @@
 .m-veil { position: fixed; left: 0; right: 0; top: -60vh; height: 60vh; z-index: 19; pointer-events: none; mix-blend-mode: multiply;
   background: linear-gradient(180deg, rgba(255,226,190,0) 0%, rgba(255,226,190,.7) 30%, rgba(255,226,190,.7) 60%, rgba(255,226,190,0) 100%); }
 
-/* ---------- All off hold: the black progress line is in styles.css; this warms the button behind it, left to right ---------- */
+/* ---------- All off hold: the round button on the Light now bar warms from left to right while held ---------- */
 @keyframes m-hold { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
-.m-hold { background-image: linear-gradient(90deg, var(--m-warm-tint), var(--m-warm-tint)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
+.m-hold { background-image: linear-gradient(90deg, var(--m-warm-deep), var(--m-warm-deep)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .m-hold.holding { animation: m-hold 1s linear forwards; }
 
 /* ---------- gesture detected ---------- */
@@ -59,8 +59,8 @@
 /* ---------- connection dot ---------- */
 @keyframes m-dot-hello { from { box-shadow: 0 0 0 0 rgba(46,139,87,.55); } to { box-shadow: 0 0 0 10px rgba(46,139,87,0); } }
 @keyframes m-dot-lost { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-.pill .dot.m-dot-hello { animation: m-dot-hello .9s var(--m-ease) 1; }
-.pill .dot.m-dot-lost { animation: m-dot-lost 2.2s ease-in-out infinite; }
+.status .dot.m-dot-hello { animation: m-dot-hello .9s var(--m-ease) 1; }
+.status .dot.m-dot-lost { animation: m-dot-lost 2.2s ease-in-out infinite; }
 
 /* ---------- sheet: GSAP takes over the transform and scrim while this class is on the root ---------- */
 .m-sheet-gsap .sheet, .m-sheet-gsap .scrim { transition: none !important; }
@@ -69,7 +69,7 @@
 
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .m-press, .m-flash, .m-pulse, .m-pulse .ic, .m-hold.holding, .m-timer .i, .pill .dot.m-dot-hello, .pill .dot.m-dot-lost { animation: none !important; }
+  .m-press, .m-flash, .m-pulse, .m-pulse .ic, .m-hold.holding, .m-timer .i, .status .dot.m-dot-hello, .status .dot.m-dot-lost { animation: none !important; }
   .m-timer-line { animation-play-state: paused !important; }   /* still shows how much is left, just does not move */
   .m-wash, .m-veil { display: none !important; }
 }

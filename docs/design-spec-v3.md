@@ -311,3 +311,23 @@ The light field colours: `roomsForLight()` returns `color: lampColor(level)` per
 - `motion.js`: `textSwap`, `barIn`; the status dot classes move from `.pill .dot` to `.status .dot`.
 - `sw.js`: bump VERSION to `v10`.
 - The Playwright suite (`ui_test2.js`, `err_test.js`) must still print `errors: none`; selectors it relies on: `.room`, `.remote-card` (update to the new row), `.remote-hero .pico-svg` (update to `.stage .pico-svg`), `#sheet-root.in`, `[data-act=...]` names unchanged.
+
+---
+
+## Implementation notes
+
+What the build did where the spec could not be followed to the letter, and the small decisions it had to make.
+
+- **Pico artwork in the stages.** `picoArt` at 120px wide is 254px tall (the Pico is a 100:212 box), so it overflows both the 240px remote stage and the 200px square on the setup sheet. The remote stage holds it at 104px wide (220px tall) and the setup sheet at 84px wide (178px tall); everything else about the stages is as written.
+- **Slider tooltip class.** The spec names the tip card `.tip` and keeps the slider tooltip as `.sliderwrap .tip`; the two would collide, so the slider tooltip is `.stip` (same look, same behaviour, `boot.js` updated).
+- **House slider range.** The house dimmer runs 1 to 100 rather than 0 to 100: at 0 every light would go off and the level row would disappear under the finger. All off is the round button beside it.
+- **The five-item tab bar.** The Automations item belongs to the automations work; the bar still has four items, and the CSS lays out five without wrapping at 360px.
+- **Row classes kept for the tests.** The remote list row is `.item.remote-card`, the recipe rows are `.item.recipe`, so `.remote-card` and `.recipe` selectors keep working alongside the renamed `.stage`.
+- **Dark sheets** are done by re-scoping the tokens on `.sheet.dark` (`--card`, `--card-2`, `--line`, `--text`, `--text-2`, `--text-3`, `--lamp-off`, `--black`), so every component that reads tokens is dark for free. `lampColor(level, dark)` and `lampHTML(..., dark)` take a flag for discs rendered on dark, since inline fills are computed in JS.
+- **The house sleep timer** (from the Now view) targets every lit light as one list; it travels through `data-t` as the targets joined by `|` (`tsplit()` in `core.js`), which is also how the agent keys its timers.
+- **The setup sheet** opens once per session from Home's `after()` when nothing is connected; the page underneath (and the Remotes tab) carry a "Let's connect your home" tip that reopens it.
+- **The "Connected to your home" moment** shows only on the first snapshot of a session when the connector is online; a reconnect goes straight to the page.
+- **`sheet.open`'s `question` option** is accepted and ignored, as the spec allows: every header is the big kind.
+- **The status circle** uses `.status.ok` / `.status.off` rather than `.on`, because `.iconbtn.on` is the black filled state.
+- **The sign-out row** keeps `data-act="logout"`; the `.btn.danger` style still exists for the delete buttons in the scene and set editors.
+- **Fixed elements in fullPage captures.** Playwright draws the bar and the tab bar at the viewport offset in fullPage screenshots; the `s3-*-full.png` captures hide them, the viewport captures show them.
