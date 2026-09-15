@@ -29,16 +29,17 @@
 /* ---------- scene wash: a band of warm light crossing a room card, under its controls ----------
    Motion.sceneRun gives the card position: relative and isolation: isolate, so z-index -1 sits
    between the card's fill and everything printed on it. */
-.m-wash { position: absolute; inset: 0; pointer-events: none; z-index: -1; opacity: 0;
-  background: linear-gradient(104deg, rgba(255,238,210,0) 38%, rgba(255,238,210,.55) 50%, rgba(255,238,210,0) 62%); }
+.m-wash { position: absolute; inset: 0; pointer-events: none; z-index: -1; opacity: 0; mix-blend-mode: screen;
+  background: linear-gradient(104deg, rgba(255,238,210,0) 36%, rgba(255,238,210,.6) 50%, rgba(255,238,210,0) 64%); }
 
-/* ---------- all off: the page's light draining out ---------- */
-.m-veil { position: fixed; left: 0; right: 0; top: 0; height: 130vh; z-index: 19; pointer-events: none;
-  background: linear-gradient(180deg, rgba(255,222,181,0) 0%, rgba(255,222,181,.62) 12%, rgba(255,222,181,.45) 55%, rgba(255,222,181,.18) 100%); }
+/* ---------- all off: a band of warm light passes down the page and leaves at the bottom ----------
+   multiply keeps black controls black and turns white paper cream, the same logic as the light field. */
+.m-veil { position: fixed; left: 0; right: 0; top: -60vh; height: 60vh; z-index: 19; pointer-events: none; mix-blend-mode: multiply;
+  background: linear-gradient(180deg, rgba(255,226,190,0) 0%, rgba(255,226,190,.7) 30%, rgba(255,226,190,.7) 60%, rgba(255,226,190,0) 100%); }
 
-/* ---------- All off hold: the black progress line is in styles.css; this warms the button while held ---------- */
-@keyframes m-hold { from { background-position: -100% 0; } to { background-position: 0 0; } }
-.m-hold { background-image: linear-gradient(90deg, var(--m-warm-tint), var(--m-warm-tint)); background-size: 200% 100%; background-repeat: no-repeat; background-position: -100% 0; }
+/* ---------- All off hold: the black progress line is in styles.css; this warms the button behind it, left to right ---------- */
+@keyframes m-hold { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+.m-hold { background-image: linear-gradient(90deg, var(--m-warm-tint), var(--m-warm-tint)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .m-hold.holding { animation: m-hold 1s linear forwards; }
 
 /* ---------- gesture detected ---------- */

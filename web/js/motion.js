@@ -139,10 +139,10 @@
     if (veil) { g.killTweensOf(veil); veil.remove(); }
     veil = document.createElement('div'); veil.className = 'm-veil';
     document.body.appendChild(veil);
+    // The band starts above the viewport (top: -60vh) and travels 270% of its own height: past the bottom edge.
     g.timeline({ onComplete: () => { if (veil) veil.remove(); veil = null; } })
-      .fromTo(veil, { yPercent: -12, opacity: 0 }, { opacity: 1, duration: 0.16, ease: 'power1.out' }, 0)
-      .to(veil, { yPercent: 100, duration: 0.72, ease: 'power2.in' }, 0.08)
-      .to(veil, { opacity: 0.6, duration: 0.4, ease: 'power1.in' }, 0.4);
+      .fromTo(veil, { yPercent: 0, opacity: 1 }, { yPercent: 270, duration: 0.85, ease: 'power2.in' }, 0)
+      .to(veil, { opacity: 0.7, duration: 0.3, ease: 'power1.in' }, 0.55);
   }
 
   // ---------- a light changed ----------

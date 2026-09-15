@@ -37,7 +37,7 @@ from zoneinfo import ZoneInfo
 from engine import ActionRunner, GestureEngine, in_night_window
 from sun import sun_times
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
