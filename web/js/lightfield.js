@@ -32,7 +32,7 @@ const F = {
   w: 0, h: 0, dpr: 1,
   raf: 0, running: false, visible: !document.hidden, onScreen: false, dirty: true, lastFrame: 0,
   reduced: false, mql: null, ro: null, io: null,
-  gain: 1, overrides: {}, previewTimer: 0, launched: false, seed: 0,
+  gain: 1, overrides: {}, previewTimer: 0, seed: 0,
   fb: null,                 // CSS fallback state
 };
 
@@ -235,7 +235,7 @@ function sleep() { F.running = false; if (F.raf) cancelAnimationFrame(F.raf); F.
 
 function frame(t) {
   F.raf = 0; F.running = false;
-  if (!F.mode || !F.visible || !F.onScreen) return;
+  if (!F.mode || !F.visible || !F.onScreen || !F.host || !F.host.isConnected) return;
   const g = G();
   const tweening = g ? [...F.pools.values()].some(p => g.isTweening(p)) : easeManually(t);
   const idle = !tweening;
@@ -436,7 +436,6 @@ export async function initLightField(container, getRooms) {
   if (F.container !== container && F.container) { F.container.appendChild(host); watch(F.container); resize(); }
   // App launch: every pool blooms up from nothing, left to right.
   update({ stagger: true, duration: 0.9 });
-  F.launched = true;
   return F.mode;
 }
 

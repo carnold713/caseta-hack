@@ -70,6 +70,6 @@
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .m-press, .m-flash, .m-pulse, .m-pulse .ic, .m-hold.holding, .m-timer .i, .pill .dot.m-dot-hello, .pill .dot.m-dot-lost { animation: none !important; }
-  .m-timer-line { animation-duration: 1ms !important; }
+  .m-timer-line { animation-play-state: paused !important; }   /* still shows how much is left, just does not move */
   .m-wash, .m-veil { display: none !important; }
 }

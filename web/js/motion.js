@@ -88,18 +88,25 @@
     if (opts.flash) ring(e);
   }
   // A Pico button on the illustration: the whole key sinks and a warm flash blooms behind the glyph.
+  let flashSeq = 0;
   function pressSVG(key, opts) {
     const g = G();
     const shape = key.querySelector('.pk-shape') || key;
     let bb = null; try { bb = shape.getBBox(); } catch (_) { /* detached */ }
     if (bb && bb.width && !reduced()) {
       const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2, r = Math.max(bb.width, bb.height) * 0.62;
+      const svg = key.ownerSVGElement;
+      const gid = 'm-flash-g' + (++flashSeq);
+      const grad = document.createElementNS(NS, 'radialGradient'); grad.setAttribute('id', gid);
+      [[0, 1], [0.45, 0.85], [1, 0]].forEach(([o, a]) => { const s = document.createElementNS(NS, 'stop'); s.setAttribute('offset', o); s.setAttribute('stop-color', WARM); s.setAttribute('stop-opacity', a); grad.appendChild(s); });
+      svg.insertBefore(grad, svg.firstChild);
       const c = document.createElementNS(NS, 'circle');
       c.setAttribute('class', 'm-flash'); c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r);
-      c.setAttribute('fill', WARM); c.setAttribute('opacity', '0.95');
+      c.setAttribute('fill', `url(#${gid})`); c.setAttribute('opacity', '0.95');
       if (shape.nextSibling) key.insertBefore(c, shape.nextSibling); else key.appendChild(c);   // above the key face, below the glyph
-      if (g) g.fromTo(c, { attr: { r: r * 0.35 }, opacity: 0.95 }, { attr: { r: r * 1.05 }, opacity: 0, duration: 0.55, ease: 'power2.out', onComplete: () => c.remove() });
-      else { c.classList.add('m-flash-css'); setTimeout(() => c.remove(), 600); }
+      const done = () => { c.remove(); grad.remove(); };
+      if (g) g.fromTo(c, { attr: { r: r * 0.35 }, opacity: 1 }, { attr: { r: r * 1.1 }, opacity: 0, duration: 0.55, ease: 'power2.out', onComplete: done });
+      else { c.classList.add('m-flash-css'); setTimeout(done, 600); }
     }
     if (g) g.fromTo(key, { scale: opts.scale != null ? opts.scale : 0.93 }, { scale: 1, duration: 0.36, ease: 'power2.out', transformOrigin: '50% 50%', overwrite: true, clearProps: 'transform' });
   }
@@ -139,10 +146,10 @@
     if (veil) { g.killTweensOf(veil); veil.remove(); }
     veil = document.createElement('div'); veil.className = 'm-veil';
     document.body.appendChild(veil);
-    // The band starts above the viewport (top: -60vh) and travels 270% of its own height: past the bottom edge.
+    // The band sits above the viewport (top: -60vh); it starts a quarter of the way in and travels past the bottom edge.
     g.timeline({ onComplete: () => { if (veil) veil.remove(); veil = null; } })
-      .fromTo(veil, { yPercent: 0, opacity: 1 }, { yPercent: 270, duration: 0.85, ease: 'power2.in' }, 0)
-      .to(veil, { opacity: 0.7, duration: 0.3, ease: 'power1.in' }, 0.55);
+      .fromTo(veil, { yPercent: 30, opacity: 1 }, { yPercent: 275, duration: 0.8, ease: 'power1.in' }, 0)
+      .to(veil, { opacity: 0.7, duration: 0.3, ease: 'power1.in' }, 0.5);
   }
 
   // ---------- a light changed ----------
@@ -154,8 +161,9 @@
     const prev = typeof wasOn === 'boolean' ? wasOn : e._mOn;
     e._mOn = on;
     const g = G(); if (!g || typeof prev !== 'boolean' || prev === on) return;
-    const act = e.classList.contains('act') ? e : e.querySelector('.act');
-    const chip = e.querySelector ? e.querySelector('.onchip') : null;
+    const isRoom = e.classList.contains('room');
+    const act = e.classList.contains('act') ? e : isRoom ? null : e.querySelector('.act');
+    const chip = isRoom ? e.querySelector('.onchip') : null;
     if (on) {
       if (act) { ring(act); g.fromTo(act, { scale: 0.88 }, { scale: 1, duration: 0.42, ease: 'power2.out', overwrite: true, clearProps: 'transform' }); }
       if (chip) g.fromTo(chip, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.42, ease: 'power3.out', overwrite: true, clearProps: 'transform,opacity' });
