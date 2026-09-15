@@ -1,0 +1,74 @@
+/* Pico Hack motion layer. Pure-CSS moments from docs/motion-spec.md.
+   Every selector here is prefixed m- and this file is loaded after styles.css.
+   GSAP-driven moments live in js/motion.js; the light field in js/lightfield.js. */
+:root { --m-ease: cubic-bezier(.2,.8,.2,1); --m-warm: #FFD9A0; --m-warm-deep: #FFB547; --m-warm-tint: #FCE3C4; }
+
+/* ---------- light field placement (Home) ----------
+   <div class="m-hero"><div class="m-lightfield" id="lightfield"></div> …status line, scene chips, All off…</div>
+   The band is as tall as the wrapper (about 180px with those three inside). The wrapper isolates a
+   stacking context so the field, at z-index -1, paints above the page and beneath everything in flow. */
+.m-hero { position: relative; isolation: isolate; margin: -4px -16px 0; padding: 4px 16px 0; }
+.m-lightfield { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.m-lightfield canvas { display: block; width: 100%; height: 100%; }
+
+/* ---------- press ---------- */
+/* While GSAP drives a press the element's own CSS transition must not fight it. */
+.m-pressing { transition: none !important; }
+@keyframes m-press { from { transform: scale(.94); } to { transform: scale(1); } }
+.m-press { animation: m-press .32s var(--m-ease); }
+/* SVG flash behind a Pico glyph (used when GSAP is missing; GSAP tweens r and opacity itself). */
+@keyframes m-flash { from { transform: scale(.4); opacity: .95; } to { transform: scale(1.1); opacity: 0; } }
+.m-flash { pointer-events: none; transform-box: fill-box; transform-origin: center; }
+.m-flash.m-flash-css { animation: m-flash .55s var(--m-ease) forwards; }
+
+/* ---------- warm ring around a light's action button when it comes on ---------- */
+.m-ring { position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--m-warm-deep); pointer-events: none; opacity: 0; }
+/* soft halo that follows a slider drag (opacity is set by Motion.sliderFeedback) */
+.m-halo { position: absolute; inset: -6px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,181,71,.55), rgba(255,181,71,0)); pointer-events: none; opacity: 0; }
+
+/* ---------- scene wash: a band of warm light crossing a room card, under its controls ----------
+   Motion.sceneRun gives the card position: relative and isolation: isolate, so z-index -1 sits
+   between the card's fill and everything printed on it. */
+.m-wash { position: absolute; inset: 0; pointer-events: none; z-index: -1; opacity: 0;
+  background: linear-gradient(104deg, rgba(255,238,210,0) 38%, rgba(255,238,210,.55) 50%, rgba(255,238,210,0) 62%); }
+
+/* ---------- all off: the page's light draining out ---------- */
+.m-veil { position: fixed; left: 0; right: 0; top: 0; height: 130vh; z-index: 19; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,222,181,0) 0%, rgba(255,222,181,.62) 12%, rgba(255,222,181,.45) 55%, rgba(255,222,181,.18) 100%); }
+
+/* ---------- All off hold: the black progress line is in styles.css; this warms the button while held ---------- */
+@keyframes m-hold { from { background-position: -100% 0; } to { background-position: 0 0; } }
+.m-hold { background-image: linear-gradient(90deg, var(--m-warm-tint), var(--m-warm-tint)); background-size: 200% 100%; background-repeat: no-repeat; background-position: -100% 0; }
+.m-hold.holding { animation: m-hold 1s linear forwards; }
+
+/* ---------- gesture detected ---------- */
+@keyframes m-pulse-bg { 0% { background-color: var(--m-warm-tint); } 100% { background-color: transparent; } }
+@keyframes m-pulse-ic { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.m-pulse { animation: m-pulse-bg .9s var(--m-ease) forwards; }
+.m-pulse .ic { animation: m-pulse-ic .5s var(--m-ease); }
+
+/* ---------- sleep timer: a hairline that drains for the rest of the countdown ----------
+   <div class="timerbar m-timer" style="--m-total:1800s;--m-elapsed:420s">…<div class="m-timer-line"></div></div> */
+@keyframes m-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.m-timer { position: relative; overflow: hidden; }
+.m-timer-line { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--text); transform-origin: left center; animation: m-timer var(--m-total, 60s) linear forwards; animation-delay: calc(-1 * var(--m-elapsed, 0s)); }
+@keyframes m-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.m-timer .i { animation: m-breathe 2.6s ease-in-out infinite; }
+
+/* ---------- connection dot ---------- */
+@keyframes m-dot-hello { from { box-shadow: 0 0 0 0 rgba(46,139,87,.55); } to { box-shadow: 0 0 0 10px rgba(46,139,87,0); } }
+@keyframes m-dot-lost { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.pill .dot.m-dot-hello { animation: m-dot-hello .9s var(--m-ease) 1; }
+.pill .dot.m-dot-lost { animation: m-dot-lost 2.2s ease-in-out infinite; }
+
+/* ---------- sheet: GSAP takes over the transform and scrim while this class is on the root ---------- */
+.m-sheet-gsap .sheet, .m-sheet-gsap .scrim { transition: none !important; }
+
+/* ---------- toast: styles.css already eases it (opacity 160ms, rise 200ms) ---------- */
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .m-press, .m-flash, .m-pulse, .m-pulse .ic, .m-hold.holding, .m-timer .i, .pill .dot.m-dot-hello, .pill .dot.m-dot-lost { animation: none !important; }
+  .m-timer-line { animation-duration: 1ms !important; }
+  .m-wash, .m-veil { display: none !important; }
+}

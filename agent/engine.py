@@ -206,7 +206,8 @@ class ActionRunner:
                 mins = max(lo, min(hi, mins))
                 start_hm = f"{mins // 60:02d}:{mins % 60:02d}"
         return winddown_level(now_hm, start_hm, settings.get("night_start", "22:00"), settings.get("night_end", "06:30"),
-                              int(wd.get("from_level", 100)), int(wd.get("to_level", 50)), int(settings.get("night_level", 30)))
+                              int(wd.get("from_level", 100)), int(wd.get("to_level", 50)), int(settings.get("night_level", 30)),
+                              int(wd.get("morning_level", 100)), wd.get("morning_until", "07:30"))
 
     def on_level_for(self, device_id: str, target) -> int:
         """Per-light "on" level: task lights are exempt from the evening curve."""
@@ -501,10 +502,14 @@ def _mins(hm: str) -> int:
     return int(hm[:2]) * 60 + int(hm[3:])
 
 
-def winddown_level(now_hm: str, start_hm: str, night_start: str, night_end: str, from_level: int, to_level: int, night_level: int) -> int:
-    """Full until start, straight line down to to_level at night_start, night_level inside the night hours."""
+def winddown_level(now_hm: str, start_hm: str, night_start: str, night_end: str, from_level: int, to_level: int, night_level: int,
+                   morning_level: int = 100, morning_until: str = "07:30") -> int:
+    """Night level inside the night hours, a soft morning until morning_until, full until start,
+    then a straight line down to to_level at night_start."""
     if in_night_window(now_hm, night_start, night_end):
         return night_level
+    if _mins(night_end) <= _mins(now_hm) < _mins(morning_until):
+        return morning_level
     now, start, ns = _mins(now_hm), _mins(start_hm), _mins(night_start)
     if ns <= start:
         return from_level if now < start else to_level

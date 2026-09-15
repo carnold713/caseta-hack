@@ -104,7 +104,7 @@ function validateConfig(cfg) {
     enabled: ad.enabled === true,
     mode: ad.mode === 'points' && points.length >= 2 ? 'points' : 'winddown',
     points: points.length >= 2 ? points : [{ time: '07:00', level: 100 }, { time: '18:00', level: 80 }, { time: '21:00', level: 40 }, { time: '23:00', level: 15 }],
-    winddown: { sunset_offset_min: clampInt(wd.sunset_offset_min, -120, 180, 30), earliest: isClock(wd.earliest) ? wd.earliest : '18:00', latest: isClock(wd.latest) ? wd.latest : '20:00', from_level: clampInt(wd.from_level, 1, 100, 100), to_level: clampInt(wd.to_level, 1, 100, 50) },
+    winddown: { sunset_offset_min: clampInt(wd.sunset_offset_min, -120, 180, 30), earliest: isClock(wd.earliest) ? wd.earliest : '18:00', latest: isClock(wd.latest) ? wd.latest : '20:00', from_level: clampInt(wd.from_level, 1, 100, 100), to_level: clampInt(wd.to_level, 1, 100, 50), morning_level: clampInt(wd.morning_level, 1, 100, 60), morning_until: isClock(wd.morning_until) ? wd.morning_until : '07:30', nudge: wd.nudge === true },
   };
   // What each light is for. Optional; the app uses it to build room moods.
   out.settings.roles = {};

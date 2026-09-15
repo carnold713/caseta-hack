@@ -311,9 +311,13 @@ class Agent:
         return (base + offset).replace(second=0, microsecond=0) if base else None
 
     async def schedule_loop(self) -> None:
+        last_sun_push = 0.0
         while True:
             try:
                 now = self.local_time()
+                if time.time() - last_sun_push > 600:
+                    last_sun_push = time.time()
+                    self.send({"type": "sun", "sun": self.sun_today(), "next_runs": self.next_fire_times()})
                 if now.year < 2025:  # a Pi has no clock battery; do not fire on a bogus date
                     await asyncio.sleep(20)
                     continue
@@ -383,16 +387,27 @@ class Agent:
         return out
 
     def sunset_hm(self) -> Optional[str]:
-        s = self.sun_today()
-        return s["sunset"][11:16] if s and s.get("sunset") else None
-
-    def sun_today(self) -> Optional[dict]:
         loc = self.config.get("settings", {}).get("location")
         if not loc:
             return None
         now = self.local_time()
-        rise, sset = sun_times(now.date(), float(loc["lat"]), float(loc["lng"]), now.tzinfo)
-        return {"sunrise": rise.isoformat() if rise else None, "sunset": sset.isoformat() if sset else None, "now": now.isoformat()}
+        _, sset = sun_times(now.date(), float(loc["lat"]), float(loc["lng"]), now.tzinfo)
+        return sset.strftime("%H:%M") if sset else None
+
+    def sun_today(self) -> Optional[dict]:
+        """Today's sun, the clock in the home's zone, and what "on" means right now under the wind-down curve."""
+        loc = self.config.get("settings", {}).get("location")
+        now = self.local_time()
+        out: dict = {"now": now.isoformat(), "sunrise": None, "sunset": None, "curve_level": None}
+        if loc:
+            rise, sset = sun_times(now.date(), float(loc["lat"]), float(loc["lng"]), now.tzinfo)
+            out["sunrise"] = rise.isoformat() if rise else None
+            out["sunset"] = sset.isoformat() if sset else None
+        try:
+            out["curve_level"] = self.runner.curve_level()
+        except Exception:  # noqa: BLE001
+            pass
+        return out
 
     # ---------- hub link ----------
     def send(self, msg: dict) -> None:
