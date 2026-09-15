@@ -281,7 +281,10 @@ function setHouseLevel(v) {
 // ---------- the Now view: the Sonos full-screen now playing, for the house ----------
 function nowArtHTML(rooms) {
   if (!rooms.length) return lampHTML(0, 96, ICON('moon', 'lg'), '', true);
-  return rooms.slice(0, 6).map(r => lampHTML(r.level, discSize(r.level) + 16, ICON(r.icon, 'sm'), '', true)).join('');
+  // one lit room fills the square like album art; more rooms share it
+  const n = Math.min(rooms.length, 6);
+  const base = n <= 1 ? 112 : n === 2 ? 80 : n <= 4 ? 64 : 52;
+  return rooms.slice(0, 6).map(r => lampHTML(r.level, Math.round(base + base * 0.35 * clamp(r.level, 0, 100) / 100), ICON(r.icon, n <= 2 ? '' : 'sm'), '', true)).join('');
 }
 function nowSub(rooms, on, lv) {
   if (!on.length) return 'Everything is off';

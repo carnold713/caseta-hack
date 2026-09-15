@@ -38,10 +38,24 @@ Pico bindings from its cached config.
   a thing a button can control. Hand-picked sets exist under Advanced.
 - **Scenes:** a look for the whole house, saved from the lights as they
   are right now, with a fade. Lutron's own scenes sit in the same list.
-- **Home:** what is on right now, All off (hold it to close shades and stop
-  fans too), starred favorites, scenes, and rooms that open to sliders,
-  toggles, fan speeds and shade controls. Long-press a favorite for a
-  sleep timer.
+- **Home:** which rooms are lit, as warm discs sized by brightness, scenes
+  as tiles, what is coming up, and rooms that open to lamp rows with
+  sliders, toggles, fan speeds and shade controls. Tap a light's name for
+  its own page: drag the disc to dim, set a sleep timer, star it. The
+  **Light now** bar sits above the tabs on every page: what is on, a
+  dimmer for everything that is on, and All off (hold it to close shades
+  and stop fans too). Tap the bar for the full Now view.
+- **Room moods:** say which lights are the main light, task light, lamps
+  or decor, and each room gets Bright, Relax, Dinner, Movie and Night as
+  scenes a chip or a remote button can run.
+- **Automations:** things the home does by itself. Three guided setups
+  (Welcome lights before sunset, a Wake-up light that rises slowly before
+  the alarm, Goodnight and Leaving buttons) and a from-scratch editor:
+  a clock time or sunrise/sunset with an offset, the lights, what happens,
+  an optional off time, days, skip tonight. Sunset needs the home's rough
+  location, taken from the phone once or picked from a city list; it stays
+  on your hub. The **Evening wind-down** makes "on" a little dimmer as the
+  night goes on, with one control: when the house goes quiet.
 - **Autosave with Undo.** Nothing to remember to save.
 - **Recent activity:** what was pressed and what happened, for "who left
   the lights on" and for tuning the double-press timing.
@@ -136,8 +150,12 @@ whenever the connector changes; the hub reads it to know what "latest" is.
    saves as you go.
 2. **Scenes** tab: set the lights how you like them (Home tab or the real
    switches), tap +, name it. A remote button can run it.
-3. **Settings**: night hours, and under Advanced the double-press speed
-   and hold length with a live tester.
+3. **Automations** tab: pick one of the three guided setups or "Something
+   else", answer the questions, done. Each row has a toggle and a next-run
+   time; the Home tab shows what is coming up with a Skip.
+4. **Settings**: connection and the connector update, night hours, and
+   under Advanced the double-press speed and hold length with a live
+   tester.
 
 A worked example, a 3-button Pico in the kitchen:
 
@@ -158,9 +176,16 @@ binding fires instantly.
 
 ## Look and feel
 
-`docs/design-spec.md` is the visual spec the interface follows: white
-ground, flat room colour blocks, black and grey everything else, Noto
-Sans, no gradients or glows. Read it before changing styles.
+`docs/design-spec-v3.md` is the visual spec the interface follows, derived
+from the Sonos iOS app: a light grey sheet with grouped grey cards, black
+pills and chips, Inter, big left-aligned titles, a dark slate "Light now"
+bar above the tabs, dark full-screen Now and light pages, and the lamp ramp
+as the only colour. `docs/ui-concepts.md` covers the lamp discs and moods,
+`docs/ux-flows.md` the automations, `docs/motion-spec.md` the motion (GSAP
+hooks in `js/motion.js`, the three.js light field in `js/lightfield.js`).
+Read the spec before changing styles. Sliders are inert to a passing finger
+(`js/slide.js`): only a tap or a sideways drag moves one, so scrolling the
+page never changes a light, and the viewport does not zoom.
 
 ## Layout
 
@@ -168,7 +193,7 @@ Sans, no gradients or glows. Read it before changing styles.
 hub/server.js     Express + ws: static PWA, /api/*, /ws/app (phones), /ws/agent (home), /install.sh
 hub/validate.js   config schema, shared truth for bindings and actions
 hub/store.js      JSON files in DATA_DIR
-web/              the PWA: index.html, styles.css, js/{core,home,remotes,scenes,settings,boot}.js, sw.js, icons/
+web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,remotes,scenes,settings,automations,cities,boot,slide,motion,lightfield}.js, sw.js, icons/
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
