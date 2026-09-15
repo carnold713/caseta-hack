@@ -11,7 +11,11 @@ VIEWS.settings = {
     return `
     <div class="h2">Home connection</div>
     ${S.agent.online ? `<div class="card"><div class="row"><div class="ic black lg">${ICON('link')}</div><div class="grow"><div class="t">Connected to your home</div><div class="muted small">${plural(nd, 'light')} · ${plural(np, 'remote')}${(info.bridge || {}).host ? ` · bridge at ${esc(info.bridge.host)}` : ''}</div></div></div>
-      <div class="row" style="margin-top:12px"><button class="btn sm" data-act="refresh">${ICON('refresh', 'sm')} Look for new lights</button></div><p class="faint small" style="margin:8px 0 0">Added or renamed something in the Lutron app? Look again to pick it up.</p></div>`
+      <div class="row" style="margin-top:12px"><button class="btn sm" data-act="refresh">${ICON('refresh', 'sm')} Look for new lights</button></div><p class="faint small" style="margin:8px 0 0">Added or renamed something in the Lutron app? Look again to pick it up.</p>
+      <div style="border-top:1px solid var(--hairline);margin-top:14px;padding-top:12px">
+        <div class="row"><div class="grow"><div class="t" style="font-size:15px">Connector ${esc(info.version || '?')}${info.commit ? ` <span class="faint">(${esc(info.commit)})</span>` : ''}</div><div class="muted small">${info.update_available ? `Update available: ${esc(info.latest)}` : 'Up to date'}</div></div>${info.update_available ? `<button class="btn sm primary" data-act="update-connector">Update now</button>` : ''}</div>
+        <label class="row" style="margin-top:12px;justify-content:space-between"><div><div style="font-weight:600">Update automatically</div><div class="muted small">Whenever a new version is out, the connector updates itself.</div></div><button class="sw ${s.auto_update ? 'on' : ''}" data-act="auto-update"></button></label>
+      </div></div>`
     : `<div class="infoblock lemon" style="align-items:flex-start"><div class="grow"><div class="t">${everConnected ? 'Not connected right now' : 'Not connected yet'}</div><div class="d">${everConnected ? `Last seen with ${plural(nd, 'light')} and ${plural(np, 'remote')}.` : 'Follow the steps below.'}</div>${everConnected ? `<div class="d" style="margin-top:8px">Is the computer running the connector on and awake?<br>Is it on the same Wi-Fi as your Lutron bridge?<br>Is the internet working there?</div><div class="d" style="margin-top:8px">Your remotes keep working from their last saved settings while disconnected.</div>` : ''}</div></div>`}
     ${setupSteps(everConnected)}
     <div class="h2">Night-time</div>

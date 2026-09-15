@@ -117,6 +117,18 @@ package name; put them in `ANDROID_CERT_SHA256` and `ANDROID_PACKAGE_NAME`
 on Railway. The hub serves them at `/.well-known/assetlinks.json`, which is
 what makes Android trust the app and hide the browser bar.
 
+### Updating the connector
+
+Settings shows the connector's version next to the hub's. Tap **Update
+now**, or leave **Update automatically** on (the default) and the hub
+updates it by itself whenever a newer connector ships: it sends an
+`update` command down the existing link, the connector runs `git reset
+--hard origin/<branch>` and `pip install -r requirements.txt`, then
+re-executes itself. Pairing is untouched. A connector older than 0.3.0
+does not understand the command; run the install line once by hand and
+it takes care of itself from then on. Bump `VERSION` in `agent/agent.py`
+whenever the connector changes; the hub reads it to know what "latest" is.
+
 ## Configure
 
 1. **Remotes** tab: press any button on a Pico and its remote opens. Tap a

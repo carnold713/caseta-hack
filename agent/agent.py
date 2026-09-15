@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -32,13 +33,38 @@ from pylutron_caseta.smartbridge import Smartbridge
 
 from engine import ActionRunner, GestureEngine, in_night_window
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
 HUB_URL = os.environ.get("HUB_URL", "").strip()
 AGENT_TOKEN = os.environ.get("AGENT_TOKEN", "")
 CONFIG_CACHE = DATA_DIR / "config.cache.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True, timeout=120, check=True).stdout.strip()
+
+
+def current_commit() -> Optional[str]:
+    try:
+        return _git("rev-parse", "--short", "HEAD")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def self_update() -> str:
+    """Pull the latest code and dependencies. Returns the new commit. Raises on failure."""
+    if not (REPO_ROOT / ".git").exists():
+        raise RuntimeError("this connector was not installed with git, so it cannot update itself")
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    _git("fetch", "--quiet", "origin", branch)
+    _git("reset", "--hard", "--quiet", f"origin/{branch}")
+    pip = Path(sys.executable).parent / "pip"
+    if pip.exists():
+        subprocess.run([str(pip), "install", "-q", "-r", str(REPO_ROOT / "agent" / "requirements.txt")], capture_output=True, text=True, timeout=900, check=True)
+    return current_commit() or "?"
 
 
 def _bridge_host() -> str:
@@ -254,7 +280,7 @@ class Agent:
                     while not self._send_q.empty():
                         self._send_q.get_nowait()
                     await ws.send(json.dumps({
-                        "type": "hello", "version": VERSION, "bridge": {"host": BRIDGE_HOST},
+                        "type": "hello", "version": VERSION, "commit": current_commit(), "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
                         "timers": self.runner.timers,
                     }))
@@ -285,6 +311,9 @@ class Agent:
         elif t == "command":
             cid = msg.get("id")
             action = msg.get("action") or {}
+            if action.get("type") == "update":
+                await self._update_and_restart(cid)
+                return
             try:
                 if action.get("type") == "refresh":
                     await self._refresh()
@@ -296,6 +325,34 @@ class Agent:
             except Exception as exc:  # noqa: BLE001
                 LOG.error("command %s failed: %s", action, exc)
                 self.send({"type": "result", "id": cid, "ok": False, "error": str(exc)})
+
+    async def _update_and_restart(self, cid) -> None:
+        LOG.info("update requested by the hub")
+        try:
+            before = current_commit()
+            new = await asyncio.get_running_loop().run_in_executor(None, self_update)
+        except subprocess.CalledProcessError as exc:
+            err = (exc.stderr or exc.stdout or str(exc)).strip()[-300:]
+            LOG.error("update failed: %s", err)
+            if self.ws:
+                await self.ws.send(json.dumps({"type": "result", "id": cid, "ok": False, "error": f"update failed: {err}"}))
+            return
+        except Exception as exc:  # noqa: BLE001
+            LOG.error("update failed: %s", exc)
+            if self.ws:
+                await self.ws.send(json.dumps({"type": "result", "id": cid, "ok": False, "error": str(exc)}))
+            return
+        LOG.info("updated %s -> %s, restarting", before, new)
+        if self.ws:
+            await self.ws.send(json.dumps({"type": "result", "id": cid, "ok": True, "detail": {"from": before, "to": new}}))
+            await asyncio.sleep(0.2)
+        if self.bridge:
+            try:
+                await self.bridge.close()
+            except Exception:  # noqa: BLE001
+                pass
+        # Replace this process with a fresh one on the new code. Works with or without systemd/launchd.
+        os.execv(sys.executable, [sys.executable, *sys.argv])
 
     async def _refresh(self) -> None:
         # Reconnect to re-read /device, /button, /virtualbutton after changes in the Lutron app.

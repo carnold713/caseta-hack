@@ -77,6 +77,7 @@ function validateConfig(cfg) {
   out.settings.night_end = isClock(s.night_end) ? s.night_end : '06:30';
   out.settings.night_level = clampInt(s.night_level, 1, 100, 30);
   out.settings.home_name = typeof s.home_name === 'string' ? s.home_name.trim().slice(0, 40) : '';
+  out.settings.auto_update = s.auto_update !== false;
   // Per-room colour keys and per-remote appearance overrides (model layout and finish), set from the app.
   out.settings.room_colors = {};
   for (const [k, v] of Object.entries(s.room_colors || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && typeof v === 'string' && /^[a-z]+$/.test(v)) out.settings.room_colors[k] = v;

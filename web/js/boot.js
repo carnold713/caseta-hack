@@ -16,6 +16,8 @@ document.addEventListener('click', async e => {
     case 'alloff': if (!el._held) { for (const id of targetDevices('h:all')) S.states[id] = { ...(S.states[id] || {}), level: 0 }; paintState(); command({ type: 'level', target: 'h:all', level: 'off' }); } el._held = false; break;
     case 'cancel-timer': command({ type: 'cancel_timer', target: d.t }); break;
     case 'timer': sheet.close(); await command({ type: 'timer', target: d.t, minutes: Number(d.m), fade: 5 }); toast(`${targetName(d.t)} turns off in ${d.m} min`); break;
+    case 'update-connector': el.disabled = true; el.textContent = 'Updating…'; toast('Updating the connector. The dot goes red, then green again in about a minute.'); try { const r = await api('/api/update-connector', { method: 'POST' }); toast(r.detail && r.detail.to ? `Updated to ${r.detail.to}. Restarting…` : 'Updated. Restarting…'); } catch (err) { toast(err.message, { err: true }); render(); } break;
+    case 'auto-update': S.config.settings.auto_update = !S.config.settings.auto_update; el.classList.toggle('on', S.config.settings.auto_update); save({ quiet: true, render: false }); break;
     case 'refresh': el.classList.add('dim'); try { await api('/api/refresh', { method: 'POST' }); toast('Looked again'); } catch (err) { toast(err.message, { err: true }); } el.classList.remove('dim'); break;
     case 'remote-open': S.remote = d.id; render(); window.scrollTo(0, 0); picoPhotoAvailable(dev(d.id)).then(u => { if (u) render(); }); break;
     case 'remote-back': S.remote = null; render(); break;

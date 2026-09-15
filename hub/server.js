@@ -21,6 +21,18 @@ const SESSION_SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256')
 if (!APP_PASSWORD) console.warn('[hub] APP_PASSWORD is not set: the app is open to anyone who finds the URL');
 if (!AGENT_TOKEN) console.warn('[hub] AGENT_TOKEN is not set: any agent can connect');
 
+// The connector code ships in this same repo, so the hub knows the current connector version.
+const LATEST_AGENT_VERSION = (() => {
+  try { return (require('fs').readFileSync(path.join(__dirname, '..', 'agent', 'agent.py'), 'utf8').match(/^VERSION = "([^"]+)"/m) || [])[1] || null; }
+  catch (_) { return null; }
+})();
+function versionLess(a, b) {
+  if (!a || !b) return false;
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) < (pb[i] || 0)) return true; if ((pa[i] || 0) > (pb[i] || 0)) return false; }
+  return false;
+}
+
 // ---------- state ----------
 let config = validateConfig(store.read('config', store.DEFAULT_CONFIG));
 let inventory = store.read('inventory', () => ({ devices: {}, buttons: {}, scenes: {}, areas: {}, bridge: null, updated: null }));
@@ -28,6 +40,7 @@ let states = {}; // device_id -> {level, fan_speed}
 let timers = {}; // target -> {ends_at, level}
 let activity = store.read('activity', () => []); // newest first, capped
 let agent = null;   // the single connected agent socket
+let updating = false;
 let agentInfo = null;
 const appClients = new Set();
 const pending = new Map(); // command id -> {resolve, reject, timer}
@@ -98,6 +111,12 @@ app.post('/api/command', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(e.status || 502).json({ error: e.message });
   }
+});
+
+// Tell the connector to pull the latest code and restart itself. The reply comes before it restarts.
+app.post('/api/update-connector', requireAuth, async (req, res) => {
+  try { res.json(await sendCommand({ type: 'update' }, 15 * 60 * 1000)); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
 // Ask the agent to re-read the bridge (after adding a device in the Lutron app).
@@ -207,7 +226,12 @@ wssAgent.on('connection', (ws, req) => {
 function handleAgentMessage(ws, msg) {
   switch (msg.type) {
     case 'hello':
-      agentInfo = { version: msg.version || null, bridge: msg.bridge || null, since: new Date().toISOString() };
+      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, since: new Date().toISOString() };
+      if (agentInfo.update_available && config.settings.auto_update !== false && !updating) {
+        console.log(`[hub] connector ${msg.version} is behind ${LATEST_AGENT_VERSION}, updating it`);
+        setTimeout(() => sendCommand({ type: 'update' }, 15 * 60 * 1000).then(r => { updating = false; console.log('[hub] connector updated', JSON.stringify(r.detail)); }).catch(e => { updating = false; console.warn('[hub] connector update failed:', e.message); broadcast({ type: 'toast', level: 'error', msg: `Connector update failed: ${e.message}` }); }), 3000);
+        updating = true;
+      }
       if (msg.inventory) setInventory(msg.inventory);
       if (msg.states) mergeStates(msg.states);
       timers = msg.timers || {};
@@ -289,7 +313,7 @@ function sendToAgent(msg) {
   if (agent && agent.readyState === WebSocket.OPEN) { agent.send(JSON.stringify(msg)); return true; }
   return false;
 }
-function sendCommand(action) {
+function sendCommand(action, timeoutMs = 10000) {
   return new Promise((resolve, rejectP) => {
     const id = crypto.randomBytes(8).toString('hex');
     if (!sendToAgent({ type: 'command', id, action })) {
@@ -298,7 +322,7 @@ function sendCommand(action) {
     const timer = setTimeout(() => {
       pending.delete(id);
       rejectP(Object.assign(new Error('agent did not answer in time'), { status: 504 }));
-    }, 10000);
+    }, timeoutMs);
     pending.set(id, { resolve, reject: rejectP, timer });
   });
 }
@@ -312,7 +336,7 @@ setInterval(() => {
   }
 }, 25000).unref();
 
-server.listen(PORT, () => console.log(`[hub] listening on ${PORT}, data in ${store.DATA_DIR}`));
+server.listen(PORT, () => console.log(`[hub] listening on ${PORT}, data in ${store.DATA_DIR}, connector version ${LATEST_AGENT_VERSION}`));
 
 // Railway swaps containers with SIGTERM; exit cleanly so the old deploy is not labelled crashed.
 for (const sig of ['SIGTERM', 'SIGINT']) {
