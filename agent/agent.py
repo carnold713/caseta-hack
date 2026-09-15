@@ -26,7 +26,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import websockets
 from pylutron_caseta.smartbridge import Smartbridge
@@ -37,7 +37,7 @@ from zoneinfo import ZoneInfo
 from engine import ActionRunner, GestureEngine, in_night_window
 from sun import sun_times
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -107,7 +107,8 @@ class Agent:
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}
         self.runner.local_time = self.local_time
-        self._fired: Dict[str, str] = {}  # schedule id -> local date it last fired
+        self.runner.sunset_hm = self.sunset_hm
+        self._fired: Dict[str, str] = self._load_fired()  # schedule id -> local date it last fired
 
     # ---------- config ----------
     def _load_cached_config(self) -> Dict[str, Any]:
@@ -266,7 +267,11 @@ class Agent:
 
     def _on_zone(self, device_id: str) -> None:
         assert self.bridge
-        self._dirty_states[device_id] = _state_of(self.bridge.devices[device_id])
+        st = _state_of(self.bridge.devices[device_id])
+        self._dirty_states[device_id] = st
+        settle = self.runner.zone_changed(device_id, st.get("level"))
+        if settle is not None:
+            asyncio.create_task(settle)
         if self._state_flush is None or self._state_flush.done():
             self._state_flush = asyncio.create_task(self._flush_states())
 
@@ -276,6 +281,21 @@ class Agent:
         self.send({"type": "state", "states": batch})
 
     # ---------- schedules ----------
+    FIRED_FILE = DATA_DIR / "schedules.state.json"
+
+    def _load_fired(self) -> Dict[str, str]:
+        try:
+            return json.loads(self.FIRED_FILE.read_text())
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def _save_fired(self) -> None:
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            self.FIRED_FILE.write_text(json.dumps(self._fired))
+        except OSError as exc:
+            LOG.warning("could not save schedule state: %s", exc)
+
     def _fire_time(self, sc: dict, day: datetime) -> Optional[datetime]:
         """When this schedule fires on the given local date, or None."""
         at = sc.get("at") or {}
@@ -294,6 +314,9 @@ class Agent:
         while True:
             try:
                 now = self.local_time()
+                if now.year < 2025:  # a Pi has no clock battery; do not fire on a bogus date
+                    await asyncio.sleep(20)
+                    continue
                 today = now.strftime("%Y-%m-%d")
                 for sc in self.config.get("schedules", []):
                     if not sc.get("enabled", True):
@@ -303,12 +326,18 @@ class Agent:
                         continue
                     if self._fired.get(sc["id"]) == today:
                         continue
+                    if sc.get("skip_until") and today <= sc["skip_until"]:
+                        continue
                     when = self._fire_time(sc, now)
                     if when is None:
                         continue
                     # fire in the minute it is due (and catch up if we were down for less than 10 minutes)
                     if when <= now < when + timedelta(minutes=10):
                         self._fired[sc["id"]] = today
+                        self._save_fired()
+                        if not self._only_if_ok(sc):
+                            LOG.info("schedule %s skipped: %s not met", sc.get("name") or sc["id"], sc.get("only_if"))
+                            continue
                         LOG.info("schedule %s (%s) firing", sc.get("name") or sc["id"], sc["id"])
                         try:
                             await self.runner.run(sc.get("actions", []))
@@ -317,9 +346,23 @@ class Agent:
                             self.send({"type": "schedule", "id": sc["id"], "name": sc.get("name") or "", "ok": False, "error": str(exc)})
                     elif now >= when + timedelta(minutes=10):
                         self._fired[sc["id"]] = today  # missed it; do not run it hours late
+                        self._save_fired()
             except Exception as exc:  # noqa: BLE001
                 LOG.exception("schedule loop: %s", exc)
             await asyncio.sleep(20)
+
+    def _only_if_ok(self, sc: dict) -> bool:
+        cond = sc.get("only_if")
+        if not cond:
+            return True
+        devs: List[str] = []
+        for a in sc.get("actions", []):
+            if a.get("target"):
+                devs.extend(self.runner._resolve(a["target"]))
+        if not devs:
+            return True
+        any_on = any((self.runner._level_of(d) or 0) > 0 for d in devs)
+        return any_on if cond == "any_on" else not any_on
 
     def next_fire_times(self) -> Dict[str, Optional[str]]:
         """For the app: the next time each schedule will run, ISO, in the home's zone."""
@@ -338,6 +381,10 @@ class Agent:
                     break
             out[sc["id"]] = nxt
         return out
+
+    def sunset_hm(self) -> Optional[str]:
+        s = self.sun_today()
+        return s["sunset"][11:16] if s and s.get("sunset") else None
 
     def sun_today(self) -> Optional[dict]:
         loc = self.config.get("settings", {}).get("location")

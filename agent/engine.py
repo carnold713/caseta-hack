@@ -133,6 +133,8 @@ class ActionRunner:
         self._timers: Dict[str, asyncio.Task] = {}   # target -> pending sleep timer
         self._on_timer = on_timer                     # (target, ends_at epoch or None, level)
         self.local_time: Optional[Callable[[], Any]] = None  # set by the agent: returns an aware datetime in the home's zone
+        self.sunset_hm: Optional[Callable[[], Optional[str]]] = None  # set by the agent: today's sunset as HH:MM, or None
+        self._floors: Dict[str, dict] = {}  # device_id -> {"floor": n} while a hold-to-dim ramp is running
 
     @property
     def timers(self) -> Dict[str, dict]:
@@ -167,6 +169,10 @@ class ActionRunner:
         if kind == "h" and ident == "all" and bridge:   # every light and switch in the house
             return [d["device_id"] for d in bridge.devices.values()
                     if d.get("zone") and d.get("type") in _LIGHT_TYPES | _SWITCH_TYPES]
+        if kind == "h" and ident == "shades" and bridge:
+            return [d["device_id"] for d in bridge.devices.values() if d.get("zone") and d.get("type") in _COVER_TYPES]
+        if kind == "h" and ident == "fans" and bridge:
+            return [d["device_id"] for d in bridge.devices.values() if d.get("zone") and d.get("type") in _FAN_TYPES]
         return []
 
     def _group_on_level(self, target) -> int:
@@ -177,12 +183,37 @@ class ActionRunner:
                 for g in self._config().get("groups", []):
                     if g.get("id") == ident and g.get("on_level"):
                         return int(g["on_level"])
+        return self.curve_level() if self.curve_level() is not None else int(settings.get("group_on_level", 100))
+
+    def curve_level(self) -> Optional[int]:
+        """What "on" means right now under the adaptive curve, or None when it is off."""
+        settings = self._config().get("settings", {})
         adaptive = settings.get("adaptive") or {}
-        if adaptive.get("enabled") and self.local_time:
-            lvl = adaptive_level(adaptive.get("points", []), self.local_time().strftime("%H:%M"))
-            if lvl is not None:
-                return lvl
-        return int(settings.get("group_on_level", 100))
+        if not adaptive.get("enabled") or not self.local_time:
+            return None
+        now = self.local_time()
+        now_hm = now.strftime("%H:%M")
+        if adaptive.get("mode") == "points":
+            return adaptive_level(adaptive.get("points", []), now_hm)
+        wd = adaptive.get("winddown") or {}
+        start_hm = wd.get("earliest", "18:00")
+        if self.sunset_hm:
+            sh = self.sunset_hm()
+            if sh:
+                mins = int(sh[:2]) * 60 + int(sh[3:]) + int(wd.get("sunset_offset_min", 30))
+                lo = int(wd.get("earliest", "18:00")[:2]) * 60 + int(wd.get("earliest", "18:00")[3:])
+                hi = int(wd.get("latest", "20:00")[:2]) * 60 + int(wd.get("latest", "20:00")[3:])
+                mins = max(lo, min(hi, mins))
+                start_hm = f"{mins // 60:02d}:{mins % 60:02d}"
+        return winddown_level(now_hm, start_hm, settings.get("night_start", "22:00"), settings.get("night_end", "06:30"),
+                              int(wd.get("from_level", 100)), int(wd.get("to_level", 50)), int(settings.get("night_level", 30)))
+
+    def on_level_for(self, device_id: str, target) -> int:
+        """Per-light "on" level: task lights are exempt from the evening curve."""
+        roles = self._config().get("settings", {}).get("roles") or {}
+        if roles.get(device_id) == "task":
+            return int(self._config().get("settings", {}).get("group_on_level", 100))
+        return self._group_on_level(target)
 
     def _level_of(self, device_id: str) -> int:
         bridge = self._bridge()
@@ -221,6 +252,26 @@ class ActionRunner:
             await bridge.set_value(device_id, int(level), fade_time=fade_td)
         else:
             await bridge.set_value(device_id, int(level))
+
+    # ----- hold-to-dim floor -----
+    def _clear_floors(self, device_ids: List[str]) -> None:
+        for d in device_ids:
+            self._floors.pop(d, None)
+
+    def zone_changed(self, device_id: str, level: Optional[int]) -> Optional[Any]:
+        """Called by the agent on every zone update; stops a ramp at its floor or ceiling. Returns a coroutine to await or None."""
+        f = self._floors.get(device_id)
+        if not f or level is None:
+            return None
+        if (f["dir"] == "down" and level <= f["floor"]) or (f["dir"] == "up" and level >= f["floor"]):
+            self._floors.pop(device_id, None)
+            bridge = self._bridge()
+
+            async def settle() -> None:
+                await bridge.stop_cover(device_id)
+                await self._set_level(device_id, f["floor"], 0)
+            return settle()
+        return None
 
     # ----- timers -----
     @staticmethod
@@ -313,22 +364,50 @@ class ActionRunner:
             self.start_timer(a["target"], int(a["minutes"]), int(a.get("level", 0) or 0), a.get("fade"))
             return None
 
+        if t == "cycle_presets":
+            ids = [p for p in a.get("preset_ids", [])]
+            presets = {p["id"]: p for p in self._config().get("presets", []) if p.get("id") in ids}
+            # which one are we in now? the preset whose levels are closest to the current state
+            def distance(p: dict) -> float:
+                lv = p.get("levels", {})
+                if not lv:
+                    return 1e9
+                return sum(abs(self._level_of(d) - (0 if isinstance(v, str) else int(v))) for d, v in lv.items() if d in bridge.devices) / len(lv)
+            ranked = sorted((distance(presets[i]), n) for n, i in enumerate(ids) if i in presets)
+            current = ranked[0][1] if ranked and ranked[0][0] < 8 else -1
+            nxt = ids[(current + 1) % len(ids)]
+            await self.run_one({"type": "preset", "preset_id": nxt})
+            return None
+
         targets = self._resolve(a.get("target", ""))
         if not targets:
             raise RuntimeError(f"target {a.get('target')} resolves to nothing")
 
         if t == "level":
             self._cancel_timers_touching(targets)
+            self._clear_floors(targets)
             level = a.get("level")
             fade = a.get("fade")
             if level == "toggle":
                 any_on = any(self._level_of(d) > 0 for d in targets)
-                level = 0 if any_on else self._group_on_level(a["target"])
-            elif level == "on":
-                level = self._group_on_level(a["target"])
-            elif level == "off":
+                if any_on:
+                    await asyncio.gather(*(self._set_level(d, 0, fade) for d in targets))
+                else:
+                    await asyncio.gather(*(self._set_level(d, self.on_level_for(d, a["target"]), fade) for d in targets))
+                return None
+            if level == "on":
+                await asyncio.gather(*(self._set_level(d, self.on_level_for(d, a["target"]), fade) for d in targets))
+                return None
+            if level == "off":
                 level = 0
             await asyncio.gather(*(self._set_level(d, int(level), fade) for d in targets))
+            return None
+
+        if t == "cap":
+            # only lights that are brighter than `level` come down to it
+            lvl = int(a["level"])
+            above = [d for d in targets if self._level_of(d) > lvl]
+            await asyncio.gather(*(self._set_level(d, lvl, a.get("fade")) for d in above))
             return None
 
         if t == "step":
@@ -363,8 +442,17 @@ class ActionRunner:
             fn = {"raise": bridge.raise_cover, "lower": bridge.lower_cover, "stop": bridge.stop_cover}[t]
             # raise_cover/lower_cover/stop_cover send the generic Raise/Lower/Stop zone commands,
             # which dimmers honour too (that is how a Pico's own raise/lower works).
+            if t == "stop":
+                self._clear_floors(targets)
+            elif t == "lower" and a.get("floor"):
+                for d in targets:
+                    self._floors[d] = {"floor": int(a["floor"]), "dir": "down"}
+            elif t == "raise" and a.get("ceiling") is not None:
+                for d in targets:
+                    self._floors[d] = {"floor": int(a["ceiling"]), "dir": "up"}
             await asyncio.gather(*(fn(d) for d in targets))
             return None
+
 
         if t == "fan":
             await asyncio.gather(*(bridge.set_fan(d, a["speed"]) for d in targets if self._is_fan(d)))
@@ -381,6 +469,7 @@ _SWITCH_TYPES = {
     "WallSwitch", "OutdoorPlugInSwitch", "PlugInSwitch", "InLineSwitch", "PowPakSwitch",
     "SunnataSwitch", "TempInWallPaddleSwitch", "Switched", "DivaSmartSwitch",
 }
+_FAN_TYPES = {"CasetaFanSpeedController", "MaestroFanSpeedController", "FanSpeed"}
 _COVER_TYPES = {
     "SerenaHoneycombShade", "SerenaRollerShade", "TriathlonHoneycombShade", "TriathlonEssentialsRollerShade",
     "TriathlonRollerShade", "TriathlonTiltOnlyWoodBlind", "QsWirelessShade", "QsWirelessHorizontalSheerBlind",
@@ -406,6 +495,25 @@ def adaptive_level(points: list, now_hm: str) -> Optional[int]:
             return int(round(prev[1] + (lvl - prev[1]) * frac))
         prev = (t, lvl)
     return pts[-1][1]
+
+
+def _mins(hm: str) -> int:
+    return int(hm[:2]) * 60 + int(hm[3:])
+
+
+def winddown_level(now_hm: str, start_hm: str, night_start: str, night_end: str, from_level: int, to_level: int, night_level: int) -> int:
+    """Full until start, straight line down to to_level at night_start, night_level inside the night hours."""
+    if in_night_window(now_hm, night_start, night_end):
+        return night_level
+    now, start, ns = _mins(now_hm), _mins(start_hm), _mins(night_start)
+    if ns <= start:
+        return from_level if now < start else to_level
+    if now < start:
+        return from_level
+    if now >= ns:
+        return to_level
+    frac = (now - start) / (ns - start)
+    return int(round(from_level + (to_level - from_level) * frac))
 
 
 def in_night_window(now_hm: str, start: str, end: str) -> bool:

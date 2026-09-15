@@ -3,7 +3,7 @@
 // is where a malformed document gets rejected.
 
 const GESTURES = new Set(['single', 'double', 'hold_start', 'hold_end', 'hold']);
-const ACTION_TYPES = new Set(['level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer']);
+const ACTION_TYPES = new Set(['level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer', 'cap', 'cycle_presets']);
 const FAN_SPEEDS = new Set(['Off', 'Low', 'Medium', 'MediumHigh', 'High']);
 
 function fail(msg) { const e = new Error(msg); e.status = 400; throw e; }
@@ -11,7 +11,7 @@ function fail(msg) { const e = new Error(msg); e.status = 400; throw e; }
 function isId(v) { return typeof v === 'string' && v.length > 0 && v.length <= 64; }
 function isLevel(v) { return Number.isInteger(v) && v >= 0 && v <= 100; }
 // d:<device> a single device, a:<area> a room, g:<group> a custom group, h:all every light and switch.
-function isOneTarget(v) { return typeof v === 'string' && (/^(d|a|g):[A-Za-z0-9_-]+$/.test(v) || v === 'h:all'); }
+function isOneTarget(v) { return typeof v === 'string' && (/^(d|a|g):[A-Za-z0-9_-]+$/.test(v) || v === 'h:all' || v === 'h:shades' || v === 'h:fans'); }
 // A target is one id or a list of them (several specific lights under one command, no named set needed).
 function isTarget(v) { return isOneTarget(v) || (Array.isArray(v) && v.length >= 1 && v.length <= 64 && v.every(isOneTarget)); }
 function targetList(v) { return Array.isArray(v) ? v : [v]; }
@@ -33,6 +33,18 @@ function validateAction(a, where) {
       break;
     case 'raise': case 'lower': case 'stop':
       if (!isTarget(a.target)) fail(`${where}: ${a.type} needs a target`);
+      // hold-to-dim stops at a glow instead of clicking off; hold-to-brighten can stop short of full
+      if (a.floor != null && !(isLevel(a.floor) && a.floor >= 1)) fail(`${where}: floor must be 1-100`);
+      if (a.ceiling != null && !isLevel(a.ceiling)) fail(`${where}: ceiling must be 0-100`);
+      break;
+    case 'cap':
+      // lower only the lights that are above `level`; leave dimmer ones alone
+      if (!isTarget(a.target)) fail(`${where}: cap needs a target`);
+      if (!isLevel(a.level)) fail(`${where}: cap level must be 0-100`);
+      if (a.fade != null && !(typeof a.fade === 'number' && a.fade >= 0 && a.fade <= 3600)) fail(`${where}: fade must be seconds`);
+      break;
+    case 'cycle_presets':
+      if (!Array.isArray(a.preset_ids) || a.preset_ids.length < 2 || !a.preset_ids.every(isId)) fail(`${where}: cycle_presets needs at least two scenes`);
       break;
     case 'fan':
       if (!isTarget(a.target)) fail(`${where}: fan needs a target`);
@@ -85,7 +97,15 @@ function validateConfig(cfg) {
   // Adaptive "on" brightness: what "on" means at each time of day, interpolated between points.
   const ad = s.adaptive || {};
   const points = Array.isArray(ad.points) ? ad.points.filter(p => p && isClock(p.time) && isLevel(p.level)).map(p => ({ time: p.time, level: p.level })).sort((a, b) => a.time.localeCompare(b.time)) : [];
-  out.settings.adaptive = { enabled: ad.enabled === true && points.length >= 2, points: points.length >= 2 ? points : [{ time: '07:00', level: 100 }, { time: '18:00', level: 80 }, { time: '21:00', level: 40 }, { time: '23:00', level: 15 }] };
+  // Two modes: 'winddown' (the default) follows the sun: full brightness until a while after sunset, then a straight
+  // line down to `to_level` at night_start, then night_level inside the night hours. 'points' is a hand-drawn curve.
+  const wd = ad.winddown || {};
+  out.settings.adaptive = {
+    enabled: ad.enabled === true,
+    mode: ad.mode === 'points' && points.length >= 2 ? 'points' : 'winddown',
+    points: points.length >= 2 ? points : [{ time: '07:00', level: 100 }, { time: '18:00', level: 80 }, { time: '21:00', level: 40 }, { time: '23:00', level: 15 }],
+    winddown: { sunset_offset_min: clampInt(wd.sunset_offset_min, -120, 180, 30), earliest: isClock(wd.earliest) ? wd.earliest : '18:00', latest: isClock(wd.latest) ? wd.latest : '20:00', from_level: clampInt(wd.from_level, 1, 100, 100), to_level: clampInt(wd.to_level, 1, 100, 50) },
+  };
   // What each light is for. Optional; the app uses it to build room moods.
   out.settings.roles = {};
   for (const [k, v] of Object.entries(s.roles || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && ['ambient', 'task', 'accent', 'decor'].includes(v)) out.settings.roles[k] = v;
@@ -123,13 +143,17 @@ function validateConfig(cfg) {
       else if (isLevel(v)) levels[k] = v;
       else fail(`preset ${p.id}: level for ${k} must be 0-100 or a fan speed`);
     }
-    out.presets.push({ id: p.id, name: p.name.trim().slice(0, 60), levels, fade: typeof p.fade === 'number' && p.fade >= 0 && p.fade <= 60 ? p.fade : null });
+    out.presets.push({ id: p.id, name: p.name.trim().slice(0, 60), levels, fade: typeof p.fade === 'number' && p.fade >= 0 && p.fade <= 60 ? p.fade : null,
+      area: typeof p.area === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(p.area) ? p.area : null,
+      mood: ['bright', 'relax', 'dinner', 'movie', 'night'].includes(p.mood) ? p.mood : null,
+      edited: p.edited === true });
   }
   const checkActions = (list, label) => {
     if (!Array.isArray(list)) fail(`${label}: actions must be a list`);
     const acts = list.map((a, i) => validateAction(a, `${label} action ${i + 1}`));
     for (const a of acts) {
       if (a.type === 'preset' && !presetIds.has(a.preset_id)) fail(`${label}: unknown preset ${a.preset_id}`);
+      if (a.type === 'cycle_presets') for (const id of a.preset_ids) if (!presetIds.has(id)) fail(`${label}: unknown preset ${id}`);
       for (const t of (a.target ? targetList(a.target) : [])) if (t.startsWith('g:') && !groupIds.has(t.slice(2))) fail(`${label}: unknown group ${t.slice(2)}`);
     }
     return acts;
@@ -166,7 +190,9 @@ function validateConfig(cfg) {
     if (!days.length) fail(`schedule ${sc.id}: pick at least one day`);
     const actions = checkActions(sc.actions, `schedule ${sc.id}`);
     if (!actions.length) fail(`schedule ${sc.id}: needs at least one action`);
-    out.schedules.push({ id: sc.id, name: typeof sc.name === 'string' ? sc.name.trim().slice(0, 60) : '', enabled: sc.enabled !== false, at: { type: at.type, time: at.type === 'time' ? at.time : null, offset_min: offset }, days, actions });
+    const onlyIf = ['any_on', 'all_off'].includes(sc.only_if) ? sc.only_if : null;
+    const skipUntil = typeof sc.skip_until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sc.skip_until) ? sc.skip_until : null;
+    out.schedules.push({ id: sc.id, name: typeof sc.name === 'string' ? sc.name.trim().slice(0, 60) : '', enabled: sc.enabled !== false, at: { type: at.type, time: at.type === 'time' ? at.time : null, offset_min: offset }, days, actions, only_if: onlyIf, skip_until: skipUntil, kind: typeof sc.kind === 'string' && /^[a-z_]{1,24}$/.test(sc.kind) ? sc.kind : null });
   }
   for (const f of arr(cfg.favorites, 'favorites')) {
     if (typeof f === 'string' && (isOneTarget(f) || /^(p|s):[A-Za-z0-9_-]+$/.test(f))) out.favorites.push(f);
