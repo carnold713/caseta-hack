@@ -9,10 +9,10 @@ document.addEventListener('click', async e => {
     case 'conn': S.view = 'settings'; location.hash = 'settings'; render(); break;
     case 'toggle': toggleTarget(d.t); break;
     case 'fav': toggleFav(d.t); break;
-    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
+    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el); Motion.sceneRun(sceneRooms(t)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
     case 'cmd': command(JSON.parse(d.cmd)); break;
     case 'fan': S.states[d.id] = { ...(S.states[d.id] || {}), fan_speed: d.s, level: d.s === 'Off' ? 0 : 100 }; paintState(); command({ type: 'fan', target: `d:${d.id}`, speed: d.s }); break;
-    case 'room-open': toggleRoom(d.id); break;
+    case 'room-open': if (window.Motion) Motion.press(el); toggleRoom(d.id); break;
     case 'alloff': if (!el._held) { for (const id of targetDevices('h:all')) S.states[id] = { ...(S.states[id] || {}), level: 0 }; paintState(); command({ type: 'level', target: 'h:all', level: 'off' }); } el._held = false; break;
     case 'cancel-timer': command({ type: 'cancel_timer', target: d.t }); break;
     case 'timer': sheet.close(); await command({ type: 'timer', target: d.t, minutes: Number(d.m), fade: 5 }); toast(`${targetName(d.t)} turns off in ${d.m} min`); break;
@@ -24,7 +24,7 @@ document.addEventListener('click', async e => {
     case 'remote-look': openLookSheet(); break;
     case 'look-model': setLook('model', d.m); break;
     case 'look-finish': setLook('finish', d.f); break;
-    case 'button-open': S.pickTargets = null; openButtonSheet(Number(d.n)); break;
+    case 'button-open': if (window.Motion) Motion.press(el); S.pickTargets = null; openButtonSheet(Number(d.n)); break;
     case 'gesture-open': S.pickTargets = null; openRecipeSheet(d.g, false); break;
     case 'recipe-mode': S.night = d.night === '1'; renderRecipeSheet(); break;
     case 'pick-target': toggleTargetChip(d.t); break;
@@ -60,6 +60,15 @@ document.addEventListener('click', async e => {
   }
 });
 
+// Room cards a scene touches, for the wash of light.
+function sceneRooms(t) {
+  const all = [...document.querySelectorAll('.room[data-room]')];
+  if (!t.startsWith('p:')) return all;
+  const p = presets().find(x => x.id === t.slice(2)); if (!p) return all;
+  const areasHit = new Set(Object.keys(p.levels).map(id => (dev(id) || {}).area || 'none'));
+  return all.filter(el => areasHit.has(el.dataset.room));
+}
+
 // Inputs: change events (checkboxes, selects, text) and live slider input.
 document.addEventListener('change', e => {
   const el = e.target; const d = el.dataset;
@@ -88,6 +97,7 @@ document.addEventListener('input', e => {
   const wrap = el.closest('.sliderwrap'); if (wrap) { wrap.classList.add('drag'); wrap.style.setProperty('--p', `${el.value}%`); const tip = wrap.querySelector('.tip'); if (tip) tip.textContent = `${el.value}%`; clearTimeout(wrap._t); wrap._t = setTimeout(() => wrap.classList.remove('drag'), 900); }
   if (el.dataset.slide) {
     el.dataset.drag = '1';
+    if (window.Motion) Motion.sliderFeedback(el, Number(el.value));
     const t = el.dataset.slide; const v = Number(el.value);
     const lv = el.closest('.light') && el.closest('.light').querySelector('.lv'); if (lv) lv.textContent = v === 0 ? 'Off' : `${v}%`;
     clearTimeout(slideTimer); slideTimer = setTimeout(() => { command({ type: 'level', target: t, level: v, fade: 0 }); }, 120);
@@ -103,6 +113,7 @@ document.addEventListener('pointerdown', e => {
   el.classList.add('holding');
   el._t = setTimeout(async () => {
     el._held = true; el.classList.remove('holding'); if (navigator.vibrate) navigator.vibrate(30);
+    if (window.Motion) Motion.allOff();
     await command({ type: 'level', target: 'h:all', level: 'off' });
     for (const d of controllable()) { if (d.domain === 'cover') command({ type: 'lower', target: `d:${d.device_id}` }); if (d.domain === 'fan') command({ type: 'fan', target: `d:${d.device_id}`, speed: 'Off' }); }
     toast('Everything off, shades closing');

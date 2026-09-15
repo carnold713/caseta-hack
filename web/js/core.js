@@ -237,13 +237,16 @@ function onLive(m) {
 function paintLive() {
   document.querySelectorAll('[data-live]').forEach(el => {
     const l = S.live[el.dataset.live];
-    el.classList.toggle('live', !!(l && l.event === 'Press' && Date.now() - l.at < 1200));
+    const was = el.classList.contains('live');
+    const now = !!(l && l.event === 'Press' && Date.now() - l.at < 1200);
+    el.classList.toggle('live', now);
+    if (now && !was && window.Motion) Motion.press(el);
   });
   setTimeout(() => document.querySelectorAll('.pb.live').forEach(el => { const l = S.live[el.dataset.live]; if (!l || Date.now() - l.at >= 1200 || l.event !== 'Press') el.classList.remove('live'); }), 1300);
 }
 function pulseGesture(n, g) {
   const ug = userGestureOf({ gesture: g });
-  document.querySelectorAll(`[data-grow="${n}/${ug}"]`).forEach(el => { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); });
+  document.querySelectorAll(`[data-grow="${n}/${ug}"]`).forEach(el => { if (window.Motion) Motion.pulse(el); else { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); } });
 }
 
 // ---------- state painting (no full re-render) ----------
@@ -258,13 +261,23 @@ function paintState() {
   document.querySelectorAll('[data-tgt]').forEach(el => {
     const t = el.dataset.tgt; const on = targetOn(t);
     if (el.classList.contains('sw')) el.classList.toggle('on', on);
-    else if (el.classList.contains('room')) { el.classList.toggle('on', on); const s = el.querySelector('.head .s'); if (s) s.textContent = roomSummary(t.slice(2)); }
+    else if (el.classList.contains('room')) { const was = el.classList.contains('on'); el.classList.toggle('on', on); const s = el.querySelector('.head .s'); if (s) s.textContent = roomSummary(t.slice(2)); if (was !== on && window.Motion) Motion.lightChanged(el, roomMeanLevel(t.slice(2)), was); }
     else if (el.classList.contains('tile')) { el.classList.toggle('on', on); const s = el.querySelector('.s'); if (s) s.textContent = tileSub(t); }
   });
   const st = $('#statusline'); if (st) st.innerHTML = statusLine();
   document.querySelectorAll('[data-onchip]').forEach(el => el.classList.toggle('hidden', !targetOn(el.dataset.onchip)));
-  document.querySelectorAll('[data-act-lvl]').forEach(el => el.classList.toggle('on', isOn(el.dataset.actLvl)));
+  document.querySelectorAll('[data-act-lvl]').forEach(el => { const was = el.classList.contains('on'); const on = isOn(el.dataset.actLvl); el.classList.toggle('on', on); if (was !== on && window.Motion) Motion.lightChanged(el.closest('.light') || el, level(el.dataset.actLvl) || 0, was); });
   if (typeof paintLight === 'function') paintLight(); // light.js: lamp discs, moods, rings, night look
+  if (window.LightField && S.view === 'home') LightField.update();
+}
+// Rooms for the light field: id = area id (matches the room card's data-room), colour, mean level of its lights.
+function roomMeanLevel(aid, overrides = {}) {
+  const ds = controllable().filter(d => (d.area || 'none') === aid && d.domain !== 'cover');
+  if (!ds.length) return 0;
+  return ds.reduce((a, d) => a + (overrides[d.device_id] ?? level(d.device_id) ?? 0), 0) / ds.length;
+}
+function roomsForLight(overrides = {}) {
+  return areas().map(a => ({ id: a.id, color: roomColor(a.id).bg, level: roomMeanLevel(a.id, overrides) }));
 }
 function roomSummary(aid) {
   const ds = controllable().filter(d => (d.area || 'none') === aid);
@@ -294,14 +307,15 @@ const sheet = {
     sh.innerHTML = `${opts.back ? `<button class="iconbtn plain" data-act="sheet-back">${ICON('back')}</button>` : ''}<div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div><button class="iconbtn plain" data-act="sheet-close">${ICON('x')}</button>`;
     root.querySelector('.sb').innerHTML = body;
     root.querySelector('.sb').scrollTop = 0;
-    root.classList.add('open'); requestAnimationFrame(() => root.classList.add('in'));
+    root.classList.add('open'); requestAnimationFrame(() => { root.classList.add('in'); if (window.Motion) Motion.sheetIn(root); });
     sheet.onBack = opts.onBack || null;
     sheet.stackTitle = title;
     document.body.style.overflow = 'hidden';
   },
   close() {
     const root = $('#sheet-root'); root.classList.remove('in');
-    setTimeout(() => { root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; }, 320);
+    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; };
+    if (window.Motion) Promise.resolve(Motion.sheetOut(root)).then(done); else setTimeout(done, 320);
     document.body.style.overflow = '';
     if (sheet.onClose) { const f = sheet.onClose; sheet.onClose = null; f(); }
   },
@@ -331,6 +345,14 @@ function render() {
   top.innerHTML = view.top ? view.top() : '';
   v.innerHTML = view.body();
   paintState(); paintLive();
+  if (S.view === 'home' && window.LightField) { const lf = document.getElementById('lightfield'); if (lf) LightField.init(lf, roomsForLight); }
+  if (window.Motion) {
+    if (!S._launched) { S._launched = true; Motion.pageIn(v, { launch: true }); }
+    else if (S._lastView !== S.view) Motion.pageIn(v);
+  }
+  if (S._prevOnline !== undefined && S._prevOnline !== S.agent.online) { const dot = top.querySelector('.pill .dot'); if (dot) dot.classList.add(S.agent.online ? 'm-dot-hello' : 'm-dot-lost'); }
+  S._prevOnline = S.agent.online;
+  S._lastView = S.view;
   if (view.after) view.after();
 }
 function connPill() {

@@ -9,12 +9,12 @@ VIEWS.home = {
   body() {
     const hasDevices = controllable().length > 0;
     if (!hasDevices && !S.agent.online) return setupEmpty();
-    let h = lightNowHTML();
+    let h = `<div class="m-hero"><div class="m-lightfield" id="lightfield"></div>` + lightNowHTML();
     if (!S.agent.online) h += `<button class="infoblock lemon" data-act="nav" data-view="settings" style="margin-bottom:16px"><div class="grow"><div class="t">Not connected to your home</div><div class="d">Showing the last known state. Your remotes keep working from their saved settings.</div></div><span class="go">${ICON('chev', 'sm')}</span></button>`;
     const sc = [...presets().map(p => ({ id: 'p:' + p.id, name: p.name, sub: `${Object.keys(p.levels).length} lights` })), ...lutronScenes().map(s => ({ id: 's:' + s.scene_id, name: s.name, sub: 'From the Lutron app' }))];
     const favs = S.config.favorites.filter(targetExists).filter(t => !/^[ps]:/.test(t));
     h += `<div class="tiles"><button class="tile new" data-act="scene-new"><div class="ic white">${ICON('plus', 'sm')}</div><div class="n">New scene</div></button>${sc.map(s => `<button class="tile" data-act="run-scene" data-t="${s.id}"><div class="ic">${ICON('scene', 'sm')}</div><div><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></button>`).join('')}${favs.map(favTile).join('')}</div>`;
-    h += `<div class="spacer"></div><button class="alloff" data-act="alloff">${ICON('power', 'sm')}<span>All off</span><span class="d">Hold for shades and fans</span><div class="hold"></div></button>`;
+    h += `<div class="spacer"></div><button class="alloff m-hold" data-act="alloff">${ICON('power', 'sm')}<span>All off</span><span class="d">Hold for shades and fans</span><div class="hold"></div></button></div>`;
     const timers = Object.entries(S.timers || {});
     if (timers.length) h += '<div class="spacer"></div>' + timers.map(([t, v]) => timerBlockHTML(t, v)).join('');
     h += sortBlockHTML();
@@ -67,7 +67,7 @@ function tickCountdowns() {
 function toggleRoom(id) {
   if (S.openRooms.has(id)) S.openRooms.delete(id); else S.openRooms.add(id);
   localStorage.setItem('openRooms', JSON.stringify([...S.openRooms]));
-  const el = document.querySelector(`.room[data-room="${id}"]`); if (el) el.classList.toggle('open', S.openRooms.has(id));
+  const el = document.querySelector(`.room[data-room="${id}"]`); if (el) { el.classList.toggle('open', S.openRooms.has(id)); if (window.Motion) Motion.expand(el, S.openRooms.has(id)); }
 }
 function toggleFav(t) {
   const f = S.config.favorites;
