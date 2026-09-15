@@ -38,6 +38,8 @@ let config = validateConfig(store.read('config', store.DEFAULT_CONFIG));
 let inventory = store.read('inventory', () => ({ devices: {}, buttons: {}, scenes: {}, areas: {}, bridge: null, updated: null }));
 let states = {}; // device_id -> {level, fan_speed}
 let timers = {}; // target -> {ends_at, level}
+let sun = null;  // {sunrise, sunset, now} from the connector, in the home's zone
+let nextRuns = {}; // schedule id -> next ISO time
 let activity = store.read('activity', () => []); // newest first, capped
 let agent = null;   // the single connected agent socket
 let updating = false;
@@ -235,10 +237,19 @@ function handleAgentMessage(ws, msg) {
       if (msg.inventory) setInventory(msg.inventory);
       if (msg.states) mergeStates(msg.states);
       timers = msg.timers || {};
+      sun = msg.sun || null; nextRuns = msg.next_runs || {};
+      broadcast({ type: 'sun', sun, next_runs: nextRuns });
       broadcast({ type: 'agent', online: true, info: agentInfo });
       broadcast({ type: 'state', states });
       broadcast({ type: 'timers', timers });
       record({ kind: 'agent', online: true });
+      break;
+    case 'schedule':
+      record({ kind: 'schedule', id: msg.id, name: msg.name, ok: msg.ok !== false, error: msg.error || null });
+      break;
+    case 'sun':
+      sun = msg.sun || null; nextRuns = msg.next_runs || {};
+      broadcast({ type: 'sun', sun, next_runs: nextRuns });
       break;
     case 'timer':
       if (msg.ends_at) timers[msg.target] = { ends_at: msg.ends_at, level: msg.level || 0 };
@@ -294,7 +305,7 @@ function mergeStates(s) {
   for (const [k, v] of Object.entries(s || {})) states[k] = { ...(states[k] || {}), ...v };
 }
 function snapshot() {
-  return { inventory, states, config, timers, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo } };
+  return { inventory, states, config, timers, sun, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo } };
 }
 let activityDirty = false;
 function record(entry) {

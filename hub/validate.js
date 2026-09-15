@@ -67,7 +67,7 @@ function validateAction(a, where) {
 
 function validateConfig(cfg) {
   if (!cfg || typeof cfg !== 'object') fail('config must be an object');
-  const out = { version: 2, settings: {}, groups: [], presets: [], bindings: [], favorites: [] };
+  const out = { version: 3, settings: {}, groups: [], presets: [], bindings: [], favorites: [], schedules: [] };
   const s = cfg.settings || {};
   out.settings.double_ms = clampInt(s.double_ms, 150, 1500, 350);
   out.settings.hold_ms = clampInt(s.hold_ms, 250, 3000, 500);
@@ -78,6 +78,17 @@ function validateConfig(cfg) {
   out.settings.night_level = clampInt(s.night_level, 1, 100, 30);
   out.settings.home_name = typeof s.home_name === 'string' ? s.home_name.trim().slice(0, 40) : '';
   out.settings.auto_update = s.auto_update !== false;
+  // Where and when: timezone comes from the phone (IANA name), location from the phone's GPS, both optional.
+  out.settings.timezone = typeof s.timezone === 'string' && /^[A-Za-z_]+(\/[A-Za-z_+-]+){0,2}$/.test(s.timezone) ? s.timezone : null;
+  out.settings.location = s.location && typeof s.location.lat === 'number' && typeof s.location.lng === 'number' && Math.abs(s.location.lat) <= 90 && Math.abs(s.location.lng) <= 180
+    ? { lat: Math.round(s.location.lat * 10000) / 10000, lng: Math.round(s.location.lng * 10000) / 10000, name: typeof s.location.name === 'string' ? s.location.name.slice(0, 60) : '' } : null;
+  // Adaptive "on" brightness: what "on" means at each time of day, interpolated between points.
+  const ad = s.adaptive || {};
+  const points = Array.isArray(ad.points) ? ad.points.filter(p => p && isClock(p.time) && isLevel(p.level)).map(p => ({ time: p.time, level: p.level })).sort((a, b) => a.time.localeCompare(b.time)) : [];
+  out.settings.adaptive = { enabled: ad.enabled === true && points.length >= 2, points: points.length >= 2 ? points : [{ time: '07:00', level: 100 }, { time: '18:00', level: 80 }, { time: '21:00', level: 40 }, { time: '23:00', level: 15 }] };
+  // What each light is for. Optional; the app uses it to build room moods.
+  out.settings.roles = {};
+  for (const [k, v] of Object.entries(s.roles || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && ['ambient', 'task', 'accent', 'decor'].includes(v)) out.settings.roles[k] = v;
   // Per-room colour keys and per-remote appearance overrides (model layout and finish), set from the app.
   out.settings.room_colors = {};
   for (const [k, v] of Object.entries(s.room_colors || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && typeof v === 'string' && /^[a-z]+$/.test(v)) out.settings.room_colors[k] = v;
@@ -114,6 +125,15 @@ function validateConfig(cfg) {
     }
     out.presets.push({ id: p.id, name: p.name.trim().slice(0, 60), levels, fade: typeof p.fade === 'number' && p.fade >= 0 && p.fade <= 60 ? p.fade : null });
   }
+  const checkActions = (list, label) => {
+    if (!Array.isArray(list)) fail(`${label}: actions must be a list`);
+    const acts = list.map((a, i) => validateAction(a, `${label} action ${i + 1}`));
+    for (const a of acts) {
+      if (a.type === 'preset' && !presetIds.has(a.preset_id)) fail(`${label}: unknown preset ${a.preset_id}`);
+      for (const t of (a.target ? targetList(a.target) : [])) if (t.startsWith('g:') && !groupIds.has(t.slice(2))) fail(`${label}: unknown group ${t.slice(2)}`);
+    }
+    return acts;
+  };
   const seen = new Set();
   for (const b of arr(cfg.bindings, 'bindings')) {
     if (!isId(b.id)) fail('binding needs an id');
@@ -123,15 +143,6 @@ function validateConfig(cfg) {
     const key = `${b.device_id}/${b.button_number}/${b.gesture}`;
     if (seen.has(key)) fail(`two bindings for ${key}`);
     seen.add(key);
-    if (!Array.isArray(b.actions)) fail(`binding ${b.id}: actions must be a list`);
-    const checkActions = (list, label) => {
-      const acts = list.map((a, i) => validateAction(a, `${label} action ${i + 1}`));
-      for (const a of acts) {
-        if (a.type === 'preset' && !presetIds.has(a.preset_id)) fail(`${label}: unknown preset ${a.preset_id}`);
-        for (const t of (a.target ? targetList(a.target) : [])) if (t.startsWith('g:') && !groupIds.has(t.slice(2))) fail(`${label}: unknown group ${t.slice(2)}`);
-      }
-      return acts;
-    };
     const actions = checkActions(b.actions, `binding ${b.id}`);
     // Optional night-time alternative: between night_start and night_end run these instead.
     let night = null;
@@ -140,6 +151,22 @@ function validateConfig(cfg) {
       night = { actions: checkActions(b.night.actions, `binding ${b.id} (night)`) };
     }
     out.bindings.push({ id: b.id, device_id: b.device_id, button_number: b.button_number, gesture: b.gesture, actions, night, enabled: b.enabled !== false, name: typeof b.name === 'string' ? b.name.slice(0, 60) : '' });
+  }
+  // Schedules: run actions at a clock time or relative to sunrise/sunset, on chosen weekdays (0 = Sunday).
+  const schedIds = new Set();
+  for (const sc of arr(cfg.schedules, 'schedules')) {
+    if (!isId(sc.id)) fail('schedule needs an id');
+    if (schedIds.has(sc.id)) fail(`duplicate schedule id ${sc.id}`);
+    schedIds.add(sc.id);
+    const at = sc.at || {};
+    if (!['time', 'sunrise', 'sunset'].includes(at.type)) fail(`schedule ${sc.id}: at.type must be time, sunrise or sunset`);
+    if (at.type === 'time' && !isClock(at.time)) fail(`schedule ${sc.id}: at.time must be HH:MM`);
+    const offset = Number.isInteger(at.offset_min) ? clampInt(at.offset_min, -180, 180, 0) : 0;
+    const days = Array.isArray(sc.days) ? [...new Set(sc.days.filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : [0, 1, 2, 3, 4, 5, 6];
+    if (!days.length) fail(`schedule ${sc.id}: pick at least one day`);
+    const actions = checkActions(sc.actions, `schedule ${sc.id}`);
+    if (!actions.length) fail(`schedule ${sc.id}: needs at least one action`);
+    out.schedules.push({ id: sc.id, name: typeof sc.name === 'string' ? sc.name.trim().slice(0, 60) : '', enabled: sc.enabled !== false, at: { type: at.type, time: at.type === 'time' ? at.time : null, offset_min: offset }, days, actions });
   }
   for (const f of arr(cfg.favorites, 'favorites')) {
     if (typeof f === 'string' && (isOneTarget(f) || /^(p|s):[A-Za-z0-9_-]+$/.test(f))) out.favorites.push(f);

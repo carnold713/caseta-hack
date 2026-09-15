@@ -132,6 +132,7 @@ class ActionRunner:
         self._cycle_pos: Dict[str, int] = {}
         self._timers: Dict[str, asyncio.Task] = {}   # target -> pending sleep timer
         self._on_timer = on_timer                     # (target, ends_at epoch or None, level)
+        self.local_time: Optional[Callable[[], Any]] = None  # set by the agent: returns an aware datetime in the home's zone
 
     @property
     def timers(self) -> Dict[str, dict]:
@@ -169,14 +170,19 @@ class ActionRunner:
         return []
 
     def _group_on_level(self, target) -> int:
-        if isinstance(target, list):
-            return int(self._config().get("settings", {}).get("group_on_level", 100))
-        kind, _, ident = target.partition(":")
-        if kind == "g":
-            for g in self._config().get("groups", []):
-                if g.get("id") == ident and g.get("on_level"):
-                    return int(g["on_level"])
-        return int(self._config().get("settings", {}).get("group_on_level", 100))
+        settings = self._config().get("settings", {})
+        if not isinstance(target, list):
+            kind, _, ident = target.partition(":")
+            if kind == "g":
+                for g in self._config().get("groups", []):
+                    if g.get("id") == ident and g.get("on_level"):
+                        return int(g["on_level"])
+        adaptive = settings.get("adaptive") or {}
+        if adaptive.get("enabled") and self.local_time:
+            lvl = adaptive_level(adaptive.get("points", []), self.local_time().strftime("%H:%M"))
+            if lvl is not None:
+                return lvl
+        return int(settings.get("group_on_level", 100))
 
     def _level_of(self, device_id: str) -> int:
         bridge = self._bridge()
@@ -381,6 +387,25 @@ _COVER_TYPES = {
     "QsWirelessWoodBlind", "RightDrawDrape", "Shade", "Tilt", "SerenaTiltOnlyWoodBlind", "PalladiomWireFreeShade",
     "SerenaEssentialsRollerShade",
 }
+
+
+def adaptive_level(points: list, now_hm: str) -> Optional[int]:
+    """Interpolate the "on" level for a clock time from sorted {time, level} points; wraps around midnight."""
+    pts = sorted(((int(p["time"][:2]) * 60 + int(p["time"][3:]), int(p["level"])) for p in points if p.get("time")), key=lambda x: x[0])
+    if len(pts) < 2:
+        return None
+    now = int(now_hm[:2]) * 60 + int(now_hm[3:])
+    # Before the first point or after the last one, hold the last (night) level: no ramp back up overnight.
+    if now < pts[0][0] or now >= pts[-1][0]:
+        return pts[-1][1]
+    prev = pts[0]
+    for t, lvl in pts[1:]:
+        if now < t:
+            span = t - prev[0]
+            frac = (now - prev[0]) / span if span else 0
+            return int(round(prev[1] + (lvl - prev[1]) * frac))
+        prev = (t, lvl)
+    return pts[-1][1]
 
 
 def in_night_window(now_hm: str, start: str, end: str) -> bool:

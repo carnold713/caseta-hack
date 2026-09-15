@@ -31,9 +31,13 @@ from typing import Any, Dict, Optional
 import websockets
 from pylutron_caseta.smartbridge import Smartbridge
 
-from engine import ActionRunner, GestureEngine, in_night_window
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-VERSION = "0.3.0"
+from engine import ActionRunner, GestureEngine, in_night_window
+from sun import sun_times
+
+VERSION = "0.4.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -102,6 +106,8 @@ class Agent:
         self._index_bindings()
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}
+        self.runner.local_time = self.local_time
+        self._fired: Dict[str, str] = {}  # schedule id -> local date it last fired
 
     # ---------- config ----------
     def _load_cached_config(self) -> Dict[str, Any]:
@@ -137,11 +143,21 @@ class Agent:
             idx.setdefault(key, {})[b["gesture"]] = b
         self._bindings = idx
 
+    def local_time(self) -> datetime:
+        """Now, in the home's timezone (from the phone) rather than whatever the Pi's clock is set to."""
+        tzname = self.config.get("settings", {}).get("timezone")
+        if tzname:
+            try:
+                return datetime.now(ZoneInfo(tzname))
+            except Exception:  # noqa: BLE001
+                pass
+        return datetime.now().astimezone()
+
     def _actions_for(self, binding: dict) -> list:
         night = binding.get("night")
         if night and night.get("actions"):
             s = self.config.get("settings", {})
-            now_hm = time.strftime("%H:%M")
+            now_hm = self.local_time().strftime("%H:%M")
             if in_night_window(now_hm, s.get("night_start", "22:00"), s.get("night_end", "06:30")):
                 return night["actions"]
         return binding.get("actions", [])
@@ -259,6 +275,78 @@ class Agent:
         batch, self._dirty_states = self._dirty_states, {}
         self.send({"type": "state", "states": batch})
 
+    # ---------- schedules ----------
+    def _fire_time(self, sc: dict, day: datetime) -> Optional[datetime]:
+        """When this schedule fires on the given local date, or None."""
+        at = sc.get("at") or {}
+        offset = timedelta(minutes=int(at.get("offset_min") or 0))
+        if at.get("type") == "time" and at.get("time"):
+            hh, mm = int(at["time"][:2]), int(at["time"][3:])
+            return day.replace(hour=hh, minute=mm, second=0, microsecond=0) + offset
+        loc = self.config.get("settings", {}).get("location")
+        if not loc:
+            return None
+        rise, sset = sun_times(day.date(), float(loc["lat"]), float(loc["lng"]), day.tzinfo)
+        base = rise if at.get("type") == "sunrise" else sset
+        return (base + offset).replace(second=0, microsecond=0) if base else None
+
+    async def schedule_loop(self) -> None:
+        while True:
+            try:
+                now = self.local_time()
+                today = now.strftime("%Y-%m-%d")
+                for sc in self.config.get("schedules", []):
+                    if not sc.get("enabled", True):
+                        continue
+                    js_day = (now.weekday() + 1) % 7  # 0 = Sunday, like the app
+                    if js_day not in (sc.get("days") or [0, 1, 2, 3, 4, 5, 6]):
+                        continue
+                    if self._fired.get(sc["id"]) == today:
+                        continue
+                    when = self._fire_time(sc, now)
+                    if when is None:
+                        continue
+                    # fire in the minute it is due (and catch up if we were down for less than 10 minutes)
+                    if when <= now < when + timedelta(minutes=10):
+                        self._fired[sc["id"]] = today
+                        LOG.info("schedule %s (%s) firing", sc.get("name") or sc["id"], sc["id"])
+                        try:
+                            await self.runner.run(sc.get("actions", []))
+                            self.send({"type": "schedule", "id": sc["id"], "name": sc.get("name") or "", "ok": True})
+                        except Exception as exc:  # noqa: BLE001
+                            self.send({"type": "schedule", "id": sc["id"], "name": sc.get("name") or "", "ok": False, "error": str(exc)})
+                    elif now >= when + timedelta(minutes=10):
+                        self._fired[sc["id"]] = today  # missed it; do not run it hours late
+            except Exception as exc:  # noqa: BLE001
+                LOG.exception("schedule loop: %s", exc)
+            await asyncio.sleep(20)
+
+    def next_fire_times(self) -> Dict[str, Optional[str]]:
+        """For the app: the next time each schedule will run, ISO, in the home's zone."""
+        out: Dict[str, Optional[str]] = {}
+        now = self.local_time()
+        for sc in self.config.get("schedules", []):
+            nxt = None
+            for d in range(0, 8):
+                day = now + timedelta(days=d)
+                js_day = (day.weekday() + 1) % 7
+                if js_day not in (sc.get("days") or [0, 1, 2, 3, 4, 5, 6]):
+                    continue
+                when = self._fire_time(sc, day)
+                if when and when > now:
+                    nxt = when.isoformat()
+                    break
+            out[sc["id"]] = nxt
+        return out
+
+    def sun_today(self) -> Optional[dict]:
+        loc = self.config.get("settings", {}).get("location")
+        if not loc:
+            return None
+        now = self.local_time()
+        rise, sset = sun_times(now.date(), float(loc["lat"]), float(loc["lng"]), now.tzinfo)
+        return {"sunrise": rise.isoformat() if rise else None, "sunset": sset.isoformat() if sset else None, "now": now.isoformat()}
+
     # ---------- hub link ----------
     def send(self, msg: dict) -> None:
         if HUB_URL:
@@ -282,7 +370,7 @@ class Agent:
                     await ws.send(json.dumps({
                         "type": "hello", "version": VERSION, "commit": current_commit(), "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
-                        "timers": self.runner.timers,
+                        "timers": self.runner.timers, "sun": self.sun_today(), "next_runs": self.next_fire_times(),
                     }))
                     LOG.info("hub connected")
                     sender = asyncio.create_task(self._pump(ws))
@@ -308,6 +396,7 @@ class Agent:
         t = msg.get("type")
         if t == "config":
             self.apply_config(msg["config"])
+            self.send({"type": "sun", "sun": self.sun_today(), "next_runs": self.next_fire_times()})
         elif t == "command":
             cid = msg.get("id")
             action = msg.get("action") or {}
@@ -404,8 +493,10 @@ async def main() -> None:
         except NotImplementedError:
             pass
     hub = asyncio.create_task(agent.hub_loop())
+    sched = asyncio.create_task(agent.schedule_loop())
     await stop.wait()
     hub.cancel()
+    sched.cancel()
     if agent.bridge:
         await agent.bridge.close()
 
