@@ -136,21 +136,29 @@ function moodLevels(aid, mood) {
   }
   return out;
 }
-// Which mood the room is in right now, if any (within a couple of percent).
+// Which mood the room is in right now, if any (within a couple of percent). A room with mood scenes is matched against them.
+function levelsMatch(lv) {
+  const ids = Object.keys(lv).filter(dev); if (!ids.length) return false;
+  return ids.every(id => { const cur = level(id) || 0, want = typeof lv[id] === 'number' ? lv[id] : (lv[id] && lv[id] !== 'Off' ? 100 : 0); return dev(id).domain === 'switch' || dev(id).domain === 'fan' ? (cur > 0) === (want > 0) : Math.abs(cur - want) <= 2; });
+}
 function moodMatch(aid) {
-  for (const m of MOODS) {
-    const lv = moodLevels(aid, m); const ids = Object.keys(lv); if (!ids.length) continue;
-    if (ids.every(id => { const cur = level(id) || 0, want = lv[id]; return dev(id).domain === 'switch' ? (cur > 0) === (want > 0) : Math.abs(cur - want) <= 2; })) return m.id;
-  }
+  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
+  if (ps.length) { const p = ps.find(x => levelsMatch(x.levels)); return p ? p.mood : null; }
+  for (const m of MOODS) { if (levelsMatch(moodLevels(aid, m))) return m.id; }
   return null;
 }
+// The room card's first row (docs/ux-flows.md 7): the room's five mood scenes, or one chip that makes them.
 function moodRowHTML(aid) {
   if (!roomDimmers(aid).length) return '';
+  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
+  if (!ps.length) return `<div class="moodrow" data-moods="${aid}"><div class="moods"><button class="chip" data-act="roles-open" data-area="${aid}">${ICON('plus', 'sm')}Make moods…</button></div></div>`;
   const cur = moodMatch(aid);
-  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${MOODS.map(m => `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(m.head, 40, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`).join('')}</div><div class="moodfoot"><button class="btn ghost" data-act="mood-save" data-area="${aid}">Save as a scene</button></div></div>`;
+  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 40, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}</div><div class="moodfoot"><button class="btn ghost" data-act="roles-open" data-area="${aid}">Change what each light is for</button></div></div>`;
 }
 async function applyMood(aid, mid) {
   const m = moodById(mid); if (!m) return;
+  const p = (typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []).find(x => x.mood === mid);
+  if (p) { for (const [id, v] of Object.entries(p.levels)) if (dev(id)) S.states[id] = { ...(S.states[id] || {}), level: typeof v === 'number' ? v : (v && v !== 'Off' ? 100 : 0) }; paintState(); await command({ type: 'preset', preset_id: p.id }); return; }
   const lv = moodLevels(aid, m);
   const byLevel = {};
   for (const [id, v] of Object.entries(lv)) { (byLevel[v] = byLevel[v] || []).push(`d:${id}`); S.states[id] = { ...(S.states[id] || {}), level: v }; }
@@ -163,10 +171,10 @@ function openMoodSave(aid) {
 }
 function saveMoodScene(aid, mid) {
   const m = moodById(mid); if (!m) return;
-  const name = `${areaName(aid)} ${m.name.toLowerCase()}`;
+  const name = `${areaName(aid)} · ${m.name}`.slice(0, 60);
   let p = presets().find(x => x.area === aid && x.mood === mid && !x.edited);
-  if (p) { p.levels = moodLevels(aid, m); p.fade = m.fade; }
-  else { p = { id: uid(), name, levels: moodLevels(aid, m), fade: m.fade, area: aid, mood: mid }; S.config.presets.push(p); }
+  if (p) { p.levels = moodLevels(aid, m); p.fade = m.fade; p.name = name; }
+  else { p = { id: uid(), name, levels: moodLevels(aid, m), fade: m.fade, area: aid, mood: mid, edited: false }; S.config.presets.push(p); }
   sheet.close();
   save({ msg: `${cap(p.name)} is now a scene` });
 }

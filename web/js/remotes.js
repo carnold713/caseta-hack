@@ -36,10 +36,48 @@ function remoteDetail(d) {
     return `<button class="item" data-act="button-open" data-n="${n}"><div class="ic">${glyph}</div><div class="grow"><div class="t">${esc(buttonTitleCap(d.device_id, n))}</div><div class="d ${lines.length ? '' : 'none'}">${lines.length ? lines.join('<br>') : 'Nothing yet'}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
   return `<div class="remote-hero"><div class="stage">${picoArt(d, { width: 104, interactive: true })}</div><div class="t2">${esc(d.name)}</div><div class="d">${esc(areaName(d.area))} · ${esc(modelName(d))}</div><p class="hint">Tap a button on the picture, or press it on the real remote.</p><button class="btn ghost" data-act="remote-look">${ICON('edit', 'sm')} Not your remote? Change the picture</button></div>
+    ${usualLayoutHTML(d, false)}
     <div class="h2">Buttons</div>
     <div class="card pad0 list">${rows}</div>
+    ${usualLayoutHTML(d, true)}
     <div class="spacer"></div>
     <div class="tip"><details class="more grow"><summary>This remote may still do what the Lutron app set up${ICON('chev', 'sm')}</summary><div class="body">Both things happen: what the Lutron app programmed and what you set here. To make a remote fully yours, open the Lutron app, tap this remote, and remove the lights it controls (keep it paired). Leave it as is if you only want to add a double press or a hold on top.</div></details></div>`;
+}
+// The usual layout (docs/ux-flows.md 8): top on, bottom off, hold to brighten or dim, the round button a mood.
+// A tip above the Buttons on a fresh remote; a link row under them once it has settings. Four-button scene remotes get neither.
+function usualLayoutTargets(d) {
+  const real = picoSlots(d).filter(s => s.real).map(s => s.n); const l = LAYOUTS[d.type] || {};
+  if (!d.area || !real.includes(0) || !real.includes(2) || l[0] !== 'On') return null;
+  return { top: 0, bottom: 2, round: real.includes(1) && l[1] === 'Round' ? 1 : null };
+}
+function usualLayoutHTML(d, asRow) {
+  const u = usualLayoutTargets(d); if (!u) return '';
+  const has = bindings().some(b => b.device_id === d.device_id);
+  if (asRow !== has) return '';
+  if (has) return `<div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="usual-layout"><div class="grow"><div class="t">Start over with the usual layout</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+  const room = areaName(d.area); const moods = typeof roomHasMoods === 'function' && roomHasMoods(d.area);
+  const middle = u.round == null ? '' : ` The middle button is ${moods ? 'Relax' : 'Half brightness'}.`;
+  return `<div class="tip" style="margin-bottom:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Set it up the usual way</div><div class="d">Top turns ${esc(room)} on, bottom turns it off, hold either to brighten or dim.${esc(middle)}</div></div><button class="go" data-act="usual-layout" title="Set it up the usual way">${ICON('chev')}</button></div>`;
+}
+function applyUsualLayout(pid) {
+  const d = dev(pid); const u = d && usualLayoutTargets(d); if (!u) return;
+  const T = `a:${d.area}`; const room = areaName(d.area);
+  const mk = (n, gesture, actions) => ({ id: uid(), device_id: pid, button_number: n, gesture, actions, night: null });
+  const list = [
+    mk(u.top, 'single', [{ type: 'level', target: T, level: 'on' }]), mk(u.top, 'double', [{ type: 'level', target: T, level: 100 }]),
+    mk(u.top, 'hold_start', [{ type: 'raise', target: T }]), mk(u.top, 'hold_end', [{ type: 'stop', target: T }]),
+    mk(u.bottom, 'single', [{ type: 'level', target: T, level: 'off', fade: 1 }]), mk(u.bottom, 'double', [{ type: 'level', target: 'h:all', level: 'off' }]),
+    mk(u.bottom, 'hold_start', [{ type: 'lower', target: T, floor: 1 }]), mk(u.bottom, 'hold_end', [{ type: 'stop', target: T }]),
+  ];
+  if (u.round != null) {
+    const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(d.area) : [];
+    const relax = mp.find(p => p.mood === 'relax');
+    if (relax) { list.push(mk(u.round, 'single', [{ type: 'preset', preset_id: relax.id }])); if (mp.length >= 2) list.push(mk(u.round, 'double', [{ type: 'cycle_presets', preset_ids: mp.map(p => p.id) }])); }
+    else list.push(mk(u.round, 'single', [{ type: 'level', target: T, level: 50 }]), mk(u.round, 'double', [{ type: 'level', target: T, level: 10, fade: 1 }]));
+  }
+  S.config.bindings = bindings().filter(b => b.device_id !== pid).concat(list);
+  save({ msg: `${room} remote set up. Tap any button to change it.` });
+  window.scrollTo(0, 0);
 }
 function openLookSheet() {
   const d = dev(S.remote); if (!d) return;
@@ -89,16 +127,28 @@ const RECIPES = [
   { id: 'up', t: 'A little brighter', mk: T => [{ type: 'step', target: T, delta: 10 }] },
   { id: 'down', t: 'A little dimmer', mk: T => [{ type: 'step', target: T, delta: -10 }] },
   { id: 'hold_up', t: 'Brighten while holding', d: 'Stops when you let go', hold: true, pair: T => ({ start: [{ type: 'raise', target: T }], end: [{ type: 'stop', target: T }] }) },
-  { id: 'hold_down', t: 'Dim while holding', d: 'Stops when you let go', hold: true, pair: T => ({ start: [{ type: 'lower', target: T }], end: [{ type: 'stop', target: T }] }) },
+  // Hold-to-dim stops at a glow (floor 1); off is only ever a tap (docs/ux-flows.md 9).
+  { id: 'hold_down', t: 'Dim while holding', d: 'Stops at a glow, never off. Let go to stop.', hold: true, pair: T => ({ start: [{ type: 'lower', target: T, floor: 1 }], end: [{ type: 'stop', target: T }] }) },
   { id: 'sleep', t: 'Sleep timer', d: 'Turns off after 20 minutes', mk: T => [{ type: 'timer', target: T, minutes: 20, fade: 5 }] },
+  // docs/ux-flows.md 8: the picked lights are the way to bed (Goodnight) or light the way (Light the way).
+  { id: 'lightway', t: 'Light the way', d: 'Very dim for 15 minutes, then off by itself.', mk: T => [{ type: 'level', target: T, level: 10, fade: 1 }, { type: 'timer', target: T, minutes: 15, level: 0, fade: 5 }] },
+  { id: 'goodnight', t: 'Goodnight', d: () => `Everything off. The way to bed stays dim for two minutes.${houseExtras()}`, mk: T => shutdownActions(T, 'dim') },
+  { id: 'leaving', t: 'Leaving', d: () => `Everything off. The light by the door stays on for two minutes.${houseExtras()}`, any: true, pick: 'door' },
   { id: 'alloff', t: 'Turn everything off', d: 'Every light in the house', any: true, mk: () => [{ type: 'level', target: 'h:all', level: 'off' }] },
   { id: 'scene', t: 'Run a scene…', any: true, pick: true },
+  // In a room with moods (docs/ux-flows.md 7): a picker over the room's mood scenes, and a step through them. Without moods, one row that makes them.
+  { id: 'mood', t: 'Room mood…', d: ctx => `Bright, Relax, Dinner, Movie or Night for ${ctx.room}`, any: true, moods: true, pick: 'mood' },
+  { id: 'nextmood', t: 'Next mood', d: ctx => `Steps through ${ctx.room}'s moods, one per press`, any: true, moods: 'two', mk: (T, ctx) => [{ type: 'cycle_presets', preset_ids: ctx.moodIds }] },
+  { id: 'moodsfirst', t: 'Room moods', d: ctx => `Make moods for ${ctx.room} first`, any: true, moods: 'none', pick: 'roles' },
   { id: 'fan_up', t: 'Fan: faster', fan: true, mk: T => [{ type: 'step', target: T, delta: 1 }] },
   { id: 'fan_down', t: 'Fan: slower', fan: true, mk: T => [{ type: 'step', target: T, delta: -1 }] },
 ];
+function houseExtras() { const f = hasFans(), sh = hasShades(); return f && sh ? ' Fans stop and shades close.' : f ? ' Fans stop.' : sh ? ' Shades close.' : ''; }
 function recipeOf(actions) {
   if (!actions || !actions.length) return 'nothing';
   const a = actions[0];
+  if (actions.length >= 2 && a.type === 'level' && a.target === 'h:all' && a.level === 'off' && actions[1].type === 'level') return actions[1].level === 'on' ? 'leaving' : 'goodnight';
+  if (actions.length === 2 && a.type === 'level' && a.level === 10 && actions[1].type === 'timer') return 'lightway';
   if (actions.length === 1) {
     if (a.type === 'level' && a.target === 'h:all' && a.level === 'off') return 'alloff';
     if (a.type === 'level') { if (a.level === 'toggle') return 'toggle'; if (a.level === 'on') return 'on'; if (a.level === 'off') return 'off'; if (a.level === 100 && !a.fade) return 'full'; if (a.level === 50 && !a.fade) return 'half'; if (a.level === 10) return 'night'; if (a.level === 20 && a.fade === 8) return 'movie'; }
@@ -106,16 +156,20 @@ function recipeOf(actions) {
     if (a.type === 'step') { const f = dev((a.target || '').slice(2)); if (f && f.domain === 'fan') return a.delta > 0 ? 'fan_up' : 'fan_down'; return a.delta > 0 ? 'up' : 'down'; }
     if (a.type === 'raise') return 'hold_up'; if (a.type === 'lower') return 'hold_down';
     if (a.type === 'timer') return 'sleep';
-    if (a.type === 'scene' || a.type === 'preset') return 'scene';
+    if (a.type === 'preset') { const p = presets().find(x => x.id === a.preset_id); return p && p.mood ? 'mood' : 'scene'; }
+    if (a.type === 'scene') return 'scene';
+    if (a.type === 'cycle_presets') return 'nextmood';
   }
   return 'custom';
 }
+// The room a remote sits in, and that room's mood scenes, for the mood recipes.
+function recipeCtx(pid) { const d = dev(pid); const aid = d && d.area ? d.area : 'none'; const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []; return { aid, room: areaName(aid), moodIds: mp.map(p => p.id), moods: mp.length, dimmers: typeof roomDimmers === 'function' ? roomDimmers(aid).length : 0 }; }
 function defaultTarget(pid) { const d = dev(pid); return d && d.area && targetDevices(`a:${d.area}`).length ? `a:${d.area}` : (controllable()[0] ? `a:${controllable()[0].area || 'none'}` : 'h:all'); }
 // The chooser holds a list; one entry is stored as a plain string, several as a list.
 const packTarget = list => (list.length === 1 ? list[0] : list.slice());
 
 function openRecipeSheet(g, night = false) {
-  const pid = S.remote, n = S.button; S.gesture = g; S.night = night;
+  const pid = S.remote, n = S.button; S.gesture = g; S.night = night; S.advCustom = null;
   const acts = gestureActions(pid, n, g, night);
   const cur = acts.find(a => a.target && a.target !== 'h:all');
   if (!S.pickTargets || !S.pickTargets.length) S.pickTargets = cur ? tlist(cur.target).filter(targetExists) : [defaultTarget(pid)];
@@ -136,7 +190,9 @@ function renderRecipeSheet() {
   const chipsT = [defaultTarget(pid), ...sel, 'h:all', ...areas().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
   const which = `<div class="h2">Which lights? <span class="faint">tap to add or remove</span></div><div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="pick-target" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(cap(targetName(t)))}</button>`).join('')}<button class="chip" data-act="pick-target-more">${ICON('dots', 'sm')}Specific lights…</button></div>${sel.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Controls ${esc(targetName(T))} · ${plural(targetDevices(T).length, 'light')}</p>` : ''}`;
   const chk = `<span class="chk">${ICON('check', 'sm')}</span>`;
-  const list = RECIPES.filter(r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any)).map(r => `<button class="item recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${r.d ? `<div class="d">${r.d}</div>` : ''}</div>${selected === r.id ? chk : ''}</button>`).join('');
+  const ctx = recipeCtx(pid);
+  const moodsOk = r => !r.moods || (r.moods === 'none' ? (ctx.moods === 0 && ctx.dimmers > 0) : r.moods === 'two' ? ctx.moods >= 2 : ctx.moods >= 1);
+  const list = RECIPES.filter(r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any) && moodsOk(r)).map(r => { const rd = typeof r.d === 'function' ? r.d(ctx) : r.d; return `<button class="item recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${rd ? `<div class="d">${esc(rd)}</div>` : ''}</div>${selected === r.id ? chk : ''}</button>`; }).join('');
   const nothing = `<button class="item recipe ${selected === 'nothing' ? 'sel' : ''}" data-act="recipe" data-r="nothing"><div class="grow"><div class="t">Nothing</div>${night ? '<div class="d">Same as normally</div>' : ''}</div>${selected === 'nothing' ? chk : ''}</button>`;
   const custom = selected === 'custom' ? `<div class="tip" style="margin-top:12px"><div class="grow"><span class="cap">Custom</span><div class="t">${esc(describe(acts))}</div></div></div>` : '';
   const more = `<details class="more"><summary>More options${ICON('chev', 'sm')}</summary><div><button class="btn block" data-act="advanced">Fine-tune: fade times, several steps, timers…</button></div></details>`;
@@ -145,13 +201,17 @@ function renderRecipeSheet() {
 }
 // Keep the picked list sensible: a room replaces its own lights, a light replaces its room, "everything" stands alone.
 function normalizeTargets(list, added) {
-  let out = [...new Set(list)];
-  if (!added) return out;
-  if (added === 'h:all') return ['h:all'];
+  const shade = t => t === 'h:shades' || (t.startsWith('d:') && (dev(t.slice(2)) || {}).domain === 'cover');
+  const shades = [...new Set(list.filter(shade))];
+  let out = [...new Set(list.filter(t => !shade(t)))];
+  if (!added) return [...out, ...shades];
+  // shades sit beside the lights: "all shades" replaces single shades and the other way round
+  if (shade(added)) return [...out, ...(added === 'h:shades' ? ['h:shades'] : shades.filter(t => t !== 'h:shades'))];
+  if (added === 'h:all') return ['h:all', ...shades];
   out = out.filter(t => t !== 'h:all');
   if (added.startsWith('a:')) out = out.filter(t => !(t.startsWith('d:') && (dev(t.slice(2)) || {}).area === added.slice(2) && t !== added));
   if (added.startsWith('d:')) { const area = (dev(added.slice(2)) || {}).area; out = out.filter(t => t !== `a:${area || 'none'}`); }
-  return out;
+  return [...out, ...shades];
 }
 function toggleTargetChip(t) {
   const i = S.pickTargets.indexOf(t);
@@ -174,9 +234,14 @@ function retargetCurrent() {
 function applyRecipe(rid) {
   const pid = S.remote, n = S.button, g = S.gesture, night = S.night, T = packTarget(S.pickTargets);
   const r = RECIPES.find(x => x.id === rid);
-  if (r && r.pick) { openScenePicker(); return; }
+  if (r && r.pick === true) { openScenePicker(); return; }
+  if (r && r.pick === 'mood') { openMoodPicker(); return; }
+  if (r && r.pick === 'roles') { const ctx = recipeCtx(pid); openRolesSheet(ctx.aid, { back: renderRecipeSheet, after: renderRecipeSheet }); return; }
+  if (r && r.pick === 'door') { openDoorPicker(); return; }
+  if (rid === 'lightway') { const path = groups().find(x => /night path/i.test(x.name)); if (path && !S.pickTargets.includes(`g:${path.id}`) && recipeOf(gestureActions(pid, n, g, night)) !== 'lightway') S.pickTargets = [`g:${path.id}`]; }
+  const ctx = recipeCtx(pid);
   let actions = [];
-  if (rid !== 'nothing') actions = r.pair ? null : r.mk(T);
+  if (rid !== 'nothing') actions = r.pair ? null : r.mk(packTarget(S.pickTargets), ctx);
   const cfg = S.config;
   const remove = gs => { cfg.bindings = cfg.bindings.filter(b => !(b.device_id === pid && b.button_number === n && gs.includes(b.gesture))); };
   if (night) {
@@ -203,6 +268,32 @@ function applyRecipe(rid) {
   save({ msg: acts.length ? describe(acts) : 'Cleared', render: true });
   renderRecipeSheet();
 }
+// "Room mood…": the room's mood scenes, saved as a scene action through pickScene.
+function openMoodPicker() {
+  const ctx = recipeCtx(S.remote);
+  const items = roomMoodPresets(ctx.aid).map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.edited ? 'Changed by you' : 'Suggested' }));
+  S.scenePick = items;
+  const body = `<div class="card pad0 list">${items.map((it, i) => { const p = presets().find(x => x.id === it.a.preset_id); const m = moodById(p.mood); return `<button class="item" data-act="pick-scene" data-i="${i}">${lampHTML(presetMax(p), 40, ICON(m.icon, 'sm'))}<div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${it.s}</div></div></button>`; }).join('')}</div>`;
+  sheet.open(`Which mood for ${esc(ctx.room)}?`, body, { back: true, onBack: renderRecipeSheet, sub: 'One press runs it.' });
+}
+// "Leaving": one question, which light is by the door, then it is saved.
+function openDoorPicker() {
+  const pid = S.remote, n = S.button, g = S.gesture;
+  const cur = (gestureActions(pid, n, g).find(a => a.type === 'level' && a.target !== 'h:all') || {}).target;
+  const lights = controllable().filter(d => d.domain === 'light' || d.domain === 'switch');
+  const pre = cur || `d:${(lights.find(d => /hall|entry|foyer|mud/i.test(areaName(d.area))) || lights[0] || {}).device_id}`;
+  const rows = areas().map(a => { const ds = lights.filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="leaving-door" data-t="d:${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${pre === `d:${d.device_id}` ? `<span class="chk">${ICON('check', 'sm')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
+  sheet.open('Which light is by the door?', rows, { back: true, onBack: renderRecipeSheet, sub: 'It stays on for two minutes after everything else goes off.' });
+}
+function saveLeaving(door) {
+  const pid = S.remote, n = S.button, g = S.gesture;
+  const actions = shutdownActions(door, 'on');
+  if (g === 'hold') holdReplace(pid, n, actions);
+  else { S.config.bindings = S.config.bindings.filter(b => !(b.device_id === pid && b.button_number === n && b.gesture === g)); S.config.bindings.push({ id: uid(), device_id: pid, button_number: n, gesture: g, actions, night: null }); }
+  S.pickTargets = [door];
+  save({ msg: describe(actions), render: true });
+  renderRecipeSheet();
+}
 function openScenePicker() {
   const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
   const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="pick-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="empty"><h3>No scenes yet</h3><p>Make one on the Scenes tab first.</p></div>`;
@@ -221,8 +312,8 @@ function pickScene(i) {
   renderRecipeSheet();
 }
 // Multi-select picker: rooms, everything, each light, and any hand-made sets. Used by the recipe sheet and the fine-tune editor.
-function openTargetPicker(selected, onDone, onBack) {
-  S.targetPick = { selected: [...selected], onDone, onBack };
+function openTargetPicker(selected, onDone, onBack, opts = {}) {
+  S.targetPick = { selected: [...selected], onDone, onBack, shades: !!opts.shades };
   renderTargetPicker();
 }
 function renderTargetPicker() {
@@ -237,8 +328,11 @@ function renderTargetPicker() {
   }).join('');
   const all = `<label class="card pad0 roomcard"><div class="roomrow">${lampHTML(litLights().length ? houseLevel() : 0, 40, ICON('house', 'sm'))}<div class="grow"><div class="n">Everything</div><div class="s">Every light in the house</div></div>${cb('h:all')}</div></label>`;
   const sets = groups().length ? `<div class="h2">Your sets</div>${groups().map(g => `<label class="card pad0 roomcard"><div class="roomrow">${lampHTML(targetOn('g:' + g.id) ? meanLevel(g.device_ids) : 0, 40, ICON('bulb', 'sm'))}<div class="grow"><div class="n">${esc(g.name)}</div><div class="s">${g.device_ids.length} lights</div></div>${cb('g:' + g.id)}</div></label>`).join('')}` : '';
+  // shades join the chooser only when the caller's action can move them (the automation editor)
+  const covers = p.shades ? controllable().filter(d => d.domain === 'cover') : [];
+  const shades = covers.length ? `<div class="h2">Shades</div><div class="card pad0 roomcard"><label class="roomrow">${lampHTML(0, 40, ICON('shade', 'sm'))}<div class="grow"><div class="n">All shades</div><div class="s">${plural(covers.length, 'shade')}</div></div>${cb('h:shades')}</label><div class="roomlights open">${covers.map(d => `<label class="item">${lampHTML(0, 28, ICON('shade', 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(areaName(d.area))}</div></div>${cb('d:' + d.device_id)}</label>`).join('')}</div></div>` : '';
   const summary = selected.length ? `${cap(targetName(packTarget(selected)))} · ${targetDevices(selected).length} lights` : 'Nothing picked yet';
-  sheet.open('Which lights should this control?', `${all}<div class="stack" style="margin-top:8px">${rooms}</div>${sets}<div class="sfoot"><div class="small muted" style="margin-bottom:8px" id="picker-summary">${esc(summary)}</div><button class="btn primary lg block" data-act="picker-done" ${selected.length ? '' : 'disabled'}>Done</button></div>`, { back: !!onBack, onBack, sub: 'Tick a whole room, single lights, or both.' });
+  sheet.open('Which lights should this control?', `${all}<div class="stack" style="margin-top:8px">${rooms}</div>${sets}${shades}<div class="sfoot"><div class="small muted" style="margin-bottom:8px" id="picker-summary">${esc(summary)}</div><button class="btn primary lg block" data-act="picker-done" ${selected.length ? '' : 'disabled'}>Done</button></div>`, { back: !!onBack, onBack, sub: 'Tick a whole room, single lights, or both.' });
 }
 
 // ----- advanced editor -----
@@ -247,20 +341,31 @@ function currentBindingForEdit() {
   const pid = S.remote, n = S.button, g = S.gesture;
   return g === 'hold' ? (binding(pid, n, 'hold_start') || binding(pid, n, 'hold')) : binding(pid, n, g);
 }
+// The list the fine-tune editor edits, resolved fresh each time (a save replaces S.config): the binding's actions,
+// its night actions, or, when S.advCustom is set by automations.js, an automation's actions.
+function advList() {
+  if (S.advCustom) return S.advCustom.list();
+  const b = currentBindingForEdit(); if (!b) return null;
+  return S.night ? ((b.night && b.night.actions) || null) : b.actions;
+}
+function advChanged() { if (S.advCustom) S.advCustom.changed(); else saveSoon(); }
+function advDefaultTarget() { if (S.advCustom) return S.advCustom.target; return S.pickTargets && S.pickTargets.length ? packTarget(S.pickTargets) : defaultTarget(S.remote); }
 function openAdvanced() {
+  S.advCustom = null;
   let b = currentBindingForEdit();
   if (!b) { b = { id: uid(), device_id: S.remote, button_number: S.button, gesture: S.gesture, actions: [], night: null }; S.config.bindings.push(b); }
   if (S.night && !b.night) b.night = { actions: [] };
   renderAdvanced();
 }
 function renderAdvanced() {
-  const b = currentBindingForEdit(); if (!b) return renderRecipeSheet();
-  const list = S.night ? b.night.actions : b.actions;
+  const list = advList(); if (!list) return renderRecipeSheet();
+  const b = S.advCustom ? null : currentBindingForEdit();
   const rows = list.map((a, i) => actionEditor(a, i)).join('') || '<p class="muted">No steps yet.</p>';
   const body = `${rows}<div class="row" style="margin-top:12px"><button class="btn" data-act="adv-add">${ICON('plus', 'sm')} Add a step</button><button class="btn" data-act="try-actions">${ICON('play', 'sm')} Try it</button></div>
-  ${b.gesture === 'hold_start' ? `<p class="faint small" style="margin-top:14px">This runs when the hold begins; "Stop" is sent automatically when you let go.</p>` : ''}
+  ${b && b.gesture === 'hold_start' ? `<p class="faint small" style="margin-top:14px">This runs when the hold begins; "Stop" is sent automatically when you let go.</p>` : ''}
   <div class="sfoot"><button class="btn primary lg block" data-act="adv-done">Done</button></div>`;
-  sheet.open(`Fine-tune ${GESTURE_LABEL[S.gesture].toLowerCase()}${S.night ? ' at night' : ''}`, body, { back: true, sub: buttonTitle(S.remote, S.button), onBack: renderRecipeSheet });
+  if (S.advCustom) sheet.open(esc(S.advCustom.title), body, { back: true, sub: S.advCustom.sub, onBack: S.advCustom.onBack });
+  else sheet.open(`Fine-tune ${GESTURE_LABEL[S.gesture].toLowerCase()}${S.night ? ' at night' : ''}`, body, { back: true, sub: buttonTitle(S.remote, S.button), onBack: renderRecipeSheet });
 }
 function actionEditor(a, i) {
   const sel = (k, opts) => `<select class="input" data-adv="${i}" data-k="${k}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(a[k]) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
@@ -281,23 +386,22 @@ function actionEditor(a, i) {
   return `<div class="card" style="margin-bottom:12px">${body}<button class="btn ghost" data-act="adv-remove" data-i="${i}">${ICON('trash', 'sm')} Remove step</button></div>`;
 }
 function advEdit(i, k, v) {
-  const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; const a = list[i];
+  const list = advList(); if (!list) return; const a = list[i];
   if (k === 'type') {
-    const T = a.target || defaultTarget(S.remote);
+    const T = a.target || advDefaultTarget();
     const fresh = { level: { type: 'level', target: T, level: 'toggle' }, step: { type: 'step', target: T, delta: 10 }, cycle: { type: 'cycle', target: T, levels: [100, 50, 20, 0] }, raise: { type: 'raise', target: T }, lower: { type: 'lower', target: T }, stop: { type: 'stop', target: T }, fan: { type: 'fan', target: (targetOptions({ fansOnly: true })[0] || {}).id || T, speed: 'High' }, scene: presets()[0] ? { type: 'preset', preset_id: presets()[0].id } : { type: 'scene', scene_id: (lutronScenes()[0] || {}).scene_id || '' }, timer: { type: 'timer', target: T, minutes: 20, level: 0, fade: 5 }, cancel_timer: { type: 'cancel_timer', target: T }, delay: { type: 'delay', ms: 1000 } }[v];
-    list[i] = fresh; renderAdvanced(); saveSoon(); return;
+    list[i] = fresh; renderAdvanced(); advChanged(); return;
   }
-  if (k === 'scene_ref') { if (v.startsWith('p:')) list[i] = { type: 'preset', preset_id: v.slice(2) }; else list[i] = { type: 'scene', scene_id: v.slice(2) }; saveSoon(); return; }
+  if (k === 'scene_ref') { if (v.startsWith('p:')) list[i] = { type: 'preset', preset_id: v.slice(2) }; else list[i] = { type: 'scene', scene_id: v.slice(2) }; advChanged(); return; }
   if (k === 'fade') { if (v === '') delete a.fade; else a.fade = Number(v); }
   else if (k === 'level') a.level = ['toggle', 'on', 'off'].includes(v) ? v : Number(v);
   else if (['delta', 'minutes', 'ms'].includes(k)) a[k] = Number(v);
   else if (k === 'levels') a.levels = v.split(/[,\s]+/).map(x => parseInt(x, 10)).filter(x => !isNaN(x) && x >= 0 && x <= 100);
   else a[k] = v;
-  saveSoon();
+  advChanged();
 }
 async function tryActions() {
-  const b = currentBindingForEdit(); if (!b) return;
-  const list = S.night ? ((b.night && b.night.actions) || []) : b.actions;
+  const list = advList() || [];
   if (!list.length) return;
   if (JSON.stringify(S.config) !== S.lastSaved) await save({ quiet: true, render: false });
   for (const a of list) { if (!(await command(a))) return; }

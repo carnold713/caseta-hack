@@ -24,20 +24,22 @@ document.addEventListener('click', async e => {
     case 'remote-look': openLookSheet(); break;
     case 'look-model': setLook('model', d.m); break;
     case 'look-finish': setLook('finish', d.f); break;
-    case 'button-open': if (window.Motion) Motion.press(el); S.pickTargets = null; openButtonSheet(Number(d.n)); break;
+    case 'button-open': if (window.Motion) Motion.press(el); S.pickTargets = null; S.advCustom = null; openButtonSheet(Number(d.n)); break;
     case 'gesture-open': S.pickTargets = null; openRecipeSheet(d.g, false); break;
     case 'recipe-mode': S.night = d.night === '1'; renderRecipeSheet(); break;
     case 'pick-target': toggleTargetChip(d.t); break;
     case 'pick-target-more': openTargetPicker(S.pickTargets, list => { S.pickTargets = list; retargetCurrent(); renderRecipeSheet(); }, renderRecipeSheet); break;
     case 'picker-done': { const p = S.targetPick; if (p.selected.length) p.onDone(p.selected); break; }
     case 'picker-expand': { const p = S.targetPick; if (p.open.has(d.id)) p.open.delete(d.id); else p.open.add(d.id); el.closest('.roomrow').classList.toggle('open'); const rl = document.querySelector(`[data-roomlights="${d.id}"]`); if (rl) rl.classList.toggle('open'); break; }
-    case 'adv-target': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; const i = Number(d.i); openTargetPicker(tlist(list[i].target), sel => { list[i].target = packTarget(sel); saveSoon(); renderAdvanced(); }, renderAdvanced); break; }
+    case 'adv-target': { const i = Number(d.i); const list = advList(); if (!list || !list[i]) break; openTargetPicker(tlist(list[i].target), sel => { const l = advList(); if (l && l[i]) l[i].target = packTarget(sel); advChanged(); renderAdvanced(); }, renderAdvanced, { shades: !!S.advCustom }); break; }
     case 'recipe': applyRecipe(d.r); break;
     case 'pick-scene': pickScene(Number(d.i)); break;
     case 'advanced': openAdvanced(); break;
-    case 'adv-add': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; list.push({ type: 'level', target: S.pickTargets && S.pickTargets.length ? packTarget(S.pickTargets) : defaultTarget(S.remote), level: 'toggle' }); renderAdvanced(); saveSoon(); break; }
-    case 'adv-remove': { const b = currentBindingForEdit(); const list = S.night ? b.night.actions : b.actions; list.splice(Number(d.i), 1); renderAdvanced(); saveSoon(); break; }
-    case 'adv-done': { const b = currentBindingForEdit(); if (b && !b.actions.length && !(b.night && b.night.actions.length)) S.config.bindings = S.config.bindings.filter(x => x.id !== b.id); if (b && b.night && !b.night.actions.length) b.night = null; await save({ msg: 'Saved' }); renderRecipeSheet(); break; }
+    case 'adv-add': { const list = advList(); if (!list) break; list.push({ type: 'level', target: advDefaultTarget(), level: S.advCustom ? 'on' : 'toggle' }); renderAdvanced(); advChanged(); break; }
+    case 'adv-remove': { const list = advList(); if (!list) break; list.splice(Number(d.i), 1); renderAdvanced(); advChanged(); break; }
+    case 'adv-done': { if (S.advCustom) { S.advCustom.onDone(); break; } const b = currentBindingForEdit(); if (b && !b.actions.length && !(b.night && b.night.actions.length)) S.config.bindings = S.config.bindings.filter(x => x.id !== b.id); if (b && b.night && !b.night.actions.length) b.night = null; await save({ msg: 'Saved' }); renderRecipeSheet(); break; }
+    case 'leaving-door': saveLeaving(d.t); break;
+    case 'usual-layout': applyUsualLayout(S.remote); break;
     case 'try-actions': tryActions(); break;
     case 'sheet-close': sheet.close(); break;
     case 'sheet-back': if (sheet.onBack) sheet.onBack(); else sheet.close(); break;
@@ -47,7 +49,8 @@ document.addEventListener('click', async e => {
     case 'scene-edit': openSceneEditor(d.id); break;
     case 'scene-capture': sceneCapture(); break;
     case 'scene-delete': sceneDelete(d.id); break;
-    case 'scene-sw': { const p = presets().find(x => x.id === S.sceneEdit); const on = !(p.levels[d.id] > 0); p.levels[d.id] = on ? 100 : 0; el.classList.toggle('on', on); saveSoon(); break; }
+    case 'scene-sw': { const p = presets().find(x => x.id === S.sceneEdit); const on = !(p.levels[d.id] > 0); p.levels[d.id] = on ? 100 : 0; el.classList.toggle('on', on); markEdited(p); saveSoon(); break; }
+    case 'scene-suggest': sceneSuggest(d.id); break;
     case 'install-help': openInstallHelp(); break;
     case 'activity': openActivity(); break;
     case 'copy': navigator.clipboard.writeText(d.text).then(() => toast('Copied')).catch(() => toast('Select the text and copy it', { err: true })); break;

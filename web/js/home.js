@@ -9,15 +9,17 @@ VIEWS.home = {
   body() {
     const hasDevices = controllable().length > 0;
     if (!hasDevices && !S.agent.online) return setupEmpty();
-    const sc = [...presets().map(p => ({ id: 'p:' + p.id, name: p.name, sub: `${Object.keys(p.levels).length} lights` })), ...lutronScenes().map(s => ({ id: 's:' + s.scene_id, name: s.name, sub: 'From the Lutron app' }))];
+    const sc = [...presets().filter(p => !(p.mood && p.area)).map(p => ({ id: 'p:' + p.id, name: p.name, sub: `${Object.keys(p.levels).length} lights` })), ...lutronScenes().map(s => ({ id: 's:' + s.scene_id, name: s.name, sub: 'From the Lutron app' }))];
     const favs = S.config.favorites.filter(targetExists).filter(t => !/^[ps]:/.test(t));
-    let h = `<div class="m-hero"><div class="m-lightfield" id="lightfield"></div>` + lightNowHTML();
+    let h = `<div class="m-hero"><div class="m-lightfield" id="lightfield"></div>` + lightNowHTML() + `<div id="wd-home">${typeof windDownCaptionHTML === 'function' ? windDownCaptionHTML() : ''}</div>`;
     h += `<div class="h2">Scenes<a class="link" data-act="nav" data-view="scenes" href="#scenes">See all</a></div>`;
     h += `<div class="tiles"><button class="tile new" data-act="scene-new"><div class="face">${ICON('plus')}</div><div class="label"><div class="n">New scene</div></div></button>${sc.map(s => `<button class="tile" data-act="run-scene" data-t="${s.id}"><div class="face">${tileFaceHTML(tileItems(s.id))}</div><div class="label"><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></button>`).join('')}${favs.map(favTile).join('')}</div></div>`;
     const timers = Object.entries(S.timers || {});
     if (timers.length) h += '<div class="spacer"></div>' + timers.map(([t, v]) => timerBlockHTML(t, v)).join('');
+    h += `<div id="comingup">${typeof comingUpHTML === 'function' ? comingUpHTML() : ''}</div>`;
     if (!S.agent.online) h += `<div class="spacer"></div><button class="tip" data-act="nav" data-view="settings"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected to your home</div><div class="d">Showing the last known state. Your remotes keep working from their saved settings.</div></div><span class="go">${ICON('chev')}</span></button>`;
     h += sortBlockHTML();
+    h += typeof moodsTipHTML === 'function' ? moodsTipHTML() : '';
     h += '<div class="h2">Rooms</div>';
     h += areas().map(roomCard).join('');
     return h;

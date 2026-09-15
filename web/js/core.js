@@ -11,6 +11,7 @@ const S = {
   ready: false, ws: null,
   remote: null, openRooms: new Set(JSON.parse(localStorage.getItem('openRooms') || '[]')),
   live: {}, lastSaved: null,
+  sun: null, nextRuns: {}, // today's sun and the next run of each automation, from the connector (automations.js reads them)
 };
 
 const ICON = (n, cls = '') => `<svg class="i ${cls}"><use href="#i-${n}"/></svg>`;
@@ -65,6 +66,7 @@ function connectWS() {
     switch (m.type) {
       case 'snapshot':
         S.inv = m.inventory; S.states = m.states; S.agent = m.agent; S.timers = m.timers || {}; S.activity = m.activity || [];
+        S.sun = m.sun || null; S.nextRuns = m.next_runs || {};
         S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
         // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
         if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); }, 900); break; } }
@@ -74,7 +76,9 @@ function connectWS() {
       case 'timers': S.timers = m.timers || {}; if (S.view === 'home') render(); break;
       case 'config': if (JSON.stringify(m.config) !== S.lastSaved) { S.config = m.config; S.lastSaved = JSON.stringify(m.config); render(); } break;
       case 'agent': S.agent = { online: m.online, info: m.info || null }; render(); break;
-      case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); break;
+      case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
+      // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
+      case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; if (typeof paintSun === 'function') paintSun(); break;
       case 'button': case 'gesture': onLive(m); break;
       case 'toast': toast(m.msg, { err: m.level === 'error' }); break;
     }
@@ -108,12 +112,16 @@ function targetDevices(t) {
   if (k === 'a') return controllable().filter(d => (d.area || 'none') === id && d.domain !== 'cover').map(d => d.device_id);
   if (k === 'g') { const g = groups().find(x => x.id === id); return g ? g.device_ids.filter(dev) : []; }
   if (t === 'h:all') return controllable().filter(d => d.domain === 'light' || d.domain === 'switch').map(d => d.device_id);
+  if (t === 'h:shades') return controllable().filter(d => d.domain === 'cover').map(d => d.device_id);
+  if (t === 'h:fans') return controllable().filter(d => d.domain === 'fan').map(d => d.device_id);
   return [];
 }
 function targetName(t) {
   if (Array.isArray(t)) { const names = t.map(targetName); return names.length > 3 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more` : names.join(', '); }
   if (!t) return 'nothing';
   if (t === 'h:all') return 'everything';
+  if (t === 'h:shades') return 'the shades';
+  if (t === 'h:fans') return 'the fans';
   const [k, id] = [t.slice(0, 1), t.slice(2)];
   if (k === 'd') return dev(id) ? dev(id).name : 'a light that is gone';
   if (k === 'a') return id === 'none' ? 'Elsewhere' : areaName(id);
@@ -125,7 +133,7 @@ function targetName(t) {
 function targetOn(t) { return targetDevices(t).some(isOn); }
 function targetExists(t) {
   if (Array.isArray(t)) return t.length > 0 && t.every(targetExists);
-  if (t === 'h:all') return true;
+  if (t === 'h:all' || t === 'h:shades' || t === 'h:fans') return true;
   const [k, id] = [t.slice(0, 1), t.slice(2)];
   if (k === 'd') return !!dev(id);
   if (k === 'a') return areas().some(a => a.id === id);
@@ -206,10 +214,12 @@ function describe(actions) {
       }
       case 'step': return a.delta > 0 ? `Makes ${t} a little brighter` : `Makes ${t} a little dimmer`;
       case 'cycle': return `Steps ${t} through ${a.levels.map(l => l === 0 ? 'off' : l + '%').join(', ')}`;
-      case 'raise': return `Brightens ${t} while holding`;
-      case 'lower': return `Dims ${t} while holding`;
+      case 'raise': return isShadeTarget(a.target) ? `Opens ${t}` : `Brightens ${t} while holding`;
+      case 'lower': return isShadeTarget(a.target) ? `Closes ${t}` : `Dims ${t} while holding`;
       case 'stop': return `Stops ${t}`;
-      case 'fan': return `Sets ${t} fan to ${fanName(a.speed)}`;
+      case 'cap': return `Lowers ${t} to ${a.level}% where it is brighter`;
+      case 'cycle_presets': { const p = presets().find(x => x.id === (a.preset_ids || [])[0]); return p && p.area ? `Steps through ${areaName(p.area)}'s moods` : 'Steps through scenes'; }
+      case 'fan': return a.speed === 'Off' ? `Turns ${t}${t === 'the fans' ? '' : ' fan'} off` : `Sets ${t}${t === 'the fans' ? '' : ' fan'} to ${fanName(a.speed)}`;
       case 'scene': return `Runs the ${targetName('s:' + a.scene_id)} scene`;
       case 'preset': return `Runs the ${targetName('p:' + a.preset_id)} scene`;
       case 'timer': return `Turns ${t} ${a.level ? 'to ' + a.level + '%' : 'off'} after ${a.minutes} min`;
@@ -220,6 +230,8 @@ function describe(actions) {
   });
   return cap(parts.filter((x, i) => i === 0 || x !== parts[i - 1]).join(', then '));
 }
+// True when every device a target names is a shade (so raise and lower read as open and close).
+function isShadeTarget(t) { if (t === 'h:shades') return true; const ids = targetDevices(t); return ids.length > 0 && ids.every(id => (dev(id) || {}).domain === 'cover'); }
 function fmtDur(s) { return s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`; }
 function fanName(s) { return { Off: 'off', Low: 'low', Medium: 'medium', MediumHigh: 'medium-high', High: 'high' }[s] || s; }
 function fmtTime(hm) { const [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${ap}`; }
@@ -312,8 +324,9 @@ const sheet = {
     sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
     sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
     root.querySelector('.sb').innerHTML = body;
-    root.querySelector('.sb').scrollTop = 0;
     root.classList.add('open'); requestAnimationFrame(() => { root.classList.add('in'); if (window.Motion) Motion.sheetIn(root); });
+    // after the root is shown: a hidden element keeps its old scroll offset and ignores writes to scrollTop
+    root.querySelector('.sb').scrollTop = 0;
     sheet.onBack = opts.onBack || null;
     sheet.stackTitle = title;
     document.body.style.overflow = 'hidden';

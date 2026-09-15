@@ -24,7 +24,7 @@ VIEWS.settings = {
     ${setupSteps(everConnected)}
     <div class="h2">Night-time</div>
     <div class="card pad0 list">
-      <div class="item"><div class="grow"><div class="t">Night starts</div><div class="d">Buttons can do something different at night, like turning on dim instead of bright.</div></div><input type="time" value="${s.night_start}" data-setting="night_start"></div>
+      <div class="item"><div class="grow"><div class="t">Night starts</div><div class="d">Buttons can do something different at night, like turning on dim instead of bright.</div><div class="d">Also when the evening wind-down reaches its lowest. You can change it on the <a data-act="nav" data-view="automations" href="#automations">Automations tab</a>.</div></div><input type="time" value="${s.night_start}" data-setting="night_start"></div>
       <div class="item"><div class="grow"><div class="t">Night ends</div></div><input type="time" value="${s.night_end}" data-setting="night_end"></div>
       ${nightLookRowHTML()}
     </div>
@@ -92,6 +92,8 @@ function activityHTML() {
     if (e.kind === 'pico') { const dv = dev(e.device_id); t = `${dv ? dv.name : 'Remote'} · ${buttonLabel(e.device_id, e.button_number)}`; d = `${GESTURE_LABEL[userGestureOf({ gesture: e.gesture })] || e.gesture}${e.bound ? '' : ' · nothing set'}`; ic = 'remote'; }
     else if (e.kind === 'app') { t = describe([e.action]) || 'Command'; d = 'From the app'; ic = 'bulb'; }
     else if (e.kind === 'agent') { t = e.online ? 'Connected to your home' : 'Lost connection to your home'; ic = 'link'; }
+    // an automation the connector ran (or could not): { kind: 'schedule', id, name, ok, error }
+    else if (e.kind === 'schedule') { const nm = e.name || (typeof scById === 'function' && scById(e.id) ? scById(e.id).name : 'An automation'); t = e.ok === false ? `${nm} didn't run` : `${nm} ran`; d = e.ok === false ? "Couldn't reach the bridge" : 'Ran on its own'; ic = 'clock'; }
     return `<div class="item">${ICON(ic)}<div class="grow"><div class="t">${esc(t)}</div><div class="d">${esc(d)}</div></div><div class="val">${when}</div></div>`;
   }).join('')}</div>`;
 }

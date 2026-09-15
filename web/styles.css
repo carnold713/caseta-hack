@@ -416,3 +416,16 @@ details.more > div { margin-top: 8px; }
 .tile .cluster .lamp svg { width: 16px; height: 16px; }
 .tile .cluster.one .lamp svg { width: 20px; height: 20px; }
 #top .t1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- automations (docs/ux-flows.md): the list row, the orange dot, day chips, the big time input ---------- */
+.auto-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; color: inherit; text-align: left; }
+.item.paused .t, .item.paused .d { color: var(--text-3); }
+.odot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--lamp-100, #F58A1F); margin-right: 6px; vertical-align: 1px; }
+.item .val { flex: 0 1 auto; text-align: right; max-width: 62%; }
+.chips.days { gap: 6px; flex-wrap: nowrap; }
+.chip.day { width: 40px; padding: 0; justify-content: center; }
+.when-time { margin: 20px 0 4px; display: flex; justify-content: center; }
+.time-big { font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em; background: var(--card); border: 0; border-radius: 12px; padding: 12px 20px; color: var(--text); min-height: 64px; }
+.wd .wd-time { border: 0; background: transparent; font-size: 17px; line-height: 22px; text-align: right; color: var(--text); padding: 0; width: 120px; flex: none; }
+.wd-home { display: block; margin: -8px 0 16px; padding: 0; color: var(--text-3); font-size: 13px; line-height: 18px; text-align: left; }
+.sheet .check { border-top: 0; }
