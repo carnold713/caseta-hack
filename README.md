@@ -66,6 +66,13 @@ Pico bindings from its cached config.
   way: "Remove from my home" on a light's page or a remote's page sends
   the bridge a delete and clears everything here that used the device. New
   rooms still come from the Lutron app for now.
+- **Philips Hue too (first pass).** Settings › Connect a Hue bridge: the
+  connector finds the bridge on the network, you press its round button,
+  and its lights, rooms and scenes join the app beside the Caséta ones,
+  with live state from the bridge's event stream. Rooms, sliders, moods,
+  scenes, automations, sleep timers and Pico buttons all work on them, so
+  one button can drive a Caséta dimmer and a Hue lamp together. On, off
+  and brightness for now; colour and white temperature come later.
 - **Autosave with Undo.** Nothing to remember to save.
 - **Recent activity:** what was pressed and what happened, for "who left
   the lights on" and for tuning the double-press timing.
@@ -212,6 +219,7 @@ web/              the PWA: index.html, styles.css, light.css, motion.css, js/{co
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
 agent/adddevice.py  add a device from the app: association mode, device heard, create (experimental)
+agent/hue.py      Philips Hue bridge: pairing, lights/rooms/scenes as hue_ devices, levels, scenes, event stream
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js
 ```
@@ -223,6 +231,7 @@ npm install
 APP_PASSWORD=dev AGENT_TOKEN=dev npm start     # http://localhost:4400
 cd agent && python test_engine.py             # gesture timing tests
 cd agent && python test_adddevice.py          # add-device session against a stub bridge
+cd agent && python test_hue.py                # Hue client against a fake bridge (needs aiohttp)
 ```
 
 Without a bridge, a fake agent that speaks the same protocol is all the

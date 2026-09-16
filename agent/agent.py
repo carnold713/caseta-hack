@@ -36,9 +36,10 @@ from zoneinfo import ZoneInfo
 
 from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
+from hue import Hue
 from sun import sun_times
 
-VERSION = "0.6.4"
+VERSION = "0.7.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -105,6 +106,9 @@ class Agent:
         self.gestures = GestureEngine(self._on_gesture, self._has_double)
         self.runner = ActionRunner(lambda: self.bridge, lambda: self.config, on_timer=self._on_timer)
         self.adder = AddSession(lambda: self.bridge, self.send)  # "Add a device" from the app
+        self.hue = Hue(DATA_DIR, on_state=self._on_hue_state, on_loaded=self._merge_hue)
+        self.runner.hue_set = self.hue.set_level
+        self.runner.hue_scene = self.hue.recall_scene
         self._index_bindings()
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}
@@ -187,8 +191,36 @@ class Agent:
         LOG.info("bridge (re)connected")
         if self.bridge and self.bridge.devices:
             self._wire_subscriptions()
+            self._merge_hue(send=False)
             self.send({"type": "inventory", "inventory": self.inventory()})
             self.send({"type": "state", "states": self.all_states()})
+
+    # ---------- Hue: its lights, rooms and scenes sit in the bridge's dictionaries under hue_ ids ----------
+    def _merge_hue(self, send: bool = True) -> None:
+        if not self.bridge:
+            return
+        for coll, src in ((self.bridge.devices, self.hue.devices), (self.bridge.areas, self.hue.areas), (self.bridge.scenes, self.hue.scenes)):
+            for k in [k for k in coll if str(k).startswith("hue_")]:
+                if k not in src:
+                    del coll[k]
+            for k, v in src.items():
+                coll[k] = v
+        if send:
+            self.send({"type": "inventory", "inventory": self.inventory()})
+            self.send({"type": "state", "states": self.all_states()})
+            self.send({"type": "hue", "hue": self.hue.info()})
+
+    def _on_hue_state(self, device_id: str) -> None:
+        d = self.hue.devices.get(device_id)
+        if not d:
+            return
+        st = _state_of(d)
+        self._dirty_states[device_id] = st
+        settle = self.runner.zone_changed(device_id, st.get("level"))
+        if settle is not None:
+            asyncio.create_task(settle)
+        if self._state_flush is None or self._state_flush.done():
+            self._state_flush = asyncio.create_task(self._flush_states())
 
     def _wire_subscriptions(self) -> None:
         assert self.bridge
@@ -226,7 +258,7 @@ class Agent:
         areas = {aid: {"id": aid, "name": a.get("name"), "parent_id": a.get("parent_id")} for aid, a in b.areas.items()}
         scenes = {sid: {"scene_id": sid, "name": s.get("name")} for sid, s in b.scenes.items()}
         return {"devices": devices, "buttons": buttons, "areas": areas, "scenes": scenes,
-                "bridge": {"host": BRIDGE_HOST}}
+                "bridge": {"host": BRIDGE_HOST}, "hue": self.hue.info()}
 
     def all_states(self) -> Dict[str, dict]:
         assert self.bridge
@@ -434,7 +466,7 @@ class Agent:
                     await ws.send(json.dumps({
                         "type": "hello", "version": VERSION, "commit": current_commit(), "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
-                        "timers": self.runner.timers, "sun": self.sun_today(), "next_runs": self.next_fire_times(),
+                        "timers": self.runner.timers, "sun": self.sun_today(), "next_runs": self.next_fire_times(), "hue": self.hue.info(),
                     }))
                     LOG.info("hub connected")
                     sender = asyncio.create_task(self._pump(ws))
@@ -487,6 +519,14 @@ class Agent:
                         if self.bridge and any(str(d.get("serial") or "") == serial for d in self.bridge.devices.values()):
                             break
                     detail["devices"] = len(self.bridge.devices) if self.bridge else 0
+                elif kind == "hue_discover":
+                    detail = {"bridges": await self.hue.discover()}
+                elif kind == "hue_pair":
+                    detail = await self.hue.pair(str(action.get("host") or ""))
+                    self.send({"type": "hue", "hue": self.hue.info()})
+                elif kind == "hue_forget":
+                    detail = await self.hue.forget()
+                    self._merge_hue()
                 elif kind == "remove_device":
                     did = str(action.get("id") or "")
                     detail = await self.adder.remove(did)
@@ -559,6 +599,10 @@ def _domain(t: Optional[str]) -> str:
         return "cover"
     if t == "SmartBridge":
         return "bridge"
+    if t == "HueLight":
+        return "light"
+    if t == "HueSwitch":
+        return "switch"
     return "other"
 
 
@@ -575,6 +619,7 @@ async def main() -> None:
         sys.exit(2)
     agent = Agent()
     await agent.connect_bridge()
+    await agent.hue.start()  # no-op until a Hue bridge is paired from the app
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -587,6 +632,7 @@ async def main() -> None:
     await stop.wait()
     hub.cancel()
     sched.cancel()
+    await agent.hue.stop()
     if agent.bridge:
         await agent.bridge.close()
 

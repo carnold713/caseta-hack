@@ -127,6 +127,15 @@ app.post('/api/refresh', requireAuth, async (req, res) => {
   try { res.json(await sendCommand({ type: 'refresh' })); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
+// Philips Hue: find, pair with (button press) or forget a Hue bridge; the connector does the talking.
+app.post('/api/hue', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!['discover', 'pair', 'forget'].includes(b.op)) return res.status(400).json({ error: 'op must be discover, pair or forget' });
+  const action = { type: `hue_${b.op}` };
+  if (b.op === 'pair') { const host = String(b.host || '').trim(); if (!/^[A-Za-z0-9.\-:]{1,64}$/.test(host)) return res.status(400).json({ error: 'a bridge address is required' }); action.host = host; }
+  try { res.json(await sendCommand(action, b.op === 'pair' ? 70000 : 25000)); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
 // Remove a device from the bridge (experimental, like adding).
 app.post('/api/removedevice', requireAuth, async (req, res) => {
   const id = String((req.body || {}).id || '').trim();
@@ -250,7 +259,7 @@ wssAgent.on('connection', (ws, req) => {
 function handleAgentMessage(ws, msg) {
   switch (msg.type) {
     case 'hello':
-      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, since: new Date().toISOString() };
+      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, since: new Date().toISOString() };
       if (agentInfo.update_available && config.settings.auto_update !== false && !updating) {
         console.log(`[hub] connector ${msg.version} is behind ${LATEST_AGENT_VERSION}, updating it`);
         setTimeout(() => sendCommand({ type: 'update' }, 15 * 60 * 1000).then(r => { updating = false; console.log('[hub] connector updated', JSON.stringify(r.detail)); }).catch(e => { updating = false; console.warn('[hub] connector update failed:', e.message); broadcast({ type: 'toast', level: 'error', msg: `Connector update failed: ${e.message}` }); }), 3000);
@@ -302,6 +311,9 @@ function handleAgentMessage(ws, msg) {
       }
       break;
     }
+    case 'hue':
+      if (agentInfo) { agentInfo.hue = msg.hue || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
+      break;
     case 'add_heard':
       if (Array.isArray(msg.heard)) addSession.heard = msg.heard;
       broadcast({ type: 'add_heard', device: msg.device || null, heard: addSession.heard });

@@ -76,7 +76,7 @@ function connectWS() {
       case 'state': Object.assign(S.states, m.states); paintState(); break;
       case 'timers': S.timers = m.timers || {}; if (S.view === 'home' && !sheet.isOpen()) render(); if (typeof paintNow === 'function') paintNow(); break;
       case 'config': if (JSON.stringify(m.config) !== S.lastSaved) { S.config = m.config; S.lastSaved = JSON.stringify(m.config); render(); } break;
-      case 'agent': S.agent = { online: m.online, info: m.info || null }; render(); break;
+      case 'agent': S.agent = { online: m.online, info: m.info || null }; render(); if (window.Hue) Hue.onAgent(); break;
       case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
       // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
       case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; if (typeof paintSun === 'function') paintSun(); break;

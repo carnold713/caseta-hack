@@ -404,7 +404,7 @@ function openLightSheet(id) {
       <button class="rbtn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}"><span class="c">${ICON('star')}</span><span>Favourite</span></button>
       <button class="rbtn" data-act="ld-kind" data-id="${id}"><span class="c">${ICON(lightIcon(d))}</span><span>What kind</span></button>
     </div>
-    <button class="btn ghost block ld-remove" data-act="dev-remove" data-id="${id}">Remove from my home</button>
+    ${String(id).startsWith('hue_') ? '' : `<button class="btn ghost block ld-remove" data-act="dev-remove" data-id="${id}">Remove from my home</button>`}
   </div>`;
   sheet.open('', body, { dark: true });
   wireLightSheet();

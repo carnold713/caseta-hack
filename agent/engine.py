@@ -135,6 +135,9 @@ class ActionRunner:
         self.local_time: Optional[Callable[[], Any]] = None  # set by the agent: returns an aware datetime in the home's zone
         self.sunset_hm: Optional[Callable[[], Optional[str]]] = None  # set by the agent: today's sunset as HH:MM, or None
         self._floors: Dict[str, dict] = {}  # device_id -> {"floor": n} while a hold-to-dim ramp is running
+        # Hue lights live in the same device dict under "hue_" ids; the agent sets these to route them
+        self.hue_set: Optional[Callable[[str, int, Optional[float]], Awaitable[None]]] = None
+        self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None
 
     @property
     def timers(self) -> Dict[str, dict]:
@@ -242,6 +245,12 @@ class ActionRunner:
             raise RuntimeError("bridge not connected")
         if device_id not in bridge.devices:
             raise RuntimeError(f"unknown device {device_id}")
+        if device_id.startswith("hue_"):
+            if self.hue_set is None:
+                raise RuntimeError("Hue bridge not connected")
+            fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
+            await self.hue_set(device_id, int(level), float(fs) if fs is not None else None)
+            return
         if self._is_fan(device_id):
             speed = "Off" if level <= 0 else "Low" if level <= 25 else "Medium" if level <= 50 else "MediumHigh" if level <= 75 else "High"
             await bridge.set_fan(device_id, speed)
@@ -337,6 +346,11 @@ class ActionRunner:
             raise RuntimeError("bridge not connected")
 
         if t == "scene":
+            if str(a["scene_id"]).startswith("hue_"):
+                if self.hue_scene is None:
+                    raise RuntimeError("Hue bridge not connected")
+                await self.hue_scene(str(a["scene_id"]))
+                return None
             await bridge.activate_scene(str(a["scene_id"]))
             return None
 
@@ -440,6 +454,7 @@ class ActionRunner:
             return None
 
         if t in ("raise", "lower", "stop"):
+            targets = [d for d in targets if not d.startswith("hue_")]  # Hue has no raise/lower ramp
             fn = {"raise": bridge.raise_cover, "lower": bridge.lower_cover, "stop": bridge.stop_cover}[t]
             # raise_cover/lower_cover/stop_cover send the generic Raise/Lower/Stop zone commands,
             # which dimmers honour too (that is how a Pico's own raise/lower works).
@@ -464,10 +479,11 @@ class ActionRunner:
 
 _LIGHT_TYPES = {
     "WallDimmer", "PlugInDimmer", "InLineDimmer", "SunnataDimmer", "TempInWallPaddleDimmer",
-    "WallDimmerWithPreset", "Dimmed", "DivaSmartDimmer", "PowPak0-10V",
+    "WallDimmerWithPreset", "Dimmed", "DivaSmartDimmer", "PowPak0-10V", "HueLight",
 }
 _SWITCH_TYPES = {
     "WallSwitch", "OutdoorPlugInSwitch", "PlugInSwitch", "InLineSwitch", "PowPakSwitch",
+    "HueSwitch",
     "SunnataSwitch", "TempInWallPaddleSwitch", "Switched", "DivaSmartSwitch",
 }
 _FAN_TYPES = {"CasetaFanSpeedController", "MaestroFanSpeedController", "FanSpeed"}

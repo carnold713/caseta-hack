@@ -1,3 +1,4 @@
 pylutron-caseta>=0.24
 websockets>=12
 zeroconf>=0.130
+aiohttp>=3.9
