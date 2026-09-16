@@ -1,147 +1,155 @@
 /* Pico Hack: light as a flat disc. Extensions from docs/ui-concepts.md on top of styles.css,
-   retokened for the Sonos direction (docs/design-spec-v3.md). Lamp ramp, "Light now" strip,
-   the dark light detail sheet, the Now view, mood row, lamp kinds, sleep-timer dial, night look. */
+   retokened for the Tenzing skin (docs/design-spec-v4.md). The lamp ramp is the only warm colour on
+   the page; blue is the control state. Lamp ramp, "Light now" strip, the white light detail sheet with
+   the vertical well, the Now view, mood chips, lamp kinds, the sleep-timer dial, the night look. */
 :root { --lamp-10: #FDF1E1; --lamp-25: #FCE3C4; --lamp-50: #F9C489; --lamp-75: #F7A64F; --lamp-100: #F58A1F; }
 
 /* ---------- lamp disc: an opaque circle whose fill (and where there is room, size) is the level ---------- */
-.lamp { display: grid; place-items: center; border-radius: 50%; background: var(--lamp-off); color: #111111; overflow: hidden; flex: none; }
-.lamp.off { color: var(--text-3); }
+.lamp { display: grid; place-items: center; border-radius: 50%; background: var(--lamp-off); color: #262626; overflow: hidden; flex: none; }
+.lamp.off { color: var(--text-2); }
 .lamp svg { flex: none; }
 /* a 24px symbol drawn large keeps its 1.5px line: stroke-width is in symbol units (24 per box) */
 svg.i.lampart { width: 96px; height: 96px; stroke-width: .375; }
 svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
+/* a disc that stands for a device sits in a ring: a hairline when off, blue when on */
+.ringed { outline: 1px solid var(--line); outline-offset: 3px; transition: outline-color .255s var(--ease); }
+.ringed:not(.off) { outline-color: var(--blue); }
 
 /* ---------- Light now: the strip on Home ---------- */
 .lightnow { margin: 0 0 20px; }
-.lightnow .ln-line { margin: 0 0 4px; }
-.ln-row { display: flex; align-items: flex-end; gap: 16px; min-height: 72px; overflow-x: auto; margin: 0 -16px; padding: 0 16px 4px; scrollbar-width: none; }
+.lightnow .ln-line { margin: 0 0 8px; }
+.ln-row { display: flex; align-items: flex-end; gap: 16px; min-height: 76px; overflow-x: auto; margin: 0 -16px; padding: 4px 16px 4px; scrollbar-width: none; }
 .ln-row::-webkit-scrollbar { display: none; }
 .ln-row.empty { display: none; }
-.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; padding: 0; transition: transform .12s ease-out; }
-.ln-lamp:active { transform: scale(.96); }
-.ln-lamp .lamp { width: 24px; height: 24px; }
-.ln-name { font-size: 13px; line-height: 18px; color: var(--text-3); white-space: nowrap; }
+.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 56px; padding: 0; }
+.ln-lamp .lamp { width: 24px; height: 24px; outline: 1px solid var(--blue); outline-offset: 3px; }
+.ln-name { font-size: 12px; line-height: 16px; color: var(--text-2); white-space: nowrap; }
 
-/* ---------- light rows: the disc opens the kind sheet, the name opens the detail ---------- */
-.light .row .lkind { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #111111; transition: transform .12s ease-out; flex: none; }
-.light .row .lkind.off { color: var(--text-3); }
-.light .row .lkind:active { transform: scale(.96); }
+/* ---------- light rows: the disc (in a 40px ring) opens the kind sheet, the name opens the detail ---------- */
+.light .row .lkind { width: 32px; height: 32px; margin: 4px; border-radius: 50%; display: grid; place-items: center; color: #262626; flex: none; outline: 1px solid var(--blue); outline-offset: 3px; transition: outline-color .255s var(--ease); }
+.light .row .lkind svg.i { width: 20px; height: 20px; }
+.light .row .lkind.off { color: var(--text-2); outline-color: var(--line); }
 .light .row .lopen { display: block; min-width: 0; }
-.light .row .fav { width: 36px; height: 36px; }
+.light .row .fav { width: 32px; height: 32px; }
 .tile .lopen { display: block; }
 
-/* ---------- mood row: five scene chips whose circle is a lamp disc at the mood's level ---------- */
+/* ---------- mood row: Large chips whose leading icon is a lamp disc at the mood's level ---------- */
 .moodrow { margin-bottom: 4px; }
-.moods { display: flex; gap: 8px; overflow-x: auto; padding: 0 0 4px; scrollbar-width: none; }
+.moods { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; }
 .moods::-webkit-scrollbar { display: none; }
-.mood { flex: none; height: 56px; border-radius: 999px; background: var(--card-2); padding: 8px 16px 8px 8px; display: flex; align-items: center; gap: 10px; font-size: 15px; line-height: 20px; font-weight: 500; color: var(--text); transition: transform .12s ease-out, background .16s; }
-.mood:active { transform: scale(.98); }
-.mood .lamp { width: 40px; height: 40px; }
-.mood.sel { background: var(--black); color: #fff; }
-.mood.sel .lamp { color: #111111; }
+.mood { flex: none; height: 48px; border-radius: var(--r-xl); background: transparent; box-shadow: inset 0 0 0 1px var(--chip-line); padding: 8px 20px 8px 8px; display: flex; align-items: center; gap: 12px; font-size: 16px; line-height: 20px; font-weight: 500; color: var(--text); transition: background .15s var(--ease), box-shadow .255s var(--ease); }
+.mood:active { background: var(--fill-2); }
+.mood .lamp { width: 32px; height: 32px; }
+.mood .lamp svg.i { width: 18px; height: 18px; }
+.mood.sel { background: var(--fill-1); box-shadow: inset 0 0 0 2px var(--text); }
 .moodfoot { display: flex; justify-content: flex-end; }
-.moodfoot .btn.ghost { height: 32px; font-size: 13px; }
-.sheet .moodrow { margin: 0 -20px; padding: 0 20px; }
-.sheet.dark .mood { background: var(--now-2); color: var(--on-dark); }
-.sheet.dark .mood.sel { background: var(--on-dark); color: var(--now); }
-.sheet.dark .moodfoot .btn.ghost { background: transparent; color: var(--on-dark-2); }
+.moodfoot .btn.ghost { margin-right: -12px; }
+.sheet .moodrow { margin: 0 -24px; padding: 0 24px; }
 
-/* ---------- light detail sheet (dark) ---------- */
-.ld-hero { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
-.ld-stage { flex: 1; min-width: 0; height: 280px; display: grid; place-items: center; }
+/* ---------- light detail sheet (white, elevated): the Tenzing dimmer dialog for one light ---------- */
+.ld-hero { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 4px; }
+.ld-stage { flex: 1; min-width: 0; height: 328px; display: grid; place-items: center; }
 .ld-disc { width: 160px; height: 160px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; }
 .ld-name { text-align: center; margin-top: 8px; }
-.ld-cap { text-align: center; color: var(--on-dark-2); font-size: 14px; line-height: 20px; margin: 4px 0 12px; }
-.ld-level { text-align: center; margin: 0 0 16px; }
-.ld-swcol { width: 44px; height: 280px; display: grid; place-items: center; flex: none; }
+.ld-cap { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
+/* the readout under the stage: the status text button */
+.ld-level { display: flex; align-items: center; justify-content: center; width: 136px; height: 48px; margin: 12px auto 16px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line-2); background: var(--surface); font-size: 16px; line-height: 20px; font-weight: 400; color: var(--text); }
+.ld-swcol { width: 112px; height: 280px; display: grid; place-items: center; flex: none; }
 .ld-actions { display: flex; justify-content: center; gap: 24px; margin-top: 16px; }
-.rbtn { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 72px; color: inherit; font-size: 13px; line-height: 18px; text-align: center; transition: transform .12s ease-out; }
-.rbtn:active { transform: scale(.96); }
-.rbtn .c { width: 56px; height: 56px; border-radius: 50%; background: var(--now-2); color: var(--on-dark); display: grid; place-items: center; }
-.rbtn.on .c { background: var(--on-dark); color: var(--now); }
+.ld-remove { margin: 16px auto 0; display: flex; }
+/* the round action with a label under it: an Extra Large Secondary action icon */
+.rbtn { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 72px; color: var(--text); font-size: 12px; line-height: 16px; text-align: center; }
+.rbtn .c { width: 56px; height: 56px; border-radius: 50%; background: var(--fill-2); color: var(--text); display: grid; place-items: center; position: relative; transition: background .15s var(--ease), box-shadow .15s var(--ease); }
+.rbtn .c svg.i { width: 28px; height: 28px; }
+.rbtn:active .c { background: var(--fill-3); box-shadow: var(--shadow-pressed); }
+.rbtn.on .c { background: var(--blue); color: var(--on-blue); }
 .rbtn.on .c svg { fill: currentColor; }
 .rbtn span { white-space: nowrap; }
 
-/* vertical slider: an 8px track with a 28px knob, 240px tall, on the dark sheet */
-.vslider { position: relative; width: 44px; height: 240px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none;
-  background: linear-gradient(to top, var(--on-dark) var(--p, 0%), rgba(255,255,255,.28) var(--p, 0%)) center / 8px 100% no-repeat; border-radius: 4px; }
-.vslider::after { content: ""; position: absolute; left: 8px; bottom: calc(var(--p, 0%) - 14px); width: 28px; height: 28px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
-.vslider:focus-visible { box-shadow: 0 0 0 2px var(--on-dark); }
-.vslider .vtip { position: absolute; right: 52px; bottom: calc(var(--p, 0%) - 20px); height: 40px; padding: 0 14px; border-radius: 999px; background: var(--on-dark); color: var(--now); font-size: 16px; line-height: 40px; font-weight: 600; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; }
+/* the vertical well: white, a hairline, radius 12, filling with blue from the bottom; a grip in the fill */
+.vcol { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
+.vslider { position: relative; width: 112px; height: 280px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
+.vslider::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--p, 0%); background: var(--blue); border-radius: 0 0 var(--r-md) var(--r-md); }
+.vslider::after { content: ""; position: absolute; left: 50%; width: 40px; height: 4px; margin-left: -20px; bottom: calc(var(--p, 0%) - 12px); border-radius: 2px; background: rgba(255,255,255,.4); }
+.vslider:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); }
+.vslider .vtip { position: absolute; left: 50%; transform: translateX(-50%); z-index: 2; bottom: calc(var(--p, 0%) + 12px); height: 32px; padding: 0 12px; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-1); color: var(--text); font-size: 14px; line-height: 32px; font-weight: 500; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s var(--ease); }
 .vslider.drag .vtip { opacity: 1; }
+.vsteps { display: flex; gap: 32px; }
+.vsteps .iconbtn svg.i { width: 20px; height: 20px; }
+.vsteps .down svg { transform: rotate(90deg); }
+.vsteps .up svg { transform: rotate(-90deg); }
 
-/* ---------- the Now view (dark, full height) ---------- */
-.now-art { width: 240px; height: 240px; border-radius: 16px; background: var(--now-2); margin: 4px auto 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 12px; padding: 20px; }
+/* ---------- the Now view (white, full height) ---------- */
+.now-art { width: 240px; height: 240px; border-radius: var(--r-s); background: var(--surface-2); box-shadow: var(--shadow-1); margin: 4px auto 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 12px; padding: 32px; }
 .now-art .lamp { transition: none; }
 .now-head { text-align: center; }
-.now-sub { text-align: center; color: var(--on-dark-2); font-size: 14px; line-height: 20px; margin: 4px 0 12px; }
-.now-level { display: flex; align-items: center; gap: 12px; color: var(--on-dark-2); margin: 0 0 8px; }
-.now-level .slider { flex: 1; min-width: 0; }
-.now-level .slider::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; }
-.now-level .slider::-moz-range-track, .now-level .slider::-moz-range-progress { height: 8px; border-radius: 4px; }
-.now-level .slider::-webkit-slider-thumb { margin-top: -8px; }
-.now-level .nb-num { color: var(--on-dark); }
+.now-sub { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
+.now-big { text-align: center; margin: 0 0 8px; }
+.now-level { display: flex; align-items: center; gap: 12px; color: var(--text-2); margin: 0 0 16px; }
+.now-level .slider { flex: 1; min-width: 0; --well-h: 48px; --grip-h: 20px; }
+.now-level .nb-num { color: var(--text-2); }
 .now-actions { display: flex; justify-content: center; gap: 12px; margin: 8px 0 4px; }
 .now-actions .rbtn { width: 76px; }
-.sheet.dark .h2 { color: var(--on-dark); }
-.now-rooms .item .n { font-size: 16px; line-height: 22px; font-weight: 500; color: var(--on-dark); }
-.now-rooms .item .lv { font-size: 13px; line-height: 18px; color: var(--on-dark-2); }
-.now-rooms .item .lamp { width: 36px; height: 36px; }
+.now-rooms .item .n { font-size: 18px; line-height: 24px; font-weight: 400; color: var(--text); }
+.now-rooms .item .lv { font-size: 14px; line-height: 16px; color: var(--text-2); margin-top: 2px; }
+.now-rooms .item .lamp { width: 32px; height: 32px; margin: 4px; }
 .now-rooms .item .grow { text-align: left; color: inherit; }
 
-/* ---------- lamp kinds: "What kind of light is this?" ---------- */
-.kind-cap { font-size: 13px; line-height: 18px; color: var(--text-3); margin: 16px 0 8px; }
+/* ---------- lamp kinds: "What kind of light is this?" (Visual Picker faces) ---------- */
+.kind-cap { font-size: 12px; line-height: 16px; color: var(--text-2); margin: 16px 0 8px; }
 .kind-cap:first-child { margin-top: 8px; }
 .kind-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.kind { position: relative; min-height: 96px; border-radius: 12px; background: var(--card); padding: 12px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 8px; color: var(--text); transition: transform .12s ease-out; }
-.kind:active { transform: scale(.96); background: var(--card-2); }
-.kind .t { font-size: 15px; line-height: 20px; font-weight: 500; }
-.kind.sel { box-shadow: inset 0 0 0 2px var(--text); }
-.kind .chk { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: var(--black); color: #fff; display: grid; place-items: center; }
+.kind { position: relative; min-height: 96px; border-radius: var(--r-s); background: var(--surface-2); box-shadow: var(--shadow-1); padding: 12px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 8px; color: var(--text); transition: background .15s var(--ease), box-shadow .15s var(--ease); }
+.kind:active { background: var(--surface); box-shadow: var(--shadow-3); }
+.kind .t { font-size: 14px; line-height: 16px; font-weight: 500; }
+.kind.sel { box-shadow: var(--shadow-1), inset 0 0 0 2px var(--blue); }
+.kind .chk { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; box-shadow: 0 0 0 2px #fff; }
+.kind .chk svg.i { width: 16px; height: 16px; }
 .sortblock { margin-top: 24px; }
 
-/* ---------- sleep-timer dial ---------- */
-.td-ring { position: relative; width: 240px; height: 240px; margin: 8px auto 16px; touch-action: none; -webkit-user-select: none; user-select: none; }
+/* ---------- sleep-timer dial: the progress bar bent into a circle ---------- */
+.td-ring { position: relative; width: 240px; height: 240px; margin: 8px auto 16px; touch-action: none; -webkit-user-select: none; user-select: none; outline: none; }
+.td-ring:focus-visible { box-shadow: 0 0 0 2px var(--blue); border-radius: 50%; }
 svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .tring circle { fill: none; }
-.tring .track { stroke: var(--line); }
-.tring .prog { stroke: var(--text); stroke-linecap: round; }
+.tring .track { stroke: var(--fill-2); }
+.tring .prog { stroke: var(--blue); stroke-linecap: round; }
 .td-ring .track, .td-ring .prog { stroke-width: 12; }
-.td-knob { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 3px rgba(0,0,0,.3); left: 120px; top: 6px; cursor: grab; }
+.td-knob { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-1), 0 0 0 1px var(--line-2); left: 120px; top: 6px; cursor: grab; }
 .td-centre { position: absolute; inset: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; pointer-events: none; }
-.td-cap { font-size: 13px; line-height: 18px; color: var(--text-3); }
-.td-min { font-size: 28px; line-height: 34px; }
+.td-cap { font-size: 12px; line-height: 16px; color: var(--text-2); }
+.td-min { font-size: 40px; line-height: 48px; font-weight: 400; }
 .td-lamp { width: 96px; height: 96px; margin-top: 8px; }
-.td .chips .chip.sel { background: var(--black); color: #fff; }
+.td .chips { justify-content: center; }
 .td .btn.primary { margin-top: 16px; }
 /* running timer on Home: the same ring at 40px with the lamp disc inside */
 .ring40 { position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center; }
 .ring40 .track, .ring40 .prog { stroke-width: 4; }
 .ring40 .lamp { width: 24px; height: 24px; }
 
-/* ---------- night look: the light surfaces go warm grey, the dark ones stay ---------- */
-:root[data-night="1"] { --ground: #D8D5CF; --sheet: #ECEAE5; --card: #DEDBD5; --card-2: #D0CCC5; --line: #C3BFB8; --text-3: #6E6B66; }
+/* ---------- night look: the surfaces stay; lit rooms glow warm from their discs and the light field rests ---------- */
+:root[data-night="1"] .room.on { background: var(--fill-1); border-color: var(--line); }
+:root[data-night="1"] .m-lightfield { opacity: .6; }
 
-/* the round All off button in the Now view warms while held, like the one on the bar */
+/* the round All off button in the Now view sweeps the pressed blue while held, like the one on the bar */
 .rbtn.m-hold { background-image: none; }
-.rbtn.m-hold .c { background-image: linear-gradient(90deg, var(--m-warm-deep), var(--m-warm-deep)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
+.rbtn.m-hold .c { background-image: linear-gradient(90deg, var(--blue-pressed), var(--blue-pressed)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .rbtn.m-hold.holding .c { animation: m-hold 1s linear forwards; }
 
-/* ---------- the Now view as a flyout card, with its panels and the timer ring ---------- */
-.sheet.now { height: 86dvh; max-height: 86dvh; }   /* one size, whatever panel is showing */
-.sheet.now .now-art { width: 200px; height: 200px; margin-top: 0; }
+/* ---------- the Now view's panels and the timer ring ---------- */
 .sheet.now .sh { min-height: 0; padding-bottom: 0; }
 .now-top { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
 .now-top .t2 { margin: 0; }
-.now-back { width: 36px; height: 36px; border-radius: 50%; background: var(--now-2); color: var(--on-dark); display: grid; place-items: center; flex: none; }
+.now-back { width: 40px; height: 40px; border-radius: 50%; background: var(--fill-2); color: var(--text); display: grid; place-items: center; flex: none; }
+.now-back svg.i { width: 20px; height: 20px; }
 .rbtn .c { position: relative; }
 .rbtn .rring { position: absolute; inset: -4px; width: 64px; height: 64px; }
-.rbtn .rring .track { stroke: rgba(255,255,255,.14); stroke-width: 3; }
-.rbtn .rring .prog { stroke: var(--on-dark); stroke-width: 3; stroke-linecap: round; }
-.rbtn.timing .c { background: var(--now-2); }
+.rbtn .rring .track { stroke: var(--line-2); stroke-width: 3; }
+.rbtn .rring .prog { stroke: var(--blue); stroke-width: 3; stroke-linecap: round; }
+.rbtn.timing .c { background: var(--fill-2); }
 .rbtn.timing .c svg.i { animation: m-breathe 2.6s ease-in-out infinite; }
-.td-ring.big .track { stroke: rgba(255,255,255,.12); }
-.td-ring.big .prog { stroke: var(--on-dark); }
-.td-ring.big .td-cap { color: var(--on-dark-2); }
+.td-ring.big .track { stroke: var(--fill-2); }
+.td-ring.big .prog { stroke: var(--blue); }
+.td-ring.big .td-cap { color: var(--text-2); }
 .now .td .chips { justify-content: center; }
 .now .td .btn.primary { margin-top: 12px; }

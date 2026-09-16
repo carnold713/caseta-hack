@@ -4,7 +4,7 @@
 VIEWS.remotes = {
   nested() { return !!(S.remote && dev(S.remote)); },
   top() {
-    if (S.remote && dev(S.remote)) return nestedTop('remote-back');
+    if (S.remote && dev(S.remote)) { const d = dev(S.remote); return nestedTop('remote-back', esc(d.name), `${esc(areaName(d.area))} · ${esc(modelName(d))}`); }
     return `<div class="t1">Remotes</div>${statusCircle()}`;
   },
   body() {
@@ -21,7 +21,7 @@ function remoteCard(d) {
   const n = new Set(bs.map(b => b.button_number)).size;
   const broken = bs.some(b => bindingBroken(b));
   const sub = n ? `${n} ${n === 1 ? 'button' : 'buttons'} set up` : 'Not set up yet';
-  return `<button class="item remote-card" data-act="remote-open" data-id="${d.device_id}"><div class="remote-thumb">${picoArt(d, { width: 40 })}</div><div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(areaName(d.area))} · ${esc(sub)}</div>${broken ? `<div class="badge">Needs attention</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+  return `<button class="item remote-card" data-act="remote-open" data-id="${d.device_id}"><div class="remote-thumb">${picoArt(d, { width: 40 })}</div><div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(areaName(d.area))} · ${esc(sub)}</div></div>${broken ? `<span class="tag red">Needs attention</span>` : ''}<span class="chev">${ICON('chev', 'sm')}</span></button>`;
 }
 function bindingBroken(b) {
   const acts = [...(b.actions || []), ...((b.night && b.night.actions) || [])];
@@ -35,7 +35,7 @@ function remoteDetail(d) {
     const glyph = lbl === 'On' ? ICON('sun', 'sm') : lbl === 'Off' ? ICON('circle', 'sm') : lbl === 'Raise' ? '▲' : lbl === 'Lower' ? '▼' : lbl === 'Round' ? '●' : esc(lbl);
     return `<button class="item" data-act="button-open" data-n="${n}"><div class="ic">${glyph}</div><div class="grow"><div class="t">${esc(buttonTitleCap(d.device_id, n))}</div><div class="d ${lines.length ? '' : 'none'}">${lines.length ? lines.join('<br>') : 'Nothing yet'}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
-  return `<div class="remote-hero"><div class="stage">${picoArt(d, { width: 104, interactive: true })}</div><div class="t2">${esc(d.name)}</div><div class="d">${esc(areaName(d.area))} · ${esc(modelName(d))}</div><p class="hint">Tap a button on the picture, or press it on the real remote.</p><button class="btn ghost" data-act="remote-look">${ICON('edit', 'sm')} Not your remote? Change the picture</button></div>
+  return `<div class="remote-hero"><div class="stage">${picoArt(d, { width: 104, interactive: true })}</div><p class="hint">Tap a button on the picture, or press it on the real remote.</p><button class="btn ghost" data-act="remote-look">${ICON('edit', 'sm')} Not your remote? Change the picture</button></div>
     ${usualLayoutHTML(d, false)}
     <div class="h2">Buttons</div>
     <div class="card pad0 list">${rows}</div>
@@ -110,7 +110,7 @@ function openButtonSheet(n) {
     const acts = gestureActions(pid, n, g); const night = gestureActions(pid, n, g, true);
     const b = g === 'hold' ? (binding(pid, n, 'hold_start') || binding(pid, n, 'hold')) : binding(pid, n, g);
     const broken = b && bindingBroken(b);
-    return `<button class="item" data-act="gesture-open" data-g="${g}" data-grow="${n}/${g}"><div class="ic ${acts.length ? 'black' : ''}">${ICON(g === 'single' ? 'bolt' : g === 'double' ? 'copy' : 'clock', 'sm')}</div><div class="grow"><div class="t">${GESTURE_LABEL[g]}</div><div class="d ${acts.length ? '' : 'none'}">${acts.length ? esc(describe(acts)) : 'Nothing yet'}</div>${night.length ? `<div class="d">At night: ${esc(describe(night))}</div>` : ''}${broken ? `<div class="d" style="color:var(--text)">● Points at something that is gone. Pick again.</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+    return `<button class="item" data-act="gesture-open" data-g="${g}" data-grow="${n}/${g}"><div class="ic ${acts.length ? 'on' : ''}">${ICON(g === 'single' ? 'bolt' : g === 'double' ? 'copy' : 'clock', 'sm')}</div><div class="grow"><div class="t">${GESTURE_LABEL[g]}</div><div class="d ${acts.length ? '' : 'none'}">${acts.length ? esc(describe(acts)) : 'Nothing yet'}</div>${night.length ? `<div class="d">At night: ${esc(describe(night))}</div>` : ''}${broken ? `<div class="d"><span class="odot"></span>Points at something that is gone. Pick again.</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
   sheet.open(title, `<div class="card pad0 list gestures">${body}</div><p class="faint small" style="margin:12px 0 0">A press on a button that also has "press twice" waits a moment to tell them apart.</p>`, { sub: 'Pick a kind of press.' });
 }
@@ -190,7 +190,7 @@ function renderRecipeSheet() {
   const sel = S.pickTargets;
   const chipsT = [defaultTarget(pid), ...sel, 'h:all', ...areas().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
   const which = `<div class="h2">Which lights? <span class="faint">tap to add or remove</span></div><div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="pick-target" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(cap(targetName(t)))}</button>`).join('')}<button class="chip" data-act="pick-target-more">${ICON('dots', 'sm')}Specific lights…</button></div>${sel.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Controls ${esc(targetName(T))} · ${plural(targetDevices(T).length, 'light')}</p>` : ''}`;
-  const chk = `<span class="chk">${ICON('check', 'sm')}</span>`;
+  const chk = `<span class="chk">${ICON('check')}</span>`;
   const ctx = recipeCtx(pid);
   const moodsOk = r => !r.moods || (r.moods === 'none' ? (ctx.moods === 0 && ctx.dimmers > 0) : r.moods === 'two' ? ctx.moods >= 2 : ctx.moods >= 1);
   const list = RECIPES.filter(r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any) && moodsOk(r)).map(r => { const rd = typeof r.d === 'function' ? r.d(ctx) : r.d; return `<button class="item recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${rd ? `<div class="d">${esc(rd)}</div>` : ''}</div>${selected === r.id ? chk : ''}</button>`; }).join('');

@@ -1,25 +1,25 @@
-/* Pico Hack: light as a flat disc (docs/ui-concepts.md A, B, D, E, F, H; surfaces from docs/design-spec-v3.md).
-   The "Light now" strip on Home, the dark light detail sheet, the Now view and the house slider
+/* Pico Hack: light as a flat disc (docs/ui-concepts.md A, B, D, E, F, H; surfaces from docs/design-spec-v4.md).
+   The "Light now" strip on Home, the white light detail sheet, the Now view and the house well
    behind the Light now bar, room moods, lamp kinds, the sleep-timer dial and the night look.
    Loaded after home.js; paintState() in core.js calls paintLight() so every real state change
    moves the discs once. */
 'use strict';
 
-// ---------- the lamp ramp: five stops, interpolated continuously; off is --lamp-off (--card-2 on light, --now-2 on dark) ----------
+// ---------- the lamp ramp: five stops, interpolated continuously; off is --lamp-off (--fill-2: every surface is white now) ----------
 const LAMP_RAMP = [[10, '#FDF1E1'], [25, '#FCE3C4'], [50, '#F9C489'], [75, '#F7A64F'], [100, '#F58A1F']];
-const LAMP_OFF_DARK = '#38464E'; // --now-2
-const MOTION = { d: .36, ease: 'power3.out' };
-if (window.gsap && gsap.matchMedia) gsap.matchMedia().add('(prefers-reduced-motion: reduce)', () => { MOTION.d = 0; return () => { MOTION.d = .36; }; });
+const MOTION = { d: .255, ease: 'power3.out' };
+if (window.gsap && gsap.matchMedia) gsap.matchMedia().add('(prefers-reduced-motion: reduce)', () => { MOTION.d = 0; return () => { MOTION.d = .255; }; });
 
 let LAMP_OFF_CACHE = null;
-function lampOff() { if (!LAMP_OFF_CACHE) LAMP_OFF_CACHE = (getComputedStyle(document.documentElement).getPropertyValue('--lamp-off') || '#D5D9DC').trim() || '#D5D9DC'; return LAMP_OFF_CACHE; }
+function lampOff() { if (!LAMP_OFF_CACHE) LAMP_OFF_CACHE = (getComputedStyle(document.documentElement).getPropertyValue('--lamp-off') || 'rgba(0,0,0,.06)').trim() || 'rgba(0,0,0,.06)'; return LAMP_OFF_CACHE; }
 function mixHex(a, b, t) {
   const pa = a.slice(1).match(/../g).map(x => parseInt(x, 16)), pb = b.slice(1).match(/../g).map(x => parseInt(x, 16));
   return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('').toUpperCase();
 }
-function lampColor(lv, dark) {
+// `dark` is accepted and ignored: there is no dark surface any more, an off disc is --lamp-off everywhere.
+function lampColor(lv, dark) { // eslint-disable-line no-unused-vars
   const v = Number(lv) || 0;
-  if (v <= 0) return dark ? LAMP_OFF_DARK : lampOff();
+  if (v <= 0) return lampOff();
   if (v <= LAMP_RAMP[0][0]) return LAMP_RAMP[0][1];
   for (let i = 1; i < LAMP_RAMP.length; i++) { const [b, cb] = LAMP_RAMP[i], [a, ca] = LAMP_RAMP[i - 1]; if (v <= b) return mixHex(ca, cb, (v - a) / (b - a)); }
   return LAMP_RAMP[LAMP_RAMP.length - 1][1];
@@ -27,7 +27,7 @@ function lampColor(lv, dark) {
 const lvText = v => (v > 0 ? `${v}%` : 'Off');
 const lvLabel = (v, dim) => (dim ? lvText(v) : v > 0 ? 'On' : 'Off'); // a switch is on or off, never a percentage
 const discSize = lv => Math.round(24 + 32 * clamp(lv, 0, 100) / 100);
-const heroSize = lv => Math.round(160 + 80 * clamp(lv, 0, 100) / 100);
+const heroSize = lv => Math.round(140 + 60 * clamp(lv, 0, 100) / 100);
 function lampHTML(lv, size, inner, cls = '', dark = false) { return `<span class="lamp ${lv > 0 ? '' : 'off'} ${cls}" style="width:${size}px;height:${size}px;background:${lampColor(lv, dark)}">${inner || ''}</span>`; }
 // One tween, only when something actually changed. Without GSAP (or under reduced motion) the value is set outright.
 function tween(el, vars, done) {
@@ -61,7 +61,7 @@ function openKindSheet(id, opts = {}) {
 function kindGridHTML(id) {
   const cur = lightKind(id);
   return ['ambient', 'task', 'accent'].map(role => `<div class="kind-cap">${ROLE_CAP[role]}</div><div class="kind-grid">${KINDS.filter(k => k[2] === role).map(k =>
-    `<button class="kind ${cur === k[0] ? 'sel' : ''}" data-act="kind-pick" data-id="${id}" data-k="${k[0]}">${ICON('lamp-' + k[0])}<span class="t">${k[1]}</span>${cur === k[0] ? `<span class="chk">${ICON('check', 'sm')}</span>` : ''}</button>`).join('')}</div>`).join('')
+    `<button class="kind ${cur === k[0] ? 'sel' : ''}" data-act="kind-pick" data-id="${id}" data-k="${k[0]}">${ICON('lamp-' + k[0])}<span class="t">${k[1]}</span>${cur === k[0] ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`).join('')
     + `<p class="faint small" style="margin:16px 0 0">Tap the chosen one again to clear it.</p>`;
 }
 function pickKind(id, k) {
@@ -153,7 +153,7 @@ function moodRowHTML(aid) {
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
   if (!ps.length) return `<div class="moodrow" data-moods="${aid}"><div class="moods"><button class="chip" data-act="roles-open" data-area="${aid}">${ICON('plus', 'sm')}Make moods…</button></div></div>`;
   const cur = moodMatch(aid);
-  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 40, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}</div><div class="moodfoot"><button class="btn ghost" data-act="roles-open" data-area="${aid}">Change what each light is for</button></div></div>`;
+  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 32, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}</div><div class="moodfoot"><button class="btn ghost" data-act="roles-open" data-area="${aid}">Change what each light is for</button></div></div>`;
 }
 async function applyMood(aid, mid) {
   const m = moodById(mid); if (!m) return;
@@ -233,11 +233,11 @@ function openRoomCard(aid) {
   const el = document.querySelector(`.room[data-room="${aid}"]`);
   if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 72, behavior: MOTION.d ? 'smooth' : 'auto' });
 }
-// The room card's disc (and the Now view's) takes the ramp fill at the room's mean level; off is the surface's off grey.
+// The room card's disc (and the Now view's) takes the ramp fill at the room's mean level; off is the off grey.
 function paintOnChips() {
   document.querySelectorAll('[data-onchip]').forEach(el => {
-    const t = el.dataset.onchip; const on = targetOn(t); const dark = !!el.closest('.dark');
-    const c = lampColor(on ? roomMean(t.slice(2)) : 0, dark);
+    const t = el.dataset.onchip; const on = targetOn(t);
+    const c = lampColor(on ? roomMean(t.slice(2)) : 0);
     el.classList.toggle('off', !on);
     if (el.dataset.fill === c) return;
     if (el.dataset.fill) tween(el, { backgroundColor: c }); else el.style.backgroundColor = c;
@@ -249,7 +249,7 @@ function paintLightDiscs() {
   document.querySelectorAll('[data-ldisc]').forEach(el => {
     const id = el.dataset.ldisc; const d = dev(id); if (!d) return;
     const lv = d.domain === 'light' || d.domain === 'switch' ? (level(id) || 0) : (isOn(id) ? 100 : 0);
-    const c = lampColor(lv, !!el.closest('.dark'));
+    const c = lampColor(lv);
     el.classList.toggle('off', lv <= 0);
     if (el.dataset.fill === c) return;
     if (el.dataset.fill) tween(el, { backgroundColor: c }); else el.style.backgroundColor = c;
@@ -281,13 +281,13 @@ function setHouseLevel(v) {
   }, 120);
 }
 
-// ---------- the Now view: the Sonos full-screen now playing, for the house ----------
+// ---------- the Now view: the app's now playing, for the house, on a white dialog ----------
 function nowArtHTML(rooms) {
-  if (!rooms.length) return lampHTML(0, 96, ICON('moon', 'lg'), '', true);
+  if (!rooms.length) return lampHTML(0, 96, ICON('moon', 'lg'), '', false);
   // one lit room fills the square like album art; more rooms share it
   const n = Math.min(rooms.length, 6);
-  const base = n <= 1 ? 96 : n === 2 ? 60 : n <= 4 ? 52 : 44;  // the square is 200px with 20px padding: two grown discs must fit side by side
-  return rooms.slice(0, 6).map(r => lampHTML(r.level, Math.round(base + base * 0.35 * clamp(r.level, 0, 100) / 100), ICON(r.icon, n <= 2 ? '' : 'sm'), '', true)).join('');
+  const base = n <= 1 ? 96 : n === 2 ? 60 : n <= 4 ? 52 : 44;  // the face is 240px with 32px padding: two grown discs must fit side by side
+  return rooms.slice(0, 6).map(r => lampHTML(r.level, Math.round(base + base * 0.35 * clamp(r.level, 0, 100) / 100), ICON(r.icon, n <= 2 ? '' : 'sm'), '', false)).join('');
 }
 function nowSub(rooms, on, lv) {
   if (!on.length) return 'Everything is off';
@@ -323,11 +323,12 @@ function nowMainHTML() {
   const rows = areas().map(a => {
     const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return '';
     const t = `a:${a.id}`; const on = targetOn(t);
-    return `<div class="item"><span class="lamp ${on ? '' : 'off'}" data-onchip="${t}" style="width:36px;height:36px;background:${lampColor(on ? roomMean(a.id) : 0, true)}">${ICON(roomIcon(a.name), 'sm')}</span><button class="grow" data-act="now-room" data-id="${a.id}"><div class="n">${esc(a.name)}</div><div class="lv" data-roomsum="${a.id}">${esc(roomSummary(a.id))}</div></button><button class="sw ${on ? 'on' : ''}" data-tgt="${t}" data-act="toggle" data-t="${t}"></button></div>`;
+    return `<div class="item"><span class="lamp ringed ${on ? '' : 'off'}" data-onchip="${t}" style="width:32px;height:32px;background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span><button class="grow" data-act="now-room" data-id="${a.id}"><div class="n">${esc(a.name)}</div><div class="lv" data-roomsum="${a.id}">${esc(roomSummary(a.id))}</div></button><button class="sw ${on ? 'on' : ''}" data-tgt="${t}" data-act="toggle" data-t="${t}"></button></div>`;
   }).join('');
   return `<div class="now-art" id="now-art" data-k="${rooms.map(r => r.id + ':' + r.level).join(',')}">${nowArtHTML(rooms)}</div>
-    <div class="t2 now-head" id="now-head">${lightNowHeadline(rooms)}</div>
+    <div class="t1 now-head" id="now-head">${lightNowHeadline(rooms)}</div>
     <div class="now-sub" id="now-sub">${nowSub(rooms, on, lv)}</div>
+    <div class="display now-big" id="now-big">${on.length ? lv + '%' : 'Off'}</div>
     <div class="now-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv : 'Off'}</span></div>
     <div class="now-actions" id="now-actions" data-tk="${nowTimerKey()}">${nowActionsHTML()}</div>
     <div class="h2">Rooms</div><div class="card pad0 list now-rooms">${rows}</div>`;
@@ -351,7 +352,7 @@ function nowPanelHTML(p) {
     const tgt = tsplit(tm.t); const lv = meanLevel(targetDevices(tgt)); const left = minutesLeft(tm.v.ends_at);
     return nowTop('Sleep timer') + `<div class="td" id="td-active">
       <div class="td-ring big" data-ring="${esc(tm.t)}" data-ends="${tm.v.ends_at}" data-c="${RING_C.toFixed(2)}">${nowRingHTML(tm.t, tm.v, 240, 12, '')}
-        <div class="td-centre"><div class="td-cap">${tm.v.level ? 'Down to ' + tm.v.level + '% in' : 'Off in'}</div><div class="td-min display" data-countdown-min="${tm.v.ends_at}">${left} min</div>${lampHTML(lv, 96, timerLampInner(tm.t), 'td-lamp', true)}</div>
+        <div class="td-centre"><div class="td-cap">${tm.v.level ? 'Down to ' + tm.v.level + '% in' : 'Off in'}</div><div class="td-min display" data-countdown-min="${tm.v.ends_at}">${left} min</div>${lampHTML(lv, 96, timerLampInner(tm.t), 'td-lamp', false)}</div>
       </div>
       <p class="now-sub" style="margin:-4px 0 16px">${esc(cap(targetName(tgt)))}</p>
       <button class="btn lg block" data-act="now-panel" data-p="timer">Change the time</button>
@@ -369,7 +370,7 @@ function nowShow(p) {
   if (window.Motion) Motion.pageIn(root, { force: true });
 }
 function nowViewHTML() { NOW.panel = 'main'; return `<div class="now" id="nowview">${nowMainHTML()}</div>`; }
-function openNowView() { sheet.open('', nowViewHTML(), { dark: true, cls: 'now' }); }
+function openNowView() { sheet.open('', nowViewHTML(), { full: true, cls: 'now' }); }
 function paintNow() {
   const root = $('#nowview'); if (!root) return;
   if (NOW.panel === 'timer-active' && !nowTimer()) { nowShow('main'); return; }
@@ -381,23 +382,23 @@ function paintNow() {
   if (head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
   root.querySelector('#now-sub').textContent = nowSub(rooms, on, lv);
   const sl = root.querySelector('[data-house]');
-  if (sl && !sl.dataset.drag) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); root.querySelector('.nb-num').textContent = on.length ? lv : 'Off'; }
+  if (sl && !sl.dataset.drag) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); root.querySelector('.nb-num').textContent = on.length ? lv : 'Off'; const big = root.querySelector('#now-big'); if (big) big.textContent = on.length ? `${lv}%` : 'Off'; }
   const acts = root.querySelector('#now-actions'); const tk = nowTimerKey();
   if (acts && acts.dataset.tk !== tk) { acts.dataset.tk = tk; acts.innerHTML = nowActionsHTML(); }
 }
 
-// ---------- light detail sheet (B), on the dark surface ----------
+// ---------- light detail sheet (B): the Tenzing dimmer dialog, white and elevated ----------
 let LD = null;
 function openLightSheet(id) {
   const d = dev(id); if (!d) return;
   const lv = level(id) || 0, t = `d:${id}`, dim = d.domain === 'light', role = lightRole(id);
   LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null };
+  const well = `<div class="vcol"><div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"><div class="vtip">${lvText(lv)}</div></div>
+      <div class="vsteps"><button class="iconbtn down" data-act="ld-step" data-d="-10" aria-label="Dimmer">${ICON('chev')}</button><button class="iconbtn up" data-act="ld-step" data-d="10" aria-label="Brighter">${ICON('chev')}</button></div></div>`;
   const body = `<div class="ld" id="ld" data-id="${id}">
-    <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lampColor(lv, true)}" role="button" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
-      ${dim ? `<div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"><div class="vtip">${lvText(lv)}</div></div>` : `<div class="ld-swcol"><button class="sw ${lv > 0 ? 'on' : ''}" data-act="ld-toggle" aria-label="On or off"></button></div>`}</div>
-    <div class="t2 ld-name">${esc(d.name)}</div>
-    <div class="ld-cap">${esc(areaName(d.area))}${role ? ` · ${ROLE_LABEL[role]}` : ''}</div>
-    <div class="ld-level display">${lvLabel(lv, dim)}</div>
+    <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lampColor(lv)}" role="button" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
+      ${dim ? well : `<div class="ld-swcol"><button class="sw ${lv > 0 ? 'on' : ''}" data-act="ld-toggle" aria-label="On or off"></button></div>`}</div>
+    <div class="ld-level">${lvLabel(lv, dim)}</div>
     ${moodRowHTML(d.area || 'none')}
     <div class="ld-actions">
       <button class="rbtn" data-act="ld-timer" data-t="${t}"><span class="c">${ICON('clock')}</span><span>Sleep timer</span></button>
@@ -406,14 +407,14 @@ function openLightSheet(id) {
     </div>
     ${String(id).startsWith('hue_') ? '' : `<button class="btn ghost block ld-remove" data-act="dev-remove" data-id="${id}">Remove from my home</button>`}
   </div>`;
-  sheet.open('', body, { dark: true });
+  sheet.open(esc(d.name), body, { sub: `${esc(areaName(d.area))}${role ? ` · ${ROLE_LABEL[role]}` : ''}` });
   wireLightSheet();
 }
 function wireLightSheet() {
   const root = $('#ld'); if (!root || !LD) return;
   const disc = root.querySelector('.ld-disc'), sl = root.querySelector('.vslider');
   const st = { lv: LD.lv };
-  const apply = v => { const s = heroSize(v); disc.style.width = disc.style.height = `${s}px`; disc.style.background = lampColor(v, true); disc.classList.toggle('off', v <= 0); };
+  const apply = v => { const s = heroSize(v); disc.style.width = disc.style.height = `${s}px`; disc.style.background = lampColor(v); disc.classList.toggle('off', v <= 0); };
   // the disc follows the finger with an 80ms lag, so it breathes rather than snaps
   const quick = window.gsap && MOTION.d > 0 ? gsap.quickTo(st, 'lv', { duration: .08, ease: 'power3.out', onUpdate: () => apply(st.lv) }) : v => { st.lv = v; apply(v); };
   LD.show = (v, animate) => {
@@ -468,10 +469,10 @@ function dialHTML(t, min, stay = false) {
   return `<div class="td" id="td">
     <div class="td-ring" role="slider" aria-label="Minutes" aria-valuemin="5" aria-valuemax="120" aria-valuenow="${min}" tabindex="0">
       <svg class="tring" viewBox="0 0 240 240" width="240" height="240" aria-hidden="true"><circle class="track" cx="120" cy="120" r="114"/><circle class="prog" cx="120" cy="120" r="114" style="stroke-dasharray:${RING_C};stroke-dashoffset:${RING_C * (1 - min / 120)}"/></svg>
-      <div class="td-centre"><div class="td-cap">Off in</div><div class="td-min display">${min} min</div>${lampHTML(lv, 96, timerLampInner(t), 'td-lamp', stay)}</div>
+      <div class="td-centre"><div class="td-cap">Off in</div><div class="td-min display">${min} min</div>${lampHTML(lv, 96, timerLampInner(t), 'td-lamp', false)}</div>
       <div class="td-knob" style="left:${p.x}px;top:${p.y}px"></div>
     </div>
-    <div class="chips">${TIMER_CHIPS.map(m => `<button class="chip ${m === min ? 'sel' : ''}" data-act="timer" data-t="${esc(t)}" data-m="${m}" ${st}>${m} min</button>`).join('')}</div>
+    <div class="chips">${TIMER_CHIPS.map(m => `<button class="chip sm ${m === min ? 'sel' : ''}" data-act="timer" data-t="${esc(t)}" data-m="${m}" ${st}>${m} min</button>`).join('')}</div>
     <button class="btn primary lg block" data-act="timer" data-t="${esc(t)}" data-m="${min}" ${st}>Start</button>
   </div>`;
 }
@@ -516,7 +517,8 @@ function timerBlockHTML(t, v) {
   const tgt = tsplit(t);
   const total = timerTotal(t, v.ends_at), left = minutesLeft(v.ends_at), f = clamp(left / total, 0, 1);
   const lv = meanLevel(targetDevices(tgt)); const s = 12 + 16 * lv / 100;
-  return `<div class="timerbar"><div class="ring40" data-ring="${esc(t)}" data-ends="${v.ends_at}" data-f="${f.toFixed(3)}"><svg class="tring" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><circle class="track" cx="20" cy="20" r="18"/><circle class="prog" cx="20" cy="20" r="18" style="stroke-dasharray:${RING40_C};stroke-dashoffset:${RING40_C * (1 - f)}"/></svg><span class="lamp" style="width:${s}px;height:${s}px;background:${lampColor(lv)}"></span></div><div class="grow"><div class="t">${esc(cap(targetName(tgt)))} ${v.level ? 'to ' + v.level + '%' : 'off'} <span data-countdown="${v.ends_at}"></span></div><div class="d">Sleep timer</div></div><button class="btn sm" data-act="cancel-timer" data-t="${esc(t)}">Cancel</button></div>`;
+  const totalS = total * 60, elapsedS = Math.max(0, totalS - Math.max(0, v.ends_at - Date.now() / 1000));
+  return `<div class="timerbar m-timer" style="--m-total:${totalS}s;--m-elapsed:${Math.round(elapsedS)}s"><div class="m-timer-line"></div><div class="ring40" data-ring="${esc(t)}" data-ends="${v.ends_at}" data-f="${f.toFixed(3)}"><svg class="tring" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><circle class="track" cx="20" cy="20" r="18"/><circle class="prog" cx="20" cy="20" r="18" style="stroke-dasharray:${RING40_C};stroke-dashoffset:${RING40_C * (1 - f)}"/></svg><span class="lamp" style="width:${s}px;height:${s}px;background:${lampColor(lv)}"></span></div><div class="grow"><div class="t">${esc(cap(targetName(tgt)))} ${v.level ? 'to ' + v.level + '%' : 'off'} <span data-countdown="${v.ends_at}"></span></div><div class="d">Sleep timer</div></div><button class="btn sm" data-act="cancel-timer" data-t="${esc(t)}">Cancel</button></div>`;
 }
 // The Home ring drains once a minute; the disc inside follows the light's level.
 function paintRings() {
@@ -524,7 +526,7 @@ function paintRings() {
     const t = el.dataset.ring, endsAt = Number(el.dataset.ends);
     const total = timerTotal(t, endsAt), f = clamp(minutesLeft(endsAt) / total, 0, 1); const C = Number(el.dataset.c) || RING40_C;
     if (f.toFixed(3) !== el.dataset.f) { el.dataset.f = f.toFixed(3); tween(el.querySelector('.prog'), { strokeDashoffset: C * (1 - f) }); }
-    const lv = meanLevel(targetDevices(tsplit(t))); const s = 12 + 16 * lv / 100, c = lampColor(lv, !!el.closest('.dark'));
+    const lv = meanLevel(targetDevices(tsplit(t))); const s = 12 + 16 * lv / 100, c = lampColor(lv);
     const disc = el.querySelector('.lamp'); if (disc && !disc.classList.contains('td-lamp') && disc.dataset.lv !== String(lv)) { if (disc.dataset.lv != null) tween(disc, { width: s, height: s, backgroundColor: c }); disc.dataset.lv = lv; }
     if (disc && disc.classList.contains('td-lamp') && disc.dataset.lv !== String(lv)) { disc.dataset.lv = lv; disc.style.background = c; disc.classList.toggle('off', lv <= 0); }
     el.querySelectorAll('[data-countdown-min]').forEach(m => { m.textContent = `${minutesLeft(endsAt)} min`; });
@@ -533,8 +535,8 @@ function paintRings() {
 }
 setInterval(() => { if (document.querySelector('[data-ring]')) paintRings(); if (typeof paintNow === 'function') paintNow(); }, 15000);
 
-// ---------- night look (H): the light surfaces go warm grey; the dark ones, the text and the lamp ramp stay ----------
-const THEME_COLOR = { day: '#F1F2F3', night: '#ECEAE5' };
+// ---------- night look (H): the surfaces stay (Tenzing has no warm mode); lit rooms glow warm from their discs and the light field rests ----------
+const THEME_COLOR = { day: '#f8f8f8', night: '#f8f8f8' };
 function inNightHours(start, end) {
   const now = new Date(); const cur = now.getHours() * 60 + now.getMinutes();
   const toMin = hm => { const [h, m] = String(hm || '').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
@@ -554,7 +556,7 @@ function applyNightLook() {
   if (on) html.dataset.night = '1'; else delete html.dataset.night;
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = on ? THEME_COLOR.night : THEME_COLOR.day;
   LAMP_OFF_CACHE = null;
-  document.querySelectorAll('.lamp.off').forEach(el => { if (!el.closest('.dark')) { el.style.background = lampOff(); delete el.dataset.fill; } });
+  document.querySelectorAll('.lamp.off').forEach(el => { el.style.background = lampOff(); delete el.dataset.fill; });
 }
 function nightLookRowHTML() {
   const cur = (S.config.settings.night_look) || 'auto';
@@ -596,6 +598,7 @@ document.addEventListener('click', e => {
     case 'mood': applyMood(d.area, d.mood); break;
     case 'mood-save': openMoodSave(d.area); break;
     case 'mood-save-pick': saveMoodScene(d.area, d.mood); break;
+    case 'ld-step': if (LD && LD.set) LD.set(LD.lv + Number(d.d)); break;
     case 'ld-toggle': if (LD && LD.show) { const v = LD.lv > 0 ? 0 : 100; LD.show(v); S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); command({ type: 'level', target: `d:${LD.id}`, level: v }); paintState(); } break;
     case 'ld-timer': { const id = LD && LD.id; sleepTimerSheet(d.t, { back: id ? () => openLightSheet(id) : null }); break; }
     case 'ld-fav': toggleFav(d.t); el.classList.toggle('on', S.config.favorites.includes(d.t)); break;

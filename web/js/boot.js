@@ -115,6 +115,7 @@ document.addEventListener('input', e => {
     // the house dimmer on the Light now bar and the Now view: the number follows the finger, one command per 120ms
     el.dataset.drag = '1';
     const v = Number(el.value); const num = el.parentElement.querySelector('.nb-num'); if (num) num.textContent = v;
+    const big = document.getElementById('now-big'); if (big && el.closest('#nowview')) big.textContent = `${v}%`;
     setHouseLevel(v);
   }
   if (el.dataset.setting === 'double_ms') $('#dv').textContent = `${el.value} ms`;
@@ -157,8 +158,8 @@ document.addEventListener('submit', async e => {
     else toast(err.message, { err: true });
   }
 });
-// The splash: the brand colour with the wordmark, then a 400ms fade into whatever the first page is.
-setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 450); } }, 400);
+// The splash: the brand blue with the wordmark, then a 255ms fade into whatever the first page is.
+setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 300); } }, 255);
 $('#sheet-root .scrim').addEventListener('click', () => sheet.close());
 document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; if (S.view !== 'remotes') S.remote = null; location.hash = S.view; render(); window.scrollTo(0, 0); }));
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1).split('/')[0]; if (v && VIEWS[v] && v !== S.view) { S.view = v; render(); } });

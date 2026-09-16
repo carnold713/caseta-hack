@@ -76,7 +76,7 @@ function picoSVG(d, opts = {}) {
       case 'up': glyph = `<path d="M${cx - 5},${cy + 3} L${cx},${cy - 3} L${cx + 5},${cy + 3}z" fill="${ink}"/>`; break;
       case 'down': glyph = `<path d="M${cx - 5},${cy - 3} L${cx},${cy + 3} L${cx + 5},${cy - 3}z" fill="${ink}"/>`; break;
       case 'fav': glyph = `<circle cx="${cx}" cy="${cy}" r="3.2" fill="${ink}"/>`; break;
-      default: glyph = `<text x="${cx}" y="${cy + 4.5}" text-anchor="middle" font-size="12" font-weight="700" fill="${ink}" font-family="Noto Sans, Inter, system-ui, sans-serif">${esc(s.glyph)}</text>`;
+      default: glyph = `<text x="${cx}" y="${cy + 4.5}" text-anchor="middle" font-size="12" font-weight="700" fill="${ink}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${esc(s.glyph)}</text>`;
     }
     const dot = s.kind === 'diag-up' ? [x + 6, y + h - 6] : s.kind === 'round-mid' ? [x + w - 2, y + 2] : [x + w - 6, y + 6];
     parts.push(`<g class="${cls}" ${attrs}><g class="pk-shape" fill="${f.btn}" stroke="${f.btnEdge}" stroke-width="1">${shape}</g>${glyph}${set.has(s.n) ? `<circle cx="${dot[0]}" cy="${dot[1]}" r="2.6" class="pk-dot"/>` : ''}</g>`);

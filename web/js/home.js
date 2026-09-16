@@ -37,7 +37,7 @@ function setupEmpty() {
 function openSetupSheet() {
   const demo = { device_id: '', name: 'Pico', type: 'Pico3ButtonRaiseLower', area: null };
   sheet.open("Let's connect your home", `<p class="body">A small helper program on a computer or Raspberry Pi in your house links this app to your Lutron bridge. About ten minutes, once.</p>
-    <div class="stage sm">${picoSVG(demo, { width: 84, model: 'PJ2-3BRL' })}</div>
+    <div class="stage sm">${picoSVG(demo, { width: 76, model: 'PJ2-3BRL' })}</div>
     <button class="btn primary lg block" data-act="nav" data-view="settings">Show me how</button><button class="btn ghost block" data-act="sheet-close">Later</button>`);
 }
 function favTile(t) {
@@ -53,7 +53,7 @@ function roomCard(a) {
   const hasToggle = ds.some(d => d.domain !== 'cover');
   const on = targetOn(t);
   return `<div class="room ${open ? 'open' : ''} ${on ? 'on' : ''}" data-tgt="${t}" data-room="${a.id}">
-    <div class="head"><button class="info" data-act="room-open" data-id="${a.id}"><span class="lamp onchip ${on ? '' : 'off'}" data-onchip="${t}" style="width:44px;height:44px;background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name))}</span><div><div class="n">${esc(a.name)}</div><div class="s">${esc(roomSummary(a.id))}</div></div></button>
+    <div class="head"><button class="info" data-act="room-open" data-id="${a.id}"><span class="slot"><span class="lamp onchip ${on ? '' : 'off'}" data-onchip="${t}" style="width:32px;height:32px;background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span></span><div><div class="n">${esc(a.name)}</div><div class="s">${esc(roomSummary(a.id))}</div></div></button>
       <div class="side"><button class="chev" data-act="room-open" data-id="${a.id}">${ICON('chev', 'sm')}</button>${hasToggle ? `<button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}"></button>` : ''}</div></div>
     <div class="body"><div><div class="lights">${moodRowHTML(a.id)}${ds.map(lightRow).join('')}</div></div></div></div>`;
 }

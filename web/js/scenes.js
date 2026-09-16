@@ -2,7 +2,7 @@
 'use strict';
 
 VIEWS.scenes = {
-  top() { return `<div class="t1">Scenes</div><div class="tools"><button class="iconbtn" data-act="scene-new" title="New scene">${ICON('plus')}</button>${statusCircle()}</div>`; },
+  top() { return `<div class="t1">Scenes</div><div class="tools"><button class="iconbtn on" data-act="scene-new" title="New scene">${ICON('plus')}</button>${statusCircle()}</div>`; },
   body() {
     const mine = presets().filter(p => !(p.mood && p.area)); const theirs = lutronScenes();
     const moods = typeof roomMoodsSectionHTML === 'function' ? roomMoodsSectionHTML() : '';

@@ -39,7 +39,7 @@
     const now = performance.now(); if (now - lastPage < 250 && !opts.force) return; lastPage = now;
     const launch = !!opts.launch;
     g.killTweensOf(v);
-    g.fromTo(v, { opacity: 0, y: launch ? 16 : 10 }, { opacity: 1, y: 0, duration: launch ? 0.42 : 0.26, ease: 'power2.out', clearProps: 'opacity,transform', overwrite: true });
+    g.fromTo(v, { opacity: 0, y: launch ? 16 : 10 }, { opacity: 1, y: 0, duration: launch ? 0.42 : 0.255, ease: 'power2.out', clearProps: 'opacity,transform', overwrite: true });
     if (launch) {
       const top = document.getElementById('top');
       if (top && top.children.length) g.fromTo(top.children, { opacity: 0, y: -6 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', clearProps: 'opacity,transform' });
@@ -62,8 +62,8 @@
     const content = [sh, ...(sb ? Array.from(sb.children).slice(0, 12) : [])].filter(Boolean);
     const tl = g.timeline({ onComplete: () => { root.classList.remove('m-sheet-gsap'); g.set([sheet, scrim].filter(Boolean), { clearProps: 'transform,opacity' }); } });
     if (scrim) tl.fromTo(scrim, { opacity: 0 }, { opacity: 1, duration: 0.24, ease: 'power1.out' }, 0);
-    tl.fromTo(sheet, { y: '100%' }, { y: '0%', duration: 0.36, ease: 'power3.out' }, 0);
-    if (content.length) tl.fromTo(content, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.28, ease: 'power2.out', stagger: 0.025, clearProps: 'opacity,transform' }, 0.1);
+    tl.fromTo(sheet, { y: '100%' }, { y: '0%', duration: 0.3, ease: 'power3.out' }, 0);
+    if (content.length) tl.fromTo(content, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.255, ease: 'power2.out', stagger: 0.025, clearProps: 'opacity,transform' }, 0.08);
   }
   function sheetOut(rootEl) {
     const g = G(); const p = sheetParts(rootEl);
@@ -73,8 +73,8 @@
     root.classList.add('m-sheet-gsap');
     return new Promise(resolve => {
       const tl = g.timeline({ onComplete: () => { root.classList.remove('m-sheet-gsap'); g.set([sheet, scrim].filter(Boolean), { clearProps: 'transform,opacity' }); resolve(); } });
-      tl.to(sheet, { y: '100%', duration: 0.24, ease: 'power2.in' }, 0);
-      if (scrim) tl.to(scrim, { opacity: 0, duration: 0.22, ease: 'power1.in' }, 0.02);
+      tl.to(sheet, { y: '100%', duration: 0.255, ease: 'power2.in' }, 0);
+      if (scrim) tl.to(scrim, { opacity: 0, duration: 0.24, ease: 'power1.in' }, 0.02);
     });
   }
 
@@ -86,7 +86,7 @@
     const g = G();
     if (!g) { if (!reduced()) restart(e, 'm-press'); return; }
     e.classList.add('m-pressing');
-    g.fromTo(e, { scale: opts.scale != null ? opts.scale : 0.94 }, { scale: 1, duration: 0.34, ease: 'power2.out', overwrite: true, clearProps: 'transform', onComplete: () => e.classList.remove('m-pressing') });
+    g.fromTo(e, { scale: opts.scale != null ? opts.scale : 0.94 }, { scale: 1, duration: 0.15, ease: 'power2.out', overwrite: true, clearProps: 'transform', onComplete: () => e.classList.remove('m-pressing') });
     if (opts.flash) ring(e);
   }
   // A Pico button on the illustration: the whole key sinks and a warm flash blooms behind the glyph.
@@ -110,7 +110,7 @@
       if (g) g.fromTo(c, { attr: { r: r * 0.35 }, opacity: 1 }, { attr: { r: r * 1.1 }, opacity: 0, duration: 0.55, ease: 'power2.out', onComplete: done });
       else { c.classList.add('m-flash-css'); setTimeout(done, 600); }
     }
-    if (g) g.fromTo(key, { scale: opts.scale != null ? opts.scale : 0.93 }, { scale: 1, duration: 0.36, ease: 'power2.out', transformOrigin: '50% 50%', overwrite: true, clearProps: 'transform' });
+    if (g) g.fromTo(key, { scale: opts.scale != null ? opts.scale : 0.93 }, { scale: 1, duration: 0.255, ease: 'power2.out', transformOrigin: '50% 50%', overwrite: true, clearProps: 'transform' });
   }
   // A warm ring that expands out of a round button and fades: a light just came on here.
   function ring(host) {
@@ -167,10 +167,10 @@
     const act = e.classList.contains('act') ? e : isRoom ? null : e.querySelector('.act');
     const chip = isRoom ? e.querySelector('.onchip') : null;
     if (on) {
-      if (act) { ring(act); g.fromTo(act, { scale: 0.88 }, { scale: 1, duration: 0.42, ease: 'power2.out', overwrite: true, clearProps: 'transform' }); }
-      if (chip) g.fromTo(chip, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.42, ease: 'power3.out', overwrite: true, clearProps: 'transform,opacity' });
+      if (act) { ring(act); g.fromTo(act, { scale: 0.88 }, { scale: 1, duration: 0.255, ease: 'power2.out', overwrite: true, clearProps: 'transform' }); }
+      if (chip) g.fromTo(chip, { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.255, ease: 'power3.out', overwrite: true, clearProps: 'transform,opacity' });
     } else if (act) {
-      g.fromTo(act, { scale: 0.96 }, { scale: 1, duration: 0.3, ease: 'power2.out', overwrite: true, clearProps: 'transform' });
+      g.fromTo(act, { scale: 0.96 }, { scale: 1, duration: 0.255, ease: 'power2.out', overwrite: true, clearProps: 'transform' });
     }
   }
 
@@ -194,7 +194,7 @@
   function expand(roomEl, open) {
     const g = G(); const r = el(roomEl); if (!g || !r || open === false) return;
     const rows = r.querySelectorAll('.light');
-    if (rows.length) g.fromTo(rows, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.24, ease: 'power2.out', stagger: 0.03, delay: 0.06, clearProps: 'opacity,transform' });
+    if (rows.length) g.fromTo(rows, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.255, ease: 'power2.out', stagger: 0.03, delay: 0.06, clearProps: 'opacity,transform' });
   }
 
   // ---------- gesture detected on a remote ----------
@@ -207,23 +207,23 @@
     if (ic) g.fromTo(ic, { scale: 1.12 }, { scale: 1, duration: 0.5, ease: 'power2.out', overwrite: true, clearProps: 'transform' });
   }
 
-  // ---------- a headline changed: fade out 120ms, swap, fade in 200ms with a 4px rise ----------
+  // ---------- a headline changed: fade out 150ms, swap, fade in 255ms with a 4px rise ----------
   function textSwap(target, html) {
     const e = el(target); if (!e) return;
     if (e.innerHTML === html) return;
     const g = G(); if (!g) { e.innerHTML = html; return; }
     g.killTweensOf(e);
-    g.to(e, { opacity: 0, duration: 0.12, ease: 'power1.in', overwrite: true, onComplete: () => {
+    g.to(e, { opacity: 0, duration: 0.15, ease: 'power1.in', overwrite: true, onComplete: () => {
       e.innerHTML = html;
-      g.fromTo(e, { opacity: 0, y: 4 }, { opacity: 1, y: 0, duration: 0.2, ease: 'power2.out', clearProps: 'opacity,transform' });
+      g.fromTo(e, { opacity: 0, y: 4 }, { opacity: 1, y: 0, duration: 0.255, ease: 'power2.out', clearProps: 'opacity,transform' });
     } });
   }
 
-  // ---------- the Light now bar appears: a 16px rise over 360ms, 120ms after the page ----------
+  // ---------- the Light now bar appears: a 16px rise over 300ms, 120ms after the page ----------
   function barIn(target) {
     const e = el(target); const g = G(); if (!g || !e) return;
     g.killTweensOf(e);
-    g.fromTo(e, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.36, delay: 0.12, ease: 'power2.out', clearProps: 'opacity,transform', overwrite: true });
+    g.fromTo(e, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.3, delay: 0.12, ease: 'power2.out', clearProps: 'opacity,transform', overwrite: true });
   }
 
   window.Motion = {

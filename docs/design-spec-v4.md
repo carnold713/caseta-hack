@@ -353,3 +353,21 @@ Everything in `motion-spec.md` stands, retimed to Tenzing's curves: `--ease` bec
 - **Wells in a 16px gutter.** A 40px well under a light row is heavier than v3's 4px track; that is the Tenzing dimmer and is intentional. If a room has more than six lights, collapse the wells to the 8px progress-bar geometry until the row is tapped (in family: the read-only progress bar).
 - **The dark option.** Keeping `sheet.open(..., { dark: true })` callable means the v3 call sites need no edits; it is a no-op.
 - **Blue on warm.** Blue rings and blue fills sit next to warm discs everywhere. That contrast is the point: warm is the light, blue is the control.
+
+### Build notes (the Tenzing skin as shipped)
+
+What the build did where the spec could not be followed to the letter, and the small decisions it had to make.
+
+- **The horizontal well's grip.** The native range input's thumb cannot be drawn 8px inside the fill's edge in every browser, so the thumb is kept only for hit testing and keyboard focus (4px wide, transparent) and the grip is painted as a second background layer on the track (WebKit) and on the progress segment (Firefox), 4x20 in 40% white, positioned at `--p` minus 12px. It is invisible over the white part of the well, so an empty well shows no grip, which is the documented look. `slide.js` is untouched.
+- **The vertical well's readout.** The drag tooltip `.vtip` sits centred above the fill's top edge rather than beside the well, so it never leaves the 112px column on a 360px phone. Two 40px chevron circles under the well step the level by 10% (`data-act="ld-step"`, the one new act, wired in `light.js`).
+- **The nested page header.** `nestedTop(backAct, title, sub)` now takes the title and the sub line: the Back link on line one, the `.t2` with its `.d` and the tools (the status circle) on line two, all inside the sticky `#top`. The remote page's `.remote-hero` keeps the stage, the hint and the ghost button, and no longer repeats the name.
+- **The Now view** opens with `full: true` (100dvh, radius 12 at the top) as section 7 says, replacing v3's 86dvh card; the height lock in `sheet.open` still holds the panels to one height. The `.display` readout above the house well is `#now-big`, painted by `paintNow()` and by the house slider's input handler in `boot.js`.
+- **The dark option** is ignored by `sheet.open`, and `lampColor(level, dark)` ignores `dark` too: an off disc is `--lamp-off` (`--fill-2`) on every surface. Every `lampHTML(..., true)` call site was switched to `false` anyway.
+- **The loading card.** The old `.dots` markup (used by the loading page, the add-device tip and the Hue tip) is styled as the Tenzing indeterminate progress bar (8px, radius 4, `--fill-2` track, a blue segment sweeping on the 600ms curve), so no JS changed there; the "Connected to your home" moment uses `svg.i.tick` styled as the 20px green success circle.
+- **The recipe list's check** is placed at the left with absolute positioning inside `.item.recipe` (padding-left 56px), and the target picker's checkboxes move to the left with `order: -1`, so the markup the tests rely on is unchanged.
+- **The connector row in Settings** puts the "Update available" tag under the version, inside the row's text column, with the blue "Update" small button at the right; side by side they did not fit at 360px.
+- **The Advanced number input** is an outlined 120px field (radius 4, 1px `--line-input`) rather than the full NumberInput with minus and plus icons: that would be a new control with new acts, and the spec's own rule for inputs in list rows already covers it.
+- **The night look** is CSS only: `:root[data-night="1"]` switches `.room.on` to `--fill-1` with the hairline border and lowers the light field to 60% opacity. `theme-color` is `#f8f8f8` in both modes.
+- **The service worker** was already at `v20`, so it is bumped to `v21` rather than the `v11` the spec names.
+- **The Pico artwork's focus ring.** Chrome on Android draws an orange focus ring around a tapped SVG key; it is replaced by the spec's 2px blue stroke on `:focus-visible`.
+- **The mood chip's disc** is 32px as written, so `moodRowHTML` passes 32 to `lampHTML` instead of 40.

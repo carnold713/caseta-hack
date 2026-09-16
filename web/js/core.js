@@ -318,13 +318,13 @@ function statusLine() {
 // ---------- sheet ----------
 const sheet = {
   el: null,
-  // opts: sub, back, onBack, dark (the Now view and the light detail), full (100dvh). `question` is accepted and ignored: every header is the big kind.
+  // opts: sub, back, onBack, full (100dvh), cls. `dark` and `question` are accepted and ignored: every sheet is white and every header is the dialog kind.
   open(title, body, opts = {}) {
     const root = $('#sheet-root');
     const sh = root.querySelector('.sh');
     // a sheet re-opened while already open (a step in a flow) keeps its height; a fresh one sizes to its content
     if (root.classList.contains('in')) sheet.lockHeight(); else root.querySelector('.sheet').style.height = '';
-    root.querySelector('.sheet').className = 'sheet' + (opts.dark ? ' dark' : '') + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '');
+    root.querySelector('.sheet').className = 'sheet' + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '');
     sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
     sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
     root.querySelector('.sb').innerHTML = body;
@@ -396,24 +396,24 @@ function statusCircle() {
   return `<button class="iconbtn status ${S.agent.online ? 'ok' : 'off'}" data-act="conn" title="${S.agent.online ? 'Connected' : 'Not connected'}">${ICON('link')}<span class="dot"></span></button>`;
 }
 const connPill = statusCircle;
-// The nested header: a back circle, the wordmark, the status circle.
-function nestedTop(backAct) {
-  return `<button class="iconbtn sm" data-act="${backAct}" title="Back">${ICON('back')}</button><span class="wordmark">Pico Hack</span>${statusCircle()}`;
+// The nested header (the Tenzing page header): a Back link on the first line, then the title (with an optional sub line) and the tools.
+function nestedTop(backAct, title = '', sub = '') {
+  return `<div class="nested-hd"><div class="line"><button class="backlink" data-act="${backAct}" title="Back">${ICON('back')}Back</button></div><div class="line"><div><div class="t2">${title}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div><div class="tools">${statusCircle()}</div></div></div>`;
 }
 function loginHTML() {
-  return `<div class="login"><div class="t1">Welcome</div><p>Enter your home's password to get started.</p>
+  return `<div class="login"><div class="card dialog"><div class="t2">Welcome</div><p class="body">Enter your home's password to get started.</p>
   <form data-form="login"><label class="field" id="pwfield"><span>Password</span><input class="input" type="password" id="pw" autofocus autocomplete="current-password"></label>
-  <div class="foot"><button class="btn primary lg block" type="submit" disabled>Continue</button><button class="btn ghost block" type="button" data-act="pw-help">Where do I find it?</button></div></form></div>`;
+  <div class="foot"><button class="btn primary lg block" type="submit" disabled>Continue</button><button class="btn ghost block" type="button" data-act="pw-help">Where do I find it?</button></div></form></div></div>`;
 }
 function loadingHTML(connected) {
-  return `<div class="loading">${connected ? `${ICON('check', 'xl tick')}<div class="t">Connected to your home</div>` : `<div class="t">Getting your home ready...</div><div class="dots"><i></i><i></i><i></i><i></i></div>`}</div>`;
+  return `<div class="loading"><div class="card dialog">${connected ? `<div class="ok">${ICON('check', 'tick')}<div class="t">Connected to your home</div></div>` : `<div class="t">Getting your home ready...</div><div class="dots"><i></i><i></i><i></i><i></i></div>`}</div></div>`;
 }
 
-// ---------- the Light now bar (docs/design-spec-v3.md section 7) ----------
+// ---------- the Light now bar (docs/design-spec-v4.md section 7) ----------
 function nowBarHTML() {
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const name = (S.config && S.config.settings.home_name) || 'Home';
-  return `<div class="nb-row"><button class="nb-main" data-act="now-open" aria-label="Open the Now view"><div class="nb-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', true) : ICON('bulb')}</div><div class="nb-text"><span class="cap">${esc(name)}</span><div class="t" id="nb-head">${lightNowHeadline(rooms)}</div></div></button><button class="nb-off m-hold" data-act="alloff" title="All off. Hold for shades and fans">${ICON('power', 'sm')}</button></div>
+  return `<div class="nb-row"><button class="nb-main" data-act="now-open" aria-label="Open the Now view"><div class="nb-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb')}</div><div class="nb-text"><span class="cap">${esc(name)}</span><div class="t" id="nb-head">${lightNowHeadline(rooms)}</div></div></button><button class="nb-off m-hold" data-act="alloff" title="All off. Hold for shades and fans">${ICON('power', 'sm')}</button></div>
   <div class="nb-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv : 'Off'}</span></div>`;
 }
 function paintNowBar() {
@@ -423,7 +423,7 @@ function paintNowBar() {
   const head = nb.querySelector('#nb-head'); const h = lightNowHeadline(rooms);
   if (head && head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
   const thumb = nb.querySelector('.nb-thumb'); const k = on.length ? String(lv) : 'off';
-  if (thumb && thumb.dataset.k !== k) { thumb.dataset.k = k; thumb.innerHTML = on.length ? lampHTML(lv, 28, '', '', true) : ICON('bulb'); }
+  if (thumb && thumb.dataset.k !== k) { thumb.dataset.k = k; thumb.innerHTML = on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb'); }
   // the dimmer stays: with nothing on, sliding it is how the house comes on
   $('#app').classList.remove('baroff');
   if (sl) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); }

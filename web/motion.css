@@ -1,7 +1,7 @@
 /* Pico Hack motion layer. Pure-CSS moments from docs/motion-spec.md.
    Every selector here is prefixed m- and this file is loaded after styles.css.
    GSAP-driven moments live in js/motion.js; the light field in js/lightfield.js. */
-:root { --m-ease: cubic-bezier(.2,.8,.2,1); --m-warm: #FFD9A0; --m-warm-deep: #FFB547; --m-warm-tint: #FCE3C4; }
+:root { --m-ease: cubic-bezier(.4,.12,.3,1); --m-ease-slow: cubic-bezier(.3,0,0,1); --m-warm: #FFD9A0; --m-warm-deep: #FFB547; --m-warm-tint: #FCE3C4; }
 
 /* ---------- light field placement (Home) ----------
    <div class="m-hero"><div class="m-lightfield" id="lightfield"></div> …Light now strip, scene tiles…</div>
@@ -15,7 +15,7 @@
 /* While GSAP drives a press the element's own CSS transition must not fight it. */
 .m-pressing { transition: none !important; }
 @keyframes m-press { from { transform: scale(.94); } to { transform: scale(1); } }
-.m-press { animation: m-press .32s var(--m-ease); }
+.m-press { animation: m-press .15s var(--m-ease); }
 /* SVG flash behind a Pico glyph (used when GSAP is missing; GSAP tweens r and opacity itself). */
 @keyframes m-flash { from { transform: scale(.4); opacity: .95; } to { transform: scale(1.1); opacity: 0; } }
 .m-flash { pointer-events: none; transform-box: fill-box; transform-origin: center; }
@@ -37,9 +37,10 @@
 .m-veil { position: fixed; left: 0; right: 0; top: -60vh; height: 60vh; z-index: 19; pointer-events: none; mix-blend-mode: multiply;
   background: linear-gradient(180deg, rgba(255,226,190,0) 0%, rgba(255,226,190,.7) 30%, rgba(255,226,190,.7) 60%, rgba(255,226,190,0) 100%); }
 
-/* ---------- All off hold: the round button on the Light now bar warms from left to right while held ---------- */
+/* ---------- All off hold: the round button on the Light now bar sweeps the pressed blue from left to right while held
+   (the warm sweep stays in the light field) ---------- */
 @keyframes m-hold { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
-.m-hold { background-image: linear-gradient(90deg, var(--m-warm-deep), var(--m-warm-deep)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
+.m-hold { background-image: linear-gradient(90deg, var(--blue-pressed), var(--blue-pressed)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .m-hold.holding { animation: m-hold 1s linear forwards; }
 
 /* ---------- gesture detected ---------- */
@@ -48,16 +49,16 @@
 .m-pulse { animation: m-pulse-bg .9s var(--m-ease) forwards; }
 .m-pulse .ic { animation: m-pulse-ic .5s var(--m-ease); }
 
-/* ---------- sleep timer: a hairline that drains for the rest of the countdown ----------
+/* ---------- sleep timer: the Medium progress bar (8px, blue) drains along the card's bottom edge for the rest of the countdown ----------
    <div class="timerbar m-timer" style="--m-total:1800s;--m-elapsed:420s">…<div class="m-timer-line"></div></div> */
 @keyframes m-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .m-timer { position: relative; overflow: hidden; }
-.m-timer-line { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--text); transform-origin: left center; animation: m-timer var(--m-total, 60s) linear forwards; animation-delay: calc(-1 * var(--m-elapsed, 0s)); }
+.m-timer-line { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; border-radius: 0 4px 4px 0; background: var(--blue); transform-origin: left center; animation: m-timer var(--m-total, 60s) linear forwards; animation-delay: calc(-1 * var(--m-elapsed, 0s)); }
 @keyframes m-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .m-timer .i { animation: m-breathe 2.6s ease-in-out infinite; }
 
 /* ---------- connection dot ---------- */
-@keyframes m-dot-hello { from { box-shadow: 0 0 0 0 rgba(46,139,87,.55); } to { box-shadow: 0 0 0 10px rgba(46,139,87,0); } }
+@keyframes m-dot-hello { from { box-shadow: 0 0 0 0 rgba(58,121,52,.55); } to { box-shadow: 0 0 0 10px rgba(58,121,52,0); } }
 @keyframes m-dot-lost { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .status .dot.m-dot-hello { animation: m-dot-hello .9s var(--m-ease) 1; }
 .status .dot.m-dot-lost { animation: m-dot-lost 2.2s ease-in-out infinite; }
@@ -65,7 +66,7 @@
 /* ---------- sheet: GSAP takes over the transform and scrim while this class is on the root ---------- */
 .m-sheet-gsap .sheet, .m-sheet-gsap .scrim { transition: none !important; }
 
-/* ---------- toast: styles.css already eases it (opacity 160ms, rise 200ms) ---------- */
+/* ---------- toast: styles.css already eases it (opacity 150ms, rise 255ms) ---------- */
 
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
