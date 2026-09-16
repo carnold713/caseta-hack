@@ -21,14 +21,14 @@ function settingsGlance() {
   const s = S.config.settings; const info = S.agent.info || {};
   const everConnected = devices().length > 0;
   return `
-    <div class="spacer"></div>${connectionTipHTML()}
+    ${connectionTipHTML()}
     ${everConnected ? '' : `<button class="tip" data-act="setup-open" style="margin-top:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Let's connect your home</div><div class="d">About ten minutes, once.</div></div><span class="go">${ICON('chev')}</span></button>`}
     <div class="h2">Your home</div>
     <div class="card pad0 list">
       ${valueRow('Home name', esc(s.home_name || 'Home'), 'home-name')}
-      <button class="item" data-act="ad-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a device</div><div class="d">A new dimmer, switch, remote or shade, without the Lutron app</div></div></button>
+      <button class="item" data-act="ad-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a device</div><div class="d">Without the Lutron app</div></div></button>
       ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div></button>`; })()}
-      <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div><div class="d">Added or renamed something in the Lutron app? Look again.</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
+      <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
     </div>
     <div class="h2">Preferences</div>
     <div class="card pad0 list">
@@ -36,9 +36,9 @@ function settingsGlance() {
     </div>
     <div class="h2">This app</div>
     <div class="card pad0 list">
-      <button class="item" data-act="install-help"><div class="grow"><div class="t">Add to your home screen</div><div class="d">Opens full-screen like a real app</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
+      <button class="item" data-act="install-help"><div class="grow"><div class="t">Add to your home screen</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
       <button class="item" data-act="activity"><div class="grow"><div class="t">Recent activity</div><div class="d">What was pressed, and what happened</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
-      <button class="item" data-act="ideas"><div class="grow"><div class="t">Ideas for your home</div><div class="d">Things worth setting up, one at a time</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
+      <button class="item" data-act="ideas"><div class="grow"><div class="t">Ideas for your home</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
     </div>
     <div class="spacer"></div>
     ${moreRow('Connector, timing, default brightness, light sets, back up', 'settings-more', 'More settings')}
@@ -54,7 +54,7 @@ function settingsMore() {
     <div class="card pad0 list">
       <div class="item"><div class="grow"><div class="t">Connector ${esc(info.version || '?')}${info.commit ? ` <span class="faint small">(${esc(info.commit)})</span>` : ''}</div><div class="d">${info.update_available ? `${esc(info.latest)} is available` : 'Up to date'}${(info.bridge || {}).host ? ` · bridge at ${esc(info.bridge.host)}` : ''}</div></div>${info.update_available ? `<button class="btn sm primary" data-act="update-connector">Update</button>` : ''}</div>
       <label class="item"><div class="grow"><div class="t">Update automatically</div><div class="d">Whenever a new version is out, the connector updates itself.</div></div><button class="sw ${s.auto_update ? 'on' : ''}" data-act="auto-update"></button></label>
-      <div class="item" style="flex-wrap:wrap"><details class="more grow" style="margin:0"><summary><div><div class="t">How your home connects</div><div class="d">The helper program, and the line that installs it</div></div>${ICON('chev', 'sm')}</summary>${howToHTML()}</details></div>
+      <div class="item disc" style="flex-wrap:wrap"><button class="dsum grow" data-act="settings-how" aria-expanded="${S.settingsHow ? 'true' : 'false'}"><div><div class="t">How your home connects</div><div class="d">The helper program, and the line that installs it</div></div>${ICON('chev', 'sm')}</button><div class="dwrap ${S.settingsHow ? 'open' : ''}"><div>${howToHTML()}</div></div></div>
     </div>
     <div class="h2">Timing</div>
     <div class="card">

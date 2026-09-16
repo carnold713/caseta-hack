@@ -8,6 +8,8 @@ document.addEventListener('click', async e => {
     case 'nav': e.preventDefault(); S.view = d.view; location.hash = S.view; if (sheet.isOpen()) sheet.close(); render(); window.scrollTo(0, 0); break;
     case 'conn': S.view = 'settings'; S.settingsMore = false; location.hash = 'settings'; render(); break;
     case 'settings-more': S.settingsMore = true; render(); window.scrollTo(0, 0); break;
+    // the disclosure eases open in place, so the cards under it are not thrown 288px down in one frame
+    case 'settings-how': { S.settingsHow = !S.settingsHow; const w = el.parentElement.querySelector('.dwrap'); if (w) w.classList.toggle('open', S.settingsHow); el.setAttribute('aria-expanded', S.settingsHow ? 'true' : 'false'); break; }
     case 'settings-back': S.settingsMore = false; render(); window.scrollTo(0, 0); break;
     case 'toggle': toggleTarget(d.t); break;
     case 'power-on': setPowerOn(d.v); break;
@@ -60,7 +62,8 @@ document.addEventListener('click', async e => {
     case 'toast-undo': { const t = $('#toast'); t.className = ''; if (t._undo) t._undo(); break; }
     case 'toast-action': { const t = $('#toast'); t.className = ''; if (t._action) t._action(); break; }
     case 'scene-new': newScene(); break;
-    case 'scene-edit': openSceneEditor(d.id); break;
+    case 'scene-edit': openSceneEditor(d.id, false, { back: typeof backTo === 'function' ? backTo(d.back, d.area) : null }); break;
+    case 'scene-lutron': sceneLutronSheet(d.id); break;
     case 'scene-capture': sceneCapture(); break;
     case 'scene-delete': sceneDelete(d.id); break;
     case 'scene-sw': { const p = presets().find(x => x.id === S.sceneEdit); const on = !(levelOf(p.levels[d.id]) > 0); sceneLevel(d.id, on ? 100 : 0); el.classList.toggle('on', on); break; }
@@ -113,7 +116,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
-  if (el.id === 'pw') { const b = document.querySelector('[data-form="login"] .btn.primary'); if (b) b.disabled = !el.value; const f = $('#pwfield'); if (f && f.classList.contains('err')) { f.classList.remove('err'); f.querySelector('span').textContent = 'Password'; } return; }
+  if (el.id === 'pw') { const b = document.querySelector('[data-form="login"] .btn.primary'); if (b) b.disabled = !el.value; const f = $('#pwfield'); if (f && f.classList.contains('err')) { f.classList.remove('err'); const sub = f.querySelector('.sub'); if (sub) sub.remove(); } return; }
   if (el.type !== 'range') return;
   el.style.setProperty('--p', `${el.value}%`);
   // the row's own level is the readout (no tooltip): a scene row's second line follows the finger too
@@ -161,6 +164,7 @@ document.addEventListener('keydown', e => {
 // Long-press a lit lamp in the row for a sleep timer.
 document.addEventListener('pointerdown', e => {
   const el = e.target.closest('[data-long="open-light"]'); if (!el) return;
+  if (e.target.closest('[data-act]') !== el) return;   // a control sitting on the disc (the rainbow button) is not a hold on the lamp
   el._lt = setTimeout(() => { el._long = true; sleepTimerSheet(el.dataset.t); }, 550);
 });
 document.addEventListener('pointerup', e => { const el = e.target.closest('[data-long]'); if (el) clearTimeout(el._lt); });
@@ -176,7 +180,8 @@ document.addEventListener('submit', async e => {
     S.token = b.token; localStorage.setItem('token', b.token); connectWS(); render();
   } catch (err) {
     const f = $('#pwfield');
-    if (/not the password/.test(err.message) && f) { f.classList.add('err'); f.querySelector('span').textContent = err.message; }
+    // the label stays "Password"; the message goes under the field in red (the .field.err .sub rule)
+    if (/not the password/.test(err.message) && f) { f.classList.add('err'); let sub = f.querySelector('.sub'); if (!sub) { sub = document.createElement('span'); sub.className = 'sub'; f.appendChild(sub); } sub.textContent = err.message; f.setAttribute('role', 'alert'); }
     else toast(err.message, { err: true });
   }
 });

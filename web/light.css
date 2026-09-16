@@ -26,7 +26,7 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .ln-row { display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 6px 16px 6px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
 .ln-row::-webkit-scrollbar { display: none; }
 .ln-row.empty { display: none; }
-.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 88px; flex: none; padding: 0; border: 0; background: none; }
+.ln-lamp { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; width: 88px; height: 96px; flex: none; padding: 0; border: 0; background: none; }
 .ln-lamp .lring { width: 56px; height: 56px; }
 .ln-lamp .lamp { width: 44px; height: 44px; transition: outline-color .2s var(--ease), transform .15s var(--ease); outline: 2px solid transparent; outline-offset: 3px; }
 .ln-lamp.on .lamp { width: 56px; height: 56px; outline-color: var(--blue); }
@@ -34,13 +34,19 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .ln-lamp:active .lamp { transform: scale(.94); }
 .ln-lamp:not(.on) .ln-name { color: var(--text-2); }
 .ln-lamp:not(.on) .lamp svg { opacity: .55; }
-.ln-name { font-size: 14px; line-height: 16px; font-weight: 500; color: var(--text); white-space: nowrap; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
-.ln-lamp .badge { top: -2px; right: 14px; width: 20px; height: 20px; padding: 3px; }
+.ln-name { font-size: 14px; line-height: 16px; font-weight: 500; color: var(--text); text-align: center; max-width: 88px; overflow: hidden; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* a running sleep timer is information, not an alert: the clock badge is blue, not the error red */
+.ln-lamp .badge { top: -2px; right: 14px; width: 20px; height: 20px; padding: 3px; background: var(--blue); }
 .ln-lamp .badge svg.i { width: 14px; height: 14px; }
+/* the rainbow way in on the hero row: a 24px chip tucked into the disc's lower right, with a 44px target */
+.ln-lamp .ln-rainbow { position: absolute; right: -1px; bottom: 1px; width: 24px; height: 24px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg); background: radial-gradient(circle, var(--surface) 6px, transparent 6.5px), var(--rainbow); }
+.ln-lamp .ln-rainbow.ct { background: radial-gradient(circle, var(--surface) 6px, transparent 6.5px), var(--warmcool); }
+.ln-lamp .ln-rainbow::after { content: ""; position: absolute; inset: -10px; border-radius: 50%; }
+.ln-lamp:not(.on) .ln-rainbow { opacity: .8; }
 .ln-hint { font-size: 12px; line-height: 16px; color: var(--text-2); margin: 0 0 4px; }
 
 /* ---------- light rows: the disc in a 40px ring, the whole row opens the light's page ---------- */
-.light .row .lkind { width: 32px; height: 32px; margin: 4px; border-radius: 50%; display: grid; place-items: center; color: #262626; flex: none; outline: 1px solid var(--blue); outline-offset: 3px; transition: outline-color .255s var(--ease); }
+.light .row .lkind { width: 32px; height: 32px; margin: 4px; border-radius: 50%; display: grid; place-items: center; color: #262626; flex: none; outline: 1px solid var(--line-3); outline-offset: 3px; transition: outline-color .255s var(--ease); }
 .light .row .lkind svg.i { width: 20px; height: 20px; }
 .light .row .lkind.off { color: var(--text-2); outline-color: var(--line); }
 .light .row .lring .lkind { outline-color: transparent; }
@@ -84,9 +90,10 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .rbtn { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 72px; color: var(--text); font-size: 12px; line-height: 16px; text-align: center; }
 .rbtn .c { width: 56px; height: 56px; border-radius: 50%; background: var(--fill-2); color: var(--text); display: grid; place-items: center; position: relative; transition: background .15s var(--ease), box-shadow .15s var(--ease); }
 .rbtn .c svg.i { width: 28px; height: 28px; }
-.rbtn:active .c { background: var(--fill-3); box-shadow: var(--shadow-pressed); }
+.rbtn:active .c { background-color: var(--fill-3); box-shadow: var(--shadow-pressed); }
 .rbtn.on .c { background: var(--blue); color: var(--on-blue); }
-.rbtn.on:active .c { background: var(--blue-pressed); box-shadow: none; }
+/* background-color, not the shorthand: the shorthand resets background-image and would wipe .m-hold's sweep. */
+.rbtn.on:active .c { background-color: var(--blue-pressed); box-shadow: none; }
 .rbtn.on .c svg { fill: currentColor; }
 .rbtn.on.power .c svg { fill: none; }
 .rbtn:disabled { pointer-events: none; color: var(--text-disabled); }
@@ -105,8 +112,12 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .vsteps .up svg { transform: rotate(-90deg); }
 
 /* ---------- the Now view: a white flyout card that stops short of the top, one height for all its panels ---------- */
-.sheet.now { height: 86dvh; max-height: 92dvh; }
-.now-art { width: 240px; height: 240px; border-radius: var(--r-s); background: var(--surface-2); box-shadow: var(--shadow-1); margin: 4px auto 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 12px; padding: 32px; }
+/* the Now view stops short of the top; its panels size to their own content between that floor and the cap */
+.sheet.now { min-height: 40dvh; max-height: 86dvh; }
+/* a 192px square inside the face: a 3 x 2 grid of 56px cells with 12px gaps, the discs sized by level */
+.now-art { width: 240px; height: 240px; border-radius: var(--r-s); background: var(--surface-2); box-shadow: var(--shadow-1); margin: 4px auto 20px; display: grid; grid-template-columns: repeat(3, 56px); grid-auto-rows: 56px; gap: 12px; justify-content: center; align-content: center; place-items: center; padding: 24px; }
+.now-art.c1 { grid-template-columns: 96px; grid-auto-rows: 96px; }
+.now-art.c2 { grid-template-columns: repeat(2, 56px); }
 .now-art .lamp { transition: none; }
 .now-head { text-align: center; }
 .now-sub { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
@@ -148,7 +159,9 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .tring .track { stroke: var(--fill-2); }
 .tring .prog { stroke: var(--blue); stroke-linecap: round; }
 .td-ring .track, .td-ring .prog { stroke-width: 12; }
-.td-knob { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-1), 0 0 0 1px var(--line-2); left: 120px; top: 6px; cursor: grab; }
+/* the knob is the one thing on the dial you take hold of, so it sits above the track on the Light/2 shadow */
+.td-knob { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-2); left: 120px; top: 6px; cursor: grab; }
+.td-knob:active { box-shadow: var(--shadow-3); }
 .td-centre { position: absolute; inset: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; pointer-events: none; }
 .td-cap { font-size: 12px; line-height: 16px; color: var(--text-2); }
 .td-min { font-size: 40px; line-height: 48px; font-weight: 400; }
@@ -173,7 +186,9 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 
 /* ---------- the Now view's panels and the timer ring ---------- */
 .sheet.now .sh { padding-bottom: 0; }
-.now { position: relative; }
+/* the Now view's own body, not the sheet: `.now` is also the sheet's class, and a `position: relative` there
+   un-anchored the card from the bottom of the screen (it sat at the top with the scrim showing under it). */
+#nowview { position: relative; }
 .rbtn .c { position: relative; }
 .rbtn .rring { position: absolute; inset: -4px; width: 64px; height: 64px; }
 .rbtn .rring .track { stroke: var(--line-2); stroke-width: 3; }
@@ -200,7 +215,9 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .slider.grad::-moz-range-progress { background: transparent; }
 .slider.grad::-moz-range-thumb { width: 8px; height: 28px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3); }
 /* swatches: round chips of the colour itself; the blue ring marks the one the lamp is showing */
-.swatches { padding-top: 4px; padding-bottom: 6px; }
+/* the swatch row is a .chips.scroll, so it already fades at the phone's edge; in a 640px dialog the row is shorter
+   than the surface, so the mask is set from the row's own end instead of the surface's. */
+.swatches { padding-top: 4px; padding-bottom: 6px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
 .swatch { flex: none; width: 40px; height: 40px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); outline: 2px solid transparent; outline-offset: 2px; transition: outline-color .255s var(--ease); }
 .swatch.sel { outline-color: var(--text); }
 .swatch:focus-visible { outline-color: var(--blue); }

@@ -20,9 +20,9 @@ const PICO_MODELS = {
 // Finishes: the body and button tones plus the highlight and shade each gradient runs between. Glyphs are
 // printed in a soft grey on the light finishes, as on the real remote.
 const PICO_FINISHES = {
-  white: { body: '#f3f3f1', bodyHi: '#fbfbfa', bodyLo: '#e3e3e0', edge: '#cfcfcb', btn: '#fdfdfc', btnHi: '#ffffff', btnLo: '#efefec', btnEdge: '#d2d2ce', ink: '#8d8d8b', led: '#5a5a58' },
+  white: { body: '#f3f3f1', bodyHi: '#fbfbfa', bodyLo: '#e3e3e0', edge: '#cfcfcb', btn: '#fdfdfc', btnHi: '#ffffff', btnLo: '#efefec', btnEdge: '#d2d2ce', ink: '#6e6e6c', led: '#5a5a58' },
   black: { body: '#2b2b2d', bodyHi: '#3a3a3d', bodyLo: '#1c1c1e', edge: '#131315', btn: '#353538', btnHi: '#434347', btnLo: '#262629', btnEdge: '#1e1e21', ink: '#d6d6d4', led: '#c8c8c6' },
-  ivory: { body: '#efe9d8', bodyHi: '#f8f4e8', bodyLo: '#dfd7c2', edge: '#cfc7b0', btn: '#f9f5e8', btnHi: '#fffdf4', btnLo: '#ece5d2', btnEdge: '#d4ccb6', ink: '#8f8874', led: '#5e5a4c' },
+  ivory: { body: '#efe9d8', bodyHi: '#f8f4e8', bodyLo: '#dfd7c2', edge: '#cfc7b0', btn: '#f9f5e8', btnHi: '#fffdf4', btnLo: '#ece5d2', btnEdge: '#d4ccb6', ink: '#6b6455', led: '#5e5a4c' },
   gray: { body: '#b9bcc0', bodyHi: '#c9ccd0', bodyLo: '#a3a6ab', edge: '#8f9297', btn: '#cfd2d6', btnHi: '#dcdfe3', btnLo: '#bdc0c5', btnEdge: '#a2a5aa', ink: '#3f4246', led: '#2a2c2f' },
 };
 
@@ -37,12 +37,29 @@ function picoModelFor(d) {
 }
 function picoFinishFor(d) { const look = (S.config && S.config.settings.remote_looks || {})[d.device_id] || {}; return look.finish || 'white'; }
 // Buttons the bridge actually reports for this remote, mapped onto the model's slots.
+// A remote paired through this app can come back numbered from 1 where the older ones start at 0, so when
+// none of the model's numbers are reported the whole set is shifted to line up. Without this the keys are
+// all drawn as ghosts and the remote cannot be set up at all.
 function picoSlots(d, modelKey) {
   const model = PICO_MODELS[modelKey || picoModelFor(d)];
   const reported = buttonsOf(d.device_id).map(b => b.button_number);
   let slots = model.slots;
-  if (model === PICO_MODELS['PJ2-4B'] && reported.length && Math.min(...reported) === 1) slots = slots.map(([k, n, g]) => [k, n + 1, g]);
+  // A remote the bridge has not listed buttons for yet (it can take a moment after pairing) is still set up
+  // through its usual keys rather than showing a page with nothing on it.
+  if (!reported.length) return slots.map(([kind, n, glyph]) => ({ kind, n, glyph, real: true }));
+  if (reported.length) {
+    const nums = slots.map(s => s[1]);
+    if (!nums.every(n => reported.includes(n))) {
+      const shift = Math.min(...reported) - Math.min(...nums);
+      if (shift && nums.every(n => reported.includes(n + shift))) slots = slots.map(([k, n, g]) => [k, n + shift, g]);
+    }
+  }
   return slots.map(([kind, n, glyph]) => ({ kind, n, glyph, real: reported.includes(n) }));
+}
+// Buttons the bridge reports that the picture has no key for: they still get a row, so every remote is editable.
+function picoExtraButtons(d) {
+  const known = new Set(picoSlots(d).map(s => s.n));
+  return buttonsOf(d.device_id).map(b => b.button_number).filter(n => !known.has(n)).sort((a, b) => a - b);
 }
 
 // Geometry in a 100 x 212 box (the real Pico is 1.25 x 2.62 in). Drawn to read like the product photo: a
@@ -103,7 +120,6 @@ function picoSVG(d, opts = {}) {
     parts.push(`<g class="${cls}" ${attrs}><g class="pk-shape" fill="url(#pk-btn-${fk})" stroke="${f.btnEdge}" stroke-width=".7" filter="url(#pk-lift)">${shape}</g>${glyph}${extra}${set.has(s.n) ? `<circle cx="${dot[0]}" cy="${dot[1]}" r="2.6" class="pk-dot"/>` : ''}</g>`);
     if (!geom) y += h + GAP;
   }
-  const led = geom && geom.led ? `<circle cx="${geom.led[0]}" cy="${geom.led[1]}" r="1.1" fill="${f.led}" opacity=".85"/>` : '';
   return `<svg class="pico-svg ${opts.cls || ''}" viewBox="0 0 ${W} ${H}" width="${opts.width || 100}" aria-label="${esc(d.name)} remote">
     <defs>
       <linearGradient id="pk-body-${fk}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${f.bodyHi}"/><stop offset=".55" stop-color="${f.body}"/><stop offset="1" stop-color="${f.bodyLo}"/></linearGradient>
@@ -113,7 +129,7 @@ function picoSVG(d, opts = {}) {
     </defs>
     <g filter="url(#pk-body-shadow)"><rect x="1" y="6" width="${W - 2}" height="200" rx="8.5" fill="url(#pk-body-${fk})" stroke="${f.edge}" stroke-width=".8"/></g>
     <rect x="2.2" y="7.2" width="${W - 4.4}" height="197.6" rx="7.6" fill="none" stroke="${f.bodyHi}" stroke-opacity=".9" stroke-width=".6"/>
-    ${led}${parts.join('')}</svg>`;
+    ${parts.join('')}</svg>`;   /* no LED pinhole: on the real remote it is a speck, drawn here it read as a stray dot */
 }
 // A photo, if the owner dropped one in. Buttons then get transparent hotspots placed with the same geometry.
 const PHOTO_CACHE = {};

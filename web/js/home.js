@@ -11,6 +11,7 @@ VIEWS.home = {
     const hasDevices = controllable().length > 0;
     if (!hasDevices && !S.agent.online) return setupEmpty();
     let h = `<div class="m-hero"><div class="m-lightfield" id="lightfield"></div>` + lightNowHTML() + `</div>`;
+    MORE_SUB_SHOWN = false;
     h += '<div class="h2">Rooms</div>';
     h += areas().map(roomCard).join('');
     const timers = Object.entries(S.timers || {});
@@ -55,22 +56,25 @@ function homeScenes() {
 function sceneRowHTML() {
   const sc = homeScenes();
   const chip = s => { const items = tileItems(s.id); const it = items[0] || { lv: 0, icon: 'scene' }; return `<button class="chip" data-act="run-scene" data-t="${s.id}">${lampHTML(it.lv, 24, ICON(it.icon, 'sm'), '', false, it.fill)}${esc(s.name)}</button>`; };
-  return `<div class="scenerow"><div class="h3">Scenes<a class="link" data-act="nav" data-view="scenes" href="#scenes" style="float:right;font-size:12px;line-height:16px;font-weight:500">See all</a></div><div class="chips scroll">${sc.map(chip).join('')}<button class="chip new" data-act="scene-new">${ICON('plus', 'sm')}New scene</button></div></div>`;
+  return `<div class="scenerow"><div class="h3">Scenes<a class="link" data-act="nav" data-view="scenes" href="#scenes" style="float:right">See all</a></div><div class="chips scroll">${sc.map(chip).join('')}<button class="chip new" data-act="scene-new">${ICON('plus', 'sm')}New scene</button></div></div>`;
 }
 function domainIcon(dm) { return { light: 'bulb', switch: 'plug', fan: 'fan', cover: 'shade' }[dm] || 'bulb'; }
 // Lights in a room: a starred light first, then by name.
 function roomOrder(ds) { const f = S.config.favorites; return ds.slice().sort((a, b) => (f.includes('d:' + b.device_id) ? 1 : 0) - (f.includes('d:' + a.device_id) ? 1 : 0)); }
+// The More row explains itself once per page, on the first open room, instead of repeating seven words per room.
+let MORE_SUB_SHOWN = false;
 function roomCard(a) {
   const ds = roomOrder(controllable().filter(d => (d.area || 'none') === a.id));
   const open = S.openRooms.has(a.id);
   const t = `a:${a.id}`;
   const hasToggle = ds.some(d => d.domain !== 'cover');
   const on = targetOn(t);
-  const more = roomDimmers(a.id).length ? `<button class="room-more" data-act="room-more" data-area="${a.id}">${ICON('dots', 'sm')}More<span class="d" style="font-weight:400">· moods, what each light is for, kinds</span><span class="chev">${ICON('chev', 'sm')}</span></button>` : '';
+  const sub = open && !MORE_SUB_SHOWN && (MORE_SUB_SHOWN = true) ? `<span class="d" style="font-weight:400">· moods, what each light is for, kinds</span>` : '';
+  const more = roomDimmers(a.id).length ? `<button class="room-more" data-act="room-more" data-area="${a.id}">${ICON('dots', 'sm')}More${sub}<span class="chev">${ICON('chev', 'sm')}</span></button>` : '';
   return `<div class="room ${open ? 'open' : ''} ${on ? 'on' : ''}" data-tgt="${t}" data-room="${a.id}">
     <div class="head"><button class="info" data-act="room-open" data-id="${a.id}"><span class="slot"><span class="lamp onchip ${on ? '' : 'off'}" data-onchip="${t}" style="width:32px;height:32px;background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span></span><div><div class="n">${esc(a.name)}</div><div class="s">${esc(roomSummary(a.id))}</div></div></button>
       <div class="side"><button class="chev" data-act="room-open" data-id="${a.id}" aria-label="${open ? 'Close' : 'Open'} ${esc(a.name)}">${ICON('chev', 'sm')}</button>${hasToggle ? `<button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(a.name)} on or off"></button>` : ''}</div></div>
-    <div class="body"><div><div class="lights">${moodRowHTML(a.id)}${ds.map(lightRow).join('')}${more}</div></div></div></div>`;
+    <div class="fold"><div><div class="lights">${moodRowHTML(a.id)}${ds.map(lightRow).join('')}${more}</div></div></div></div>`;
 }
 // The disc for a light, in the ring that says what it can do: the rainbow for colour, warm-to-cool for white temperature.
 function ringClass(d) { return d.color ? 'color' : d.ct ? 'ct' : ''; }
@@ -99,8 +103,8 @@ function roomMoreSheet(aid) {
   const ds = roomLights(aid);
   const kinds = ds.map(d => { const k = lightKind(d.device_id); return `<button class="item" data-act="room-kind" data-id="${d.device_id}" data-area="${aid}">${lampHTML(level(d.device_id) || 0, 28, ICON(lightIcon(d), 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div></div><span class="val">${k ? esc(kindLabel(k)) : 'Not set'}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('');
   const body = `<div class="card pad0 list">
-    ${ps.length ? valueRow('Moods', `${ps.length} moods`, 'rm-open', `data-area="${aid}"`, { sub: 'Bright, Relax, Dinner, Movie and Night' }) : `<button class="item" data-act="roles-open" data-area="${aid}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Make moods</div><div class="d">Bright, Relax, Dinner, Movie and Night, from what each light is for</div></div></button>`}
-    <button class="item" data-act="roles-open" data-area="${aid}"><div class="grow"><div class="t">What each light is for</div><div class="d">Main, task, lamps or decor: the moods use it</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
+    ${ps.length ? valueRow('Moods', `${ps.length} moods`, 'rm-open', `data-area="${aid}" data-back="room-more"`, { sub: 'Bright, Relax, Dinner, Movie and Night' }) : `<button class="item" data-act="roles-open" data-area="${aid}" data-back="room-more"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Make moods</div><div class="d">Bright, Relax, Dinner, Movie and Night, from what each light is for</div></div></button>`}
+    <button class="item" data-act="roles-open" data-area="${aid}" data-back="room-more"><div class="grow"><div class="t">What each light is for</div><div class="d">Main, task, lamps or decor: the moods use it</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
   </div>
   <div class="h3" style="margin-top:24px">Kind of light</div><div class="card pad0 list">${kinds}</div>`;
   showSheet('room-more', esc(areaName(aid)), body, { sub: `${plural(ds.length, 'light')}` });
@@ -119,7 +123,7 @@ function toggleRoom(id) {
   const el = document.querySelector(`.room[data-room="${id}"]`); if (!el) return;
   // closing a card near the end of the page: ease the scroll along with the collapse, so the page never yanks under the finger
   if (!opening) {
-    const body = el.querySelector('.body > div'); const shrink = body ? body.offsetHeight : 0;
+    const body = el.querySelector('.fold > div'); const shrink = body ? body.offsetHeight : 0;
     const maxAfter = document.documentElement.scrollHeight - shrink - window.innerHeight;
     if (shrink && window.scrollY > maxAfter) easeScrollTo(Math.max(0, maxAfter), 255);
   }

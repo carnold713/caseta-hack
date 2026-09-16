@@ -114,6 +114,8 @@ function validateConfig(cfg) {
   out.settings.night_level = clampInt(s.night_level, 1, 100, 30);
   out.settings.home_name = typeof s.home_name === 'string' ? s.home_name.trim().slice(0, 40) : '';
   out.settings.auto_update = s.auto_update !== false;
+  // Devices removed from the app. Some bridges keep a deleted remote in their own list, so the app hides it.
+  out.settings.hidden_devices = Array.isArray(s.hidden_devices) ? s.hidden_devices.filter(isId).slice(0, 200) : [];
   // The app greeted this home once (the "Your home is connected" sheet); a second phone does not see it again.
   out.settings.greeted = s.greeted === true;
   // Where and when: timezone comes from the phone (IANA name), location from the phone's GPS, both optional.

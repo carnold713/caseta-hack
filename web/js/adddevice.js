@@ -119,7 +119,17 @@ async function adCreate() {
   const room = (adRooms().find(a => a.id === AD.area) || {}).name || 'its room';
   AD.busy = true; AD.error = null; adShow();
   try {
-    await api('/api/adddevice', { method: 'POST', body: JSON.stringify({ op: 'create', serial: AD.pick, name, area: AD.area }) });
+    const r = await api('/api/adddevice', { method: 'POST', body: JSON.stringify({ op: 'create', serial: AD.pick, name, area: AD.area }) });
+    // Added again after being removed: it must not stay hidden. The connector names the device it made when
+    // it can; otherwise anything on the bridge with this serial is welcomed back.
+    const made = r && r.detail && r.detail.device_id;
+    const welcomeBack = () => {
+      const before = (S.config.settings.hidden_devices || []).length;
+      if (made) unhideDevice(made);
+      for (const dv of Object.values(S.inv.devices || {})) if (String(dv.serial || '') === String(AD.pick)) unhideDevice(dv.device_id);
+      if ((S.config.settings.hidden_devices || []).length !== before) save({ quiet: true, render: true });
+    };
+    welcomeBack(); setTimeout(welcomeBack, 3000); setTimeout(welcomeBack, 9000);
     AD.created = { name, room }; AD.busy = false; adGo('done');
   } catch (e) { AD.error = e.message; AD.busy = false; adShow(); }
 }
@@ -147,17 +157,31 @@ function forgetDevice(id) {
   if (cfg.settings.roles) delete cfg.settings.roles[id];
   if (cfg.settings.remote_looks) delete cfg.settings.remote_looks[id];
 }
+// Some bridges keep a deleted device in their own list, and the next refresh would put it back on the
+// Remotes page. So a device that reappears shortly after a removal is hidden here for good.
+function hideDevice(id) {
+  const s = S.config.settings; const list = s.hidden_devices || (s.hidden_devices = []);
+  if (!list.includes(id)) list.push(id);
+}
+function unhideDevice(id) {
+  const s = S.config.settings; if (!s.hidden_devices) return;
+  s.hidden_devices = s.hidden_devices.filter(x => x !== id);
+}
 async function removeDevice(id, btn) {
   const d = dev(id); if (!d) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
   try {
-    await api('/api/removedevice', { method: 'POST', body: JSON.stringify({ id }) });
+    const r = await api('/api/removedevice', { method: 'POST', body: JSON.stringify({ id }) });
     forgetDevice(id);
     delete S.inv.devices[id];
     if (S.remote === id) S.remote = null;
     sheet.close();
+    const stillThere = !!(r && r.detail && r.detail.still_listed);
+    if (stillThere) hideDevice(id);
     await save({ msg: `${d.name} removed`, quiet: true, render: true });
     toast(`${d.name} removed from your home`);
+    // Older connectors do not say whether the bridge let go of it: watch for it coming back.
+    if (!stillThere) setTimeout(() => { if (dev(id)) { hideDevice(id); save({ quiet: true, render: true }); } }, 4000);
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Remove'; }
     toast(`The bridge said no: ${e.message}`, { err: true });

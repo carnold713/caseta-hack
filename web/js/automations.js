@@ -195,17 +195,18 @@ function autoRowHTML(sc) {
   const off = pairOf(sc); const glyph = sc.at.type === 'sunrise' ? 'sun' : sc.at.type === 'sunset' ? 'moon' : 'clock';
   return `<div class="item auto ${sc.enabled === false ? 'paused' : ''}"><button class="auto-main" data-act="au-open" data-id="${esc(sc.id)}"><div class="ic">${ICON(glyph, 'sm')}</div><div class="grow"><div class="t">${esc(sc.name || 'Automation')}</div><div class="d">${esc(ruleLine(sc, off))}</div><div class="d" data-next="${esc(sc.id)}">${nextLineHTML(sc)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button><button class="sw ${sc.enabled === false ? '' : 'on'}" data-act="au-toggle" data-id="${esc(sc.id)}" aria-label="${esc(sc.name || 'Automation')} on or off"></button></div>`;
 }
-function guidedRowsHTML() {
+function guidedRowsHTML(cap) {
   const rows = [
     ['gs-welcome', 'moon', 'Welcome lights', 'On before you get home, off at bedtime'],
     dimmers().length ? ['gs-wakeup', 'bed', 'Wake-up light', 'A lamp rises slowly before your alarm'] : null,
     remotes().length ? ['gs-buttons', 'remote', 'Goodnight and Leaving buttons', 'One hold shuts the house down'] : null,
     ['ae-new', 'plus', 'Something else', 'Any lights, any time'],
   ].filter(Boolean);
-  return `<div class="card pad0 list">${rows.map(([act, ic, t, d]) => `<button class="item" data-act="${act}">${ICON(ic)}<div class="grow"><div class="t">${t}</div><div class="d">${d}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>`;
+  return `<div class="card pad0 list">${cap ? `<div class="lcap">${esc(cap)}</div>` : ''}${rows.map(([act, ic, t, d]) => `<button class="item" data-act="${act}">${ICON(ic)}<div class="grow"><div class="t">${t}</div><div class="d">${d}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>`;
 }
+// Nothing set up yet: one card, its caption doing the work the separate "Get started" card used to (design 32).
 function emptyStateHTML() {
-  return `<div class="h2">Your automations</div><div class="tip"><div class="grow"><span class="cap">Get started</span><div class="t">What should your home do on its own?</div><div class="d">Each of these takes about a minute.</div></div></div><div class="spacer"></div>${guidedRowsHTML()}`;
+  return `<div class="h2">What should your home do on its own?</div>${guidedRowsHTML('Get started · each takes about a minute')}`;
 }
 function tzTipHTML() {
   const home = S.config.settings.timezone, phone = phoneTZ();
@@ -825,7 +826,7 @@ const LEVEL_OPTS = [100, 90, 80, 70, 60, 50, 40, 35, 30, 25, 20, 15, 10, 5];
 function openCurveSheet() {
   const { ad } = wdSettings();
   const pts = ad.points || [];
-  const rows = pts.map((p, i) => `<div class="item"><input type="time" value="${p.time}" data-pt="${i}" data-k="time" aria-label="Time" style="text-align:left;width:110px"><div class="grow"></div><select class="input" data-pt="${i}" data-k="level" style="width:90px;min-height:40px;padding:6px 32px 6px 12px">${LEVEL_OPTS.map(v => `<option value="${v}" ${p.level === v ? 'selected' : ''}>${v}%</option>`).join('')}</select><button class="iconbtn plain sm" data-act="wd-pt-remove" data-i="${i}" ${pts.length <= 2 ? 'disabled' : ''} aria-label="Remove">${ICON('trash', 'sm')}</button></div>`).join('');
+  const rows = pts.map((p, i) => `<div class="item"><input type="time" value="${p.time}" data-pt="${i}" data-k="time" aria-label="Time" style="text-align:left;width:104px;flex:none"><div class="grow" style="min-width:0"></div><select class="input" data-pt="${i}" data-k="level" style="width:100px;flex:none;min-height:40px;padding:6px 32px 6px 10px">${LEVEL_OPTS.map(v => `<option value="${v}" ${p.level === v ? 'selected' : ''}>${v}%</option>`).join('')}</select><button class="iconbtn plain sm" data-act="wd-pt-remove" data-i="${i}" ${pts.length <= 2 ? 'disabled' : ''} aria-label="Remove">${ICON('trash', 'sm')}</button></div>`).join('');
   const body = `<div class="chips">${[['winddown', 'Follow the sun'], ['points', 'By the hour']].map(([v, l]) => `<button class="chip ${ad.mode === v ? 'sel' : ''}" data-act="wd-mode" data-v="${v}">${l}</button>`).join('')}</div>
     <p class="d" style="margin:12px 0 0">${ad.mode === 'points' ? 'What "on" means at each time of day; between two times it slides from one to the next, and after the last one it holds until the first.' : 'Following the sun uses the levels on the previous sheet. Switch to "By the hour" to draw the curve yourself.'}</p>
     <div class="card pad0 list" style="margin-top:12px">${rows}<button class="item" data-act="wd-pt-add"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a time</div></div></button></div>`;
@@ -899,11 +900,14 @@ function roomMoodsSectionHTML() {
   const rooms = lightRooms().filter(a => roomHasMoods(a.id)); if (!rooms.length) return '';
   return `<div class="h2">Room moods</div><div class="card pad0 list">${rooms.map(a => { const ps = roomMoodPresets(a.id); const ch = ps.filter(p => p.edited).length; return `<button class="item" data-act="rm-open" data-area="${a.id}">${lampHTML(targetOn(`a:${a.id}`) ? roomMean(a.id) : 0, 40, ICON(roomIcon(a.name), 'sm'))}<div class="grow"><div class="t">${esc(a.name)}</div><div class="d">${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('')}</div>`;
 }
-function openRoomMoodsSheet(aid) {
+// `back` is a route name ('room-more'), so every sheet opened from the room's More row can walk back to it.
+function backTo(name, aid) { return name === 'room-more' ? () => roomMoreSheet(aid) : name === 'roommoods' ? () => openRoomMoodsSheet(aid, { back: 'room-more' }) : null; }
+function openRoomMoodsSheet(aid, opts = {}) {
   const ps = roomMoodPresets(aid); const ch = ps.filter(p => p.edited).length;
-  const rows = ps.map(p => { const m = moodById(p.mood); return `<div class="item"><button class="ic" data-act="run-scene" data-t="p:${p.id}" title="Run">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${p.edited ? 'Changed by you' : 'Suggested'} · ${plural(Object.keys(p.levels).length, 'light')}</div></div><button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}" title="Edit">${ICON('edit', 'sm')}</button></div>`; }).join('');
-  const body = `<div class="card pad0 list">${rows}</div><div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="rl-open" data-area="${aid}">${ICON('dots')}<div class="grow"><div class="t">Change what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
-  showSheet('roommoods', `${esc(areaName(aid))} moods`, body, { sub: `${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}` });
+  const rows = ps.map(p => { const m = moodById(p.mood); return `<div class="item"><button class="ic" data-act="run-scene" data-t="p:${p.id}" title="Run">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${p.edited ? 'Changed by you' : 'Suggested'} · ${plural(Object.keys(p.levels).length, 'light')}</div></div><button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}" data-back="roommoods" data-area="${aid}" title="Edit">${ICON('edit', 'sm')}</button></div>`; }).join('');
+  const body = `<div class="card pad0 list">${rows}</div><div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="rl-open" data-area="${aid}" data-back="roommoods">${ICON('dots')}<div class="grow"><div class="t">Change what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+  const back = backTo(opts.back, aid);
+  showSheet('roommoods', `${esc(areaName(aid))} moods`, body, { sub: `${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}`, back: !!back, onBack: back });
 }
 
 // ---------- events ----------
@@ -984,12 +988,12 @@ document.addEventListener('click', e => {
     case 'wd-pt-add': { const { ad } = wdSettings(); const last = ad.points[ad.points.length - 1]; ad.points.push({ time: hmAdd(last ? last.time : '20:00', 60), level: last ? last.level : 50 }); ad.points.sort((a, b) => a.time.localeCompare(b.time)); save({ quiet: true, render: false }); openCurveSheet(); break; }
     case 'wd-pt-remove': { const { ad } = wdSettings(); if (ad.points.length > 2) { ad.points.splice(Number(d.i), 1); save({ quiet: true, render: false }); openCurveSheet(); } break; }
     // roles and moods
-    case 'roles-open': case 'rl-open': openRolesSheet(d.area); break;
+    case 'roles-open': case 'rl-open': openRolesSheet(d.area, { back: backTo(d.back, d.area) }); break;
     case 'rl-pick': RS.roles[d.id] = d.r; renderRolesSheet(); break;
     case 'rl-make': rolesMake(); break;
     case 'rl-skip': rolesAdvance(RS.walk, RS.aid, null); break;
     case 'moods-walk': { const walk = moodsWalkRooms(); if (walk.length) openRolesSheet(walk[0], { walk }); break; }
-    case 'rm-open': openRoomMoodsSheet(d.area); break;
+    case 'rm-open': openRoomMoodsSheet(d.area, { back: d.back }); break;
   }
 });
 document.addEventListener('change', e => {

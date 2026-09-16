@@ -37,8 +37,8 @@ const remoteHasSettings = d => bindings().some(b => b.device_id === d.device_id)
 // The remote page (2.5): the picture, the hint while nothing is set, the usual-layout offer, two-line button rows, More.
 function remoteDetail(d) {
   const has = remoteHasSettings(d);
-  const rows = picoSlots(d).filter(s => s.real).map(s => {
-    const n = s.n;
+  const shown = picoSlots(d).filter(s => s.real).map(s => s.n).concat(picoExtraButtons(d));
+  const rows = shown.map(n => {
     const g = k => gestureActions(d.device_id, n, k);
     const press = g('single'), twice = g('double'), hold = g('hold');
     const rest = [twice.length ? `Twice: ${esc(shortDescribe(twice))}` : null, hold.length ? `Hold: ${esc(shortDescribe(hold))}` : null].filter(Boolean).join(' · ');

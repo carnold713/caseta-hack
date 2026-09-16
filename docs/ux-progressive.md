@@ -181,17 +181,25 @@ Most overwhelming, in order, with the reason:
 - Motion: `Motion.pageIn` on the body at every step; nothing else.
 - Every walk is also reachable without the walk: the stacked sheet or page that exists today remains the editor for the thing once it exists.
 
+**The disclosure inside a row.** "How your home connects" under More settings is a `.dsum` button plus a `.dwrap` grid fold (the room card's pattern, eased over 255 ms), not a `<details>`: a `<details>` opens in one frame and threw the cards under it 288 px down.
+
 **The More row.** `moreRow(sub)` renders one `.card.pad0.list` with a single row: title "More", second line listing what is behind it ("Change the picture, start over, remove"), chevron. Always the last card on a screen. It opens a sheet titled with the thing's name (the remote's name, the light's name, "More settings"). On the light detail sheet, which has a row of round buttons instead of list cards, the same idea is a round button labelled "More".
 
-**The value row.** A list row whose title is the question and whose `.val` is the current answer: "Which lights?" · "Bedroom". Tapping it expands the chips under it (in place, `Motion.expand`) or opens the sheet that answers it. It replaces every chip row that is shown open by default today when the default answer is usually right.
+**The value row.** A list row whose title is the question and whose `.val` is the current answer: "Which lights?" · "Bedroom". Tapping it expands the chips under it (in place, `Motion.expand`) or opens the sheet that answers it. It replaces every chip row that is shown open by default today when the default answer is usually right. **The answer is never cut**: `.val` wraps to a second line (`-webkit-line-clamp: 2`) and the row wraps under the question when even that will not fit, because an ellipsis on the answer ("When? · 20 minutes be…") hides the one thing the row exists to say.
+
+**The toast.** On a page it clears the bar and the tabs. **With a sheet open it lifts over the sheet's own sticky footer**: `placeToast()` in `core.js` measures `.sfoot` and sets `--toast-lift`, and `#toast` transitions `bottom`, so it eases between the two places instead of jumping 170px and never lands on the Next / Done / "Try it now" the person is about to press. A hidden toast is `visibility: hidden`, so its Undo is out of the tab order.
+
+**Keyboard in a sheet.** `sheet.open` focuses the sheet (`focusIn`), a capture-phase Tab handler keeps focus inside `#sheet-root` while it is open, and `close` gives focus back to whatever opened it. Escape still closes.
+
+**Pressed and hover.** Every `:hover` rule is guarded with `:not(:active)`, so a pressed state always wins: a hover rule that came later in the file (or with one more class in it) used to outrank `:active` and nothing changed under the finger on emulated touch, where Chromium still matches `(hover: hover)`. A `div.item[role="button"]` keeps the pressed fill the "a div row is not a button" rule cancels.
 
 ### 2.1 Home
 
-**Glance (as built after the polish pass).** Title, status circle; the headline ("Kitchen and Bedroom are on", two names at most, then "and 2 more"); under it one line only when something is due within the hour ("Welcome lights off at 3pm · Skip") and the wind-down caption when it applies; the lamp row of every light (56px lit, 44px off, a starred light first; a lamp with colour wears the rainbow ring); **Rooms**, with the first card visible without scrolling at 390x844; sleep timers as rows; **Scenes** as one chip row under a small caption (a tap runs one, "New scene" is the last chip, a starred scene is first; the tile grid lives on the Scenes tab); **at most one row of advice** (2.1a) last, as a 56px list row. "Coming up" left Home: the Automations tab carries a one-line "Next: …" caption under its title. Favourite tiles left Home: the star pins a light to the front of the lamp row and the top of its room.
+**Glance (as built after the polish pass).** Title, status circle; the headline ("Kitchen and Bedroom are on", two names at most, then "and 2 more"); under it one line only when something is due within the hour ("Welcome lights off at 3pm · Skip") and the wind-down caption when it applies; the lamp row of every light (56px lit, 44px off, a starred light first; a lamp with colour wears the rainbow ring **and a 28px rainbow button on the disc's lower right, with a 44px target, that opens its page at Colour**, so the ring is never decoration; a name may take two lines in a 96px cell); **Rooms** as a section heading (18/24 500 `--text-2`, so it does not read like the room names under it), with the first card visible without scrolling at 390x844; sleep timers as rows; **Scenes** as one chip row under a small caption (a tap runs one, "New scene" is the last chip, a starred scene is first; the tile grid lives on the Scenes tab); **at most one row of advice** (2.1a) last, as a 56px list row. "Coming up" left Home: the Automations tab carries a one-line "Next: …" caption under its title. Favourite tiles left Home: the star pins a light to the front of the lamp row and the top of its room.
 
 **2.1a One card at a time.** The `sortBlockHTML()` tip, the `moodsTipHTML()` tip and the setup tip are replaced by a single slot filled by `nextCardHTML()` (section 3). Priority when more than one applies: not connected (the existing "Not connected to your home" tip) beats everything; otherwise the Next card shows its one suggestion; otherwise nothing. Two cards never stack.
 
-**Room card open.** The mood row shows moods only. Every light row is a button that opens the light page (trailing chevron); the on button and the star are its trailing controls, and a Hue lamp's row carries a 32px rainbow button that opens the light page at its Colour section. The disc no longer opens the kind picker. The last row of an open card is **"More · moods, what each light is for, kinds"**, which opens the room's More sheet: "Moods" (or "Make moods"), "What each light is for" (the roles sheet), and one row per light with its kind (the kind picker, back to this sheet). "Change" and "Make moods…" moved there from the chip row.
+**Room card open.** The mood row shows moods only. Every light row is a button that opens the light page (trailing chevron); the on button and the star are its trailing controls, and a Hue lamp's row carries a 32px rainbow button that opens the light page at its Colour section. The disc no longer opens the kind picker. The last row of an open card is **"More"**, which spells out what it holds ("· moods, what each light is for, kinds") on the first open room only, so four open rooms do not repeat seven words four times. It opens the room's More sheet: "Moods" (or "Make moods"), "What each light is for" (the roles sheet), and one row per light with its kind (the kind picker, back to this sheet). "Change" and "Make moods…" moved there from the chip row. **Every one of those sub-sheets carries a back arrow to the room's More sheet**, including the moods sheet, the roles sheet and the scene editor a mood's pencil opens: `backTo(name, aid)` in `automations.js` turns a `data-back` route name into that arrow.
 
 **Removed, hidden, moved.** Removed from Home: the sort-lights tip, the moods tip (both become suggestions, section 3), the ghost link (moved into the mood row as a chip). Nothing else changes.
 
@@ -206,9 +214,13 @@ Most overwhelming, in order, with the reason:
 
 **Removed, hidden, moved.** "What kind" leaves the button row (it is still one tap further, and the sort walk in section 3 opens the kind sheet directly). "Remove from my home" leaves the first glance. The ghost link goes as in 2.1.
 
+**Landing on Colour.** The rainbow button opens the page and scrolls **only as far as reveals the Colour section** (`c.offsetTop + c.offsetHeight - sb.clientHeight + 16`, and not at all when it is already in view), then washes the section in `--blue-10` for 600 ms (`.m-land`). Scrolling to the section's top used to clamp at the sheet's small overflow and cut the disc flat under the header without ever reaching Colour.
+
 ### 2.3 Now view
 
-Titled "Light now"; its panels (Scenes, Sleep timer) use the sheet header's back arrow like every other flow. "All off" is the primary blue like the bar; a caption under the round buttons says what the hold does and what the hollow button brings back. Sleep-timer chips pick a time on the dial and Start starts it, in every dial.
+Titled "Light now"; its panels (Scenes, Sleep timer) use the sheet header's back arrow like every other flow, and **each panel eases to its own content** (`.sheet.now` is `min-height: 40dvh; max-height: 86dvh` and `nowShow` goes through `sheet.morph`), so three scene rows are not followed by 500px of white. "All off" is the primary blue like the bar; a caption under the round buttons says what the hold does and what the hollow button brings back; while it is held the sweep crosses it (`:active` sets `background-color`, never the `background` shorthand, which would reset `.m-hold`'s gradient). Sleep-timer chips pick a time on the dial and Start starts it, in every dial.
+
+**The art face.** One lit room fills the 240px square like album art. More rooms lay out on a fixed grid of 56px cells inside the face (24px padding, 12px gaps, one, two or three columns by count, `now-art.c1/.c2/.c3`), each disc scaled 32 to 56px by its room's level and sorted brightest first, so the cluster has a rhythm. The sub line counts ("3 lights on"); the 40/48 display under it is the number.
 
 ### 2.4 Remotes list
 
@@ -269,7 +281,11 @@ Unchanged. They are reached on request only.
 
 ### 2.9 Scenes tab
 
-Unchanged. The empty-state tip's title becomes a question: cap "Scenes", title **"What look would you like to keep?"**, sub "Set the lights the way you like them, then save that look. A remote button can run it later."
+**The tiles are the scenes.** A three-column grid (`repeat(3, minmax(0, 1fr))`, never plain `1fr`, whose `minmax(auto, 1fr)` let a nowrap sub line set a track's width and pushed the page off the phone): "New scene" first, then one tile per scene, the face painted in the scene's own lamp colours. The face runs the scene; a 32px button in the face's lower right **opens** it, the pencil for your own looks (the scene editor) and `⋯` for a Lutron one (a small sheet: what it is, the star, "Try it").
+
+Under the grid sits only what a tile cannot show: **Room moods**. The "Your scenes" and "From the Lutron app" lists are gone, because they listed the same scenes the tiles already show; the star they carried lives in the scene editor's More ("Show it first on Home") and in the Lutron sheet, and the pencil is on the tile. A "New scene" is the first tile and the `+` in the header.
+
+The empty-state tip's title becomes a question: cap "Scenes", title **"What look would you like to keep?"**, sub "Set the lights the way you like them, then save that look. A remote button can run it later."
 
 ### 2.10 Scene editor
 
@@ -285,7 +301,7 @@ Both the fresh and the existing editor share one layout; the fresh one has the n
 6. The More row: "More" / "Fade, delete".
 7. Sticky "Done".
 
-**On request: More** opens "More" with sub the scene's name: "Change gradually over" (the existing select), and "Delete this scene" (danger). A room mood adds the existing "A suggested mood" tip at the top of the editor, unchanged, and "Back to the suggestion" stays where it is.
+**On request: More** opens "More" with sub the scene's name: **"Show it first on Home"** with the star (the pin that used to sit in the tab's list row), "Change gradually over" (the existing select), and "Delete this scene" (danger). A room mood adds the existing "A suggested mood" tip at the top of the editor, unchanged, and "Back to the suggestion" stays where it is.
 
 **Removed, hidden, moved.** The fade select and the delete pill move under More. Lights not in the scene move behind "Add or remove lights".
 
@@ -300,7 +316,7 @@ Unchanged in shape. The legend shrinks to one line: **"Main is the ceiling light
 1. Title, status circle.
 2. Offline tip and time-zone tip when they apply (unchanged).
 3. A `.card.pad0.list` with one row **"Evening wind-down"**, toggle at right, sub when off "Lights you turn on come on a little dimmer late in the evening." and when on "Quiet from 10pm · lights come on dimmer as the evening goes on." Tapping the row (not the toggle) opens the wind-down sheet (2.15).
-4. `.h2` "Your automations" and the rows, unchanged. Empty: the three setups and "Something else" as rows, with the tip above them reduced to one line: cap "Get started", title **"What should your home do on its own?"**, sub "Each of these takes about a minute."
+4. `.h2` "Your automations" and the rows, unchanged. Empty: the heading is the question, **"What should your home do on its own?"**, and the three setups and "Something else" are one card whose `.lcap` reads "Get started · each takes about a minute". There is no second card above the list.
 5. "New automation" row.
 
 The 15-word help sentence at the top is removed. The Lutron timers caption moves to the bottom of the New automation sheet.

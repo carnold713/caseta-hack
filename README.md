@@ -37,12 +37,17 @@ Pico bindings from its cached config.
 - **Rooms come from the bridge.** No groups to build; "Kitchen" is already
   a thing a button can control. Hand-picked sets exist under Advanced.
 - **Scenes:** a look for the whole house, saved from the lights as they
-  are right now, with a fade. Lutron's own scenes sit in the same list.
+  are right now, with a fade. Lutron's own scenes sit in the same grid.
+  The Scenes tab is the tiles: the face runs the scene, a small button in
+  its corner opens it (the editor for yours, a short "from the Lutron app"
+  sheet for Lutron's, where the star that pins it to the front on Home
+  lives). Under the tiles, only what a tile cannot show: Room moods.
 - **Home:** one headline ("Kitchen and Bedroom are on"), a line for
   anything due within the hour with a Skip, then every light in a row:
   lit in its own colour at 56px, grey and smaller when off; tap one to
   toggle it, hold a lit one for a sleep timer. A lamp that can show
-  colour wears a rainbow ring. Then the rooms, first, which open to mood
+  colour wears a rainbow ring with a small rainbow button on it that
+  opens its Colour section. Then the rooms, first, which open to mood
   chips and lamp rows with sliders, toggles, fan speeds and shade
   controls; the whole row opens the light's page (a chevron says so) and
   a Hue lamp's row carries a rainbow button that lands on its Colour
@@ -55,12 +60,13 @@ Pico bindings from its cached config.
   off while anything is lit (hold it to close shades and stop fans too),
   and with the house dark it brings back the lights that were on before,
   at the same levels (the connector remembers them), or turns everything
-  on, as you choose in Settings. Tap the bar for the full Now view.
+  on, as you choose in Settings. Tap the bar for the full Now view (each of its panels is
+  as tall as its own contents).
 - **Room moods:** say which lights are the main light, task light, lamps
   or decor, and each room gets Bright, Relax, Dinner, Movie and Night as
   scenes a chip or a remote button can run. Making and changing them,
   and the kind of each light, live under the room's "More" row at the
-  foot of its open card.
+  foot of its open card; every sheet under it has a back arrow to it.
 - **Kinds of light:** each light can say where it is and what it is,
   two questions in one sheet: Ceiling, Wall, Window, Desk, Table, Floor,
   Under a cabinet, Shelf or cove, Bed or Outside, then the fixture for
@@ -95,8 +101,10 @@ Pico bindings from its cached config.
   scenes, automations, sleep timers and Pico buttons all work on them, so
   one button can drive a Caséta dimmer and a Hue lamp together. A lamp
   that can do white temperature gets a Warmth slider on its page (Candle
-  to Daylight, over the lamp's own range); a colour lamp gets swatches and,
-  behind "More colours…", a hue strip and a saturation slider. The disc,
+  to Daylight, over the lamp's own range); a colour lamp gets eight swatches
+  and, behind "More colours…", a hue strip and a saturation slider (the
+  swatch nearest the lamp's colour is marked, so a colour set by a scene
+  still shows where it sits). The disc,
   the room row and the scene tiles glow in the lamp's actual colour. A
   scene saved from what is on keeps each Hue lamp's colour or warmth with
   its brightness, and the scene editor has a Colour (or Warmth) row per

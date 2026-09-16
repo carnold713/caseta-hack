@@ -181,11 +181,15 @@ function moodLevels(aid, mood) {
     else if (!tagged) out[d.device_id] = mood.head;
     else out[d.device_id] = mood.roles[lightRole(d.device_id) || 'ambient'];
   }
+  // a mood that would leave the room dark is not a look: the main light keeps a floor
+  if (!Object.values(out).some(v => levelOf(v) > 0)) { const dim = roomDimmers(aid)[0]; if (dim) out[dim.device_id] = 15; }
   return out;
 }
 // Which mood the room is in right now, if any (within a couple of percent). A room with mood scenes is matched against them.
 function levelsMatch(lv) {
   const ids = Object.keys(lv).filter(dev); if (!ids.length) return false;
+  // a mood that leaves every light off is not a look: a dark room is dark, not "in Movie"
+  if (!ids.some(id => levelOf(lv[id]) > 0)) return false;
   return ids.every(id => { const cur = level(id) || 0, want = levelOf(lv[id]); return dev(id).domain === 'switch' || dev(id).domain === 'fan' ? (cur > 0) === (want > 0) : Math.abs(cur - want) <= 2; });
 }
 function moodMatch(aid) {
@@ -241,11 +245,13 @@ function roomsLit() {
     return { id: a.id, name: a.name, level: Math.max(1, roomMean(a.id)), icon: roomIcon(a.name) };
   }).filter(Boolean);
 }
+// short: true for the bar's one line (18 characters of names), 'wide' for the Now view's 24px headline (26), false on Home.
 function lightNowHeadline(rooms, short = false) {
   if (!S.agent.online) return 'Last known state';
   if (!rooms.length) return 'Everything is off';
   const n = rooms.map(r => r.name);
-  if (short) { if (n.length > 2 || (n.length === 2 && n.join('').length > 18)) return `${n.length} rooms are on`; }
+  const budget = short === 'wide' ? 26 : 18;
+  if (short) { if (n.length > 2 || (n.length === 2 && n.join('').length > budget)) return `${n.length} rooms are on`; }
   else if (n.length > 2) return `${esc(n.slice(0, 2).join(', '))} and ${n.length - 2} more are on`;
   return `${esc(n.join(' and '))} ${n.length === 1 ? 'is' : 'are'} on`;
 }
@@ -262,7 +268,9 @@ function lampItemHTML(d) {
   const lv = isOn(d.device_id) ? (level(d.device_id) || 100) : 0;
   const ring = typeof ringClass === 'function' ? ringClass(d) : '';
   const size = lv > 0 ? 56 : 44;
-  return `<button class="ln-lamp ${lv > 0 ? 'on' : ''}" data-act="lamp-toggle" data-id="${d.device_id}" ${lv > 0 ? 'data-long="open-light"' : ''} data-t="d:${d.device_id}" data-level="${lv}" data-timer="${timerOn(d.device_id) ? 1 : ''}" title="${esc(d.name)}" aria-label="${esc(d.name)}, ${lv > 0 ? 'on' : 'off'}"><span class="lring ${ring}">${lampHTML(lv, size, ICON(lightIcon(d), 'sm'), '', false, lightFill(d.device_id, lv))}${timerOn(d.device_id) ? `<span class="badge">${ICON('clock')}</span>` : ''}</span><span class="ln-name">${esc(d.name)}</span></button>`;
+  // the ring says the lamp can show colour; the small rainbow button beside it is the way in, the same one the room row carries
+  const rainbow = ring ? `<button class="iconbtn sm rainbow ln-rainbow ${ring}" data-act="light-colour" data-id="${d.device_id}" title="${d.color ? 'Colour' : 'Warmth'}" aria-label="${esc(d.name)}: ${d.color ? 'colour' : 'warmth'}">${ICON('sun', 'sm')}</button>` : '';
+  return `<div class="ln-lamp ${lv > 0 ? 'on' : ''}" role="button" tabindex="0" data-act="lamp-toggle" data-id="${d.device_id}" ${lv > 0 ? 'data-long="open-light"' : ''} data-t="d:${d.device_id}" data-level="${lv}" data-timer="${timerOn(d.device_id) ? 1 : ''}" title="${esc(d.name)}" aria-label="${esc(d.name)}, ${lv > 0 ? 'on' : 'off'}"><span class="lring ${ring}">${lampHTML(lv, size, ICON(lightIcon(d), 'sm'), '', false, lightFill(d.device_id, lv))}${timerOn(d.device_id) ? `<span class="badge">${ICON('clock')}</span>` : ''}${rainbow}</span><span class="ln-name">${esc(d.name)}</span></div>`;
 }
 // The hint under the row, the first three times Home is seen.
 function lampHintHTML() {
@@ -365,16 +373,20 @@ function setHouseLevel(v) {
 }
 
 // ---------- the Now view: the app's now playing, for the house, on a white dialog ----------
+// The face is 240px with 24px padding: a 192px square that holds a 3 x 2 grid of 56px cells with 12px gaps.
+// Each room's disc is 32 to 56px by its level, brightest first, so the cluster has a rhythm instead of a wrap.
+function nowArtRooms(rooms) { return rooms.slice().sort((a, b) => b.level - a.level).slice(0, 6); }
+function nowArtCls(rooms) { const n = Math.min(rooms.length, 6); return n <= 1 ? 'c1' : n === 2 ? 'c2' : 'c3'; }
 function nowArtHTML(rooms) {
   if (!rooms.length) return lampHTML(0, 96, ICON('moon', 'lg'), '', false);
-  // one lit room fills the square like album art; more rooms share it
-  const n = Math.min(rooms.length, 6);
-  const base = n <= 1 ? 96 : n === 2 ? 60 : n <= 4 ? 52 : 44;  // the face is 240px with 32px padding: two grown discs must fit side by side
-  return rooms.slice(0, 6).map(r => lampHTML(r.level, Math.round(base + base * 0.35 * clamp(r.level, 0, 100) / 100), ICON(r.icon, n <= 2 ? '' : 'sm'), '', false)).join('');
+  const list = nowArtRooms(rooms);
+  if (list.length === 1) return lampHTML(list[0].level, 96, ICON(list[0].icon, ''), '', false);
+  return list.map(r => lampHTML(r.level, Math.round(32 + 24 * clamp(r.level, 0, 100) / 100), ICON(r.icon, 'sm'), '', false)).join('');
 }
 function nowSub(rooms, on, lv) {
   if (!on.length) return S.agent.online ? 'Slide the dimmer or tap the power button to bring the lights up' : '';
-  return `${plural(on.length, 'light')} · ${lv}% on average${rooms.length > 6 ? ` · ${rooms.length - 6} more rooms` : ''}`;
+  void lv;   // the display under this line is the number; the sub says what it counts
+  return `${plural(on.length, 'light')} on${rooms.length > 6 ? ` · ${rooms.length - 6} more rooms` : ''}`;
 }
 const NOW = { panel: 'main' };
 // The running timer that ends soonest (the house timer or a room's); any light's timer counts, lit or not.
@@ -412,8 +424,8 @@ function nowMainHTML() {
     const disc = `<span class="lamp ringed ${on ? '' : 'off'}" data-onchip="${t}" style="width:32px;height:32px;background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span>`;
     return `<div class="item">${ring ? `<span class="lring ${ring}">${disc}</span>` : disc}<button class="grow" data-act="now-room" data-id="${a.id}"><div><div class="n">${esc(a.name)}</div><div class="lv" data-roomsum="${a.id}">${esc(roomSummary(a.id))}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button><button class="sw ${on ? 'on' : ''}" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(a.name)} on or off"></button></div>`;
   }).join('');
-  return `<div class="now-art" id="now-art" data-k="${rooms.map(r => r.id + ':' + r.level).join(',')}">${nowArtHTML(rooms)}</div>
-    <div class="t1 now-head" id="now-head">${lightNowHeadline(rooms)}</div>
+  return `<div class="now-art ${nowArtCls(rooms)}" id="now-art" data-k="${rooms.map(r => r.id + ':' + r.level).join(',')}">${nowArtHTML(rooms)}</div>
+    <div class="t1 now-head" id="now-head">${lightNowHeadline(rooms, 'wide')}</div>
     <div class="now-sub" id="now-sub">${nowSub(rooms, on, lv)}</div>
     <div class="display now-big" id="now-big">${on.length ? lv + '%' : 'Off'}</div>
     <div class="now-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"></div>
@@ -454,9 +466,9 @@ function nowPanelHTML(p) {
 function nowShow(p) {
   NOW.panel = p;
   const root = $('#nowview'); if (!root) return;
-  sheet.lockHeight();
+  // the panel eases to its own content (three scene rows are not 726px of white), the way the light page's sub-sheets do
   const swap = () => { root.innerHTML = nowPanelHTML(p); sheet.header(NOW_TITLE[p] || 'Light now', { back: p !== 'main' }); sheet.onBack = p !== 'main' ? () => nowShow('main') : null; };
-  if (window.Motion) Motion.swap(root, swap); else swap();
+  sheet.morph(swap);
   const sb = root.closest('.sb'); if (sb) sb.scrollTop = 0; sheet.scrolled();
   if (p === 'timer') wireDial();
 }
@@ -469,8 +481,8 @@ function paintNow() {
   if (NOW.panel !== 'main') { root.querySelectorAll('[data-countdown-min]').forEach(el => { el.textContent = `${minutesLeft(Number(el.dataset.countdownMin))} min`; }); return; }
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const art = root.querySelector('#now-art'); const k = rooms.map(r => r.id + ':' + r.level).join(',');
-  if (art.dataset.k !== k) { art.dataset.k = k; art.innerHTML = nowArtHTML(rooms); }
-  const head = root.querySelector('#now-head'); const h = lightNowHeadline(rooms);
+  if (art.dataset.k !== k) { art.dataset.k = k; art.className = 'now-art ' + nowArtCls(rooms); art.innerHTML = nowArtHTML(rooms); }
+  const head = root.querySelector('#now-head'); const h = lightNowHeadline(rooms, 'wide');
   if (head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
   root.querySelector('#now-sub').textContent = nowSub(rooms, on, lv);
   const capEl = root.querySelector('#now-cap'); const c = nowCaption(); if (capEl && capEl.innerHTML !== c) capEl.innerHTML = c;
@@ -504,8 +516,9 @@ function openLightSheet(id, opts = {}) {
   </div>`;
   sheet.open(esc(d.name), body, { sub: lightCaption(id) });
   wireLightSheet();
-  // from the rainbow button on a row: land on the Colour section
-  if (opts.scrollTo === 'colour') { const sb = $('#sheet-root .sb'); const c = sb && sb.querySelector('.ccol'); if (c) { const go = () => { sb.scrollTop = Math.max(0, c.offsetTop - 12); sheet.scrolled(); }; go(); setTimeout(go, 60); } }
+  // From the rainbow button on a row: reveal the Colour section, and no further. Scrolling to its top would clamp at
+  // the sheet's small overflow and cut the disc and the well under the header without ever reaching Colour.
+  if (opts.scrollTo === 'colour') { const sb = $('#sheet-root .sb'); const c = sb && sb.querySelector('.ccol'); if (c) { const go = () => { const need = c.offsetTop + c.offsetHeight - sb.clientHeight + 16; if (need > sb.scrollTop) sb.scrollTop = Math.max(0, need); sheet.scrolled(); }; go(); setTimeout(go, 60); setTimeout(() => { c.classList.remove('m-land'); void c.offsetWidth; c.classList.add('m-land'); setTimeout(() => c.classList.remove('m-land'), 700); }, 120); } }
 }
 // The light page's More (2.2): what kind of light it is, and removing it from the home.
 function lightMoreSheet(id) {

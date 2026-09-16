@@ -110,7 +110,10 @@ function connectWS() {
 }
 
 // ---------- inventory helpers ----------
-const devices = () => Object.values(S.inv.devices || {});
+// A device removed from the app stays hidden even when the bridge goes on listing it: some bridges keep a
+// deleted remote in their own list until it is unpaired there, and it should not come back on the next refresh.
+const hiddenDevices = () => ((S.config && S.config.settings && S.config.settings.hidden_devices) || []);
+const devices = () => { const hide = hiddenDevices(); return Object.values(S.inv.devices || {}).filter(d => !hide.includes(d.device_id)); };
 const dev = id => (S.inv.devices || {})[id];
 const areaName = id => ((S.inv.areas || {})[id] || {}).name || 'Elsewhere';
 const areas = () => { const ids = [...new Set(controllable().map(d => d.area || 'none'))]; return ids.map(id => ({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) })).sort((a, b) => a.name.localeCompare(b.name)); };
@@ -362,6 +365,8 @@ const sheet = {
     sheet.onBack = opts.onBack || null;
     sheet.stackTitle = title;
     document.body.style.overflow = 'hidden';
+    sheet.focusIn();
+    placeToast(); requestAnimationFrame(placeToast); setTimeout(placeToast, 300);
   },
   // Change what an open sheet shows. `swap` rewrites the header and body; the old content fades out over a ghost and the
   // new fades in with no travel. keep: the card holds its height (a step inside one flow); otherwise it eases to the
@@ -369,7 +374,7 @@ const sheet = {
   morph(swap, o = {}) {
     const root = $('#sheet-root'); const el = root.querySelector('.sheet'); const sh = el.querySelector('.sh'), sb = el.querySelector('.sb');
     const h0 = Math.round(el.getBoundingClientRect().height);
-    const run = () => { if (window.Motion) Motion.swap(el, swap, { nodes: [sh, sb], top: sh.offsetTop }); else swap(); };
+    const run = () => { const had = root.contains(document.activeElement); if (window.Motion) Motion.swap(el, swap, { nodes: [sh, sb], top: sh.offsetTop }); else swap(); if (had && !root.contains(document.activeElement)) { el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); } placeToast(); requestAnimationFrame(placeToast); setTimeout(placeToast, 300); };
     if (o.keep) { if (!el.style.height && h0 > 120) el.style.height = `${h0}px`; run(); return; }
     clearTimeout(el._ht); el.style.transition = 'none'; el.style.height = '';
     run();
@@ -390,6 +395,8 @@ const sheet = {
   close() {
     const root = $('#sheet-root'); root.classList.remove('in');
     SHEET_KEY = null;
+    sheet.focusOut();
+    placeToast();
     const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; const el = root.querySelector('.sheet'); el.style.height = ''; el.style.transition = ''; root.querySelectorAll('.m-ghost').forEach(g => g.remove()); };
     if (window.Motion) Promise.resolve(Motion.sheetOut(root)).then(done); else setTimeout(done, 320);
     document.body.style.overflow = '';
@@ -400,7 +407,30 @@ const sheet = {
   lockHeight() { const root = $('#sheet-root'); const el = root.querySelector('.sheet'); if (!root.classList.contains('in') || el.style.height) return; const h = el.getBoundingClientRect().height; if (h > 120) el.style.height = `${Math.round(h)}px`; },
   update(body) { sheet.lockHeight(); const sb = $('#sheet-root .sb'); if (sb) sb.innerHTML = body; },
   isOpen() { return $('#sheet-root').classList.contains('open'); },
+  // Keyboard: a sheet opened with Enter takes focus, Tab stays inside it while the page behind is inert, and the
+  // control that opened it gets focus back on close (docs/ux-progressive.md 2.21).
+  focusables() { return [...$('#sheet-root').querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter(e => e.offsetWidth || e.offsetHeight || e.getClientRects().length); },
+  focusIn() {
+    const root = $('#sheet-root'); const el = root.querySelector('.sheet');
+    const a = document.activeElement;
+    if (a && a !== document.body && !root.contains(a)) sheet._opener = a;
+    if (el && !root.contains(document.activeElement)) { el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); }
+  },
+  focusOut() {
+    const o = sheet._opener; sheet._opener = null;
+    if (o && document.contains(o)) setTimeout(() => { try { o.focus({ preventScroll: true }); } catch (_) { /* gone */ } }, 0);
+  },
 };
+// The trap itself: while a sheet is open Tab never leaves #sheet-root.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const root = $('#sheet-root'); if (!root || !root.classList.contains('open')) return;
+  const list = sheet.focusables(); if (!list.length) { e.preventDefault(); return; }
+  const first = list[0], last = list[list.length - 1]; const a = document.activeElement;
+  if (!root.contains(a)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
+  if (e.shiftKey && (a === first || a === root.querySelector('.sheet'))) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+}, true);
 { const sb = $('#sheet-root .sb'); if (sb) sb.addEventListener('scroll', () => sheet.scrolled(), { passive: true }); }
 
 // ---------- sheets that re-render in place ----------
@@ -506,13 +536,24 @@ document.addEventListener('click', e => {
 
 // ---------- toast ----------
 let toastTimer;
+// Where the toast sits. On a page it clears the bar and the tabs (CSS). With a sheet open it lifts over the sheet's
+// sticky footer, so it is never on top of Next / Done / Try it now; `bottom` is transitioned, so it eases into place.
+function placeToast() {
+  const t = $('#toast'); if (!t) return;
+  const root = $('#sheet-root');
+  const f = root && root.classList.contains('in') ? root.querySelector('.sfoot') : null;
+  const lift = f ? Math.max(0, Math.round(window.innerHeight - f.getBoundingClientRect().top)) : 0;
+  t.style.setProperty('--toast-lift', lift + 'px');
+}
 function toast(msg, opts = {}) {
   const t = $('#toast');
   t.innerHTML = `<span>${esc(msg)}</span>${opts.undo ? '<button data-act="toast-undo">Undo</button>' : ''}${opts.action ? `<button data-act="toast-action">${esc(opts.action)}</button>` : ''}`;
+  placeToast();
   t.className = 'show' + (opts.err ? ' err' : '');
   t._undo = opts.undo; t._action = opts.onAction;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.className = ''; }, opts.undo || opts.err ? 6000 : 2200);
 }
+window.addEventListener('resize', () => placeToast());
 
 // ---------- render dispatcher ----------
 const VIEWS = {};
@@ -531,8 +572,10 @@ function render() {
   v.innerHTML = view.body();
   // the Light now bar: present on every page once the snapshot is here; never rebuilt while its slider is held
   const held = nb.querySelector('[data-house]') && nb.querySelector('[data-house]').dataset.drag;
-  if (!held) nb.innerHTML = nowBarHTML();
-  nb.classList.add('show'); app.classList.add('hasbar');
+  // a home that has never been connected has nothing to show: no "Last known state" over "Let's connect your home"
+  const haveHouse = controllable().length > 0;
+  if (!held) nb.innerHTML = haveHouse ? nowBarHTML() : '';
+  nb.classList.toggle('show', haveHouse); app.classList.toggle('hasbar', haveHouse);
   paintState(); paintLive();
   if (S.view === 'home' && window.LightField) { const lf = document.getElementById('lightfield'); if (lf) LightField.init(lf, roomsForLight); }
   const pageKey = S.view + (nested ? '/' + (S.remote || 'more') : '');

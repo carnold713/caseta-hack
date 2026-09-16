@@ -39,7 +39,7 @@ from adddevice import AddSession
 from hue import Hue, color_state
 from sun import sun_times
 
-VERSION = "0.8.1"
+VERSION = "0.8.2"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -527,12 +527,19 @@ class Agent:
                     detail = await self.adder.create(action.get("serial"), action.get("name"), action.get("area"))
                     # the bridge lists a new device a few seconds after creating it: re-read until it shows up
                     serial = str(action.get("serial") or "")
+                    made = None
                     for attempt in range(6):
                         if attempt:
                             await asyncio.sleep(2)
                         await self._refresh()
-                        if self.bridge and any(str(d.get("serial") or "") == serial for d in self.bridge.devices.values()):
+                        made = next((did for did, d in (self.bridge.devices if self.bridge else {}).items()
+                                     if str(d.get("serial") or "") == serial), None)
+                        if made:
                             break
+                    # The app needs the id to bring a device back that it had hidden after an earlier removal.
+                    detail["device_id"] = made
+                    detail["buttons"] = len([b for b in (self.bridge.buttons if self.bridge else {}).values()
+                                             if b.get("parent_device") == made]) if made else 0
                     detail["devices"] = len(self.bridge.devices) if self.bridge else 0
                 elif kind == "hue_discover":
                     detail = {"bridges": await self.hue.discover()}
@@ -551,6 +558,8 @@ class Agent:
                         await self._refresh()
                         if not (self.bridge and did in self.bridge.devices):
                             break
+                    # Some bridges keep a deleted device in their own list; the app hides it when we say so.
+                    detail["still_listed"] = bool(self.bridge and did in self.bridge.devices)
                     detail["devices"] = len(self.bridge.devices) if self.bridge else 0
                 else:
                     await self.runner.run_one(action)
@@ -621,6 +630,9 @@ class Agent:
         assert self.bridge
         await self.bridge.connect()
         self._wire_subscriptions()
+        # connect() rebuilds the bridge's own dictionaries, so the Hue lights have to be put back beside them
+        # or they would disappear from the app until the next Hue load.
+        self._merge_hue(send=False)
         self.send({"type": "inventory", "inventory": self.inventory()})
         self.send({"type": "state", "states": self.all_states()})
 
