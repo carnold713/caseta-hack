@@ -4,7 +4,8 @@
    them ever throws into the app. There is no observer here: the app calls these hooks.
 
    window.Motion = {
-     pageIn(viewEl, {launch})      a view has just been rendered
+     pageIn(viewEl, {launch})      a view has just been rendered: a 150ms cross-fade, no travel (the launch rises 16px)
+     swap(hostEl, fn, {nodes, top})  content is about to change in place: the old fades out over a ghost (80ms), fn swaps it, the new fades in (150ms)
      sheetIn(rootEl)               #sheet-root got .open and .in this frame
      sheetOut(rootEl) -> Promise   #sheet-root is closing
      press(el, {flash, scale})     a real press on a button; on a Pico SVG button: scale + a flash on the glyph
@@ -39,11 +40,38 @@
     const now = performance.now(); if (now - lastPage < 250 && !opts.force) return; lastPage = now;
     const launch = !!opts.launch;
     g.killTweensOf(v);
-    g.fromTo(v, { opacity: 0, y: launch ? 16 : 10 }, { opacity: 1, y: 0, duration: launch ? 0.42 : 0.255, ease: 'power2.out', clearProps: 'opacity,transform', overwrite: true });
+    // a page change is a cross-fade with no travel (a slide on every tab reads as a jump); only the launch rises
+    if (launch) g.fromTo(v, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.42, ease: 'power2.out', clearProps: 'opacity,transform', overwrite: true });
+    else g.fromTo(v, { opacity: 0 }, { opacity: 1, duration: 0.15, ease: 'power2.out', clearProps: 'opacity', overwrite: true });
     if (launch) {
       const top = document.getElementById('top');
       if (top && top.children.length) g.fromTo(top.children, { opacity: 0, y: -6 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', clearProps: 'opacity,transform' });
     }
+  }
+
+  // ---------- content swapped in place: a sheet step, a Now panel, the kind picker ----------
+  // The old nodes are cloned into an absolutely positioned ghost over the host, fn rewrites the real content, the ghost
+  // fades out over 80ms while the new content fades in over 150ms. Nothing travels, so nothing reads as a jump.
+  function swap(hostEl, fn, opts) {
+    opts = opts || {};
+    const h = el(hostEl); const g = G();
+    if (!h) { if (fn) fn(); return; }
+    if (!g) { fn(); return; }
+    rel(h);
+    const nodes = (opts.nodes ? arr(opts.nodes).map(el) : Array.from(h.children)).filter(n => n && !n.classList.contains('m-ghost'));
+    const w = document.createElement('div'); w.className = 'm-ghost';
+    if (opts.top != null) w.style.top = opts.top + 'px';
+    const scrolls = nodes.map(n => n.scrollTop);
+    for (const n of nodes) w.appendChild(n.cloneNode(true));
+    w.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+    fn();
+    h.appendChild(w);
+    Array.from(w.children).forEach((c, i) => { if (scrolls[i]) c.scrollTop = scrolls[i]; });
+    g.to(w, { opacity: 0, duration: 0.08, ease: 'power1.in', onComplete: () => w.remove() });
+    const fresh = (opts.nodes ? nodes : Array.from(h.children)).filter(k => k !== w && !k.classList.contains('m-ghost'));
+    if (!fresh.length) return;
+    g.killTweensOf(fresh);
+    g.fromTo(fresh, { opacity: 0 }, { opacity: 1, duration: 0.15, ease: 'power2.out', delay: 0.04, clearProps: 'opacity', overwrite: true });
   }
 
   // ---------- sheet choreography: scrim, then the sheet, then its content ----------
@@ -59,11 +87,11 @@
     const { root, sheet, scrim, sh, sb } = p;
     g.killTweensOf([sheet, scrim].filter(Boolean));
     root.classList.add('m-sheet-gsap');
-    const content = [sh, ...(sb ? Array.from(sb.children).slice(0, 12) : [])].filter(Boolean);
+    const content = [sh, ...(sb ? Array.from(sb.children).slice(0, 4) : [])].filter(Boolean);
     const tl = g.timeline({ onComplete: () => { root.classList.remove('m-sheet-gsap'); g.set([sheet, scrim].filter(Boolean), { clearProps: 'transform,opacity' }); } });
     if (scrim) tl.fromTo(scrim, { opacity: 0 }, { opacity: 1, duration: 0.24, ease: 'power1.out' }, 0);
     tl.fromTo(sheet, { y: '100%' }, { y: '0%', duration: 0.3, ease: 'power3.out' }, 0);
-    if (content.length) tl.fromTo(content, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.255, ease: 'power2.out', stagger: 0.025, clearProps: 'opacity,transform' }, 0.08);
+    if (content.length) tl.fromTo(content, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.2, ease: 'power2.out', stagger: 0.015, clearProps: 'opacity,transform' }, 0.08);
   }
   function sheetOut(rootEl) {
     const g = G(); const p = sheetParts(rootEl);
@@ -227,7 +255,7 @@
   }
 
   window.Motion = {
-    pageIn: safe(pageIn), sheetIn: safe(sheetIn),
+    pageIn: safe(pageIn), swap: function (h, fn, o) { try { swap(h, fn, o); } catch (e) { if (window.console) console.warn('Motion:', e); try { if (fn && !h) fn(); } catch (_) { /* fn ran */ } } }, sheetIn: safe(sheetIn),
     sheetOut: function (root) { try { return sheetOut(root) || Promise.resolve(); } catch (e) { if (window.console) console.warn('Motion:', e); return Promise.resolve(); } },
     press: safe(press), sceneRun: safe(sceneRun), allOff: safe(allOff),
     lightChanged: safe(lightChanged), sliderFeedback: safe(sliderFeedback),

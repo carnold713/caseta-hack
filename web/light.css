@@ -14,32 +14,45 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 /* a disc that stands for a device sits in a ring: a hairline when off, blue when on */
 .ringed { outline: 1px solid var(--line); outline-offset: 3px; transition: outline-color .255s var(--ease); }
 .ringed:not(.off) { outline-color: var(--blue); }
+/* a disc that stands for a Hue lamp wears the rainbow (colour) or the warm-to-cool ring (white temperature) in place of the blue one */
+.lring { position: relative; display: grid; place-items: center; flex: none; }
+.lring::before { content: ""; position: absolute; inset: -5px; border-radius: 50%; -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); }
+.lring.color::before { background: var(--rainbow); }
+.lring.ct::before { background: var(--warmcool); }
 
-/* ---------- Light now: the strip on Home ---------- */
-.lightnow { margin: 0 0 20px; }
+/* ---------- Light now: the strip on Home. 88px cells, 8px apart; a lit disc is 56px in a 2px blue ring, an off one 44 ---------- */
+.lightnow { margin: 0 0 8px; }
 .lightnow .ln-line { margin: 0 0 8px; }
-.ln-row { display: flex; align-items: flex-start; gap: 12px; overflow-x: auto; margin: 0 -16px; padding: 4px 16px 6px; scrollbar-width: none; }
+.ln-row { display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 6px 16px 6px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
 .ln-row::-webkit-scrollbar { display: none; }
 .ln-row.empty { display: none; }
-.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 72px; flex: none; padding: 0; border: 0; background: none; }
-.ln-lamp .lamp { width: 44px; height: 44px; transition: outline-color .2s; outline: 1px solid transparent; outline-offset: 3px; }
-.ln-lamp.on .lamp { outline-color: var(--blue); }
+.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 88px; flex: none; padding: 0; border: 0; background: none; }
+.ln-lamp .lring { width: 56px; height: 56px; }
+.ln-lamp .lamp { width: 44px; height: 44px; transition: outline-color .2s var(--ease), transform .15s var(--ease); outline: 2px solid transparent; outline-offset: 3px; }
+.ln-lamp.on .lamp { width: 56px; height: 56px; outline-color: var(--blue); }
+.ln-lamp.on .lring.color .lamp, .ln-lamp.on .lring.ct .lamp { outline-color: transparent; }
+.ln-lamp:active .lamp { transform: scale(.94); }
 .ln-lamp:not(.on) .ln-name { color: var(--text-2); }
 .ln-lamp:not(.on) .lamp svg { opacity: .55; }
-.ln-name { font-size: 12px; line-height: 16px; color: var(--text); white-space: nowrap; max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
-.ln-room { font-size: 11px; line-height: 14px; color: var(--text-2); white-space: nowrap; max-width: 72px; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
+.ln-name { font-size: 14px; line-height: 16px; font-weight: 500; color: var(--text); white-space: nowrap; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
+.ln-lamp .badge { top: -2px; right: 14px; width: 20px; height: 20px; padding: 3px; }
+.ln-lamp .badge svg.i { width: 14px; height: 14px; }
+.ln-hint { font-size: 12px; line-height: 16px; color: var(--text-2); margin: 0 0 4px; }
 
-/* ---------- light rows: the disc (in a 40px ring) opens the kind sheet, the name opens the detail ---------- */
+/* ---------- light rows: the disc in a 40px ring, the whole row opens the light's page ---------- */
 .light .row .lkind { width: 32px; height: 32px; margin: 4px; border-radius: 50%; display: grid; place-items: center; color: #262626; flex: none; outline: 1px solid var(--blue); outline-offset: 3px; transition: outline-color .255s var(--ease); }
 .light .row .lkind svg.i { width: 20px; height: 20px; }
 .light .row .lkind.off { color: var(--text-2); outline-color: var(--line); }
+.light .row .lring .lkind { outline-color: transparent; }
+.light .row .lring::before { inset: -1px; }
+.light .row .lring { margin: 0; }
 .light .row .lopen { display: block; min-width: 0; }
 .light .row .fav { width: 32px; height: 32px; }
 .tile .lopen { display: block; }
 
-/* ---------- mood row: Large chips whose leading icon is a lamp disc at the mood's level ---------- */
-.moodrow { margin-bottom: 4px; }
-.moods { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; }
+/* ---------- mood row: Large chips whose leading icon is a lamp disc at the mood's level; the row bleeds to the card's edge and fades on the scrolling side ---------- */
+.moodrow { margin: 0 -16px 4px; }
+.moods { display: flex; gap: 8px; overflow-x: auto; padding: 2px 16px 4px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
 .moods::-webkit-scrollbar { display: none; }
 .mood { flex: none; height: 48px; border-radius: var(--r-xl); background: transparent; box-shadow: inset 0 0 0 1px var(--chip-line); padding: 8px 20px 8px 8px; display: flex; align-items: center; gap: 12px; font-size: 16px; line-height: 20px; font-weight: 500; color: var(--text); transition: background .15s var(--ease), box-shadow .255s var(--ease); }
 .mood:active { background: var(--fill-2); }
@@ -48,12 +61,18 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .mood.sel { background: var(--fill-1); box-shadow: inset 0 0 0 2px var(--text); }
 .moods { align-items: center; }
 .moods .chip.change { color: var(--text-2); }
-.sheet .moodrow { margin: 0 -24px; padding: 0 24px; }
+.sheet .moodrow { margin: 0 -24px; }
+.sheet .moods { padding: 2px 24px 4px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+/* the room's moods at the foot of the light page: a quiet caption row of small chips */
+.ld-moods { margin-top: 20px; }
+.ld-moods .h3 { margin: 0 0 8px; }
+.ld-moods .chips.scroll { margin: 0 -24px; padding: 2px 24px 4px; }
 
-/* ---------- light detail sheet (white, elevated): the Tenzing dimmer dialog for one light ---------- */
+/* ---------- light detail sheet (white, elevated): the Tenzing dimmer dialog for one light. The disc and the well are one centred composition of fixed width ---------- */
 .ld-hero { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 4px; }
-.ld-stage { flex: 1; min-width: 0; height: 328px; display: grid; place-items: center; }
-.ld-disc { width: 160px; height: 160px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; }
+.ld-stage { flex: none; width: 184px; height: 328px; display: grid; place-items: center; }
+.ld-disc { width: 160px; height: 160px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; outline: none; transition: box-shadow .15s var(--ease); }
+.ld-disc:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
 .ld-name { text-align: center; margin-top: 8px; }
 .ld-cap { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
 /* the readout under the stage: the status text button */
@@ -67,7 +86,11 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .rbtn .c svg.i { width: 28px; height: 28px; }
 .rbtn:active .c { background: var(--fill-3); box-shadow: var(--shadow-pressed); }
 .rbtn.on .c { background: var(--blue); color: var(--on-blue); }
+.rbtn.on:active .c { background: var(--blue-pressed); box-shadow: none; }
 .rbtn.on .c svg { fill: currentColor; }
+.rbtn.on.power .c svg { fill: none; }
+.rbtn:disabled { pointer-events: none; color: var(--text-disabled); }
+.rbtn:disabled .c { background: var(--fill-disabled); color: var(--text-disabled); }
 .rbtn span { white-space: nowrap; }
 
 /* the vertical well: white, a hairline, radius 12, filling with blue from the bottom; a grip in the fill */
@@ -75,9 +98,7 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .vslider { position: relative; width: 112px; height: 280px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
 .vslider::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--p, 0%); background: var(--vfill, var(--blue)); border-radius: 0 0 var(--r-md) var(--r-md); transition: background .255s var(--ease); }
 .vslider::after { content: ""; position: absolute; left: 50%; width: 40px; height: 4px; margin-left: -20px; bottom: calc(var(--p, 0%) - 12px); border-radius: 2px; background: rgba(255,255,255,.4); }
-.vslider:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); }
-.vslider .vtip { position: absolute; left: 50%; transform: translateX(-50%); z-index: 2; bottom: calc(var(--p, 0%) + 12px); height: 32px; padding: 0 12px; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-1); color: var(--text); font-size: 14px; line-height: 32px; font-weight: 500; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s var(--ease); }
-.vslider.drag .vtip { opacity: 1; }
+.vslider:focus-visible { box-shadow: inset 0 0 0 1px var(--line-2), 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
 .vsteps { display: flex; gap: 32px; }
 .vsteps .iconbtn svg.i { width: 20px; height: 20px; }
 .vsteps .down svg { transform: rotate(90deg); }
@@ -94,11 +115,18 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .now-level .slider { flex: 1; min-width: 0; --well-h: 48px; --grip-h: 20px; }
 .now-level .nb-num { color: var(--text-2); }
 .now-actions { display: flex; justify-content: center; gap: 12px; margin: 8px 0 4px; }
-.now-actions .rbtn { width: 76px; }
-.now-rooms .item .n { font-size: 18px; line-height: 24px; font-weight: 400; color: var(--text); }
+.now-actions .rbtn { width: 72px; }
+.now-cap { text-align: center; color: var(--text-2); font-size: 12px; line-height: 16px; margin: 8px 0 0; }
+.now-rooms .item .n { font-size: 16px; line-height: 20px; font-weight: 500; color: var(--text); }
 .now-rooms .item .lv { font-size: 14px; line-height: 16px; color: var(--text-2); margin-top: 2px; }
 .now-rooms .item .lamp { width: 32px; height: 32px; margin: 4px; }
-.now-rooms .item .grow { text-align: left; color: inherit; }
+.now-rooms .item .grow { text-align: left; color: inherit; display: flex; align-items: center; gap: 8px; margin: -12px 0; padding: 12px 0; border-radius: var(--r-s); transition: background .15s var(--ease); }
+.now-rooms .item .grow > div:first-child { flex: 1; min-width: 0; }
+.now-rooms .item .grow .chev { color: var(--text-2); flex: none; display: grid; place-items: center; }
+.now-rooms .item .grow:active { background: var(--fill-2); }
+.now-rooms .item .lring::before { inset: -1px; }
+.now-rooms .item .lring .lamp { margin: 4px; }
+.now-rooms .item .lring .ringed { outline-color: transparent; }
 
 /* ---------- lamp kinds: "What kind of light is this?" (Visual Picker faces) ---------- */
 .kind-cap { font-size: 12px; line-height: 16px; color: var(--text-2); margin: 16px 0 8px; }
@@ -125,8 +153,10 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .td-cap { font-size: 12px; line-height: 16px; color: var(--text-2); }
 .td-min { font-size: 40px; line-height: 48px; font-weight: 400; }
 .td-lamp { width: 96px; height: 96px; margin-top: 8px; }
-.td .chips { justify-content: center; }
+.td .chips { justify-content: flex-start; }
+.td .chips.scroll { margin: 0 -24px; padding: 2px 24px 4px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
 .td .btn.primary { margin-top: 16px; }
+.td .td-row { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
 /* running timer on Home: the same ring at 40px with the lamp disc inside */
 .ring40 { position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center; }
 .ring40 .track, .ring40 .prog { stroke-width: 4; }
@@ -138,15 +168,12 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 
 /* the round All off button in the Now view sweeps the pressed blue while held, like the one on the bar */
 .rbtn.m-hold { background-image: none; }
-.rbtn.m-hold .c { background-image: linear-gradient(90deg, var(--blue-pressed), var(--blue-pressed)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
+.rbtn.m-hold .c { background-image: linear-gradient(90deg, rgba(255,255,255,.3), rgba(255,255,255,.3)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .rbtn.m-hold.holding .c { animation: m-hold 1s linear forwards; }
 
 /* ---------- the Now view's panels and the timer ring ---------- */
-.sheet.now .sh { min-height: 0; padding-bottom: 0; }
-.now-top { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
-.now-top .t2 { margin: 0; }
-.now-back { width: 40px; height: 40px; border-radius: 50%; background: var(--fill-2); color: var(--text); display: grid; place-items: center; flex: none; }
-.now-back svg.i { width: 20px; height: 20px; }
+.sheet.now .sh { padding-bottom: 0; }
+.now { position: relative; }
 .rbtn .c { position: relative; }
 .rbtn .rring { position: absolute; inset: -4px; width: 64px; height: 64px; }
 .rbtn .rring .track { stroke: var(--line-2); stroke-width: 3; }
@@ -156,12 +183,11 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .td-ring.big .track { stroke: var(--fill-2); }
 .td-ring.big .prog { stroke: var(--blue); }
 .td-ring.big .td-cap { color: var(--text-2); }
-.now .td .chips { justify-content: center; }
 .now .td .btn.primary { margin-top: 12px; }
 
 /* ---------- colour and warmth (Hue lamps; js/color.js): a warmth slider on a warm-to-cool track, swatches, and a hue strip behind "More colours…" ---------- */
 .ccol { margin: 0 0 8px; }
-.ld .ccol { margin: -4px 0 12px; }
+.ld .ccol { margin: -4px 0 4px; }
 .crow { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; touch-action: pan-y; } /* a sideways drag on its slider is the slider's, never a page pan (as .sliderwrap) */
 .crow .clab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; line-height: 16px; color: var(--text-2); }
 .crow .clab .t { font-size: 16px; line-height: 20px; font-weight: 500; color: var(--text); }
@@ -176,7 +202,8 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 /* swatches: round chips of the colour itself; the blue ring marks the one the lamp is showing */
 .swatches { padding-top: 4px; padding-bottom: 6px; }
 .swatch { flex: none; width: 40px; height: 40px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); outline: 2px solid transparent; outline-offset: 2px; transition: outline-color .255s var(--ease); }
-.swatch.sel, .swatch:focus-visible { outline-color: var(--blue); }
+.swatch.sel { outline-color: var(--text); }
+.swatch:focus-visible { outline-color: var(--blue); }
 .swatches .chip { align-self: center; }
 /* the value row inside the component ("More colours…") sits on a hairline, not in a card */
 .ccol > .item.vrow { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 48px; padding: 8px 0; text-align: left; color: inherit; border-top: 1px solid var(--line); }

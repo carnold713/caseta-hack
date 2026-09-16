@@ -40,7 +40,7 @@ const NEXT = [
     title: () => 'One button for goodnight?', reason: () => `Hold Off on the ${esc(bedRemote().name)}: everything off, a dim path to bed.`,
     go: () => openButtonsSetup() },
   { id: 'install', can: () => true, when: () => !standalone(),
-    title: () => 'Put this app on your home screen?', reason: () => 'It opens full-screen, like a real app.',
+    title: () => 'Add this app to your home screen?', reason: () => 'It opens full-screen, like a real app.',
     go: () => openInstallHelp() },
 ];
 const nextById = id => NEXT.find(x => x.id === id);
@@ -60,16 +60,17 @@ function nextPick() {
 // Never over a problem: a broken button or a failed automation run takes the slot.
 function problemCardHTML() {
   const broken = bindings().find(bindingBroken);
-  if (broken) { const d = dev(broken.device_id); return `<button class="tip top" data-act="next-remote" data-id="${esc(broken.device_id)}"><div class="grow"><span class="cap">Needs attention</span><div class="t">${esc(d ? d.name : 'A remote')} points at something that is gone</div><div class="d">Pick again.</div></div><span class="go">${ICON('chev')}</span></button>`; }
+  if (broken) { const d = dev(broken.device_id); return `<div class="card pad0 list nextrow"><button class="item" data-act="next-remote" data-id="${esc(broken.device_id)}"><div class="grow"><span class="cap">Needs attention</span><div class="t">${esc(d ? d.name : 'A remote')} points at something that is gone</div><div class="d">Pick again.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`; }
   const failed = topLevel().find(failedLast);
-  if (failed) return `<button class="tip top" data-act="nav" data-view="automations"><div class="grow"><span class="cap">Needs attention</span><div class="t">${esc(failed.name)} didn't run</div><div class="d">Couldn't reach the bridge</div></div><span class="go">${ICON('chev')}</span></button>`;
+  if (failed) return `<div class="card pad0 list nextrow"><button class="item" data-act="nav" data-view="automations"><div class="grow"><span class="cap">Needs attention</span><div class="t">${esc(failed.name)} didn't run</div><div class="d">Couldn't reach the bridge</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   return '';
 }
+// The Next row: one 56px list row, last on Home, never above the rooms.
 function nextCardHTML() {
   if (!S.config) return '';
-  const p = problemCardHTML(); if (p) return `<div class="spacer"></div>${p}`;
+  const p = problemCardHTML(); if (p) return p;
   const s = nextPick(); if (!s) return '';
-  return `<div class="spacer"></div><div class="tip top" id="nextcard"><div class="grow"><span class="cap">Next</span><div class="t">${s.title()}</div><div class="d">${s.reason()}</div><button class="btn ghost" data-act="next-later" data-id="${s.id}">Not now</button></div><button class="go" data-act="next-go" data-id="${s.id}" title="Do it">${ICON('chev')}</button></div>`;
+  return `<div class="card pad0 list nextrow" id="nextcard"><div class="item" role="button" tabindex="0" data-act="next-go" data-id="${s.id}"><div class="grow"><span class="cap">Next</span><div class="t">${s.title()}</div><div class="d">${s.reason()}</div></div><button class="btn ghost" data-act="next-later" data-id="${s.id}">Not now</button><span class="chev">${ICON('chev', 'sm')}</span></div></div>`;
 }
 // "Not now": gone for the rest of the session, remembered 14 days; three in a week and the card rests for 30 days.
 function nextLater(id) {
@@ -79,7 +80,7 @@ function nextLater(id) {
   list = list.filter(t => now - t < 7 * NX_DAY); list.push(now); nxSet('next:notnow', JSON.stringify(list));
   if (list.length >= 3) nxSet('next:quiet:until', String(now + 30 * NX_DAY));
   nxSess.set('next:shown', 'none');
-  const el = $('#nextcard'); if (el) { const sp = el.previousElementSibling; el.remove(); if (sp && sp.classList.contains('spacer')) sp.remove(); }
+  const el = $('#nextcard'); if (el) el.remove();
 }
 function nextGo(id) { const s = nextById(id); if (s) s.go(); }
 

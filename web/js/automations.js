@@ -60,6 +60,7 @@ function daysText(days) {
   if (d.length === 7) return 'Every day';
   if (d.join() === '1,2,3,4,5') return 'Weekdays';
   if (d.join() === '0,6') return 'Weekends';
+  if (d.length === 6) return `Every day but ${DAY_LONG[ALL_DAYS.find(i => !d.includes(i))]}`;
   return [1, 2, 3, 4, 5, 6, 0].filter(i => d.includes(i)).map(i => DAY_SHORT[i]).join(', ');
 }
 // "at 6:30am", "at sunset", "20 minutes before sunset"
@@ -180,6 +181,7 @@ VIEWS.automations = {
     if (!controllable().length && !S.agent.online) return setupEmpty();
     let h = `<div class="spacer"></div>`;
     if (!S.agent.online) h += `<div class="tip"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected right now</div><div class="d">Your home keeps running these on its own. This list may be a little behind.</div></div></div><div class="spacer"></div>`;
+    h += nextCaptionHTML();
     h += tzTipHTML();
     h += windDownRowHTML();
     const list = topLevel();
@@ -191,7 +193,7 @@ VIEWS.automations = {
 };
 function autoRowHTML(sc) {
   const off = pairOf(sc); const glyph = sc.at.type === 'sunrise' ? 'sun' : sc.at.type === 'sunset' ? 'moon' : 'clock';
-  return `<div class="item auto ${sc.enabled === false ? 'paused' : ''}"><button class="auto-main" data-act="au-open" data-id="${esc(sc.id)}"><div class="ic">${ICON(glyph, 'sm')}</div><div class="grow"><div class="t">${esc(sc.name || 'Automation')}</div><div class="d">${esc(ruleLine(sc, off))}</div><div class="d" data-next="${esc(sc.id)}">${nextLineHTML(sc)}</div></div></button><button class="sw ${sc.enabled === false ? '' : 'on'}" data-act="au-toggle" data-id="${esc(sc.id)}" aria-label="On or off"></button></div>`;
+  return `<div class="item auto ${sc.enabled === false ? 'paused' : ''}"><button class="auto-main" data-act="au-open" data-id="${esc(sc.id)}"><div class="ic">${ICON(glyph, 'sm')}</div><div class="grow"><div class="t">${esc(sc.name || 'Automation')}</div><div class="d">${esc(ruleLine(sc, off))}</div><div class="d" data-next="${esc(sc.id)}">${nextLineHTML(sc)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button><button class="sw ${sc.enabled === false ? '' : 'on'}" data-act="au-toggle" data-id="${esc(sc.id)}" aria-label="${esc(sc.name || 'Automation')} on or off"></button></div>`;
 }
 function guidedRowsHTML() {
   const rows = [
@@ -215,6 +217,8 @@ function tzTipHTML() {
 function paintSun() {
   document.querySelectorAll('[data-next]').forEach(el => { const sc = scById(el.dataset.next); if (sc) el.innerHTML = nextLineHTML(sc); });
   const cu = $('#comingup'); if (cu) cu.innerHTML = comingUpHTML();
+  const due = $('#ln-due'); if (due) due.innerHTML = dueLineHTML();
+  const nc = $('#next-cap'); if (nc) nc.outerHTML = nextCaptionHTML();
   const wc = $('#wd-cap'); if (wc) wc.innerHTML = windDownCaption();
   const wh = $('#wd-home'); if (wh) wh.innerHTML = windDownCaptionHTML();
   const wt = $('#wd-today'); if (wt) wt.textContent = todaySentence();
@@ -223,7 +227,24 @@ function paintSun() {
   if (AE && SHEET_KEY === 'editor') renderEditor();
 }
 
-// ---------- Home: Coming up ----------
+// ---------- what is coming up: one line on Home when something is due within the hour, one caption on the Automations tab ----------
+function upcoming(withinMs) {
+  return schedules().filter(sc => sc.enabled !== false).map(sc => ({ sc, n: nextRunOf(sc) })).filter(x => x.n && !x.n.past && x.n.d && x.n.d.getTime() - Date.now() < withinMs).sort((a, b) => a.n.d - b.n.d);
+}
+function upcomingLabel({ sc, n }) {
+  const label = `${sc.name}${parentOf(sc) ? (sc.actions.some(a => a.type === 'raise') ? ' open' : ' off') : ''}`;
+  const when = n.rel === 'today' ? n.time : n.rel === 'tomorrow' ? `tomorrow ${n.time}` : `${DAY_SHORT[weekdayOf(n.date)]} ${n.time}`;
+  return `${label} at ${when}`;
+}
+function dueLineHTML() {
+  const x = upcoming(3600000)[0]; if (!x) return '';
+  const parent = parentOf(x.sc) || x.sc; const sk = skipping(parent);
+  return `<p class="ln-due"><span>${esc(upcomingLabel(x))}</span><span>·</span><button class="link" data-act="${sk ? 'au-unskip' : 'au-skip'}" data-id="${esc(parent.id)}" data-date="${x.n.date}">${sk ? "Don't skip" : 'Skip'}</button></p>`;
+}
+function nextCaptionHTML() {
+  const x = upcoming(7 * 86400000)[0]; if (!x) return '<span id="next-cap"></span>';
+  return `<p class="d" id="next-cap" style="margin:-8px 0 16px">Next: ${esc(upcomingLabel(x))}</p>`;
+}
 function comingUpHTML() {
   const rows = schedules().filter(sc => sc.enabled !== false).map(sc => ({ sc, n: nextRunOf(sc) })).filter(x => x.n && !x.n.past && x.n.d && x.n.d.getTime() - Date.now() < 24 * 3600000)
     .sort((a, b) => a.n.d - b.n.d).slice(0, 2);
@@ -294,7 +315,7 @@ function aeApplyRecipe(rid) {
 function openAutoScenePicker() {
   const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.mood ? 'Room mood' : 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
   AE.scenePick = items;
-  const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="ae-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="empty"><h3>No scenes yet</h3><p>Make one on the Scenes tab first.</p></div>`;
+  const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="ae-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
   showSheet('ae-scene', 'Which scene?', body, { back: true, onBack: renderEditor });
 }
 function daysHTML(days, act, warn) {
@@ -330,7 +351,7 @@ function renderEditor() {
   const broken = (sc.actions || []).some(a => a.target && !targetExists(a.target));
   const lightsBody = `${targetChipsHTML(sel, 'ae-target', 'ae-target-more')}${broken ? `<p class="d" style="margin:8px 0 0"><span class="odot"></span>Points at something that is gone. Pick again.</p>` : ''}`;
   const rows = valueRow('Which lights?', esc(cap(targetName(packTarget(sel)))), 'ae-exp', 'data-k="L"', { open: AE.exp.L, sub: broken ? '<span class="odot"></span>Points at something that is gone' : '' }) + (AE.exp.L ? `<div class="vrow-body">${lightsBody}</div>` : '')
-    + valueRow('What happens', r ? esc(r.t) : 'Custom', 'ae-what')
+    + valueRow('What happens?', r ? esc(r.t) : 'Custom', 'ae-what')
     + valueRow('Which days?', esc(daysText(sc.days)), 'ae-exp', 'data-k="D"', { open: AE.exp.D }) + (AE.exp.D ? `<div class="vrow-body">${daysHTML(sc.days, 'ae', AE.dayWarn)}</div>` : '');
   const body = `<div class="card pad0 list" style="margin-top:8px">${rows}</div>`;
   const actions = `<div class="stack" style="margin-top:24px"><button class="btn block" data-act="ae-try">${ICON('play', 'sm')} Try it now</button>${inCfg ? `<button class="btn block" data-act="ae-skip">${esc(skipLabel(sc))}</button>` : ''}</div>
@@ -396,7 +417,7 @@ function openNewAutoWalk() {
 function openNwScenePicker() {
   const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.mood ? 'Room mood' : 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
   NW.scenePick = items;
-  const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="nw-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="empty"><h3>No scenes yet</h3><p>Make one on the Scenes tab first.</p></div>`;
+  const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="nw-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
   showSheet('nw-scene', 'Which scene?', body, { back: true, onBack: renderSetup });
 }
 // "Pick a time…" for the off pair: the When body on its own sheet, back to the walk.
@@ -664,8 +685,8 @@ function wakeupPreview(g) {
 }
 // "Another light…": every dimmer in the house, as a sub-step of the wake-up walk; picking one answers the step.
 function openLampPicker() {
-  const rows = lightRooms().map(a => { const ds = dimmers().filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="gs-lamp-pick" data-id="${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${GS.lamp === d.device_id ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
-  showSheet('lamp', 'Which light?', rows || '<div class="empty"><p>No dimmable lights found.</p></div>', { sub: 'A dimmer, so it can rise slowly.', back: true, onBack: renderSetup });
+  const rows = lightRooms().map(a => { const ds = dimmers().filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="gs-lamp-pick" data-id="${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${GS.lamp === d.device_id ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
+  showSheet('lamp', 'Which light?', rows || `<div class="tip"><div class="grow"><span class="cap">Lights</span><div class="t">No dimmable lights found</div></div></div>`, { sub: 'A dimmer, so it can rise slowly.', back: true, onBack: renderSetup });
 }
 function saveWakeup(g) {
   if (!g.lamp) return;
@@ -741,19 +762,19 @@ function curveLevelNow() {
 function windDownCaption() {
   const s = S.config.settings; const { wd } = wdSettings();
   if (!s.location) return `Without your home's location, dimming starts at ${fmtTime(wd.earliest || '18:00')}. <a data-act="loc-use" href="#">Use my location</a>`;
-  return `Dimming starts after sunset and is lowest here. From then until ${fmtTime(s.night_end)}, on means ${s.night_level}%. Early mornings are soft too. This is also when night starts for your remotes.`;
+  return `Dimming starts after sunset and reaches its lowest at the quiet time. From then until ${fmtTime(s.night_end)}, on means ${s.night_level}%. Early mornings are soft too. This is also when night starts for your remotes.`;
 }
 // The Automations tab's row (2.12): the toggle at the right, the sheet behind the row itself.
 function windDownRowHTML() {
   const s = S.config.settings; const { ad } = wdSettings(); const on = !!ad.enabled;
   const sub = on ? `Quiet from ${fmtTime(s.night_start)} · lights come on dimmer as the evening goes on.` : 'Lights you turn on come on a little dimmer late in the evening.';
-  return `<div class="card pad0 list wd"><div class="item"><button class="auto-main" data-act="wd-open"><div class="grow"><div class="t">Evening wind-down</div><div class="d">${esc(sub)}</div></div></button><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div></div>`;
+  return `<div class="card pad0 list wd"><div class="item"><button class="auto-main" data-act="wd-open"><div class="grow"><div class="t">Evening wind-down</div><div class="d">${esc(sub)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down on or off"></button></div></div>`;
 }
 const windDownCardHTML = windDownRowHTML;
 // The wind-down sheet (2.15): the toggle, the sentence, and when on the quiet time, its caption and the Advanced row.
 function openWindDownSheet() {
   const s = S.config.settings; const { ad } = wdSettings(); const on = !!ad.enabled;
-  const body = `<div class="card pad0 list wd"><div class="item"><div class="grow"><div class="t">Evening wind-down</div><div class="d">${on ? 'On' : 'Off'}</div></div><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div></div>
+  const body = `<div class="card pad0 list wd"><div class="item"><div class="grow"><div class="t">${on ? 'On' : 'Off'}</div></div><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div></div>
     <p class="body" style="margin:16px 0 0">As the evening goes on, lights you turn on come on a little dimmer, so the house feels calmer late. Set a level yourself and it stays.</p>
     ${on ? `<div class="card pad0 list wd" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">When does the house go quiet?</div></div><input type="time" class="wd-time" value="${s.night_start}" data-wd="night_start" aria-label="When does the house go quiet?"></div></div>
     <p class="d" id="wd-cap" style="margin:8px 0 0">${windDownCaption()}</p>
@@ -852,6 +873,7 @@ function renderRolesSheet() {
   const body = `<p class="d">Main is the ceiling light. Task is where hands work. Lamps are for atmosphere. Decor is lit to be looked at.</p>
     <div class="card pad0 list" style="margin-top:12px">${rows}</div>
     <div class="sfoot"><button class="btn primary lg block" data-act="rl-make">${has ? 'Update moods' : 'Make moods'}</button>${walk ? `<button class="btn ghost block" data-act="rl-skip">${nextAid ? `Next: ${esc(areaName(nextAid))}` : 'Skip this room'}</button>` : ''}</div>`;
+  void ds;
   showSheet('roles', `What kind of light is each one in the ${esc(areaName(aid))}?`, body, { sub: 'We guessed from the names. Fix any that are wrong.', back: !!RS.back, onBack: RS.back, cap: walk ? `Room ${walk.indexOf(aid) + 1} of ${walk.length}` : '', top: true });
 }
 function rolesMake() {
@@ -915,8 +937,8 @@ document.addEventListener('click', e => {
     case 'nw-days': NW.days = [...QUICK_DAYS[d.v]]; NW.dayWarn = false; renderSetup(); break;
     case 'nw-name': NW.nameOpen = !NW.nameOpen; renderSetup(); if (NW.nameOpen) { const i = $('#nw-name'); if (i) i.focus(); } break;
     case 'ae-scene': { const it = AE.scenePick[Number(d.i)]; if (!it) break; const sc = aeSc(); sc.actions = [it.a]; const off = aeOff(); if (off) off.actions = makePair(sc, off.at, AE.L, AE.Sh).actions; aeSave(); break; }
-    case 'ae-day': { const sc = aeSc(); setDay(sc.days, Number(d.d), AE); if (AE.dayWarn) renderEditor(); else aeSave(`Runs ${daysText(sc.days).toLowerCase()}`); break; }
-    case 'ae-days': { const sc = aeSc(); sc.days = [...QUICK_DAYS[d.v]]; AE.dayWarn = false; aeSave(`Runs ${daysText(sc.days).toLowerCase()}`); break; }
+    case 'ae-day': { const sc = aeSc(); setDay(sc.days, Number(d.d), AE); if (AE.dayWarn) renderEditor(); else aeSave(`Runs ${daysText(sc.days).replace(/^Every/, 'every')}`); break; }
+    case 'ae-days': { const sc = aeSc(); sc.days = [...QUICK_DAYS[d.v]]; AE.dayWarn = false; aeSave(`Runs ${daysText(sc.days).replace(/^Every/, 'every')}`); break; }
     case 'ae-try': aeTry(); break;
     case 'ae-skip': { const sc = aeSc(); if (skipping(sc)) unSkip(sc); else doSkip(sc); setTimeout(renderEditor, 50); break; }
     case 'ae-more': openMoreSheet(); break;
@@ -953,7 +975,7 @@ document.addEventListener('click', e => {
     case 'gs-save': if (!GS) break; if (GS.kind === 'welcome') saveWelcome(GS); else if (GS.kind === 'wakeup') saveWakeup(GS); else saveButtons(GS); break;
     // wind-down
     case 'wd-open': openWindDownSheet(); break;
-    case 'wd-toggle': { const { ad } = wdSettings(); ad.enabled = !ad.enabled; save({ msg: ad.enabled ? 'Evening wind-down is on' : 'Evening wind-down is off', render: S.view === 'automations' || S.view === 'home' }); if (SHEET_KEY === 'wd') openWindDownSheet(); break; }
+    case 'wd-toggle': { const { ad } = wdSettings(); ad.enabled = !ad.enabled; save({ msg: ad.enabled ? 'Evening wind-down is on' : 'Evening wind-down is off', render: S.view === 'automations' || S.view === 'home' }); if (sheet.isOpen() && SHEET_KEY === 'wd') openWindDownSheet(); break; }
     case 'wd-advanced': openWindDownAdvanced(); break;
     case 'wd-set': wdSet(d.k, d.v); break;
     case 'wd-nudge': { const { wd } = wdSettings(); wd.nudge = !wd.nudge; el.classList.toggle('on', wd.nudge); save({ msg: wd.nudge ? 'Untouched lights will lower gently' : 'Untouched lights are left alone', render: false }); break; }

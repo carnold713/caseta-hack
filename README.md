@@ -38,12 +38,19 @@ Pico bindings from its cached config.
   a thing a button can control. Hand-picked sets exist under Advanced.
 - **Scenes:** a look for the whole house, saved from the lights as they
   are right now, with a fade. Lutron's own scenes sit in the same list.
-- **Home:** every light in a row at the top, one size, lit in its own
-  colour or grey when off; tap one to toggle it, hold for a sleep timer.
-  Then scenes as tiles, what is coming up, and rooms that open to lamp
-  rows with sliders, toggles, fan speeds and shade controls. Tap a
-  light's name for its own page: drag the disc to dim, set a sleep timer,
-  star it. The **Light now** bar sits above the tabs on every page: what
+- **Home:** one headline ("Kitchen and Bedroom are on"), a line for
+  anything due within the hour with a Skip, then every light in a row:
+  lit in its own colour at 56px, grey and smaller when off; tap one to
+  toggle it, hold a lit one for a sleep timer. A lamp that can show
+  colour wears a rainbow ring. Then the rooms, first, which open to mood
+  chips and lamp rows with sliders, toggles, fan speeds and shade
+  controls; the whole row opens the light's page (a chevron says so) and
+  a Hue lamp's row carries a rainbow button that lands on its Colour
+  section. Scenes follow as one chip row (a tap runs one, the tile grid
+  lives on the Scenes tab), and the one row of advice (Next) comes last.
+  Starring a light pins it to the front of the lamp row and the top of
+  its room. The light page: drag the disc to dim, then Warmth and Colour,
+  the sleep timer, the star, More. The **Light now** bar sits above the tabs on every page: what
   is on, a dimmer for everything that is on, and the power button: All
   off while anything is lit (hold it to close shades and stop fans too),
   and with the house dark it brings back the lights that were on before,
@@ -51,7 +58,9 @@ Pico bindings from its cached config.
   on, as you choose in Settings. Tap the bar for the full Now view.
 - **Room moods:** say which lights are the main light, task light, lamps
   or decor, and each room gets Bright, Relax, Dinner, Movie and Night as
-  scenes a chip or a remote button can run.
+  scenes a chip or a remote button can run. Making and changing them,
+  and the kind of each light, live under the room's "More" row at the
+  foot of its open card.
 - **Kinds of light:** each light can say where it is and what it is,
   two questions in one sheet: Ceiling, Wall, Window, Desk, Table, Floor,
   Under a cabinet, Shelf or cove, Bed or Outside, then the fixture for
@@ -201,9 +210,10 @@ light went off, in `last_on.json`, and brings it back at the same levels.
 3. **Automations** tab: pick one of the three guided setups or "Something
    else", answer the questions, done. Each row has a toggle and a next-run
    time; the Home tab shows what is coming up with a Skip.
-4. **Settings**: connection and the connector update, night hours, and
-   under Advanced the double-press speed and hold length with a live
-   tester.
+4. **Settings**: connection, the home's name, adding devices, and one
+   Preferences row (the power button with the house dark, night hours,
+   the night look). The connector update, the double-press speed and hold
+   length with a live tester live under More settings.
 
 A worked example, a 3-button Pico in the kitchen:
 

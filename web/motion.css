@@ -22,7 +22,7 @@
 .m-flash.m-flash-css { animation: m-flash .55s var(--m-ease) forwards; }
 
 /* ---------- warm ring around a light's action button when it comes on ---------- */
-.m-ring { position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--m-warm-deep); pointer-events: none; opacity: 0; }
+.m-ring { position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--blue-40); pointer-events: none; opacity: 0; }
 /* soft halo that follows a slider drag (opacity is set by Motion.sliderFeedback) */
 .m-halo { position: absolute; inset: -6px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,181,71,.55), rgba(255,181,71,0)); pointer-events: none; opacity: 0; }
 
@@ -40,7 +40,7 @@
 /* ---------- All off hold: the round button on the Light now bar sweeps the pressed blue from left to right while held
    (the warm sweep stays in the light field) ---------- */
 @keyframes m-hold { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
-.m-hold { background-image: linear-gradient(90deg, var(--blue-pressed), var(--blue-pressed)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
+.m-hold { background-image: linear-gradient(90deg, rgba(255,255,255,.3), rgba(255,255,255,.3)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .m-hold.holding { animation: m-hold 1s linear forwards; }
 
 /* ---------- gesture detected ---------- */
@@ -53,9 +53,8 @@
    <div class="timerbar m-timer" style="--m-total:1800s;--m-elapsed:420s">…<div class="m-timer-line"></div></div> */
 @keyframes m-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .m-timer { position: relative; overflow: hidden; }
-.m-timer-line { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; border-radius: 0 4px 4px 0; background: var(--blue); transform-origin: left center; animation: m-timer var(--m-total, 60s) linear forwards; animation-delay: calc(-1 * var(--m-elapsed, 0s)); }
+.m-timer-line { position: absolute; left: 16px; right: 16px; bottom: 6px; height: 8px; border-radius: 4px; background: var(--blue); transform-origin: left center; animation: m-timer var(--m-total, 60s) linear forwards; animation-delay: calc(-1 * var(--m-elapsed, 0s)); }
 @keyframes m-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-.m-timer .i { animation: m-breathe 2.6s ease-in-out infinite; }
 
 /* ---------- connection dot ---------- */
 @keyframes m-dot-hello { from { box-shadow: 0 0 0 0 rgba(58,121,52,.55); } to { box-shadow: 0 0 0 10px rgba(58,121,52,0); } }
@@ -70,7 +69,7 @@
 
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .m-press, .m-flash, .m-pulse, .m-pulse .ic, .m-hold.holding, .m-timer .i, .status .dot.m-dot-hello, .status .dot.m-dot-lost { animation: none !important; }
+  .m-press, .m-flash, .m-pulse, .m-pulse .ic, .m-hold.holding, .status .dot.m-dot-hello, .status .dot.m-dot-lost { animation: none !important; }
   .m-timer-line { animation-play-state: paused !important; }   /* still shows how much is left, just does not move */
   .m-wash, .m-veil { display: none !important; }
 }

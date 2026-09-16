@@ -187,17 +187,17 @@ Most overwhelming, in order, with the reason:
 
 ### 2.1 Home
 
-**Glance.** Title, status circle; the Light now strip; the wind-down caption when it applies; Scenes; sleep timers; Coming up; **at most one card** (2.1a); Rooms.
+**Glance (as built after the polish pass).** Title, status circle; the headline ("Kitchen and Bedroom are on", two names at most, then "and 2 more"); under it one line only when something is due within the hour ("Welcome lights off at 3pm · Skip") and the wind-down caption when it applies; the lamp row of every light (56px lit, 44px off, a starred light first; a lamp with colour wears the rainbow ring); **Rooms**, with the first card visible without scrolling at 390x844; sleep timers as rows; **Scenes** as one chip row under a small caption (a tap runs one, "New scene" is the last chip, a starred scene is first; the tile grid lives on the Scenes tab); **at most one row of advice** (2.1a) last, as a 56px list row. "Coming up" left Home: the Automations tab carries a one-line "Next: …" caption under its title. Favourite tiles left Home: the star pins a light to the front of the lamp row and the top of its room.
 
 **2.1a One card at a time.** The `sortBlockHTML()` tip, the `moodsTipHTML()` tip and the setup tip are replaced by a single slot filled by `nextCardHTML()` (section 3). Priority when more than one applies: not connected (the existing "Not connected to your home" tip) beats everything; otherwise the Next card shows its one suggestion; otherwise nothing. Two cards never stack.
 
-**Room card open.** The mood row stays. The ghost link "Change what each light is for" under the row is removed; the mood row gains a trailing small chip with the `dots` glyph and the label "Change" that opens the roles sheet (`roles-open`). Rooms without moods keep the single "Make moods…" chip. Everything else in the card is unchanged.
+**Room card open.** The mood row shows moods only. Every light row is a button that opens the light page (trailing chevron); the on button and the star are its trailing controls, and a Hue lamp's row carries a 32px rainbow button that opens the light page at its Colour section. The disc no longer opens the kind picker. The last row of an open card is **"More · moods, what each light is for, kinds"**, which opens the room's More sheet: "Moods" (or "Make moods"), "What each light is for" (the roles sheet), and one row per light with its kind (the kind picker, back to this sheet). "Change" and "Make moods…" moved there from the chip row.
 
 **Removed, hidden, moved.** Removed from Home: the sort-lights tip, the moods tip (both become suggestions, section 3), the ghost link (moved into the mood row as a chip). Nothing else changes.
 
 ### 2.2 Light page (the light detail sheet)
 
-**Glance.** Stage, name, room and role, the level, the mood row (with the same trailing "Change" chip as 2.1), and three round buttons: "Sleep timer", "Favourite", "More".
+**Glance.** The stage (disc and well, one centred composition), the name with one caption ("Kitchen · Ceiling pendant · Task"), one readout under the stage, then Warmth and Colour on a Hue lamp (label left, value right), the three round buttons "Sleep timer" (disabled while the light is off), "Favourite", "More", and last the room's moods as a quiet caption row of small chips (no setup chips here).
 
 **On request: More** opens a sheet on the same surface as the light page, titled with the light's name, sub "Kitchen · Pendant" (the role caption as today), with one `.card.pad0.list`:
 
@@ -208,7 +208,7 @@ Most overwhelming, in order, with the reason:
 
 ### 2.3 Now view
 
-Unchanged. Fix the selected chip on the timer panel (1.6).
+Titled "Light now"; its panels (Scenes, Sleep timer) use the sheet header's back arrow like every other flow. "All off" is the primary blue like the bar; a caption under the round buttons says what the hold does and what the hollow button brings back. Sleep-timer chips pick a time on the dial and Start starts it, in every dial.
 
 ### 2.4 Remotes list
 
@@ -250,7 +250,7 @@ Unchanged. The body line stays: "Press a button on any remote to open it here."
    - Hold: Brighten while holding · Dim while holding · Sleep timer · Goodnight · Turn everything off.
    - When every picked light is a fan: Fan: faster · Fan: slower · Turn on or off · Turn off.
    The recipe currently set is always visible: if it is not among the usual ways it is appended to the short list, ticked. The "Nothing" row is gone from the list; a fresh button simply shows no tick.
-5. "Show all ways" expands, in place, into the full list grouped under Captions: **"Brightness"** (Turn on, Turn off, Turn on or off, Full brightness, Half brightness, Nightlight, Movie mode, Step through brightness, A little brighter, A little dimmer, and on a hold Brighten while holding and Dim while holding), **"Scenes and moods"** (Run a scene…, Room mood…, Next mood), **"Timers and going out"** (Sleep timer, Light the way, Goodnight, Leaving, Turn everything off), **"Fans"** (Fan: faster, Fan: slower; only when the pick has a fan). Rows keep today's second lines. Once expanded it stays expanded for the life of the sheet; a second open of the sheet starts short again.
+5. "Show all ways" expands, in place, into the full list grouped under Captions (a "Show fewer" row collapses it again; the list keeps its scroll on every tap and the tick appears where you tapped): **"Brightness"** (Turn on, Turn off, Turn on or off, Full brightness, Half brightness, Nightlight, Movie mode, Step through brightness, A little brighter, A little dimmer, and on a hold Brighten while holding and Dim while holding), **"Scenes and moods"** (Run a scene…, Room mood…, Next mood), **"Timers and going out"** (Sleep timer, Light the way, Goodnight, Leaving, Turn everything off), **"Fans"** (Fan: faster, Fan: slower; only when the pick has a fan). Rows keep today's second lines. Once expanded it stays expanded for the life of the sheet; a second open of the sheet starts short again.
 6. The Custom tip, when the steps match no recipe. Unchanged.
 7. "Try it now" (secondary), only when something is set. Unchanged.
 8. The More row: "More" / "At night, fine-tune, clear".
@@ -368,8 +368,8 @@ Each keeps its title and sub on step 1 only. The pre-fills and the saved shapes 
 
 1. The Connection tip. Connected: "Connected to your home" / "5 lights · 2 remotes" (the bridge address moves to More settings). Not connected: as today.
 2. **While the home has never connected**, directly under the tip: the "Connect your home" walk entry (2.18) as a `.tip`: cap "Set up", title "Let's connect your home", sub "About ten minutes, once.", chevron. Once the home has connected this card is gone from the glance.
-3. `.h2` "Your home": "Home name"; "Add a device"; "Connect a Hue bridge" / "Hue bridge"; "Look for new lights" (sub shortened to "Added or renamed something in the Lutron app? Look again.").
-4. `.h2` "Night-time": "Night starts" with sub "Buttons can do something different at night." (one line; the wind-down sentence and the link leave); "Night ends"; "Night look" with its three chips.
+3. `.h2` "Your home": "Home name" (a value row that opens a small name sheet); "Add a device" and "Connect a Hue bridge" as add rows; "Look for new lights" (sub shortened to "Added or renamed something in the Lutron app? Look again.").
+4. `.h2` "Preferences": one row ("Power button, night hours, night look") that opens the Preferences sheet: the power button with the house dark, "Night starts" with sub "Buttons can do something different at night.", "Night ends", "Night look" with its three chips.
 5. `.h2` "This app": "Add to your phone's home screen"; "Recent activity"; **"Ideas for your home"** · sub "Things worth setting up, one at a time" (section 3.4).
 6. The More row: "More settings" / "Connector, timing, default brightness, light sets, back up".
 7. "Sign out" card.

@@ -25,21 +25,18 @@ function settingsGlance() {
     ${everConnected ? '' : `<button class="tip" data-act="setup-open" style="margin-top:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Let's connect your home</div><div class="d">About ten minutes, once.</div></div><span class="go">${ICON('chev')}</span></button>`}
     <div class="h2">Your home</div>
     <div class="card pad0 list">
-      <div class="item"><div class="grow"><div class="t">Home name</div></div><input class="input name" value="${esc(s.home_name)}" placeholder="Home" data-setting="home_name"></div>
-      <button class="item" data-act="ad-open"><div class="grow"><div class="t">Add a device</div><div class="d">A new dimmer, switch, remote or shade, without the Lutron app</div></div><span class="chev">${ICON('plus', 'sm')}</span></button>
-      ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div><span class="chev">${ICON('plus', 'sm')}</span></button>`; })()}
-      ${powerRowHTML()}
+      ${valueRow('Home name', esc(s.home_name || 'Home'), 'home-name')}
+      <button class="item" data-act="ad-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a device</div><div class="d">A new dimmer, switch, remote or shade, without the Lutron app</div></div></button>
+      ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div></button>`; })()}
       <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div><div class="d">Added or renamed something in the Lutron app? Look again.</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
     </div>
-    <div class="h2">Night-time</div>
+    <div class="h2">Preferences</div>
     <div class="card pad0 list">
-      <div class="item"><div class="grow"><div class="t">Night starts</div><div class="d">Buttons can do something different at night.</div></div><input type="time" value="${s.night_start}" data-setting="night_start"></div>
-      <div class="item"><div class="grow"><div class="t">Night ends</div></div><input type="time" value="${s.night_end}" data-setting="night_end"></div>
-      ${nightLookRowHTML()}
+      ${valueRow('Power button, night hours, night look', '', 'prefs', '', { sub: prefsSub() })}
     </div>
     <div class="h2">This app</div>
     <div class="card pad0 list">
-      <button class="item" data-act="install-help"><div class="grow"><div class="t">Add to your phone's home screen</div><div class="d">Opens full-screen like a real app</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
+      <button class="item" data-act="install-help"><div class="grow"><div class="t">Add to your home screen</div><div class="d">Opens full-screen like a real app</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
       <button class="item" data-act="activity"><div class="grow"><div class="t">Recent activity</div><div class="d">What was pressed, and what happened</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
       <button class="item" data-act="ideas"><div class="grow"><div class="t">Ideas for your home</div><div class="d">Things worth setting up, one at a time</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
     </div>
@@ -55,7 +52,7 @@ function settingsMore() {
   return `
     <div class="h2" style="margin-top:8px">Connector</div>
     <div class="card pad0 list">
-      <div class="item"><div class="grow"><div class="t">Connector ${esc(info.version || '?')}${info.commit ? ` <span class="faint small">(${esc(info.commit)})</span>` : ''}</div><div class="d">${info.update_available ? `Update available: ${esc(info.latest)}` : 'Up to date'}${(info.bridge || {}).host ? ` · bridge at ${esc(info.bridge.host)}` : ''}</div>${info.update_available ? `<span class="tag">Update available</span>` : ''}</div>${info.update_available ? `<button class="btn sm primary" data-act="update-connector">Update</button>` : ''}</div>
+      <div class="item"><div class="grow"><div class="t">Connector ${esc(info.version || '?')}${info.commit ? ` <span class="faint small">(${esc(info.commit)})</span>` : ''}</div><div class="d">${info.update_available ? `${esc(info.latest)} is available` : 'Up to date'}${(info.bridge || {}).host ? ` · bridge at ${esc(info.bridge.host)}` : ''}</div></div>${info.update_available ? `<button class="btn sm primary" data-act="update-connector">Update</button>` : ''}</div>
       <label class="item"><div class="grow"><div class="t">Update automatically</div><div class="d">Whenever a new version is out, the connector updates itself.</div></div><button class="sw ${s.auto_update ? 'on' : ''}" data-act="auto-update"></button></label>
       <div class="item" style="flex-wrap:wrap"><details class="more grow" style="margin:0"><summary><div><div class="t">How your home connects</div><div class="d">The helper program, and the line that installs it</div></div>${ICON('chev', 'sm')}</summary>${howToHTML()}</details></div>
     </div>
@@ -94,13 +91,16 @@ function setSetting(k, v) {
   const s = S.config.settings;
   if (k === 'double_ms' || k === 'hold_ms' || k === 'group_on_level') s[k] = Number(v); else s[k] = v;
   if (k === 'double_ms') $('#dv').textContent = `${v} ms`; if (k === 'hold_ms') $('#hv').textContent = `${v} ms`;
+  if (k === 'home_name') { const t = document.querySelector('#top .t1'); if (t && S.view === 'home') t.textContent = v || 'Home'; const r = document.querySelector('[data-act="home-name"] .val'); if (r) r.textContent = v || 'Home'; paintNowBar(); }
   saveSoon();
 }
+// The name saves as you type (the value row, the page title and the bar follow).
+document.addEventListener('input', e => { if (e.target.dataset && e.target.dataset.setting === 'home_name') setSetting('home_name', e.target.value); });
 function openActivity() {
   sheet.open('Recent activity', `<div id="activity">${activityHTML()}</div>`);
 }
 function activityHTML() {
-  if (!S.activity.length) return '<div class="empty"><p>Nothing yet. Press a remote button.</p></div>';
+  if (!S.activity.length) return `<div class="tip"><div class="grow"><span class="cap">Activity</span><div class="t">Nothing yet</div><div class="d">Press a remote button and it shows up here.</div></div></div>`;
   return `<div class="card pad0 list">${S.activity.slice(0, 60).map(e => {
     const when = new Date(e.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     let t = '', d = '', ic = 'bolt';
@@ -113,6 +113,28 @@ function activityHTML() {
   }).join('')}</div>`;
 }
 function paintActivity() { const el = $('#activity'); if (el) el.innerHTML = activityHTML(); }
+// The home's name: a small sheet with one field, saved as you type.
+function openHomeName() {
+  const s = S.config.settings;
+  sheet.open('Home name', `<label class="field" style="margin-top:0"><span>Name</span><input class="input" value="${esc(s.home_name || '')}" placeholder="Home" data-setting="home_name" maxlength="40" autocomplete="off"></label><p class="d">It shows at the top of Home and on the Light now bar.</p><div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`);
+  setTimeout(() => { const i = $('#sheet-root [data-setting="home_name"]'); if (i) { i.focus(); i.select(); } }, 350);
+}
+// Preferences (docs/ux-progressive.md 2.17): the power button with the house dark, the night hours, the night look, in one sheet.
+function prefsSub() { const s = S.config.settings; return `${(s.power_on || 'restore') === 'all' ? 'Everything on' : 'What was on before'} · night ${fmtTime(s.night_start)} to ${fmtTime(s.night_end)}`; }
+function openPrefs() {
+  const s = S.config.settings;
+  const body = `<div class="card pad0 list">
+      ${powerRowHTML()}
+    </div>
+    <div class="h3" style="margin-top:24px">Night-time</div>
+    <div class="card pad0 list">
+      <div class="item"><div class="grow"><div class="t">Night starts</div><div class="d">Buttons can do something different at night.</div></div><input type="time" value="${s.night_start}" data-setting="night_start" aria-label="Night starts"></div>
+      <div class="item"><div class="grow"><div class="t">Night ends</div></div><input type="time" value="${s.night_end}" data-setting="night_end" aria-label="Night ends"></div>
+      ${nightLookRowHTML()}
+    </div>`;
+  showSheet('prefs', 'Preferences', body, { sub: 'The power button, night hours, night look.' });
+  sheet.onClose = () => { const r = document.querySelector('[data-act="prefs"] .d'); if (r) r.textContent = prefsSub(); };
+}
 function openInstallHelp() {
   sheet.open('Add to your home screen', `<div class="stack">
     <div class="card"><div class="t">Android (Chrome)</div><div class="body">Tap the ⋮ menu, then <b style="color:var(--text)">Add to Home screen</b>. Tap Install if it offers.</div></div>
@@ -130,7 +152,7 @@ function openGroupEditor(id) {
 // The power button with the house dark: bring back what was on, or turn everything on.
 function powerRowHTML() {
   const cur = S.config.settings.power_on || 'restore';
-  return `<div class="item" style="flex-wrap:wrap"><div class="grow"><div class="t">Power button when everything is off</div><div class="d">${cur === 'all' ? 'Turns every light on at its usual level.' : 'Brings back the lights that were on before, at the same levels.'}</div></div>
+  return `<div class="item" style="flex-wrap:wrap"><div class="grow"><div class="t">Power button with the house dark</div><div class="d">${cur === 'all' ? 'Turns every light on at its usual level.' : 'Brings back the lights that were on before, at the same levels.'}</div></div>
     <div class="chips" style="flex-basis:100%;margin-top:4px" data-power-on>${[['restore', 'What was on before'], ['all', 'Everything']].map(([v, l]) => `<button class="chip sm ${cur === v ? 'sel' : ''}" data-act="power-on" data-v="${v}">${l}</button>`).join('')}</div></div>`;
 }
 function setPowerOn(v) {

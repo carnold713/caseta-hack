@@ -27,7 +27,7 @@ function lampColor(lv, dark) { // eslint-disable-line no-unused-vars
 const lvText = v => (v > 0 ? `${v}%` : 'Off');
 const lvLabel = (v, dim) => (dim ? lvText(v) : v > 0 ? 'On' : 'Off'); // a switch is on or off, never a percentage
 const discSize = lv => Math.round(24 + 32 * clamp(lv, 0, 100) / 100);
-const heroSize = lv => Math.round(140 + 60 * clamp(lv, 0, 100) / 100);
+const heroSize = lv => Math.round(132 + 52 * clamp(lv, 0, 100) / 100);
 // `fill` overrides the ramp: a Hue lamp's disc is painted in its own colour (js/color.js lampFill).
 function lampHTML(lv, size, inner, cls = '', dark = false, fill = null) { return `<span class="lamp ${lv > 0 ? '' : 'off'} ${cls}" style="width:${size}px;height:${size}px;background:${fill || lampColor(lv, dark)}">${inner || ''}</span>`; }
 // One tween, only when something actually changed. Without GSAP (or under reduced motion) the value is set outright.
@@ -42,8 +42,11 @@ function elFrom(html) { const t = document.createElement('template'); t.innerHTM
 // A kind is a place and a fixture (`desk-lamp`, `ceiling-track`). KINDS keeps the old [id, label, role] shape for readers of it.
 const KINDS = Object.values(KIND_DEF.KINDS).map(k => [k.id, k.label, k.role]);
 const KIND_ROLE = KIND_DEF.ROLES;
-const ROLE_LABEL = { ambient: 'Ambient', task: 'Task', accent: 'Accent', decor: 'Decor' };
-const ROLE_CAP = { ambient: 'Ambient · fills the room', task: 'Task · light for your hands', accent: 'Accent · lamps and glow' };
+// One vocabulary everywhere (the roles sheet, the kind picker, the light page): Main, Task, Lamps, Decor.
+const ROLE_LABEL = { ambient: 'Main', task: 'Task', accent: 'Lamps', decor: 'Decor' };
+const ROLE_CAP = { ambient: 'Main · fills the room', task: 'Task · light for your hands', accent: 'Lamps · for atmosphere', decor: 'Decor · lit to be looked at' };
+// "Kitchen · Ceiling pendant · Task": the one caption for a light, used by its page and its More sheet.
+function lightCaption(id) { const d = dev(id); if (!d) return ''; const k = lightKind(id), r = lightRole(id); return [areaName(d.area), k ? kindLabel(k) : null, r ? ROLE_LABEL[r] : null].filter(Boolean).map(esc).join(' · '); }
 function kindLabel(k) { const x = KIND_DEF.KINDS[KIND_DEF.normalize(k)]; return x ? x.label : null; }
 // The stored id, read as the id in the table: the nine old one-word ids ("pendant") still resolve ("ceiling-pendant").
 function lightKind(id) { return KIND_DEF.normalize(((S.config && S.config.settings.light_kinds) || {})[id]); }
@@ -80,7 +83,7 @@ function kindPlacesHTML(id) {
   const cur = lightKind(id); const curPlace = cur ? KIND_DEF.KINDS[cur].place : null;
   const rows = KIND_DEF.PLACES.map(p => {
     const sel = curPlace === p.id;
-    const sub = sel ? kindLabel(cur) : cap(p.fixtures.slice(0, 3).map(f => f.name.toLowerCase()).join(', ')) + (p.fixtures.length > 3 ? ', …' : '');
+    const sub = sel ? kindLabel(cur) : cap(p.fixtures.slice(0, 3).map(f => f.name.toLowerCase()).join(', ')) + (p.fixtures.length > 3 ? ' and more' : '');
     return `<button class="item pick ${sel ? 'sel' : ''}" data-act="kind-place" data-id="${id}" data-p="${p.id}">${ICON(p.icon)}<div class="grow"><div class="t">${p.name}</div><div class="d">${esc(sub)}</div></div>${sel ? `<span class="chk">${ICON('check')}</span>` : `<span class="chev">${ICON('chev', 'sm')}</span>`}</button>`;
   });
   return `<div class="card pad0 list">${rows.join('')}</div>`;
@@ -124,7 +127,7 @@ function pickKind(id, k) {
   saveSoon();
   if (KP && KP.id === id) kindRender();
   const d = dev(id); if (!d) return;
-  document.querySelectorAll(`[data-act="kind-open"][data-id="${id}"]`).forEach(b => { b.innerHTML = ICON(lightIcon(d)); });
+  document.querySelectorAll(`.lkind[data-ldisc="${id}"]`).forEach(b => { b.innerHTML = ICON(lightIcon(d)); });
   document.querySelectorAll('.tile[data-tgt] .face').forEach(f => { delete f.dataset.k; });
   paintLight();
 }
@@ -192,12 +195,20 @@ function moodMatch(aid) {
   return null;
 }
 // The room card's first row (docs/ux-flows.md 7): the room's five mood scenes, or one chip that makes them.
+// The room card's first row (docs/ux-flows.md 7): the room's mood scenes, nothing else. Making and changing moods lives under the room's More.
 function moodRowHTML(aid) {
   if (!roomDimmers(aid).length) return '';
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
-  if (!ps.length) return `<div class="moodrow" data-moods="${aid}"><div class="moods"><button class="chip" data-act="roles-open" data-area="${aid}">${ICON('plus', 'sm')}Make moods…</button></div></div>`;
+  if (!ps.length) return '';
   const cur = moodMatch(aid);
-  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 32, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}<button class="chip sm change" data-act="roles-open" data-area="${aid}" title="Change what each light is for">${ICON('dots', 'sm')}Change</button></div></div>`;
+  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 32, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}</div></div>`;
+}
+// The light page's foot: the room's moods as a quiet caption row of small chips (no setup chips here).
+function moodCaptionHTML(aid) {
+  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
+  if (!ps.length) return '';
+  const cur = moodMatch(aid);
+  return `<div class="ld-moods" data-moods="${aid}"><div class="h3">${esc(areaName(aid))} moods</div><div class="chips scroll">${ps.map(p => { const m = moodById(p.mood); return `<button class="chip sm ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${m.name}</button>`; }).join('')}</div></div>`;
 }
 async function applyMood(aid, mid) {
   const m = moodById(mid); if (!m) return;
@@ -230,27 +241,38 @@ function roomsLit() {
     return { id: a.id, name: a.name, level: Math.max(1, roomMean(a.id)), icon: roomIcon(a.name) };
   }).filter(Boolean);
 }
-function lightNowHeadline(rooms) {
+function lightNowHeadline(rooms, short = false) {
   if (!S.agent.online) return 'Last known state';
   if (!rooms.length) return 'Everything is off';
   const n = rooms.map(r => r.name);
-  const list = n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
-  return `${esc(list)} ${n.length === 1 ? 'is' : 'are'} on`;
+  if (short) { if (n.length > 2 || (n.length === 2 && n.join('').length > 18)) return `${n.length} rooms are on`; }
+  else if (n.length > 2) return `${esc(n.slice(0, 2).join(', '))} and ${n.length - 2} more are on`;
+  return `${esc(n.join(' and '))} ${n.length === 1 ? 'is' : 'are'} on`;
 }
-// The row at the top of Home: every light at one size, lit in its own colour, grey when off. Tap toggles it,
-// hold opens it. Order never changes (by room, then name), so a lamp is always where you left it.
+// The row at the top of Home: every light, lit in its own colour and 56px, grey and 44px when off. Tap toggles it,
+// hold a lit one for a sleep timer. A starred light comes first, then by room and name, so a lamp is always where you left it.
 function rowLights() {
-  const order = new Map(areas().map((a, i) => [a.id, i]));
+  const order = new Map(areas().map((a, i) => [a.id, i])); const f = S.config.favorites;
   return controllable().filter(d => d.domain === 'light' || d.domain === 'switch')
-    .sort((a, b) => ((order.get(a.area || 'none') ?? 999) - (order.get(b.area || 'none') ?? 999)) || a.name.localeCompare(b.name));
+    .sort((a, b) => ((f.includes('d:' + b.device_id) ? 1 : 0) - (f.includes('d:' + a.device_id) ? 1 : 0)) || ((order.get(a.area || 'none') ?? 999) - (order.get(b.area || 'none') ?? 999)) || a.name.localeCompare(b.name));
 }
+// Is a sleep timer running over this light?
+function timerOn(id) { return Object.entries(S.timers || {}).some(([t, v]) => v && v.ends_at && targetDevices(tsplit(t)).includes(id)); }
 function lampItemHTML(d) {
   const lv = isOn(d.device_id) ? (level(d.device_id) || 100) : 0;
-  return `<button class="ln-lamp ${lv > 0 ? 'on' : ''}" data-act="lamp-toggle" data-id="${d.device_id}" data-long="open-light" data-t="d:${d.device_id}" data-level="${lv}" title="${esc(d.name)}">${lampHTML(lv, 44, ICON(lightIcon(d), 'sm'), '', false, lightFill(d.device_id, lv))}<span class="ln-name">${esc(d.name)}</span><span class="ln-room">${esc(areaName(d.area))}</span></button>`;
+  const ring = typeof ringClass === 'function' ? ringClass(d) : '';
+  const size = lv > 0 ? 56 : 44;
+  return `<button class="ln-lamp ${lv > 0 ? 'on' : ''}" data-act="lamp-toggle" data-id="${d.device_id}" ${lv > 0 ? 'data-long="open-light"' : ''} data-t="d:${d.device_id}" data-level="${lv}" data-timer="${timerOn(d.device_id) ? 1 : ''}" title="${esc(d.name)}" aria-label="${esc(d.name)}, ${lv > 0 ? 'on' : 'off'}"><span class="lring ${ring}">${lampHTML(lv, size, ICON(lightIcon(d), 'sm'), '', false, lightFill(d.device_id, lv))}${timerOn(d.device_id) ? `<span class="badge">${ICON('clock')}</span>` : ''}</span><span class="ln-name">${esc(d.name)}</span></button>`;
+}
+// The hint under the row, the first three times Home is seen.
+function lampHintHTML() {
+  let n = 0; try { n = Number(localStorage.getItem('lnHint') || 0); if (!sessionStorage.getItem('lnHintSeen')) { sessionStorage.setItem('lnHintSeen', '1'); localStorage.setItem('lnHint', String(n + 1)); } } catch (_) { return ''; }
+  return n < 3 ? `<p class="ln-hint">Tap to switch · hold for a timer</p>` : '';
 }
 function lightNowHTML() {
   const rooms = roomsLit(); const ds = rowLights();
-  return `<div class="lightnow" id="lightnow"><p class="statusline ln-line">${lightNowHeadline(rooms)}</p><div class="ln-row ${ds.length ? '' : 'empty'}">${ds.map(d => lampItemHTML(d)).join('')}</div></div>`;
+  const due = typeof dueLineHTML === 'function' ? dueLineHTML() : '';
+  return `<div class="lightnow" id="lightnow"><p class="statusline ln-line">${lightNowHeadline(rooms)}</p><div id="ln-due">${due}</div><div id="wd-home">${typeof windDownCaptionHTML === 'function' ? windDownCaptionHTML() : ''}</div><div class="ln-row ${ds.length ? '' : 'empty'}">${ds.map(d => lampItemHTML(d)).join('')}</div>${ds.length ? lampHintHTML() : ''}</div>`;
 }
 function paintLightNow() {
   const root = $('#lightnow'); if (!root) return;
@@ -260,16 +282,23 @@ function paintLightNow() {
   const row = root.querySelector('.ln-row');
   const ds = rowLights();
   const have = new Map([...row.querySelectorAll('.ln-lamp')].map(el => [el.dataset.id, el]));
-  if (ds.length !== have.size || ds.some(d => !have.has(d.device_id))) { row.innerHTML = ds.map(d => lampItemHTML(d)).join(''); row.classList.toggle('empty', !ds.length); return; }
+  const order = ds.map(d => d.device_id).join(',');
+  if (ds.length !== have.size || ds.some(d => !have.has(d.device_id)) || row.dataset.order !== order) { row.dataset.order = order; row.innerHTML = ds.map(d => lampItemHTML(d)).join(''); row.classList.toggle('empty', !ds.length); return; }
   for (const d of ds) {
     const el = have.get(d.device_id);
     const lv = isOn(d.device_id) ? (level(d.device_id) || 100) : 0;
     const fill = lightFill(d.device_id, lv);
+    const tm = timerOn(d.device_id) ? '1' : '';
+    if (el.dataset.timer !== tm) { el.dataset.timer = tm; const b = el.querySelector('.badge'); if (tm && !b) el.querySelector('.lring').insertAdjacentHTML('beforeend', `<span class="badge">${ICON('clock')}</span>`); else if (!tm && b) b.remove(); }
     if (Number(el.dataset.level) === lv && el.dataset.fill === fill) continue;
+    const was = Number(el.dataset.level) > 0;
     el.dataset.level = lv; el.dataset.fill = fill;
     el.classList.toggle('on', lv > 0);
+    if (lv > 0) el.setAttribute('data-long', 'open-light'); else el.removeAttribute('data-long');
     const lamp = el.querySelector('.lamp'); lamp.classList.toggle('off', lv <= 0);
-    tween(lamp, { backgroundColor: fill });
+    // the disc breathes: colour, and size 44 to 56 when it comes on
+    const size = lv > 0 ? 56 : 44;
+    if (was !== lv > 0) tween(lamp, { backgroundColor: fill, width: size, height: size }); else tween(lamp, { backgroundColor: fill });
   }
 }
 function openRoomCard(aid) {
@@ -279,6 +308,7 @@ function openRoomCard(aid) {
   if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 72, behavior: MOTION.d ? 'smooth' : 'auto' });
 }
 // The room card's disc (and the Now view's) takes the ramp fill at the room's mean level; off is the off grey.
+function paintLnHint() { /* the hint is rendered once per visit; nothing to repaint */ }
 function paintOnChips() {
   document.querySelectorAll('[data-onchip]').forEach(el => {
     const t = el.dataset.onchip; const on = targetOn(t);
@@ -343,17 +373,15 @@ function nowArtHTML(rooms) {
   return rooms.slice(0, 6).map(r => lampHTML(r.level, Math.round(base + base * 0.35 * clamp(r.level, 0, 100) / 100), ICON(r.icon, n <= 2 ? '' : 'sm'), '', false)).join('');
 }
 function nowSub(rooms, on, lv) {
-  if (!on.length) return 'Everything is off';
+  if (!on.length) return S.agent.online ? 'Slide the dimmer or tap the power button to bring the lights up' : '';
   return `${plural(on.length, 'light')} · ${lv}% on average${rooms.length > 6 ? ` · ${rooms.length - 6} more rooms` : ''}`;
 }
 const NOW = { panel: 'main' };
-// The running timer that covers the lit lights, soonest first (the house timer or a room's).
+// The running timer that ends soonest (the house timer or a room's); any light's timer counts, lit or not.
 function nowTimer() {
-  const lit = new Set(litLights().map(d => d.device_id)); if (!lit.size) return null;
   let best = null;
   for (const [t, v] of Object.entries(S.timers || {})) {
     if (!v || !v.ends_at) continue;
-    if (!targetDevices(tsplit(t)).some(id => lit.has(id))) continue;
     if (!best || v.ends_at < best.v.ends_at) best = { t, v };
   }
   return best;
@@ -364,19 +392,25 @@ function nowRingHTML(t, v, size, width, cls) {
   return `<svg class="tring ${cls}" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true" style="--w:${width}"><circle class="track" cx="${size / 2}" cy="${size / 2}" r="${r}"/><circle class="prog" cx="${size / 2}" cy="${size / 2}" r="${r}" style="stroke-dasharray:${c};stroke-dashoffset:${c * (1 - f)}"/></svg>`;
 }
 function nowActionsHTML() {
-  const rb = (act, icon, label, extra = '', inner = '') => `<button class="rbtn ${act === 'alloff' ? 'm-hold' : ''}" data-act="${act}" ${extra}><span class="c">${ICON(icon)}${inner}</span><span>${label}</span></button>`;
+  const rb = (act, icon, label, extra = '', inner = '') => `<button class="rbtn ${act === 'alloff' ? `m-hold power ${litLights().length ? 'on' : ''}` : ''}" data-act="${act}" ${extra}><span class="c">${ICON(icon)}${inner}</span><span>${label}</span></button>`;
   const tm = nowTimer();
   const timer = tm
     ? `<button class="rbtn timing" data-act="now-panel" data-p="timer-active" data-ring="${esc(tm.t)}" data-ends="${tm.v.ends_at}" data-c="${(2 * Math.PI * 28).toFixed(2)}"><span class="c">${ICON('clock')}${nowRingHTML(tm.t, tm.v, 64, 3, 'rring')}</span><span data-countdown-min="${tm.v.ends_at}">${minutesLeft(tm.v.ends_at)} min</span></button>`
     : rb('now-panel', 'clock', 'Sleep timer', 'data-p="timer"');
   return `${rb('alloff', 'power', powerLabel(), `title="${powerTitle()}"`)}${rb('now-night', 'moon', 'Night')}${timer}${rb('now-panel', 'scene', 'Scenes', 'data-p="scenes"')}`;
 }
+// The caption under the round buttons says what the hold does, and what the hollow button brings back.
+function nowCaption() { return litLights().length ? `Hold ${ICON('power', 'sm')} to close shades and stop fans too` : ((S.config.settings.power_on || 'restore') === 'all' ? `${ICON('power', 'sm')} turns every light on` : `${ICON('power', 'sm')} brings back what was on`); }
+// The ring a room's disc wears in the Now view: the rainbow when every light in it can show colour.
+function roomRingClass(aid) { const ds = roomLights(aid); if (!ds.length) return ''; if (ds.every(d => d.color)) return 'color'; if (ds.every(d => d.ct)) return 'ct'; return ''; }
 function nowMainHTML() {
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const rows = areas().map(a => {
     const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return '';
     const t = `a:${a.id}`; const on = targetOn(t);
-    return `<div class="item"><span class="lamp ringed ${on ? '' : 'off'}" data-onchip="${t}" style="width:32px;height:32px;background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span><button class="grow" data-act="now-room" data-id="${a.id}"><div class="n">${esc(a.name)}</div><div class="lv" data-roomsum="${a.id}">${esc(roomSummary(a.id))}</div></button><button class="sw ${on ? 'on' : ''}" data-tgt="${t}" data-act="toggle" data-t="${t}"></button></div>`;
+    const ring = roomRingClass(a.id);
+    const disc = `<span class="lamp ringed ${on ? '' : 'off'}" data-onchip="${t}" style="width:32px;height:32px;background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span>`;
+    return `<div class="item">${ring ? `<span class="lring ${ring}">${disc}</span>` : disc}<button class="grow" data-act="now-room" data-id="${a.id}"><div><div class="n">${esc(a.name)}</div><div class="lv" data-roomsum="${a.id}">${esc(roomSummary(a.id))}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button><button class="sw ${on ? 'on' : ''}" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(a.name)} on or off"></button></div>`;
   }).join('');
   return `<div class="now-art" id="now-art" data-k="${rooms.map(r => r.id + ':' + r.level).join(',')}">${nowArtHTML(rooms)}</div>
     <div class="t1 now-head" id="now-head">${lightNowHeadline(rooms)}</div>
@@ -384,32 +418,36 @@ function nowMainHTML() {
     <div class="display now-big" id="now-big">${on.length ? lv + '%' : 'Off'}</div>
     <div class="now-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"></div>
     <div class="now-actions" id="now-actions" data-tk="${nowTimerKey()}">${nowActionsHTML()}</div>
+    <p class="now-cap" id="now-cap">${nowCaption()}</p>
     <div class="h2">Rooms</div><div class="card pad0 list now-rooms">${rows}</div>`;
 }
 function nowTimerKey() { const tm = nowTimer(); return tm ? `${tm.t}@${tm.v.ends_at}@${minutesLeft(tm.v.ends_at)}` : ''; }
-const nowTop = title => `<div class="now-top"><button class="now-back" data-act="now-panel" data-p="main" aria-label="Back">${ICON('back', 'sm')}</button><div class="t2">${title}</div></div>`;
+// A panel's title goes in the sheet's header, with the back arrow; nowShow sets it.
+const NOW_TITLE = { main: 'Light now', scenes: 'Scenes', timer: 'Sleep timer', 'timer-active': 'Sleep timer' };
+const nowTop = () => '';
 function nowPanelHTML(p) {
   if (p === 'scenes') {
     const list = [...presets().filter(x => !x.mood).map(x => ({ id: 'p:' + x.id, name: x.name, sub: plural(Object.keys(x.levels).length, 'light') })), ...lutronScenes().map(x => ({ id: 's:' + x.scene_id, name: x.name, sub: 'From the Lutron app' }))];
     const moods = roomsLit().map(r => { const ps = presets().filter(x => x.area === r.id && x.mood); if (!ps.length) return ''; return `<div class="h2">${esc(r.name)} moods</div><div class="chips scroll">${ps.map(x => `<button class="chip" data-act="run-scene" data-t="p:${x.id}">${esc((x.name.split('·')[1] || x.name).trim())}</button>`).join('')}</div>`; }).join('');
     const rows = list.map(x => `<button class="item" data-act="run-scene" data-t="${x.id}"><span class="ic">${ICON('play', 'sm')}</span><div class="grow"><div class="n">${esc(x.name)}</div><div class="lv">${esc(x.sub)}</div></div></button>`).join('');
-    return nowTop('Scenes') + (rows ? `<div class="card pad0 list now-rooms">${rows}</div>` : `<p class="now-sub" style="text-align:left">No scenes yet. Set the lights how you like them and save the look on the Scenes tab.</p>`) + moods;
+    return (rows ? `<div class="card pad0 list now-rooms">${rows}</div>` : `<button class="tip" data-act="scene-new"><div class="grow"><span class="cap">Scenes</span><div class="t">What look would you like to keep?</div><div class="d">Set the lights the way you like them, then save that look.</div></div><span class="go">${ICON('plus')}</span></button>`) + moods.replace(/class="h2"/g, 'class="h3" style="margin-top:20px"');
   }
   if (p === 'timer') {
-    const ids = litLights(); if (!ids.length) return nowTop('Sleep timer') + '<p class="now-sub" style="text-align:left">Nothing is on.</p>';
+    const ids = litLights(); if (!ids.length) return `<div class="tip"><div class="grow"><span class="cap">Sleep timer</span><div class="t">Nothing is on</div><div class="d">Turn a light on first, then set a timer for it.</div></div></div>`;
     const t = ids.map(x => `d:${x.device_id}`).join('|');
-    return nowTop('Sleep timer') + `<p class="now-sub" style="text-align:left;margin-top:-4px">${esc(cap(targetName(tsplit(t))))} fade off when the time is up.</p>` + dialHTML(t, 20, true);
+    const who = ids.length === 1 ? `${esc(ids[0].name)} fades` : `${plural(ids.length, 'light')} fade`;
+    return `<p class="now-sub" style="text-align:left;margin-top:-4px">${who} off when the time is up.</p>` + dialHTML(t, 20, true);
   }
   if (p === 'timer-active') {
     const tm = nowTimer(); if (!tm) return nowMainHTML();
     const tgt = tsplit(tm.t); const lv = meanLevel(targetDevices(tgt)); const left = minutesLeft(tm.v.ends_at);
-    return nowTop('Sleep timer') + `<div class="td" id="td-active">
+    const n = targetDevices(tgt).length;
+    return `<div class="td" id="td-active">
       <div class="td-ring big" data-ring="${esc(tm.t)}" data-ends="${tm.v.ends_at}" data-c="${RING_C.toFixed(2)}">${nowRingHTML(tm.t, tm.v, 240, 12, '')}
         <div class="td-centre"><div class="td-cap">${tm.v.level ? 'Down to ' + tm.v.level + '% in' : 'Off in'}</div><div class="td-min display" data-countdown-min="${tm.v.ends_at}">${left} min</div>${lampHTML(lv, 96, timerLampInner(tm.t), 'td-lamp', false)}</div>
       </div>
-      <p class="now-sub" style="margin:-4px 0 16px">${esc(cap(targetName(tgt)))}</p>
-      <button class="btn lg block" data-act="now-panel" data-p="timer">Change the time</button>
-      <button class="btn primary lg block" data-act="cancel-timer" data-t="${esc(tm.t)}" data-stay="1" style="margin-top:8px">Cancel the timer</button></div>`;
+      <p class="now-sub" style="margin:-4px 0 8px">${n > 3 ? plural(n, 'light') : esc(cap(targetName(tgt)))}</p>
+      <div class="td-row"><button class="btn sm" data-act="now-panel" data-p="timer">Change the time</button><button class="btn ghost" data-act="cancel-timer" data-t="${esc(tm.t)}" data-stay="1">Cancel</button></div></div>`;
   }
   return nowMainHTML();
 }
@@ -417,14 +455,14 @@ function nowShow(p) {
   NOW.panel = p;
   const root = $('#nowview'); if (!root) return;
   sheet.lockHeight();
-  root.innerHTML = nowPanelHTML(p);
-  const sb = root.closest('.sb'); if (sb) sb.scrollTop = 0;
+  const swap = () => { root.innerHTML = nowPanelHTML(p); sheet.header(NOW_TITLE[p] || 'Light now', { back: p !== 'main' }); sheet.onBack = p !== 'main' ? () => nowShow('main') : null; };
+  if (window.Motion) Motion.swap(root, swap); else swap();
+  const sb = root.closest('.sb'); if (sb) sb.scrollTop = 0; sheet.scrolled();
   if (p === 'timer') wireDial();
-  if (window.Motion) Motion.pageIn(root, { force: true });
 }
 function nowViewHTML() { NOW.panel = 'main'; return `<div class="now" id="nowview">${nowMainHTML()}</div>`; }
 // The Now view is a flyout card that stops short of the top of the screen (86dvh, one height for all its panels), never a full-height sheet.
-function openNowView() { sheet.open('', nowViewHTML(), { cls: 'now' }); }
+function openNowView() { sheet.open('Light now', nowViewHTML(), { cls: 'now' }); }
 function paintNow() {
   const root = $('#nowview'); if (!root) return;
   if (NOW.panel === 'timer-active' && !nowTimer()) { nowShow('main'); return; }
@@ -435,6 +473,7 @@ function paintNow() {
   const head = root.querySelector('#now-head'); const h = lightNowHeadline(rooms);
   if (head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
   root.querySelector('#now-sub').textContent = nowSub(rooms, on, lv);
+  const capEl = root.querySelector('#now-cap'); const c = nowCaption(); if (capEl && capEl.innerHTML !== c) capEl.innerHTML = c;
   const sl = root.querySelector('[data-house]');
   if (sl && !sl.dataset.drag) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); const big = root.querySelector('#now-big'); if (big) big.textContent = on.length ? `${lv}%` : 'Off'; }
   const acts = root.querySelector('#now-actions'); const tk = nowTimerKey();
@@ -443,37 +482,41 @@ function paintNow() {
 
 // ---------- light detail sheet (B): the Tenzing dimmer dialog, white and elevated ----------
 let LD = null;
-function openLightSheet(id) {
+function openLightSheet(id, opts = {}) {
   const d = dev(id); if (!d) return;
-  const lv = level(id) || 0, t = `d:${id}`, dim = d.domain === 'light', role = lightRole(id);
+  const lv = level(id) || 0, t = `d:${id}`, dim = d.domain === 'light';
   const colour = colorState(id); // a Hue lamp's {mode, kelvin, hex}; null for a Caseta light
   LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null, color: colour ? { ...colour } : null, more: false };
-  const well = `<div class="vcol"><div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"><div class="vtip">${lvText(lv)}</div></div>
+  const well = `<div class="vcol"><div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"></div>
       <div class="vsteps"><button class="iconbtn down" data-act="ld-step" data-d="-10" aria-label="Dimmer">${ICON('chev')}</button><button class="iconbtn up" data-act="ld-step" data-d="10" aria-label="Brighter">${ICON('chev')}</button></div></div>`;
+  // one composition: the disc and the well side by side, centred; one readout under them; colour next; the three actions; the room's moods last
   const body = `<div class="ld" id="ld" data-id="${id}">
-    <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lightFill(id, lv)}" role="button" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
+    <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lightFill(id, lv)}" role="button" tabindex="0" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
       ${dim ? well : `<div class="ld-swcol"><button class="sw ${lv > 0 ? 'on' : ''}" data-act="ld-toggle" aria-label="On or off"></button></div>`}</div>
     <div class="ld-level">${lvLabel(lv, dim)}</div>
     ${d.ct || d.color ? colorCtlHTML('ld', id, d, colour, {}) : ''}
-    ${moodRowHTML(d.area || 'none')}
     <div class="ld-actions">
-      <button class="rbtn" data-act="ld-timer" data-t="${t}"><span class="c">${ICON('clock')}</span><span>Sleep timer</span></button>
+      <button class="rbtn" data-act="ld-timer" data-t="${t}" ${lv > 0 ? '' : 'disabled'}><span class="c">${ICON('clock')}</span><span>Sleep timer</span></button>
       <button class="rbtn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}"><span class="c">${ICON('star')}</span><span>Favourite</span></button>
       <button class="rbtn" data-act="ld-more" data-id="${id}"><span class="c">${ICON('dots')}</span><span>More</span></button>
     </div>
+    ${moodCaptionHTML(d.area || 'none')}
   </div>`;
-  sheet.open(esc(d.name), body, { sub: `${esc(areaName(d.area))}${role ? ` · ${ROLE_LABEL[role]}` : ''}` });
+  sheet.open(esc(d.name), body, { sub: lightCaption(id) });
   wireLightSheet();
+  // from the rainbow button on a row: land on the Colour section
+  if (opts.scrollTo === 'colour') { const sb = $('#sheet-root .sb'); const c = sb && sb.querySelector('.ccol'); if (c) { const go = () => { sb.scrollTop = Math.max(0, c.offsetTop - 12); sheet.scrolled(); }; go(); setTimeout(go, 60); } }
 }
 // The light page's More (2.2): what kind of light it is, and removing it from the home.
 function lightMoreSheet(id) {
   const d = dev(id); if (!d) return;
   const k = lightKind(id); const kind = k ? (KINDS.find(x => x[0] === k) || [])[1] : null; const role = lightRole(id);
   const body = `<div class="card pad0 list">
-    ${valueRow('What kind of light is this?', kind ? esc(kind) : 'Not set', 'ld-kind', `data-id="${id}"`)}
-    ${String(id).startsWith('hue_') ? '' : `<button class="item ld-remove" data-act="dev-remove" data-id="${id}">${ICON('trash')}<div class="grow"><div class="t">Remove from my home</div><div class="d">It leaves your Lutron bridge.</div></div><span class="chev">${ICON('x', 'sm')}</span></button>`}
+    ${valueRow('Kind of light', kind ? esc(kind) : 'Not set', 'ld-kind', `data-id="${id}"`)}
+    ${String(id).startsWith('hue_') ? '' : `<button class="item ld-remove" data-act="dev-remove" data-id="${id}">${ICON('trash')}<div class="grow"><div class="t">Remove from my home</div><div class="d">It leaves your Lutron bridge.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`}
   </div>`;
-  showSheet('light-more', esc(d.name), body, { sub: `${esc(areaName(d.area))}${kind ? ` · ${esc(kind)}` : role ? ` · ${ROLE_LABEL[role]}` : ''}`, back: true, onBack: () => openLightSheet(id) });
+  void role;
+  showSheet('light-more', esc(d.name), body, { sub: lightCaption(id), back: true, onBack: () => openLightSheet(id) });
 }
 function wireLightSheet() {
   const root = $('#ld'); if (!root || !LD) return;
@@ -492,8 +535,10 @@ function wireLightSheet() {
     if (animate && window.gsap && MOTION.d > 0) { if (LD.stTween) LD.stTween.kill(); LD.stTween = gsap.to(st, { lv: v, duration: MOTION.d, ease: MOTION.ease, onUpdate: () => apply(st.lv) }); }
     else quick(v);
     root.querySelector('.ld-level').textContent = lvLabel(v, LD.dim);
-    if (sl) { sl.style.setProperty('--p', `${v}%`); sl.setAttribute('aria-valuenow', v); sl.querySelector('.vtip').textContent = lvText(v); }
+    if (sl) { sl.style.setProperty('--p', `${v}%`); sl.setAttribute('aria-valuenow', v); }
     const sw = root.querySelector('[data-act="ld-toggle"]'); if (sw) sw.classList.toggle('on', v > 0);
+    const tb = root.querySelector('[data-act="ld-timer"]'); if (tb) tb.disabled = v <= 0;
+    disc.setAttribute('aria-label', `Drag up or down to dim, tap to turn ${v > 0 ? 'off' : 'on'}`);
   };
   // one command in flight while dragging, the last value always lands (sendLevel drops the ones between)
   const sendNow = v => { S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); sendLevel(`d:${LD.id}`, v); paintState(); };
@@ -513,6 +558,7 @@ function wireLightSheet() {
   disc.addEventListener('pointermove', e => { const g = LD.drag0; if (!g || !LD.dim) return; const dy = g.y - e.clientY; if (Math.abs(dy) > 3) g.moved = true; if (g.moved) LD.set(g.lv + dy / 240 * 100); });
   const discUp = () => { const g = LD.drag0; if (!g) return; LD.drag0 = null; if (LD.dim) endDrag(); if (!g.moved) { const v = LD.lv > 0 ? 0 : (LD.dim ? S.config.settings.group_on_level : 100); LD.show(v); sendNow(v); LD.lastSend = Date.now(); } };
   disc.addEventListener('pointerup', discUp); disc.addEventListener('pointercancel', () => { LD.drag0 = null; if (LD.dim) endDrag(); });
+  disc.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); const v = LD.lv > 0 ? 0 : (LD.dim ? S.config.settings.group_on_level : 100); LD.show(v); sendNow(v); } });
 }
 // The light sheet's colour controls (js/color.js): every change goes to the lamp at once, one in flight, newest wins.
 colorHost('ld', {
@@ -561,7 +607,7 @@ function dialHTML(t, min, stay = false) {
       <div class="td-centre"><div class="td-cap">Off in</div><div class="td-min display">${min} min</div>${lampHTML(lv, 96, timerLampInner(t), 'td-lamp', false)}</div>
       <div class="td-knob" style="left:${p.x}px;top:${p.y}px"></div>
     </div>
-    <div class="chips">${TIMER_CHIPS.map(m => `<button class="chip sm ${m === min ? 'sel' : ''}" data-act="timer" data-t="${esc(t)}" data-m="${m}" ${st}>${m} min</button>`).join('')}</div>
+    <div class="chips scroll">${TIMER_CHIPS.map(m => `<button class="chip sm ${m === min ? 'sel' : ''}" data-act="timer-pick" data-m="${m}">${m} min</button>`).join('')}</div>
     <button class="btn primary lg block" data-act="timer" data-t="${esc(t)}" data-m="${min}" ${st}>Start</button>
   </div>`;
 }
@@ -577,7 +623,7 @@ function wireDial() {
     TD.min = min;
     root.querySelector('.td-min').textContent = `${min} min`;
     ring.setAttribute('aria-valuenow', min);
-    root.querySelectorAll('.chips .chip').forEach(c => c.classList.toggle('sel', Number(c.dataset.m) === min));
+    root.querySelectorAll('.chips .chip').forEach(c => { const sel = Number(c.dataset.m) === min; c.classList.toggle('sel', sel); if (sel && c.scrollIntoView) c.scrollIntoView({ block: 'nearest', inline: 'center', behavior: MOTION.d ? 'smooth' : 'auto' }); });
     root.querySelector('.btn.primary').dataset.m = min;
     const p = knobPos(min), off = RING_C * (1 - min / 120);
     if (animate && window.gsap && MOTION.d > 0) { gsap.to(prog, { strokeDashoffset: off, duration: MOTION.d, ease: MOTION.ease, overwrite: 'auto' }); gsap.to(knob, { left: p.x, top: p.y, duration: MOTION.d, ease: MOTION.ease, overwrite: 'auto' }); }
@@ -588,6 +634,7 @@ function wireDial() {
   ring.addEventListener('pointerdown', e => { e.preventDefault(); ring.setPointerCapture(e.pointerId); TD.dragging = true; show(pick(fromPoint(e.clientX, e.clientY))); });
   ring.addEventListener('pointermove', e => { if (!TD.dragging) return; const m = pick(fromPoint(e.clientX, e.clientY)); if (m !== TD.min) show(m); });
   const end = () => { TD.dragging = false; };
+  TD.show = show;
   ring.addEventListener('pointerup', end); ring.addEventListener('pointercancel', end);
   ring.addEventListener('keydown', e => { const dir = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key]; if (!dir) return; e.preventDefault(); const i = clamp(TIMER_STEPS.indexOf(TD.min) + dir, 0, TIMER_STEPS.length - 1); show(TIMER_STEPS[i], true); });
 }
@@ -607,7 +654,8 @@ function timerBlockHTML(t, v) {
   const total = timerTotal(t, v.ends_at), left = minutesLeft(v.ends_at), f = clamp(left / total, 0, 1);
   const lv = meanLevel(targetDevices(tgt)); const s = 12 + 16 * lv / 100;
   const totalS = total * 60, elapsedS = Math.max(0, totalS - Math.max(0, v.ends_at - Date.now() / 1000));
-  return `<div class="timerbar m-timer" style="--m-total:${totalS}s;--m-elapsed:${Math.round(elapsedS)}s"><div class="m-timer-line"></div><div class="ring40" data-ring="${esc(t)}" data-ends="${v.ends_at}" data-f="${f.toFixed(3)}"><svg class="tring" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><circle class="track" cx="20" cy="20" r="18"/><circle class="prog" cx="20" cy="20" r="18" style="stroke-dasharray:${RING40_C};stroke-dashoffset:${RING40_C * (1 - f)}"/></svg><span class="lamp" style="width:${s}px;height:${s}px;background:${lampColor(lv)}"></span></div><div class="grow"><div class="t">${esc(cap(targetName(tgt)))} ${v.level ? 'to ' + v.level + '%' : 'off'} <span data-countdown="${v.ends_at}"></span></div><div class="d">Sleep timer</div></div><button class="btn sm" data-act="cancel-timer" data-t="${esc(t)}">Cancel</button></div>`;
+  const n = targetDevices(tgt).length; const who = n > 3 ? plural(n, 'light') : cap(targetName(tgt));
+  return `<div class="timerbar m-timer" style="--m-total:${totalS}s;--m-elapsed:${Math.round(elapsedS)}s"><div class="m-timer-line"></div><div class="ring40" data-ring="${esc(t)}" data-ends="${v.ends_at}" data-f="${f.toFixed(3)}"><svg class="tring" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><circle class="track" cx="20" cy="20" r="18"/><circle class="prog" cx="20" cy="20" r="18" style="stroke-dasharray:${RING40_C};stroke-dashoffset:${RING40_C * (1 - f)}"/></svg><span class="lamp" style="width:${s}px;height:${s}px;background:${lampColor(lv)}"></span></div><div class="grow"><div class="t">${esc(who)} ${v.level ? 'to ' + v.level + '%' : 'off'} <span data-countdown="${v.ends_at}"></span></div><div class="d">Sleep timer</div></div><button class="btn sm" data-act="cancel-timer" data-t="${esc(t)}">Cancel</button></div>`;
 }
 // The Home ring drains once a minute; the disc inside follows the light's level.
 function paintRings() {
@@ -680,10 +728,14 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const d = el.dataset;
   switch (d.act) {
-    case 'lamp-toggle': toggleTarget(`d:${d.id}`); break;
+    case 'lamp-toggle': { const now = Date.now(); if (el._tap && now - el._tap < 300) break; el._tap = now; toggleTarget(`d:${d.id}`); break; }  // a double tap is one toggle, not two
     case 'lamp-room': openRoomCard(d.id); break;
     case 'light-open': openLightSheet(d.id); break;
+    case 'light-colour': openLightSheet(d.id, { scrollTo: 'colour' }); break;
     case 'kind-open': openKindSheet(d.id); break;
+    case 'room-more': roomMoreSheet(d.area); break;
+    case 'room-kind': { const id = d.id, aid = d.area; openKindSheet(id, { back: () => roomMoreSheet(aid) }); break; }
+    case 'timer-pick': if (TD && TD.show) TD.show(Number(d.m), true); break;
     case 'kind-place': pickPlace(d.id, d.p); break;
     case 'kind-pick': pickKind(d.id, d.k); break;
     case 'mood': applyMood(d.area, d.mood); break;
@@ -691,7 +743,7 @@ document.addEventListener('click', e => {
     case 'mood-save-pick': saveMoodScene(d.area, d.mood); break;
     case 'ld-step': if (LD && LD.set) LD.set(LD.lv + Number(d.d)); break;
     case 'ld-toggle': if (LD && LD.show) { const v = LD.lv > 0 ? 0 : 100; LD.show(v); S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); command({ type: 'level', target: `d:${LD.id}`, level: v }); paintState(); } break;
-    case 'ld-timer': { const id = LD && LD.id; sleepTimerSheet(d.t, { back: id ? () => openLightSheet(id) : null }); break; }
+    case 'ld-timer': { const id = LD && LD.id; if (id && !(level(id) > 0)) break; sleepTimerSheet(d.t, { back: id ? () => openLightSheet(id) : null }); break; }
     case 'ld-fav': toggleFav(d.t); el.classList.toggle('on', S.config.favorites.includes(d.t)); break;
     case 'ld-kind': { const id = d.id; openKindSheet(id, { back: () => lightMoreSheet(id) }); break; }
     case 'ld-more': lightMoreSheet(d.id); break;
@@ -699,7 +751,7 @@ document.addEventListener('click', e => {
     case 'sort-skip': sortStep(d.id, true); break;
     case 'now-open': openNowView(); break;
     case 'now-room': sheet.close(); openRoomCard(d.id); break;
-    case 'now-night': for (const r of roomsLit()) applyMood(r.id, 'night'); break;
+    case 'now-night': { const rs = roomsLit(); if (!rs.length) { toast('Nothing is on'); break; } if (window.Motion) Motion.press(el.querySelector('.c') || el); for (const r of rs) applyMood(r.id, 'night'); toast(`Night in ${rs.length > 2 ? plural(rs.length, 'room') : rs.map(r => r.name).join(' and ')}`); break; }
     case 'now-panel': nowShow(d.p); break;
     case 'timer': rememberTimer(d.t, Number(d.m)); break; // boot.js sends it; this remembers how long it was
     case 'night-look': setNightLook(d.v); break;

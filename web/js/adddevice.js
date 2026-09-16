@@ -121,7 +121,6 @@ async function adCreate() {
   try {
     await api('/api/adddevice', { method: 'POST', body: JSON.stringify({ op: 'create', serial: AD.pick, name, area: AD.area }) });
     AD.created = { name, room }; AD.busy = false; adGo('done');
-    toast(`${name} added to ${room}`);
   } catch (e) { AD.error = e.message; AD.busy = false; adShow(); }
 }
 
@@ -131,8 +130,8 @@ function openRemoveDevice(id) {
   const isPico = d.domain === 'pico';
   const uses = bindings().filter(b => isPico ? b.device_id === id : [...b.actions, ...((b.night && b.night.actions) || [])].some(a => tlist(a.target).includes('d:' + id))).length;
   sheet.open(`Remove ${esc(d.name)}?`, `<div class="tip"><div class="grow"><span class="cap">${esc(areaName(d.area))}</span><div class="t">It leaves your Lutron bridge</div><div class="d">It stops working until it is added again${isPico ? ', and its button settings here are cleared' : uses ? `, and the ${plural(uses, 'button')} that used it forget it` : ''}. The Lutron app will not list it any more either.</div></div></div>
-    ${AD.showLog ? adLogHTML() : ''}
-    <div class="sfoot"><button class="btn primary lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="sheet-close">Keep it</button></div>`, { sub: 'This part of the bridge is not documented either; if it says no, the Lutron app can still remove it.' });
+    ${AD.showLog ? `<p class="d" style="margin:12px 0 0">This part of the bridge is not documented either; if it keeps saying no, the Lutron app can still remove it.</p>${adLogHTML()}` : ''}
+    <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="sheet-close">Keep it</button></div>`, { sub: `${esc(areaName(d.area))} · ${isPico ? 'remote' : d.domain}` });
 }
 function forgetDevice(id) {
   const t = 'd:' + id; const cfg = S.config;

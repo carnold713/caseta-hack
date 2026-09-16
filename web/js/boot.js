@@ -12,13 +12,13 @@ document.addEventListener('click', async e => {
     case 'toggle': toggleTarget(d.t); break;
     case 'power-on': setPowerOn(d.v); break;
     case 'fav': toggleFav(d.t); break;
-    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
+    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el.classList.contains('item') ? el.querySelector('.ic') || el : el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
     case 'cmd': command(JSON.parse(d.cmd)); break;
-    case 'fan': S.states[d.id] = { ...(S.states[d.id] || {}), fan_speed: d.s, level: d.s === 'Off' ? 0 : 100 }; paintState(); command({ type: 'fan', target: `d:${d.id}`, speed: d.s }); break;
-    case 'room-open': if (window.Motion) Motion.press(el); toggleRoom(d.id); break;
+    case 'fan': setFan(d.id, d.s); break;
+    case 'room-open': toggleRoom(d.id); break;
     case 'alloff': if (!el._held) powerButton(); el._held = false; break;
     case 'cancel-timer': { const stay = d.stay && el.closest('#nowview'); await command({ type: 'cancel_timer', target: tsplit(d.t) }); if (stay && typeof nowShow === 'function') { delete S.timers[d.t]; nowShow('main'); } break; }
-    case 'timer': { const stay = d.stay && el.closest('#nowview'); if (!stay) sheet.close(); const ok = await command({ type: 'timer', target: tsplit(d.t), minutes: Number(d.m), fade: 5 }); if (ok) toast(`${cap(targetName(tsplit(d.t)))} turns off in ${d.m} min`); if (stay && typeof nowShow === 'function') { if (ok && !S.timers[d.t]) S.timers[d.t] = { ends_at: Date.now() / 1000 + Number(d.m) * 60, level: 0 }; nowShow('main'); } break; }
+    case 'timer': { const stay = d.stay && el.closest('#nowview'); if (!stay) sheet.close(); const tgt = tsplit(d.t); const n = targetDevices(tgt).length; const ok = await command({ type: 'timer', target: tgt, minutes: Number(d.m), fade: 5 }); if (ok) toast(n > 1 ? `${plural(n, 'light')} turn off in ${d.m} min` : `${cap(targetName(tgt))} turns off in ${d.m} min`); if (stay && typeof nowShow === 'function') { if (ok && !S.timers[d.t]) S.timers[d.t] = { ends_at: Date.now() / 1000 + Number(d.m) * 60, level: 0 }; nowShow('main'); } break; }
     case 'update-connector': el.disabled = true; el.textContent = 'Updating…'; toast('Updating the connector. The dot goes red, then green again in about a minute.'); try { const r = await api('/api/update-connector', { method: 'POST' }); toast(r.detail && r.detail.to ? `Updated to ${r.detail.to}. Restarting…` : 'Updated. Restarting…'); } catch (err) { toast(err.message, { err: true }); render(); } break;
     case 'auto-update': S.config.settings.auto_update = !S.config.settings.auto_update; el.classList.toggle('on', S.config.settings.auto_update); save({ quiet: true, render: false }); break;
     case 'refresh': el.classList.add('dim'); try { await api('/api/refresh', { method: 'POST' }); toast('Looked again'); } catch (err) { toast(err.message, { err: true }); } el.classList.remove('dim'); break;
@@ -27,17 +27,18 @@ document.addEventListener('click', async e => {
     case 'remote-look': openLookSheet(); break;
     case 'remote-more': S.remoteLutron = false; remoteMoreSheet(); break;
     case 'remote-lutron': S.remoteLutron = !S.remoteLutron; remoteMoreSheet(); break;
-    case 'usual-hide': try { localStorage.setItem(`usualHidden:${d.id}`, '1'); } catch (_) { /* ignore */ } { const t = $('#usualtip'); if (t) t.remove(); } break;
+    case 'usual-hide': try { localStorage.setItem(`usualHidden:${d.id}`, '1'); } catch (_) { /* ignore */ } { const t = $('#usualtip'); if (t) { if (window.gsap && !Motion.reduced()) { t.style.overflow = 'hidden'; gsap.to(t, { height: 0, opacity: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, duration: 0.255, ease: 'power2.inOut', onComplete: () => t.remove() }); } else t.remove(); } } break;
     case 'recipe-more': recipeMoreSheet(); break;
     case 'recipe-night': S.night = true; renderRecipeSheet(); break;
     case 'recipe-clear': applyRecipe('nothing'); break;
     case 'recipe-all': S.recipeAll = true; renderRecipeSheet(); break;
+    case 'recipe-fewer': S.recipeAll = false; renderRecipeSheet(); break;
     case 'pick-open': S.pickOpen = !S.pickOpen; renderRecipeSheet(); break;
     case 'scene-lights': openSceneLightsSheet(); break;
     case 'scene-more': sceneMoreSheet(); break;
     case 'look-model': setLook('model', d.m); break;
     case 'look-finish': setLook('finish', d.f); break;
-    case 'button-open': if (window.Motion) Motion.press(el); S.pickTargets = null; S.advCustom = null; openButtonSheet(Number(d.n)); break;
+    case 'button-open': if (window.Motion) Motion.press(el.classList.contains('item') ? el.querySelector('.ic') || el : el); S.pickTargets = null; S.advCustom = null; openButtonSheet(Number(d.n)); break;
     case 'gesture-open': S.pickTargets = null; openRecipeSheet(d.g, false); break;
     case 'recipe-mode': S.night = d.night === '1'; renderRecipeSheet(); break;
     case 'pick-target': toggleTargetChip(d.t); break;
@@ -52,7 +53,7 @@ document.addEventListener('click', async e => {
     case 'adv-remove': { const list = advList(); if (!list) break; list.splice(Number(d.i), 1); renderAdvanced(); advChanged(); break; }
     case 'adv-done': { if (S.advCustom) { S.advCustom.onDone(); break; } const b = currentBindingForEdit(); if (b && !b.actions.length && !(b.night && b.night.actions.length)) S.config.bindings = S.config.bindings.filter(x => x.id !== b.id); if (b && b.night && !b.night.actions.length) b.night = null; await save({ msg: 'Saved' }); renderRecipeSheet(); break; }
     case 'leaving-door': saveLeaving(d.t); break;
-    case 'usual-layout': applyUsualLayout(S.remote); break;
+    case 'usual-layout': applyUsualLayout(S.remote, { scroll: !!el.closest('#usualtip') }); break;
     case 'try-actions': tryActions(); break;
     case 'sheet-close': sheet.close(); break;
     case 'sheet-back': if (sheet.onBack) sheet.onBack(); else sheet.close(); break;
@@ -75,6 +76,8 @@ document.addEventListener('click', async e => {
     case 'logout': S.token = ''; localStorage.removeItem('token'); if (S.ws) S.ws.close(); S.ready = false; S._everReady = false; S._loadingShown = false; S._barShown = false; sheet.close(); render(); break;
     case 'pw-help': sheet.open("Your home's password", `<p class="body">It's the password whoever set up your hub chose. It's in the hub's settings under APP_PASSWORD.</p><div class="spacer"></div><button class="btn primary lg block" data-act="sheet-close">Got it</button>`); break;
     case 'setup-open': openSetupSheet(); break;
+    case 'home-name': openHomeName(); break;
+    case 'prefs': openPrefs(); break;
   }
 });
 
@@ -113,7 +116,8 @@ document.addEventListener('input', e => {
   if (el.id === 'pw') { const b = document.querySelector('[data-form="login"] .btn.primary'); if (b) b.disabled = !el.value; const f = $('#pwfield'); if (f && f.classList.contains('err')) { f.classList.remove('err'); f.querySelector('span').textContent = 'Password'; } return; }
   if (el.type !== 'range') return;
   el.style.setProperty('--p', `${el.value}%`);
-  const wrap = el.closest('.sliderwrap'); if (wrap) { wrap.classList.add('drag'); wrap.style.setProperty('--p', `${el.value}%`); const tip = wrap.querySelector('.stip'); if (tip) tip.textContent = `${el.value}%`; clearTimeout(wrap._t); wrap._t = setTimeout(() => wrap.classList.remove('drag'), 900); }
+  // the row's own level is the readout (no tooltip): a scene row's second line follows the finger too
+  if (el.dataset.sceneLvl) { const it = el.closest('.item'); const dd = it && it.querySelector('.grow .d'); if (dd) dd.textContent = Number(el.value) > 0 ? `${el.value}%` : 'Off'; }
   if (el.dataset.slide) {
     el.dataset.drag = '1';
     if (window.Motion) Motion.sliderFeedback(el, Number(el.value));
@@ -148,7 +152,13 @@ document.addEventListener('pointerdown', e => {
 });
 document.addEventListener('pointerup', e => { const el = e.target.closest('[data-act="alloff"]'); if (el) { clearTimeout(el._t); el.classList.remove('holding'); } });
 document.addEventListener('pointercancel', e => { const el = e.target.closest('[data-act="alloff"]'); if (el) { clearTimeout(el._t); el.classList.remove('holding'); } });
-// Long-press a favorite tile for a sleep timer.
+// Keyboard: a row that is a button (role="button") acts on Enter and Space like a real one.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target; if (!el || el.getAttribute('role') !== 'button' || !el.dataset.act || el.tagName === 'BUTTON') return;
+  e.preventDefault(); el.click();
+});
+// Long-press a lit lamp in the row for a sleep timer.
 document.addEventListener('pointerdown', e => {
   const el = e.target.closest('[data-long="open-light"]'); if (!el) return;
   el._lt = setTimeout(() => { el._long = true; sleepTimerSheet(el.dataset.t); }, 550);

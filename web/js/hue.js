@@ -39,9 +39,9 @@ function huConnectedHTML() {
   const i = hueInfo() || {};
   const rooms = Object.values(S.inv.areas || {}).filter(a => String(a.id).startsWith('hue_')).map(a => a.name);
   return `<div class="tip"><div class="grow"><span class="cap">Connected · ${esc(i.host || '')}</span><div class="t">${plural(i.lights || 0, 'light')} in ${plural(i.rooms || 0, 'room')}</div><div class="d">${i.live ? 'Live: changes made in the Hue app show up here right away.' : 'Reconnecting to its event stream...'}${i.error ? ` ${esc(i.error)}` : ''}</div></div><div class="ic lg">${ICON('link')}</div></div>
-    ${rooms.length ? `<div class="h2">Rooms</div><div class="chips">${rooms.map(r => `<span class="chip">${esc(r)}</span>`).join('')}</div>` : ''}
-    <p class="small faint" style="margin:16px 0 0">Hue's own scenes stay in the Hue app; make scenes here and they can mix Hue and Caseta lights. Colour and white temperature come in a later pass; on, off and brightness work now.</p>
-    <div class="card pad0 list" style="margin-top:20px"><button class="item" data-act="hue-forget"><div class="grow"><div class="t">Forget this bridge</div><div class="d">Its lights leave the app. The Hue app is not affected.</div></div><span class="chev">${ICON('x', 'sm')}</span></button></div>`;
+    ${rooms.length ? `<p class="d" style="margin:16px 0 0">Rooms: ${esc(rooms.join(', '))}</p>` : ''}
+    <p class="small faint" style="margin:12px 0 0">Hue's own scenes stay in the Hue app; make scenes here and they can mix Hue and Caseta lights.</p>
+    <div class="card pad0 list" style="margin-top:20px"><button class="item" data-act="hue-forget"><div class="grow"><div class="t">Forget this bridge</div><div class="d">Its lights leave the app. The Hue app is not affected.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
 }
 async function huDiscover() {
   HU.busy = true; HU.error = null; HU.bridges = []; huShow();

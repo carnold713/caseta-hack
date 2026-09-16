@@ -2,14 +2,16 @@
 'use strict';
 
 VIEWS.scenes = {
-  top() { return `<div class="t1">Scenes</div><div class="tools"><button class="iconbtn on" data-act="scene-new" title="New scene">${ICON('plus')}</button>${statusCircle()}</div>`; },
+  top() { return `<div class="t1">Scenes</div><div class="tools"><button class="iconbtn plain" data-act="scene-new" title="New scene" aria-label="New scene" style="color:var(--blue)">${ICON('plus')}</button>${statusCircle()}</div>`; },
   body() {
     const mine = presets().filter(p => !(p.mood && p.area)); const theirs = lutronScenes();
     const moods = typeof roomMoodsSectionHTML === 'function' ? roomMoodsSectionHTML() : '';
     if (!mine.length && !theirs.length && !moods) return `<button class="tip" data-act="scene-new" style="margin-top:8px"><div class="grow"><span class="cap">Scenes</span><div class="t">What look would you like to keep?</div><div class="d">Set the lights the way you like them, then save that look. A remote button can run it later.</div></div><span class="go">${ICON('plus')}</span></button>`;
-    let h = '';
-    const row = (t, name, sub, extra) => `<div class="item"><button class="ic" data-act="run-scene" data-t="${t}" title="Run">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(name)}</div><div class="d">${esc(sub)}</div></div><button class="iconbtn plain ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="fav" data-t="${t}">${ICON('star', 'sm')}</button>${extra || ''}</div>`;
-    if (mine.length) h += `<div class="h2">Your scenes</div><div class="card pad0 list">${mine.map(p => row('p:' + p.id, p.name, sceneSub(p), `<button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}">${ICON('edit', 'sm')}</button>`)).join('')}</div>`;
+    // the tiles first (a scene is a picture), then the lists: the row runs the scene, the pencil edits it, the star pins it to the front on Home
+    const tiles = [...mine.map(p => ({ id: 'p:' + p.id, name: p.name, sub: sceneSub(p) })), ...theirs.map(s => ({ id: 's:' + s.scene_id, name: s.name, sub: 'From the Lutron app' }))];
+    let h = `<div class="tiles grid" style="margin-top:8px"><button class="tile new" data-act="scene-new"><div class="face">${ICON('plus')}</div><div class="label"><div class="n">New scene</div></div></button>${tiles.map(s => `<button class="tile" data-act="run-scene" data-t="${s.id}"><div class="face">${tileFaceHTML(tileItems(s.id))}</div><div class="label"><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></button>`).join('')}</div>`;
+    const row = (t, name, sub, extra) => `<div class="item" role="button" tabindex="0" data-act="run-scene" data-t="${t}"><span class="ic">${ICON('play', 'sm')}</span><div class="grow"><div class="t">${esc(name)}</div><div class="d">${esc(sub)}</div></div><button class="iconbtn plain ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="fav" data-t="${t}" aria-label="Favourite">${ICON('star', 'sm')}</button>${extra || ''}</div>`;
+    if (mine.length) h += `<div class="h2">Your scenes</div><div class="card pad0 list">${mine.map(p => row('p:' + p.id, p.name, sceneSub(p), `<button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}" aria-label="Edit">${ICON('edit', 'sm')}</button>`)).join('')}</div>`;
     if (theirs.length) h += `<div class="h2">From the Lutron app</div><div class="card pad0 list">${theirs.map(s => row('s:' + s.scene_id, s.name, 'Edit it in the Lutron app')).join('')}</div>`;
     h += moods;
     h += `<div class="spacer"></div><div class="card pad0 list"><button class="item" data-act="scene-new"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">New scene</div></div></button></div>`;
@@ -48,7 +50,7 @@ const sceneLightRow = (p, d) => {
   let ctl = '';
   if (d.domain === 'fan') ctl = `<select class="input" style="width:130px;min-height:40px;padding:6px 32px 6px 12px" data-scene-lvl="${d.device_id}">${['Off', 'Low', 'Medium', 'MediumHigh', 'High'].map(s => `<option value="${s}" ${v === s ? 'selected' : ''}>${cap(fanName(s))}</option>`).join('')}</select>`;
   else if (d.domain === 'switch') ctl = `<button class="sw ${lv > 0 ? 'on' : ''}" data-act="scene-sw" data-id="${d.device_id}"></button>`;
-  else ctl = `<div class="sliderwrap" style="width:140px"><input class="slider" type="range" min="0" max="100" value="${lv}" style="--p:${lv}%" data-scene-lvl="${d.device_id}"><div class="stip"></div></div>`;
+  else ctl = `<div class="sliderwrap" style="width:140px"><input class="slider" type="range" min="0" max="100" value="${lv}" style="--p:${lv}%" data-scene-lvl="${d.device_id}" aria-label="${esc(d.name)} in this look"></div>`;
   // a Hue lamp's disc shows the colour the scene gives it; under its row, a value row opens the colour controls
   const fill = c && lv > 0 ? lampFill(c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex, lv) : null;
   let row = `<div class="item">${lampHTML(lv, 28, '', '', false, fill)}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.domain === 'fan' ? cap(fanName(v)) : lv > 0 ? lv + '%' : 'Off'}</div></div>${ctl}</div>`;
@@ -79,14 +81,14 @@ function openSceneEditor(id, fresh = false) {
   const rows = areas().map(a => {
     const ds = inc.filter(d => (d.area || 'none') === a.id);
     if (!ds.length) return '';
-    return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => sceneLightRow(p, d)).join('')}</div>`;
+    return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => sceneLightRow(p, d)).join('')}</div>`;
   }).join('');
   // A room mood: a suggested scene until the person changes it; then it is theirs and Update moods leaves it alone.
   const mood = p.mood && p.area ? `<div class="tip" style="margin-top:8px"><div class="grow"><span class="cap">Room mood</span><div class="t">${p.edited ? 'Changed by you.' : 'A suggested mood.'} Change anything you like; from then on it's yours and won't be replaced.</div>${p.edited ? `<button class="btn ghost" data-act="scene-suggest" data-id="${p.id}">Back to the suggestion</button>` : ''}</div></div>` : '';
   const body = `${mood}<label class="field"><span>Name</span><input class="input" id="scene-name" value="${esc(p.name)}" ${fresh ? 'autofocus' : ''}></label>
     <div class="h2">In this look</div>${rows || `<p class="d">No lights yet. Add some below.</p>`}
     <div class="card pad0 list" style="margin-top:16px">${valueRow('Add or remove lights', `${inc.length} of ${all.length}`, 'scene-lights')}</div>
-    <div class="btnpair" style="margin-top:16px"><button class="btn" data-act="scene-capture">${ICON('copy', 'sm')} Use the lights as they are</button><button class="btn" data-act="run-scene" data-t="p:${p.id}">${ICON('play', 'sm')} Try it</button></div>
+    <div class="btnpair" style="margin-top:16px"><button class="btn" data-act="scene-capture">${ICON('copy', 'sm')} Use current levels</button><button class="btn" data-act="run-scene" data-t="p:${p.id}">${ICON('play', 'sm')} Try it</button></div>
     <div style="margin-top:16px">${moreRow('Fade, delete', 'scene-more')}</div>
     <div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`;
   const title = fresh ? 'What should we call this look?' : esc(p.name);
@@ -100,7 +102,7 @@ function openSceneLightsSheet() {
   const rows = areas().map(a => {
     const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover');
     if (!ds.length) return '';
-    return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${d.device_id in p.levels ? 'checked' : ''} data-act="scene-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.device_id in p.levels ? (d.domain === 'fan' ? cap(fanName(p.levels[d.device_id])) : levelOf(p.levels[d.device_id]) > 0 ? levelOf(p.levels[d.device_id]) + '%' : 'Off') : 'Left alone'}</div></div></label>`).join('')}</div>`;
+    return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${d.device_id in p.levels ? 'checked' : ''} data-act="scene-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.device_id in p.levels ? (d.domain === 'fan' ? cap(fanName(p.levels[d.device_id])) : levelOf(p.levels[d.device_id]) > 0 ? levelOf(p.levels[d.device_id]) + '%' : 'Off') : 'Left alone'}</div></div></label>`).join('')}</div>`;
   }).join('');
   showSheet('scene-lights', 'Which lights are in this look?', rows, { sub: 'A light you tick joins at the level it is at now.', back: true, onBack: () => openSceneEditor(p.id) });
 }

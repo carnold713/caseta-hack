@@ -1,7 +1,7 @@
 /* Swipe a sheet down to close it, with weight.
    A finger pulling down on a sheet drags it: the sheet follows the finger one for one (with a
    rubber band when pushed above its rest), the scrim thins as it goes. On release the sheet either
-   flies off the bottom, at the speed the finger gave it, or springs back with a little overshoot.
+   flies off the bottom, at the speed the finger gave it, or eases back with no overshoot.
    A pull that starts in the sheet's body only counts once that body is scrolled to its top, so
    scrolling a long sheet still works; a pull on a drag control (a dial, a slider, the lamp disc)
    never counts. Touch only: that is where the gesture lives. */
@@ -59,11 +59,10 @@
         if (s.scrim) gs.to(s.scrim, { opacity: 0, duration: dur, ease: 'power1.out' });
       } else { s.sheet.style.transition = `transform ${dur}s ease-out`; s.sheet.style.transform = `translateY(${s.h}px)`; setTimeout(() => { s.sheet.style.transition = ''; done(); }, dur * 1000); }
     } else {
-      // spring back: the further and faster it was moving, the more it overshoots
+      // spring back: a critically damped return, no overshoot (the design spec says no bounce on layout)
       const done = () => { s.sheet.style.transform = ''; if (s.scrim) s.scrim.style.opacity = ''; finish(); };
       if (gs) {
-        const amp = Math.min(1.4, 1 + Math.abs(v));
-        gs.to(s.sheet, { y: 0, duration: 0.55, ease: `elastic.out(${amp.toFixed(2)}, 0.62)`, onComplete: done });
+        gs.to(s.sheet, { y: 0, duration: 0.35, ease: 'expo.out', onComplete: done });
         if (s.scrim) gs.to(s.scrim, { opacity: 1, duration: 0.25, ease: 'power1.out' });
       } else { s.sheet.style.transition = 'transform .32s cubic-bezier(.2,.8,.2,1)'; s.sheet.style.transform = 'translateY(0)'; setTimeout(() => { s.sheet.style.transition = ''; done(); }, 340); }
     }

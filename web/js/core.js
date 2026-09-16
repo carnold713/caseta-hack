@@ -91,7 +91,7 @@ function connectWS() {
         S.sun = m.sun || null; S.nextRuns = m.next_runs || {};
         S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
         // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
-        if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); if (typeof openGreeting === 'function') openGreeting(); }, 900); break; } }
+        if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); setTimeout(() => { if (typeof openGreeting === 'function') openGreeting(); }, 450); }, 900); break; } }
         render(); break;
       case 'inventory': S.inv = m.inventory; render(); break;
       case 'state': Object.assign(S.states, m.states); paintState(); break;
@@ -254,11 +254,12 @@ function describe(actions) {
       default: return a.type;
     }
   });
-  return cap(parts.filter((x, i) => i === 0 || x !== parts[i - 1]).join(', then '));
+  const kept = parts.filter((x, i) => i === 0 || x !== parts[i - 1]);
+  return cap(kept.map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)).join(', then '));
 }
 // True when every device a target names is a shade (so raise and lower read as open and close).
 function isShadeTarget(t) { if (t === 'h:shades') return true; const ids = targetDevices(t); return ids.length > 0 && ids.every(id => (dev(id) || {}).domain === 'cover'); }
-function fmtDur(s) { return s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`; }
+function fmtDur(s) { return s >= 60 ? `${Math.round(s / 60)} min` : `${s} ${s === 1 ? 'second' : 'seconds'}`; }
 function fanName(s) { return { Off: 'off', Low: 'low', Medium: 'medium', MediumHigh: 'medium-high', High: 'high' }[s] || s; }
 function fmtTime(hm) { const [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${ap}`; }
 
@@ -343,29 +344,53 @@ function statusLine() {
 const sheet = {
   el: null,
   // opts: sub, cap (a small caption above the title, "1 of 3"), back, onBack, full (100dvh), cls. `dark` and `question` are accepted and ignored: every sheet is white and every header is the dialog kind.
+  // A sheet that is already open never replays its slide-up: the content cross-fades in place and the card eases to
+  // the new content's own height (sheet.morph). Sub-sheets opened while a walk is running keep the walk's minimum height.
   open(title, body, opts = {}) {
-    const root = $('#sheet-root');
-    // a sheet re-opened while already open (a step in a flow) keeps its height; a fresh one sizes to its content
-    if (root.classList.contains('in')) sheet.lockHeight(); else root.querySelector('.sheet').style.height = '';
-    root.querySelector('.sheet').className = 'sheet' + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '');
-    sheet.header(title, opts);
-    root.querySelector('.sb').innerHTML = body;
-    root.classList.add('open'); requestAnimationFrame(() => { root.classList.add('in'); if (window.Motion) Motion.sheetIn(root); });
-    // after the root is shown: a hidden element keeps its old scroll offset and ignores writes to scrollTop
-    root.querySelector('.sb').scrollTop = 0;
+    const root = $('#sheet-root'); const el = root.querySelector('.sheet'); const sb = root.querySelector('.sb');
+    const walking = !!WALK.cur || /\bwalk\b/.test(opts.cls || '');
+    const cls = 'sheet' + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '') + (walking && !/\bwalk\b/.test(opts.cls || '') ? ' walk' : '');
+    const swap = () => { el.className = cls; sheet.header(title, opts); sb.innerHTML = body; sb.scrollTop = 0; sheet.scrolled(); };
+    if (root.classList.contains('in')) sheet.morph(swap);
+    else {
+      el.style.height = ''; el.style.transition = '';
+      swap();
+      root.classList.add('open'); requestAnimationFrame(() => { root.classList.add('in'); if (window.Motion) Motion.sheetIn(root); });
+      // after the root is shown: a hidden element keeps its old scroll offset and ignores writes to scrollTop
+      sb.scrollTop = 0;
+    }
     sheet.onBack = opts.onBack || null;
     sheet.stackTitle = title;
     document.body.style.overflow = 'hidden';
   },
-  // The header alone: the close circle, the back circle when there is somewhere to go back to, the caption, the title, the sub line.
+  // Change what an open sheet shows. `swap` rewrites the header and body; the old content fades out over a ghost and the
+  // new fades in with no travel. keep: the card holds its height (a step inside one flow); otherwise it eases to the
+  // new content's natural height, capped by the sheet's max-height, and sizes itself again afterwards.
+  morph(swap, o = {}) {
+    const root = $('#sheet-root'); const el = root.querySelector('.sheet'); const sh = el.querySelector('.sh'), sb = el.querySelector('.sb');
+    const h0 = Math.round(el.getBoundingClientRect().height);
+    const run = () => { if (window.Motion) Motion.swap(el, swap, { nodes: [sh, sb], top: sh.offsetTop }); else swap(); };
+    if (o.keep) { if (!el.style.height && h0 > 120) el.style.height = `${h0}px`; run(); return; }
+    clearTimeout(el._ht); el.style.transition = 'none'; el.style.height = '';
+    run();
+    const h1 = Math.round(el.getBoundingClientRect().height);
+    if (Math.abs(h1 - h0) < 2 || !window.Motion || Motion.reduced()) { el.style.transition = ''; return; }
+    el.style.height = `${h0}px`; void el.offsetHeight;
+    el.style.transition = 'height .255s var(--ease)'; el.style.height = `${h1}px`;
+    el._ht = setTimeout(() => { el.style.transition = ''; el.style.height = ''; }, 280);
+  },
+  // The header alone: the close circle, the back arrow inline on the title line when there is somewhere to go back to, the caption, the title, the sub line.
   header(title, opts = {}) {
     const sh = $('#sheet-root .sh');
-    sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
-    sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow">${opts.cap ? `<div class="stepcap">${opts.cap}</div>` : ''}<h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
+    sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle') + (sh.classList.contains('scrolled') ? ' scrolled' : '');
+    sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back" aria-label="Back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close" aria-label="Close">${ICON('x')}</button><div class="grow">${opts.cap ? `<div class="stepcap">${opts.cap}</div>` : ''}<h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
   },
+  // A hairline under the header while the body is scrolled.
+  scrolled() { const sh = $('#sheet-root .sh'), sb = $('#sheet-root .sb'); if (sh && sb) sh.classList.toggle('scrolled', sb.scrollTop > 0); },
   close() {
     const root = $('#sheet-root'); root.classList.remove('in');
-    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; root.querySelector('.sheet').style.height = ''; };
+    SHEET_KEY = null;
+    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; const el = root.querySelector('.sheet'); el.style.height = ''; el.style.transition = ''; root.querySelectorAll('.m-ghost').forEach(g => g.remove()); };
     if (window.Motion) Promise.resolve(Motion.sheetOut(root)).then(done); else setTimeout(done, 320);
     document.body.style.overflow = '';
     if (sheet.onClose) { const f = sheet.onClose; sheet.onClose = null; f(); }
@@ -376,21 +401,22 @@ const sheet = {
   update(body) { sheet.lockHeight(); const sb = $('#sheet-root .sb'); if (sb) sb.innerHTML = body; },
   isOpen() { return $('#sheet-root').classList.contains('open'); },
 };
+{ const sb = $('#sheet-root .sb'); if (sb) sb.addEventListener('scroll', () => sheet.scrolled(), { passive: true }); }
 
 // ---------- sheets that re-render in place ----------
 let SHEET_KEY = null;
-// Same key while the sheet is open: swap the body (and the header) and keep the scroll position; otherwise open afresh.
+// Same key while the sheet is open: swap the body (and the header) in place, keep the height and the scroll position; otherwise open afresh.
 function showSheet(key, title, body, opts = {}) {
   const root = $('#sheet-root');
   if (SHEET_KEY === key && root.classList.contains('open') && root.classList.contains('in')) {
-    if (opts.grow) root.querySelector('.sheet').style.height = ''; else sheet.lockHeight();  // a step swap keeps the sheet's height, as a re-open does; `grow` lets a sheet that gains rows size to them
-    const sb = root.querySelector('.sb'); const top = sb.scrollTop; sb.innerHTML = body; sb.scrollTop = opts.top ? 0 : top;
-    sheet.header(title, opts);
+    const sb = root.querySelector('.sb'); const top = sb.scrollTop;
+    // a step swap keeps the sheet's height, as a re-open does; `grow` lets a sheet that gains rows ease to them
+    sheet.morph(() => { sb.innerHTML = body; sheet.header(title, opts); sb.scrollTop = opts.top ? 0 : top; sheet.scrolled(); }, { keep: !opts.grow });
     sheet.onBack = opts.onBack || null; return;
   }
   SHEET_KEY = key; sheet.open(title, body, opts);
 }
-function closeSheet() { SHEET_KEY = null; sheet.close(); }
+function closeSheet() { sheet.close(); }
 
 // ---------- the walk: one question per step, in one sheet (docs/ux-progressive.md 2.0) ----------
 // def: { key, title, sub, state, primary, doneAct, onDone(w), onClose(w), cls, steps: [step] }
@@ -414,8 +440,8 @@ function walkRender(w) {
   // the current step stopped applying (its answer is now known): move on to the next one that shows
   if (!steps.includes(step)) { step = steps.find(s => w.def.steps.indexOf(s) > w.i) || steps[steps.length - 1]; w.i = w.def.steps.indexOf(step); }
   const idx = steps.indexOf(step), n = steps.length;
-  const cap = `${idx === 0 && w.def.title ? esc(w.def.title) + ' · ' : ''}${idx + 1} of ${n}`;
-  const title = typeof step.title === 'function' ? step.title(w) : step.title;
+  const cap = `${w.def.title ? esc(w.def.title) + ' · ' : ''}${idx + 1} of ${n}`;
+  const title = (typeof step.title === 'function' ? step.title(w) : step.title) || (step.kind === 'plan' ? "Here's the plan" : '');
   const sub = step.sub != null ? (typeof step.sub === 'function' ? step.sub(w) : step.sub) : (idx === 0 ? (w.def.sub || '') : '');
   const ok = !step.valid || !!step.valid(w);
   let foot = '';
@@ -423,7 +449,6 @@ function walkRender(w) {
   else if (step.kind === 'plan') foot = `<div class="sfoot"><button class="btn primary lg block" data-act="${w.def.doneAct || 'walk-done'}" ${ok ? '' : 'disabled'}>${esc(w.def.primary || 'Done')}</button><button class="btn ghost block" data-act="sheet-close">Not now</button></div>`;
   else if (step.kind !== 'pick' && !step.noNext) foot = walkNextFoot(step.next || 'Next', ok);
   showSheet(w.key, title, step.body(w) + foot, { sub, cap, back: idx > 0 || w.ret != null, onBack: () => walkBack(w), top: true, cls: 'walk' + (w.def.cls ? ' ' + w.def.cls : '') });
-  if (window.Motion) Motion.pageIn($('#sheet-root .sb'), { force: true });
 }
 const walkNextFoot = (label, ok) => `<div class="sfoot"><button class="btn primary lg block" data-act="walk-next" ${ok ? '' : 'disabled'}>${esc(label)}</button></div>`;
 function walkAdvance(w) {
@@ -453,7 +478,7 @@ function pickRow(v, title, sub = '', sel = false, glyph = '') {
   return `<button class="item pick ${sel ? 'sel' : ''}" data-act="walk-pick" data-v="${esc(v)}">${glyph}<div class="grow"><div class="t">${title}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div>${sel ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`;
 }
 // The plan step: the summary in a tip, then value rows for the numbers.
-function planHTML(sentence, rows) { return `<div class="tip top plan"><div class="grow"><span class="cap">Here's the plan</span><div class="t">${sentence}</div></div></div>${rows ? `<div class="card pad0 list" style="margin-top:16px">${rows}</div>` : ''}`; }
+function planHTML(sentence, rows) { return `<div class="tip top plan"><div class="grow"><div class="t">${sentence}</div></div></div>${rows ? `<div class="card pad0 list" style="margin-top:16px">${rows}</div>` : ''}`; }
 // A value row: the question as the title, the current answer at the right. `act` decides what a tap does.
 function valueRow(title, val, act, data = '', opts = {}) {
   return `<button class="item vrow ${opts.open ? 'open' : ''}" data-act="${act}" ${data}><div class="grow"><div class="t">${title}</div>${opts.sub ? `<div class="d">${opts.sub}</div>` : ''}</div><span class="val">${val}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`;
@@ -528,7 +553,7 @@ function statusCircle() {
 const connPill = statusCircle;
 // The nested header (the Tenzing page header): a Back link on the first line, then the title (with an optional sub line) and the tools.
 function nestedTop(backAct, title = '', sub = '') {
-  return `<div class="nested-hd"><div class="line"><button class="backlink" data-act="${backAct}" title="Back">${ICON('back')}Back</button></div><div class="line"><div><div class="t2">${title}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div><div class="tools">${statusCircle()}</div></div></div>`;
+  return `<div class="nested-hd"><button class="iconbtn plain backlink" data-act="${backAct}" aria-label="Back" title="Back">${ICON('back')}</button><div class="grow"><div class="t2">${title}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div></div>`;
 }
 function loginHTML() {
   return `<div class="login"><div class="card dialog"><div class="t2">Welcome</div><p class="body">Enter your home's password to get started.</p>
@@ -543,20 +568,23 @@ function loadingHTML(connected) {
 function nowBarHTML() {
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const name = (S.config && S.config.settings.home_name) || 'Home';
-  return `<div class="nb-row"><button class="nb-main" data-act="now-open" aria-label="Open the Now view"><div class="nb-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb')}</div><div class="nb-text"><span class="cap">${esc(name)}</span><div class="t" id="nb-head">${lightNowHeadline(rooms)}</div></div></button><button class="nb-off m-hold ${on.length ? '' : 'dark'}" data-act="alloff" title="${powerTitle()}" aria-label="${powerLabel()}">${ICON('power', 'sm')}</button></div>
-  <div class="nb-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv : 'Off'}</span></div>`;
+  return `<div class="nb-row"><button class="nb-main" data-act="now-open" aria-label="Open the Now view"><div class="nb-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb')}</div><div class="nb-text"><span class="cap" id="nb-cap">${barCaption(name, on.length)}</span><div class="t"><span id="nb-head">${lightNowHeadline(rooms, true)}</span>${ICON('chev', 'sm')}</div></div></button><button class="nb-off m-hold ${on.length ? '' : 'dark'}" data-act="alloff" title="${powerTitle()}" aria-label="${powerLabel()}">${ICON('power', 'sm')}</button></div>
+  <div class="nb-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv + '%' : 'Off'}</span></div>`;
 }
+// With the house dark the bar says what its two controls do; otherwise it carries the home's name.
+function barCaption(name, lit) { return lit ? esc(name) : (S.agent.online ? `Slide to turn on · ${ICON('power', 'sm')} ${(S.config.settings.power_on || 'restore') === 'all' ? 'turns everything on' : 'brings back what was on'}` : esc(name)); }
 function paintNowBar() {
   const nb = $('#nowbar'); if (!nb || !nb.classList.contains('show') || !nb.firstChild) return;
   const sl = nb.querySelector('[data-house]'); if (sl && sl.dataset.drag) return;
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
-  const head = nb.querySelector('#nb-head'); const h = lightNowHeadline(rooms);
+  const head = nb.querySelector('#nb-head'); const h = lightNowHeadline(rooms, true);
   if (head && head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
+  const capEl = nb.querySelector('#nb-cap'); const c = barCaption((S.config && S.config.settings.home_name) || 'Home', on.length); if (capEl && capEl.innerHTML !== c) capEl.innerHTML = c;
   const thumb = nb.querySelector('.nb-thumb'); const k = on.length ? String(lv) : 'off';
   if (thumb && thumb.dataset.k !== k) { thumb.dataset.k = k; thumb.innerHTML = on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb'); }
   // the dimmer stays: with nothing on, sliding it is how the house comes on
   $('#app').classList.remove('baroff');
   if (sl) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); }
-  const num = nb.querySelector('.nb-num'); if (num) num.textContent = on.length ? lv : 'Off';
+  const num = nb.querySelector('.nb-num'); if (num) num.textContent = on.length ? `${lv}%` : 'Off';
   const pw = nb.querySelector('.nb-off'); if (pw) { pw.classList.toggle('dark', !on.length); pw.title = powerTitle(); pw.setAttribute('aria-label', powerLabel()); }
 }
