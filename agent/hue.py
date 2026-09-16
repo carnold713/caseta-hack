@@ -7,8 +7,8 @@ rooms and scenes, listens to its event stream for live state, and sets levels wi
 Everything Hue is namespaced with "hue_" so it sits beside the Caseta devices in the same
 dictionaries the action runner already reads: a light is "hue_<uuid>" (type HueLight or
 HueSwitch, area "hue_<room uuid>", zone set so it counts as controllable, current_state 0..100),
-a room is an area "hue_<uuid>", a scene is "hue_<uuid>". Colour is left for later; this pass is
-on, off, brightness, rooms, scenes and live state.
+a room is an area "hue_<uuid>". Hue's own scenes are not imported (this app makes its own). Colour is
+left for later; this pass is on, off, brightness, rooms and live state.
 """
 from __future__ import annotations
 
@@ -174,7 +174,9 @@ class Hue:
     async def load(self) -> None:
         lights = (await self._get("/clip/v2/resource/light")).get("data", [])
         rooms = (await self._get("/clip/v2/resource/room")).get("data", [])
-        scenes = (await self._get("/clip/v2/resource/scene")).get("data", [])
+        # Hue's own scenes are deliberately not imported: scenes in this app are made here, and they
+        # can hold Hue lights beside Caseta ones. recall_scene stays for anything that still references one.
+        scenes: list = []
         # a room lists its devices; a light belongs to a device; so light -> device -> room
         device_room: Dict[str, str] = {}
         areas: Dict[str, dict] = {}

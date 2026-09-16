@@ -39,7 +39,7 @@ from adddevice import AddSession
 from hue import Hue
 from sun import sun_times
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))

@@ -68,7 +68,8 @@ Pico bindings from its cached config.
   rooms still come from the Lutron app for now.
 - **Philips Hue too (first pass).** Settings › Connect a Hue bridge: the
   connector finds the bridge on the network, you press its round button,
-  and its lights, rooms and scenes join the app beside the Caséta ones,
+  and its lights and rooms join the app beside the Caséta ones (its own
+  scenes stay in the Hue app; scenes made here can mix both),
   with live state from the bridge's event stream. Rooms, sliders, moods,
   scenes, automations, sleep timers and Pico buttons all work on them, so
   one button can drive a Caséta dimmer and a Hue lamp together. On, off
@@ -219,7 +220,7 @@ web/              the PWA: index.html, styles.css, light.css, motion.css, js/{co
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
 agent/adddevice.py  add a device from the app: association mode, device heard, create (experimental)
-agent/hue.py      Philips Hue bridge: pairing, lights/rooms/scenes as hue_ devices, levels, scenes, event stream
+agent/hue.py      Philips Hue bridge: pairing, lights and rooms as hue_ devices, levels, event stream
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js
 ```

@@ -14,7 +14,7 @@ function openHue() {
 }
 function huShow(full) {
   const titles = { find: 'Connect a Hue bridge', press: 'Press the button', connected: 'Hue bridge' };
-  const subs = { find: 'Its lights, rooms and scenes join this app, and a remote button can control them.', press: 'The bridge hands out a key only while its button was just pressed.', connected: '' };
+  const subs = { find: 'Its lights and rooms join this app, and a remote button can control them. Scenes are made here.', press: 'The bridge hands out a key only while its button was just pressed.', connected: '' };
   const body = HU.step === 'connected' ? huConnectedHTML() : HU.step === 'press' ? huPressHTML() : huFindHTML();
   if (full || !sheet.isOpen() || !HU.open) { sheet.open(titles[HU.step], body, { sub: subs[HU.step], back: HU.step === 'press', onBack: () => { HU.step = 'find'; HU.error = null; huShow(true); } }); HU.open = true; sheet.onClose = () => { HU.open = false; }; }
   else sheet.update(body);
@@ -37,9 +37,9 @@ function huPressHTML() {
 function huConnectedHTML() {
   const i = hueInfo() || {};
   const rooms = Object.values(S.inv.areas || {}).filter(a => String(a.id).startsWith('hue_')).map(a => a.name);
-  return `<div class="tip"><div class="grow"><span class="cap">Connected · ${esc(i.host || '')}</span><div class="t">${plural(i.lights || 0, 'light')} in ${plural(i.rooms || 0, 'room')}${i.scenes ? ` · ${plural(i.scenes, 'scene')}` : ''}</div><div class="d">${i.live ? 'Live: changes made in the Hue app show up here right away.' : 'Reconnecting to its event stream...'}${i.error ? ` ${esc(i.error)}` : ''}</div></div><div class="ic lg">${ICON('link')}</div></div>
+  return `<div class="tip"><div class="grow"><span class="cap">Connected · ${esc(i.host || '')}</span><div class="t">${plural(i.lights || 0, 'light')} in ${plural(i.rooms || 0, 'room')}</div><div class="d">${i.live ? 'Live: changes made in the Hue app show up here right away.' : 'Reconnecting to its event stream...'}${i.error ? ` ${esc(i.error)}` : ''}</div></div><div class="ic lg">${ICON('link')}</div></div>
     ${rooms.length ? `<div class="h2">Rooms</div><div class="chips">${rooms.map(r => `<span class="chip">${esc(r)}</span>`).join('')}</div>` : ''}
-    <p class="small faint" style="margin:16px 0 0">Colour and white temperature come in a later pass; on, off and brightness work now, everywhere a Caseta light does.</p>
+    <p class="small faint" style="margin:16px 0 0">Hue's own scenes stay in the Hue app; make scenes here and they can mix Hue and Caseta lights. Colour and white temperature come in a later pass; on, off and brightness work now.</p>
     <div class="card pad0 list" style="margin-top:20px"><button class="item" data-act="hue-forget"><div class="grow"><div class="t">Forget this bridge</div><div class="d">Its lights leave the app. The Hue app is not affected.</div></div><span class="chev">${ICON('x', 'sm')}</span></button></div>`;
 }
 async function huDiscover() {

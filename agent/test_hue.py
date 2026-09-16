@@ -81,13 +81,13 @@ async def main():
         assert not hue.paired
         # pairing: first answer is "press the button", the second hands out the key, and the bridge loads
         info = await hue.pair(f"127.0.0.1:{port}", seconds=8)
-        assert hue.paired and info["lights"] == 2 and info["rooms"] == 1 and info["scenes"] == 1, info
+        assert hue.paired and info["lights"] == 2 and info["rooms"] == 1 and info["scenes"] == 0, info
         assert json.loads((Path(tmp) / "hue.json").read_text())["key"] == "KEY123"
         assert loaded, "on_loaded fired"
         d = hue.devices[hid(LIGHT)]
         assert d["type"] == "HueLight" and d["area"] == hid(ROOM) and d["current_state"] == 42 and d["zone"] == LIGHT and d["name"] == "Desk lamp", d
         assert hue.devices[hid(SWITCH)]["type"] == "HueSwitch" and hue.devices[hid(SWITCH)]["current_state"] == 0
-        assert hue.areas[hid(ROOM)]["name"] == "Office" and hue.scenes[hid(SCENE)]["name"] == "Focus"
+        assert hue.areas[hid(ROOM)]["name"] == "Office" and not hue.scenes, "Hue scenes stay out"
         # setting a level: on with brightness and a fade in ms; off is just off
         await hue.set_level(hid(LIGHT), 60, 2.5)
         await hue.set_level(hid(SWITCH), 100, None)
@@ -96,8 +96,10 @@ async def main():
         assert state["puts"][1] == (SWITCH, {"on": {"on": True}}), state["puts"]
         assert state["puts"][2] == (LIGHT, {"on": {"on": False}}), state["puts"]
         assert hue.devices[hid(LIGHT)]["current_state"] == 0
-        await hue.recall_scene(hid(SCENE))
-        assert state["scenes"] == [(SCENE, {"recall": {"action": "active"}})]
+        try:
+            await hue.recall_scene(hid(SCENE)); raise AssertionError("expected an error")
+        except RuntimeError:
+            pass
         # the event stream moved the lamp to 80 then off, telling the agent each time
         await asyncio.sleep(0.8)
         assert hid(LIGHT) in changed and changed.count(hid(LIGHT)) >= 4, changed
