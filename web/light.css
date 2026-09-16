@@ -18,12 +18,16 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 /* ---------- Light now: the strip on Home ---------- */
 .lightnow { margin: 0 0 20px; }
 .lightnow .ln-line { margin: 0 0 8px; }
-.ln-row { display: flex; align-items: flex-end; gap: 16px; min-height: 76px; overflow-x: auto; margin: 0 -16px; padding: 4px 16px 4px; scrollbar-width: none; }
+.ln-row { display: flex; align-items: flex-start; gap: 12px; overflow-x: auto; margin: 0 -16px; padding: 4px 16px 6px; scrollbar-width: none; }
 .ln-row::-webkit-scrollbar { display: none; }
 .ln-row.empty { display: none; }
-.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 56px; padding: 0; }
-.ln-lamp .lamp { width: 24px; height: 24px; outline: 1px solid var(--blue); outline-offset: 3px; }
-.ln-name { font-size: 12px; line-height: 16px; color: var(--text-2); white-space: nowrap; }
+.ln-lamp { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 72px; flex: none; padding: 0; border: 0; background: none; }
+.ln-lamp .lamp { width: 44px; height: 44px; transition: outline-color .2s; outline: 1px solid transparent; outline-offset: 3px; }
+.ln-lamp.on .lamp { outline-color: var(--blue); }
+.ln-lamp:not(.on) .ln-name { color: var(--text-2); }
+.ln-lamp:not(.on) .lamp svg { opacity: .55; }
+.ln-name { font-size: 12px; line-height: 16px; color: var(--text); white-space: nowrap; max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+.ln-room { font-size: 11px; line-height: 14px; color: var(--text-2); white-space: nowrap; max-width: 72px; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
 
 /* ---------- light rows: the disc (in a 40px ring) opens the kind sheet, the name opens the detail ---------- */
 .light .row .lkind { width: 32px; height: 32px; margin: 4px; border-radius: 50%; display: grid; place-items: center; color: #262626; flex: none; outline: 1px solid var(--blue); outline-offset: 3px; transition: outline-color .255s var(--ease); }

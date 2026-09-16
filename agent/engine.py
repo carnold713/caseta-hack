@@ -13,6 +13,7 @@ A preset level may be {level, kelvin?, hex?} for such a lamp; anything else is a
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from datetime import timedelta
@@ -141,6 +142,11 @@ class ActionRunner:
         self.hue_set: Optional[Callable[[str, int, Optional[float]], Awaitable[None]]] = None
         self.hue_color: Optional[Callable[..., Awaitable[None]]] = None  # (device_id, kelvin=, hex=, fade_s=, level=)
         self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None
+        # What the house looked like just before it went dark: every light lit within the two minutes
+        # before the last one went off, at its level then. The power button brings it back.
+        self._last_lit: Dict[str, tuple] = {}   # device_id -> (level, when)
+        self.last_on: Dict[str, int] = {}
+        self.memory_file: Optional[Any] = None  # a Path the agent sets so last_on survives a restart
 
     @property
     def timers(self) -> Dict[str, dict]:
@@ -285,8 +291,44 @@ class ActionRunner:
         for d in device_ids:
             self._floors.pop(d, None)
 
+    # ----- what was on before the house went dark -----
+    def load_memory(self) -> None:
+        try:
+            if self.memory_file and self.memory_file.exists():
+                data = json.loads(self.memory_file.read_text())
+                self.last_on = {str(k): int(v) for k, v in data.items() if isinstance(v, (int, float)) and v > 0}
+        except Exception:  # noqa: BLE001
+            self.last_on = {}
+
+    def _remember(self, device_id: str, level: Optional[int]) -> None:
+        bridge = self._bridge()
+        dev = bridge.devices.get(device_id) if bridge else None
+        if not dev or dev.get("type") not in _LIGHT_TYPES | _SWITCH_TYPES or level is None:
+            return
+        now = time.time()
+        if level > 0:
+            self._last_lit[device_id] = (int(level), now)
+            return
+        any_lit = any(
+            d.get("type") in _LIGHT_TYPES | _SWITCH_TYPES and self._level_of(did) > 0
+            for did, d in bridge.devices.items() if did != device_id
+        )
+        if any_lit:
+            return
+        recent = {d: lv for d, (lv, t) in self._last_lit.items() if now - t <= 120}
+        if not recent:
+            return
+        self.last_on = recent
+        self._last_lit = {}
+        if self.memory_file:
+            try:
+                self.memory_file.write_text(json.dumps(self.last_on))
+            except Exception:  # noqa: BLE001
+                pass
+
     def zone_changed(self, device_id: str, level: Optional[int]) -> Optional[Any]:
         """Called by the agent on every zone update; stops a ramp at its floor or ceiling. Returns a coroutine to await or None."""
+        self._remember(device_id, level)
         f = self._floors.get(device_id)
         if not f or level is None:
             return None
@@ -444,6 +486,18 @@ class ActionRunner:
                 level = 0
             await asyncio.gather(*(self._set_level(d, int(level), fade) for d in targets))
             return None
+
+        if t == "restore":
+            # the power button with nothing on: the lights that were on before the house went dark, at
+            # their levels then; with nothing remembered, everything comes on at its usual level
+            targets = [d for d in self._resolve(a["target"]) if bridge.devices.get(d, {}).get("type") in _LIGHT_TYPES | _SWITCH_TYPES]
+            fade = a.get("fade")
+            picks = {d: self.last_on[d] for d in targets if d in self.last_on}
+            if picks:
+                await asyncio.gather(*(self._set_level(d, lv, fade) for d, lv in picks.items()))
+            else:
+                await asyncio.gather(*(self._set_level(d, self.on_level_for(d, a["target"]), fade) for d in targets))
+            return {"restored": sorted(picks)} if picks else {"restored": []}
 
         if t == "color":
             # white temperature or a colour, only for the Hue lamps in the target that can do it; the rest are left alone

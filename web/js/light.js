@@ -237,13 +237,20 @@ function lightNowHeadline(rooms) {
   const list = n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
   return `${esc(list)} ${n.length === 1 ? 'is' : 'are'} on`;
 }
-function lampItemHTML(r, size) {
-  const s = size == null ? discSize(r.level) : size;
-  return `<button class="ln-lamp" data-act="lamp-room" data-id="${r.id}" data-level="${r.level}" title="Open ${esc(r.name)}"><span class="lamp" style="width:${s}px;height:${s}px;background:${lampColor(r.level)}">${ICON(r.icon, 'sm')}</span><span class="ln-name">${esc(r.name)}</span></button>`;
+// The row at the top of Home: every light at one size, lit in its own colour, grey when off. Tap toggles it,
+// hold opens it. Order never changes (by room, then name), so a lamp is always where you left it.
+function rowLights() {
+  const order = new Map(areas().map((a, i) => [a.id, i]));
+  return controllable().filter(d => d.domain === 'light' || d.domain === 'switch')
+    .sort((a, b) => ((order.get(a.area || 'none') ?? 999) - (order.get(b.area || 'none') ?? 999)) || a.name.localeCompare(b.name));
+}
+function lampItemHTML(d) {
+  const lv = isOn(d.device_id) ? (level(d.device_id) || 100) : 0;
+  return `<button class="ln-lamp ${lv > 0 ? 'on' : ''}" data-act="lamp-toggle" data-id="${d.device_id}" data-long="open-light" data-t="d:${d.device_id}" data-level="${lv}" title="${esc(d.name)}">${lampHTML(lv, 44, ICON(lightIcon(d), 'sm'), '', false, lightFill(d.device_id, lv))}<span class="ln-name">${esc(d.name)}</span><span class="ln-room">${esc(areaName(d.area))}</span></button>`;
 }
 function lightNowHTML() {
-  const rooms = roomsLit();
-  return `<div class="lightnow" id="lightnow"><p class="statusline ln-line">${lightNowHeadline(rooms)}</p><div class="ln-row ${rooms.length ? '' : 'empty'}">${rooms.map(r => lampItemHTML(r)).join('')}</div></div>`;
+  const rooms = roomsLit(); const ds = rowLights();
+  return `<div class="lightnow" id="lightnow"><p class="statusline ln-line">${lightNowHeadline(rooms)}</p><div class="ln-row ${ds.length ? '' : 'empty'}">${ds.map(d => lampItemHTML(d)).join('')}</div></div>`;
 }
 function paintLightNow() {
   const root = $('#lightnow'); if (!root) return;
@@ -251,25 +258,19 @@ function paintLightNow() {
   const line = root.querySelector('.ln-line'); const h = lightNowHeadline(rooms);
   if (line.innerHTML !== h) { if (window.Motion) Motion.textSwap(line, h); else line.innerHTML = h; }
   const row = root.querySelector('.ln-row');
-  const want = new Set(rooms.map(r => r.id));
-  const have = new Map([...row.querySelectorAll('.ln-lamp')].filter(el => !el.dataset.gone).map(el => [el.dataset.id, el]));
-  for (const [id, el] of have) if (!want.has(id)) { el.dataset.gone = '1'; tween(el.querySelector('.lamp'), { width: 0, height: 0 }, () => el.remove()); }
-  let prev = null;
-  for (const r of rooms) {
-    let el = have.get(r.id);
-    const s = discSize(r.level), c = lampColor(r.level);
-    if (!el) {
-      el = elFrom(lampItemHTML(r, 0));
-      if (prev) prev.after(el); else row.prepend(el);
-      tween(el.querySelector('.lamp'), { width: s, height: s, backgroundColor: c });
-    } else if (Number(el.dataset.level) !== r.level) {
-      el.dataset.level = r.level;
-      tween(el.querySelector('.lamp'), { width: s, height: s, backgroundColor: c });
-    }
-    prev = el;
+  const ds = rowLights();
+  const have = new Map([...row.querySelectorAll('.ln-lamp')].map(el => [el.dataset.id, el]));
+  if (ds.length !== have.size || ds.some(d => !have.has(d.device_id))) { row.innerHTML = ds.map(d => lampItemHTML(d)).join(''); row.classList.toggle('empty', !ds.length); return; }
+  for (const d of ds) {
+    const el = have.get(d.device_id);
+    const lv = isOn(d.device_id) ? (level(d.device_id) || 100) : 0;
+    const fill = lightFill(d.device_id, lv);
+    if (Number(el.dataset.level) === lv && el.dataset.fill === fill) continue;
+    el.dataset.level = lv; el.dataset.fill = fill;
+    el.classList.toggle('on', lv > 0);
+    const lamp = el.querySelector('.lamp'); lamp.classList.toggle('off', lv <= 0);
+    tween(lamp, { backgroundColor: fill });
   }
-  if (rooms.length) row.classList.remove('empty');
-  else setTimeout(() => { if (row.isConnected && !roomsLit().length) row.classList.add('empty'); }, MOTION.d * 1000 + 20);
 }
 function openRoomCard(aid) {
   if (S.view !== 'home') { S.view = 'home'; location.hash = 'home'; render(); }
@@ -307,6 +308,20 @@ function paintMoodRows() {
 // ---------- the house: every light that is on, its mean level, and one slider for all of them ----------
 function litLights() { return controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && (level(d.device_id) || 0) > 0); }
 function houseLevel() { const ls = litLights(); return ls.length ? meanLevel(ls.map(d => d.device_id)) : 0; }
+// The power button: everything off while anything is lit; with the house dark it turns the lights on, either the
+// ones that were on before (the connector remembers them) or every light, as the Settings choice says.
+function powerButton() {
+  if (litLights().length) {
+    for (const id of targetDevices('h:all')) S.states[id] = { ...(S.states[id] || {}), level: 0 };
+    paintState();
+    command({ type: 'level', target: 'h:all', level: 'off' });
+    return;
+  }
+  const all = (S.config.settings.power_on || 'restore') === 'all';
+  command(all ? { type: 'level', target: 'h:all', level: 'on' } : { type: 'restore', target: 'h:all' });
+}
+function powerLabel() { return litLights().length ? 'All off' : ((S.config.settings.power_on || 'restore') === 'all' ? 'All on' : 'Lights back on'); }
+function powerTitle() { return litLights().length ? 'All off. Hold for shades and fans' : (powerLabel() + '. Hold for shades and fans'); }
 // Shared by the bar and the Now view: one command in flight while dragging, the last value always lands.
 function setHouseLevel(v) {
   v = clamp(Math.round(v), 1, 100);
@@ -354,7 +369,7 @@ function nowActionsHTML() {
   const timer = tm
     ? `<button class="rbtn timing" data-act="now-panel" data-p="timer-active" data-ring="${esc(tm.t)}" data-ends="${tm.v.ends_at}" data-c="${(2 * Math.PI * 28).toFixed(2)}"><span class="c">${ICON('clock')}${nowRingHTML(tm.t, tm.v, 64, 3, 'rring')}</span><span data-countdown-min="${tm.v.ends_at}">${minutesLeft(tm.v.ends_at)} min</span></button>`
     : rb('now-panel', 'clock', 'Sleep timer', 'data-p="timer"');
-  return `${rb('alloff', 'power', 'All off', 'title="Hold for shades and fans"')}${rb('now-night', 'moon', 'Night')}${timer}${rb('now-panel', 'scene', 'Scenes', 'data-p="scenes"')}`;
+  return `${rb('alloff', 'power', powerLabel(), `title="${powerTitle()}"`)}${rb('now-night', 'moon', 'Night')}${timer}${rb('now-panel', 'scene', 'Scenes', 'data-p="scenes"')}`;
 }
 function nowMainHTML() {
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
@@ -665,6 +680,7 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const d = el.dataset;
   switch (d.act) {
+    case 'lamp-toggle': toggleTarget(`d:${d.id}`); break;
     case 'lamp-room': openRoomCard(d.id); break;
     case 'light-open': openLightSheet(d.id); break;
     case 'kind-open': openKindSheet(d.id); break;

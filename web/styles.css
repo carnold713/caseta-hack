@@ -587,3 +587,4 @@ input.slider { pointer-events: none; }
 /* a mouse dragging a horizontal row */
 .chips.scroll.dragging, .tiles.dragging, .moods.dragging, .ln-row.dragging { cursor: grabbing; scroll-behavior: auto; user-select: none; }
 @media (hover: hover) and (pointer: fine) { .chips.scroll, .tiles, .moods, .ln-row { cursor: grab; } }
+.nb-off.dark { background: var(--surface); color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }

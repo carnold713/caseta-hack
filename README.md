@@ -38,13 +38,17 @@ Pico bindings from its cached config.
   a thing a button can control. Hand-picked sets exist under Advanced.
 - **Scenes:** a look for the whole house, saved from the lights as they
   are right now, with a fade. Lutron's own scenes sit in the same list.
-- **Home:** which rooms are lit, as warm discs sized by brightness, scenes
-  as tiles, what is coming up, and rooms that open to lamp rows with
-  sliders, toggles, fan speeds and shade controls. Tap a light's name for
-  its own page: drag the disc to dim, set a sleep timer, star it. The
-  **Light now** bar sits above the tabs on every page: what is on, a
-  dimmer for everything that is on, and All off (hold it to close shades
-  and stop fans too). Tap the bar for the full Now view.
+- **Home:** every light in a row at the top, one size, lit in its own
+  colour or grey when off; tap one to toggle it, hold for a sleep timer.
+  Then scenes as tiles, what is coming up, and rooms that open to lamp
+  rows with sliders, toggles, fan speeds and shade controls. Tap a
+  light's name for its own page: drag the disc to dim, set a sleep timer,
+  star it. The **Light now** bar sits above the tabs on every page: what
+  is on, a dimmer for everything that is on, and the power button: All
+  off while anything is lit (hold it to close shades and stop fans too),
+  and with the house dark it brings back the lights that were on before,
+  at the same levels (the connector remembers them), or turns everything
+  on, as you choose in Settings. Tap the bar for the full Now view.
 - **Room moods:** say which lights are the main light, task light, lamps
   or decor, and each room gets Bright, Relax, Dinner, Movie and Night as
   scenes a chip or a remote button can run.
@@ -183,7 +187,9 @@ it takes care of itself from then on. Bump `VERSION` in `agent/agent.py`
 whenever the connector changes; the hub reads it to know what "latest" is.
 Connector 0.8.0 is the first that understands the `color` action and the
 object form of scene levels; older connectors ignore colour and apply the
-brightness alone.
+brightness alone. 0.8.1 adds `restore` (the power button with the house
+dark): the connector keeps what was lit in the two minutes before the last
+light went off, in `last_on.json`, and brings it back at the same levels.
 
 ## Configure
 
@@ -214,7 +220,7 @@ A worked example, a 3-button Pico in the kitchen:
 
 Action types (`hub/validate.js` is the schema): `level`, `step`, `raise`,
 `lower`, `stop`, `cap`, `fan`, `scene`, `preset`, `cycle`, `cycle_presets`,
-`timer`, `cancel_timer`, `delay`, and `color`. `color` is
+`timer`, `cancel_timer`, `delay`, `restore` (what was on before the house went dark, or plain on) and `color`. `color` is
 `{type: "color", target, kelvin: 1000-10000 | hex: "#rrggbb", level?: 0-100,
 fade?: seconds}` with exactly one of `kelvin` and `hex`; it reaches only the
 Hue lamps in the target that can do what it asks (white temperature for

@@ -28,6 +28,7 @@ function settingsGlance() {
       <div class="item"><div class="grow"><div class="t">Home name</div></div><input class="input name" value="${esc(s.home_name)}" placeholder="Home" data-setting="home_name"></div>
       <button class="item" data-act="ad-open"><div class="grow"><div class="t">Add a device</div><div class="d">A new dimmer, switch, remote or shade, without the Lutron app</div></div><span class="chev">${ICON('plus', 'sm')}</span></button>
       ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div><span class="chev">${ICON('plus', 'sm')}</span></button>`; })()}
+      ${powerRowHTML()}
       <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div><div class="d">Added or renamed something in the Lutron app? Look again.</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
     </div>
     <div class="h2">Night-time</div>
@@ -124,4 +125,17 @@ function openGroupEditor(id) {
   S.groupEdit = g.id;
   const rows = areas().map(a => { const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return ''; return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${g.device_ids.includes(d.device_id) ? 'checked' : ''} data-act="group-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div></div></label>`).join('')}</div>`; }).join('');
   sheet.open('Light set', `<label class="field"><span>Name</span><input class="input" id="group-name" value="${esc(g.name)}"></label>${rows}<div class="spacer"></div><button class="btn danger block" data-act="group-delete" data-id="${g.id}">Delete this set</button><div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`);
+}
+
+// The power button with the house dark: bring back what was on, or turn everything on.
+function powerRowHTML() {
+  const cur = S.config.settings.power_on || 'restore';
+  return `<div class="item" style="flex-wrap:wrap"><div class="grow"><div class="t">Power button when everything is off</div><div class="d">${cur === 'all' ? 'Turns every light on at its usual level.' : 'Brings back the lights that were on before, at the same levels.'}</div></div>
+    <div class="chips" style="flex-basis:100%;margin-top:4px" data-power-on>${[['restore', 'What was on before'], ['all', 'Everything']].map(([v, l]) => `<button class="chip sm ${cur === v ? 'sel' : ''}" data-act="power-on" data-v="${v}">${l}</button>`).join('')}</div></div>`;
+}
+function setPowerOn(v) {
+  S.config.settings.power_on = v;
+  const row = document.querySelector('[data-power-on]'); if (row) row.closest('.item').outerHTML = powerRowHTML();
+  saveSoon();
+  paintNowBar();
 }

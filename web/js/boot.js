@@ -10,12 +10,13 @@ document.addEventListener('click', async e => {
     case 'settings-more': S.settingsMore = true; render(); window.scrollTo(0, 0); break;
     case 'settings-back': S.settingsMore = false; render(); window.scrollTo(0, 0); break;
     case 'toggle': toggleTarget(d.t); break;
+    case 'power-on': setPowerOn(d.v); break;
     case 'fav': toggleFav(d.t); break;
     case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
     case 'cmd': command(JSON.parse(d.cmd)); break;
     case 'fan': S.states[d.id] = { ...(S.states[d.id] || {}), fan_speed: d.s, level: d.s === 'Off' ? 0 : 100 }; paintState(); command({ type: 'fan', target: `d:${d.id}`, speed: d.s }); break;
     case 'room-open': if (window.Motion) Motion.press(el); toggleRoom(d.id); break;
-    case 'alloff': if (!el._held) { for (const id of targetDevices('h:all')) S.states[id] = { ...(S.states[id] || {}), level: 0 }; paintState(); command({ type: 'level', target: 'h:all', level: 'off' }); } el._held = false; break;
+    case 'alloff': if (!el._held) powerButton(); el._held = false; break;
     case 'cancel-timer': { const stay = d.stay && el.closest('#nowview'); await command({ type: 'cancel_timer', target: tsplit(d.t) }); if (stay && typeof nowShow === 'function') { delete S.timers[d.t]; nowShow('main'); } break; }
     case 'timer': { const stay = d.stay && el.closest('#nowview'); if (!stay) sheet.close(); const ok = await command({ type: 'timer', target: tsplit(d.t), minutes: Number(d.m), fade: 5 }); if (ok) toast(`${cap(targetName(tsplit(d.t)))} turns off in ${d.m} min`); if (stay && typeof nowShow === 'function') { if (ok && !S.timers[d.t]) S.timers[d.t] = { ends_at: Date.now() / 1000 + Number(d.m) * 60, level: 0 }; nowShow('main'); } break; }
     case 'update-connector': el.disabled = true; el.textContent = 'Updating…'; toast('Updating the connector. The dot goes red, then green again in about a minute.'); try { const r = await api('/api/update-connector', { method: 'POST' }); toast(r.detail && r.detail.to ? `Updated to ${r.detail.to}. Restarting…` : 'Updated. Restarting…'); } catch (err) { toast(err.message, { err: true }); render(); } break;

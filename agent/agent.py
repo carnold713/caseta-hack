@@ -39,7 +39,7 @@ from adddevice import AddSession
 from hue import Hue, color_state
 from sun import sun_times
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -110,6 +110,8 @@ class Agent:
         self.runner.hue_set = self.hue.set_level
         self.runner.hue_color = self.hue.set_color
         self.runner.hue_scene = self.hue.recall_scene
+        self.runner.memory_file = DATA_DIR / "last_on.json"
+        self.runner.load_memory()
         self._index_bindings()
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}

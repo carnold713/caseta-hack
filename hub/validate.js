@@ -3,7 +3,7 @@
 // is where a malformed document gets rejected.
 
 const GESTURES = new Set(['single', 'double', 'hold_start', 'hold_end', 'hold']);
-const ACTION_TYPES = new Set(['level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer', 'cap', 'cycle_presets', 'color']);
+const ACTION_TYPES = new Set(['restore', 'level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer', 'cap', 'cycle_presets', 'color']);
 const FAN_SPEEDS = new Set(['Off', 'Low', 'Medium', 'MediumHigh', 'High']);
 // The kinds of light and their roles, the same table the app loads (it works as a script and as a module).
 const KIND_DEF = require('../web/js/kinds.js');
@@ -37,6 +37,10 @@ function validateAction(a, where) {
     case 'level':
       if (!isTarget(a.target)) fail(`${where}: level needs a target`);
       if (!(isLevel(a.level) || ['toggle', 'on', 'off'].includes(a.level))) fail(`${where}: level must be 0-100, on, off or toggle`);
+      if (a.fade != null && !(typeof a.fade === 'number' && a.fade >= 0 && a.fade <= 3600)) fail(`${where}: fade must be seconds`);
+      break;
+    case 'restore':
+      if (!isTarget(a.target)) fail(`${where}: restore needs a target`);
       if (a.fade != null && !(typeof a.fade === 'number' && a.fade >= 0 && a.fade <= 3600)) fail(`${where}: fade must be seconds`);
       break;
     case 'step':
@@ -103,6 +107,7 @@ function validateConfig(cfg) {
   out.settings.double_ms = clampInt(s.double_ms, 150, 1500, 350);
   out.settings.hold_ms = clampInt(s.hold_ms, 250, 3000, 500);
   out.settings.group_on_level = clampInt(s.group_on_level, 1, 100, 100);
+  out.settings.power_on = ['restore', 'all'].includes(s.power_on) ? s.power_on : 'restore';
   out.settings.default_fade = typeof s.default_fade === 'number' && s.default_fade >= 0 && s.default_fade <= 60 ? s.default_fade : 0.5;
   out.settings.night_start = isClock(s.night_start) ? s.night_start : '22:00';
   out.settings.night_end = isClock(s.night_end) ? s.night_end : '06:30';
