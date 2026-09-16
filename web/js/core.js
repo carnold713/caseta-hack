@@ -322,6 +322,8 @@ const sheet = {
   open(title, body, opts = {}) {
     const root = $('#sheet-root');
     const sh = root.querySelector('.sh');
+    // a sheet re-opened while already open (a step in a flow) keeps its height; a fresh one sizes to its content
+    if (root.classList.contains('in')) sheet.lockHeight(); else root.querySelector('.sheet').style.height = '';
     root.querySelector('.sheet').className = 'sheet' + (opts.dark ? ' dark' : '') + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '');
     sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
     sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
@@ -335,12 +337,15 @@ const sheet = {
   },
   close() {
     const root = $('#sheet-root'); root.classList.remove('in');
-    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; };
+    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; root.querySelector('.sheet').style.height = ''; };
     if (window.Motion) Promise.resolve(Motion.sheetOut(root)).then(done); else setTimeout(done, 320);
     document.body.style.overflow = '';
     if (sheet.onClose) { const f = sheet.onClose; sheet.onClose = null; f(); }
   },
-  update(body) { const sb = $('#sheet-root .sb'); if (sb) sb.innerHTML = body; },
+  // Once a sheet is open its height stays put while the content inside changes: the content scrolls or
+  // leaves room, the card never jumps. Cleared on close.
+  lockHeight() { const root = $('#sheet-root'); const el = root.querySelector('.sheet'); if (!root.classList.contains('in') || el.style.height) return; const h = el.getBoundingClientRect().height; if (h > 120) el.style.height = `${Math.round(h)}px`; },
+  update(body) { sheet.lockHeight(); const sb = $('#sheet-root .sb'); if (sb) sb.innerHTML = body; },
   isOpen() { return $('#sheet-root').classList.contains('open'); },
 };
 
@@ -409,7 +414,7 @@ function nowBarHTML() {
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const name = (S.config && S.config.settings.home_name) || 'Home';
   return `<div class="nb-row"><button class="nb-main" data-act="now-open" aria-label="Open the Now view"><div class="nb-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', true) : ICON('bulb')}</div><div class="nb-text"><span class="cap">${esc(name)}</span><div class="t" id="nb-head">${lightNowHeadline(rooms)}</div></div></button><button class="nb-off m-hold" data-act="alloff" title="All off. Hold for shades and fans">${ICON('power', 'sm')}</button></div>
-  <div class="nb-level ${on.length ? '' : 'hidden'}">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${lv}" style="--p:${lv}%" data-house="1" aria-label="House brightness"><span class="nb-num">${lv}</span></div>`;
+  <div class="nb-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv : 'Off'}</span></div>`;
 }
 function paintNowBar() {
   const nb = $('#nowbar'); if (!nb || !nb.classList.contains('show') || !nb.firstChild) return;
@@ -419,8 +424,8 @@ function paintNowBar() {
   if (head && head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
   const thumb = nb.querySelector('.nb-thumb'); const k = on.length ? String(lv) : 'off';
   if (thumb && thumb.dataset.k !== k) { thumb.dataset.k = k; thumb.innerHTML = on.length ? lampHTML(lv, 28, '', '', true) : ICON('bulb'); }
-  nb.querySelector('.nb-level').classList.toggle('hidden', !on.length);
-  $('#app').classList.toggle('baroff', !on.length);
-  if (sl) { sl.value = lv; sl.style.setProperty('--p', `${lv}%`); }
-  const num = nb.querySelector('.nb-num'); if (num) num.textContent = lv;
+  // the dimmer stays: with nothing on, sliding it is how the house comes on
+  $('#app').classList.remove('baroff');
+  if (sl) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); }
+  const num = nb.querySelector('.nb-num'); if (num) num.textContent = on.length ? lv : 'Off';
 }

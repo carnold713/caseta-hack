@@ -267,7 +267,10 @@ let houseGate = null, housePending = null;
 // Shared by the bar and the Now view: one command per 120ms while dragging, the last value always lands.
 function setHouseLevel(v) {
   v = clamp(Math.round(v), 1, 100);
-  const ids = litLights().map(d => d.device_id); if (!ids.length) return;
+  // dims what is on; when nothing is on, sliding is how the house comes on: every light goes to that level
+  const lit = litLights().map(d => d.device_id);
+  const ids = lit.length ? lit : controllable().filter(d => d.domain === 'light' || d.domain === 'switch').map(d => d.device_id);
+  if (!ids.length) return;
   for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level: v };
   housePending = { ids, v };
   if (houseGate) return;
@@ -325,7 +328,7 @@ function nowMainHTML() {
   return `<div class="now-art" id="now-art" data-k="${rooms.map(r => r.id + ':' + r.level).join(',')}">${nowArtHTML(rooms)}</div>
     <div class="t2 now-head" id="now-head">${lightNowHeadline(rooms)}</div>
     <div class="now-sub" id="now-sub">${nowSub(rooms, on, lv)}</div>
-    <div class="now-level ${on.length ? '' : 'dim'}">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${lv}" style="--p:${lv}%" data-house="1" aria-label="House brightness" ${on.length ? '' : 'disabled'}><span class="nb-num">${lv}</span></div>
+    <div class="now-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv : 'Off'}</span></div>
     <div class="now-actions" id="now-actions" data-tk="${nowTimerKey()}">${nowActionsHTML()}</div>
     <div class="h2">Rooms</div><div class="card pad0 list now-rooms">${rows}</div>`;
 }
@@ -359,6 +362,7 @@ function nowPanelHTML(p) {
 function nowShow(p) {
   NOW.panel = p;
   const root = $('#nowview'); if (!root) return;
+  sheet.lockHeight();
   root.innerHTML = nowPanelHTML(p);
   const sb = root.closest('.sb'); if (sb) sb.scrollTop = 0;
   if (p === 'timer') wireDial();
@@ -377,7 +381,7 @@ function paintNow() {
   if (head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
   root.querySelector('#now-sub').textContent = nowSub(rooms, on, lv);
   const sl = root.querySelector('[data-house]');
-  if (sl && !sl.dataset.drag) { sl.value = lv; sl.style.setProperty('--p', `${lv}%`); sl.disabled = !on.length; sl.parentElement.classList.toggle('dim', !on.length); root.querySelector('.nb-num').textContent = lv; }
+  if (sl && !sl.dataset.drag) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); root.querySelector('.nb-num').textContent = on.length ? lv : 'Off'; }
   const acts = root.querySelector('#now-actions'); const tk = nowTimerKey();
   if (acts && acts.dataset.tk !== tk) { acts.dataset.tk = tk; acts.innerHTML = nowActionsHTML(); }
 }

@@ -128,7 +128,7 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .rbtn.m-hold.holding .c { animation: m-hold 1s linear forwards; }
 
 /* ---------- the Now view as a flyout card, with its panels and the timer ring ---------- */
-.sheet.now { max-height: 86dvh; }
+.sheet.now { height: 86dvh; max-height: 86dvh; }   /* one size, whatever panel is showing */
 .sheet.now .now-art { width: 200px; height: 200px; margin-top: 0; }
 .sheet.now .sh { min-height: 0; padding-bottom: 0; }
 .now-top { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
