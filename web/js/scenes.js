@@ -17,28 +17,59 @@ VIEWS.scenes = {
   },
 };
 const sceneSub = p => `${plural(Object.keys(p.levels).length, 'light')}${p.fade ? ` · fades over ${fmtDur(p.fade)}` : ''}`;
+// What a light is doing now, as a scene entry: a fan speed, a level, or {level, kelvin | hex} for a Hue lamp showing a colour.
+function sceneEntryNow(d, dflt) {
+  const id = d.device_id;
+  if (d.domain === 'fan') return (S.states[id] || {}).fan_speed || 'Off';
+  const lv = level(id) ?? dflt;
+  const c = colorState(id);
+  if (c && c.mode === 'ct' && c.kelvin && d.ct) return { level: lv, kelvin: Math.round(c.kelvin) };
+  if (c && c.mode === 'xy' && c.hex && d.color) return { level: lv, hex: c.hex.toLowerCase() };
+  return lv;
+}
+// A scene entry with a new brightness, keeping its colour when it has one.
+function withLevel(v, lv) { return v && typeof v === 'object' ? { ...v, level: lv } : lv; }
 
 function newScene() {
   const p = { id: uid(), name: 'New scene', levels: {}, fade: null };
-  for (const d of controllable()) { if (d.domain === 'cover') continue; if (isOn(d.device_id)) p.levels[d.device_id] = d.domain === 'fan' ? ((S.states[d.device_id] || {}).fan_speed || 'Off') : (level(d.device_id) ?? 100); }
+  for (const d of controllable()) { if (d.domain === 'cover') continue; if (isOn(d.device_id)) p.levels[d.device_id] = sceneEntryNow(d, 100); }
   S.config.presets.push(p);
   save({ quiet: true, render: true });
   openSceneEditor(p.id, true);
 }
 // "Kitchen Cans 60%, Bedside Lamp 30%, Porch on": what the scene holds, at most six, then "and 2 more".
 function sceneLevelsText(p) {
-  const parts = Object.entries(p.levels).filter(([id]) => dev(id)).map(([id, v]) => { const d = dev(id); return `${d.name} ${d.domain === 'fan' ? fanName(v) : d.domain === 'switch' ? (v > 0 ? 'on' : 'off') : v > 0 ? v + '%' : 'off'}`; });
+  const parts = Object.entries(p.levels).filter(([id]) => dev(id)).map(([id, v]) => { const d = dev(id); const lv = levelOf(v); return `${d.name} ${d.domain === 'fan' ? fanName(v) : d.domain === 'switch' ? (lv > 0 ? 'on' : 'off') : lv > 0 ? lv + '%' : 'off'}`; });
   if (!parts.length) return 'nothing yet';
   return parts.slice(0, 6).join(', ') + (parts.length > 6 ? ` and ${parts.length - 6} more` : '');
 }
 const sceneLightRow = (p, d) => {
-  const v = p.levels[d.device_id];
+  const v = p.levels[d.device_id], lv = levelOf(v), c = colorOf(v);
   let ctl = '';
   if (d.domain === 'fan') ctl = `<select class="input" style="width:130px;min-height:40px;padding:6px 32px 6px 12px" data-scene-lvl="${d.device_id}">${['Off', 'Low', 'Medium', 'MediumHigh', 'High'].map(s => `<option value="${s}" ${v === s ? 'selected' : ''}>${cap(fanName(s))}</option>`).join('')}</select>`;
-  else if (d.domain === 'switch') ctl = `<button class="sw ${v > 0 ? 'on' : ''}" data-act="scene-sw" data-id="${d.device_id}"></button>`;
-  else ctl = `<div class="sliderwrap" style="width:140px"><input class="slider" type="range" min="0" max="100" value="${v}" style="--p:${v}%" data-scene-lvl="${d.device_id}"><div class="stip"></div></div>`;
-  return `<div class="item">${lampHTML(typeof v === 'number' ? v : (v && v !== 'Off' ? 100 : 0), 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.domain === 'fan' ? cap(fanName(v)) : v > 0 ? v + '%' : 'Off'}</div></div>${ctl}</div>`;
+  else if (d.domain === 'switch') ctl = `<button class="sw ${lv > 0 ? 'on' : ''}" data-act="scene-sw" data-id="${d.device_id}"></button>`;
+  else ctl = `<div class="sliderwrap" style="width:140px"><input class="slider" type="range" min="0" max="100" value="${lv}" style="--p:${lv}%" data-scene-lvl="${d.device_id}"><div class="stip"></div></div>`;
+  // a Hue lamp's disc shows the colour the scene gives it; under its row, a value row opens the colour controls
+  const fill = c && lv > 0 ? lampFill(c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex, lv) : null;
+  let row = `<div class="item">${lampHTML(lv, 28, '', '', false, fill)}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.domain === 'fan' ? cap(fanName(v)) : lv > 0 ? lv + '%' : 'Off'}</div></div>${ctl}</div>`;
+  if (d.ct || d.color) row += valueRow(d.color ? 'Colour' : 'Warmth', `${colourDot(c)}<span data-scol="${d.device_id}">${esc(colourLabel(c))}</span>`, 'c-expand', `data-cns="scene" data-cid="${d.device_id}"`);
+  return row;
 };
+// The scene editor's colour controls (js/color.js): the entry becomes {level, kelvin | hex}, or a plain level again.
+colorHost('scene', {
+  cur: id => { const p = presets().find(x => x.id === S.sceneEdit); return p ? colorOf(p.levels[id]) : null; },
+  opts: () => ({ none: true }),
+  set(id, v) {
+    const p = presets().find(x => x.id === S.sceneEdit); if (!p || !(id in p.levels)) return;
+    const lv = levelOf(p.levels[id]);
+    p.levels[id] = v ? { level: lv, ...v } : lv;
+    markEdited(p); saveSoon();
+    const c = colorOf(p.levels[id]);
+    const lab = document.querySelector(`[data-scol="${id}"]`); if (lab) { lab.textContent = colourLabel(c); const dot = lab.previousElementSibling; if (dot) dot.outerHTML = colourDot(c); }
+    const row = lab && lab.closest('.item') && lab.closest('.item').previousElementSibling; const lamp = row && row.querySelector('.lamp');
+    if (lamp) lamp.style.background = c && lv > 0 ? lampFill(c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex, lv) : lampColor(lv);
+  },
+});
 // The scene editor (docs/ux-progressive.md 2.10): the name, only the lights in the look, "Add or remove lights", the pair, More, Done.
 function openSceneEditor(id, fresh = false) {
   const p = presets().find(x => x.id === id); if (!p) return;
@@ -69,7 +100,7 @@ function openSceneLightsSheet() {
   const rows = areas().map(a => {
     const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover');
     if (!ds.length) return '';
-    return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${d.device_id in p.levels ? 'checked' : ''} data-act="scene-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.device_id in p.levels ? (d.domain === 'fan' ? cap(fanName(p.levels[d.device_id])) : p.levels[d.device_id] > 0 ? p.levels[d.device_id] + '%' : 'Off') : 'Left alone'}</div></div></label>`).join('')}</div>`;
+    return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${d.device_id in p.levels ? 'checked' : ''} data-act="scene-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.device_id in p.levels ? (d.domain === 'fan' ? cap(fanName(p.levels[d.device_id])) : levelOf(p.levels[d.device_id]) > 0 ? levelOf(p.levels[d.device_id]) + '%' : 'Off') : 'Left alone'}</div></div></label>`).join('')}</div>`;
   }).join('');
   showSheet('scene-lights', 'Which lights are in this look?', rows, { sub: 'A light you tick joins at the level it is at now.', back: true, onBack: () => openSceneEditor(p.id) });
 }
@@ -90,14 +121,14 @@ function sceneEdit(k, v) {
 }
 function sceneInclude(did, on) {
   const p = presets().find(x => x.id === S.sceneEdit); const d = dev(did);
-  if (on) p.levels[did] = d.domain === 'fan' ? ((S.states[did] || {}).fan_speed || 'Off') : (level(did) ?? 100); else delete p.levels[did];
+  if (on) p.levels[did] = sceneEntryNow(d, 100); else delete p.levels[did];
   markEdited(p); saveSoon();
   if (SHEET_KEY === 'scene-lights') openSceneLightsSheet(); else openSceneEditor(p.id);
 }
-function sceneLevel(did, v) { const p = presets().find(x => x.id === S.sceneEdit); p.levels[did] = typeof v === 'number' ? clamp(v, 0, 100) : v; markEdited(p); saveSoon(); }
+function sceneLevel(did, v) { const p = presets().find(x => x.id === S.sceneEdit); p.levels[did] = typeof v === 'number' ? withLevel(p.levels[did], clamp(v, 0, 100)) : v; markEdited(p); saveSoon(); }
 function sceneCapture() {
   const p = presets().find(x => x.id === S.sceneEdit);
-  for (const did of Object.keys(p.levels)) { const d = dev(did); if (!d) continue; p.levels[did] = d.domain === 'fan' ? ((S.states[did] || {}).fan_speed || 'Off') : (level(did) ?? 0); }
+  for (const did of Object.keys(p.levels)) { const d = dev(did); if (!d) continue; p.levels[did] = sceneEntryNow(d, 0); }
   markEdited(p); saveSoon(); openSceneEditor(p.id); toast('Captured');
 }
 // "Back to the suggestion": the mood's computed levels again, and Update moods may refresh it from now on.

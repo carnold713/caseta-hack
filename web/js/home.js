@@ -72,8 +72,8 @@ function lightRow(d) {
   const opens = d.domain === 'light' || d.domain === 'switch';
   const lv = opens ? (level(id) || 0) : (isOn(id) ? 100 : 0);
   const disc = opens
-    ? `<button class="lkind lamp ${lv > 0 ? '' : 'off'}" data-act="kind-open" data-id="${id}" data-ldisc="${id}" title="What kind of light is this?" style="background:${lampColor(lv)}">${ICON(lightIcon(d))}</button>`
-    : `<span class="lkind lamp ${lv > 0 ? '' : 'off'}" data-ldisc="${id}" style="background:${lampColor(lv)}">${ICON(domainIcon(d.domain))}</span>`;
+    ? `<button class="lkind lamp ${lv > 0 ? '' : 'off'}" data-act="kind-open" data-id="${id}" data-ldisc="${id}" title="What kind of light is this?" style="background:${lightFill(id, lv)}">${ICON(lightIcon(d))}</button>`
+    : `<span class="lkind lamp ${lv > 0 ? '' : 'off'}" data-ldisc="${id}" style="background:${lightFill(id, lv)}">${ICON(domainIcon(d.domain))}</span>`;
   const act = `<button class="act ${isOn(id) ? 'on' : ''}" data-act-lvl="${id}" data-act="toggle" data-t="${t}">${ICON(d.domain === 'fan' ? 'fan' : 'sun', 'sm')}</button>`;
   const head = (withAct) => `<div class="row">${disc}<${opens ? `button class="grow lopen" data-act="light-open" data-id="${id}"` : 'div class="grow"'}><div class="n">${esc(d.name)}</div><div class="lv" data-lvl="${id}"></div></${opens ? 'button' : 'div'}>${withAct ? act : ''}${fav}</div>`;
   const slider = `<div class="sliderwrap"><input class="slider" type="range" min="0" max="100" data-lvl="${id}" data-slide="${t}"><div class="stip"></div></div>`;

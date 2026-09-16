@@ -36,10 +36,10 @@ from zoneinfo import ZoneInfo
 
 from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
-from hue import Hue
+from hue import Hue, color_state
 from sun import sun_times
 
-VERSION = "0.7.2"
+VERSION = "0.8.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -108,12 +108,13 @@ class Agent:
         self.adder = AddSession(lambda: self.bridge, self.send)  # "Add a device" from the app
         self.hue = Hue(DATA_DIR, on_state=self._on_hue_state, on_loaded=self._merge_hue)
         self.runner.hue_set = self.hue.set_level
+        self.runner.hue_color = self.hue.set_color
         self.runner.hue_scene = self.hue.recall_scene
         self._index_bindings()
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}
-        # Level commands run in a lane per target, latest wins: a fast swipe sends a stream of levels
-        # and only the newest one still matters, so anything waiting behind a bridge round-trip is dropped.
+        # Level and colour commands run in a lane per target and kind, latest wins: a fast swipe sends a stream
+        # of levels and only the newest one still matters, so anything waiting behind a bridge round-trip is dropped.
         self._lanes: Dict[str, dict] = {}
         self.runner.local_time = self.local_time
         self.runner.sunset_hm = self.sunset_hm
@@ -251,6 +252,12 @@ class Agent:
                 "area": d.get("area"),
                 "domain": _domain(d.get("type")),
             }
+            if str(did).startswith("hue_") and (d.get("color") or d.get("ct")):
+                # what the lamp can do, in the app's units: the mirek range becomes kelvin, widest first
+                devices[did]["color"] = bool(d.get("color"))
+                devices[did]["ct"] = bool(d.get("ct"))
+                if d.get("ct"):
+                    devices[did]["ct_range"] = [int(round(1_000_000 / d["ct"]["max"])), int(round(1_000_000 / d["ct"]["min"]))]
         buttons = {}
         for bid, bt in b.buttons.items():
             buttons[bid] = {
@@ -502,7 +509,7 @@ class Agent:
             if action.get("type") == "update":
                 await self._update_and_restart(cid)
                 return
-            if action.get("type") == "level":
+            if action.get("type") in ("level", "color"):
                 self._queue_level(cid, action)
                 return
             try:
@@ -552,8 +559,8 @@ class Agent:
                 self.send({"type": "result", "id": cid, "ok": False, "error": str(exc)})
 
     def _queue_level(self, cid, action: dict) -> None:
-        """Latest wins per target: a level waiting behind a bridge round-trip is superseded, not sent."""
-        key = json.dumps(action.get("target"), sort_keys=True)
+        """Latest wins per target and kind: a level (or colour) waiting behind a bridge round-trip is superseded, not sent."""
+        key = f"{action.get('type')}|{json.dumps(action.get('target'), sort_keys=True)}"
         lane = self._lanes.get(key)
         if lane is not None:
             waiting = lane.get("next")
@@ -642,7 +649,12 @@ def _domain(t: Optional[str]) -> str:
 
 def _state_of(d: dict) -> dict:
     lvl = d.get("current_state", -1)
-    return {"level": int(lvl) if isinstance(lvl, (int, float)) and lvl >= 0 else None, "fan_speed": d.get("fan_speed")}
+    st = {"level": int(lvl) if isinstance(lvl, (int, float)) and lvl >= 0 else None, "fan_speed": d.get("fan_speed")}
+    if str(d.get("device_id", "")).startswith("hue_"):
+        c = color_state(d)  # {"mode": "ct" | "xy" | None, "kelvin", "xy", "hex"} for a lamp that can do either
+        if c:
+            st["color"] = c
+    return st
 
 
 async def main() -> None:

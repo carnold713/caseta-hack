@@ -48,6 +48,14 @@ Pico bindings from its cached config.
 - **Room moods:** say which lights are the main light, task light, lamps
   or decor, and each room gets Bright, Relax, Dinner, Movie and Night as
   scenes a chip or a remote button can run.
+- **Kinds of light:** each light can say where it is and what it is,
+  two questions in one sheet: Ceiling, Wall, Window, Desk, Table, Floor,
+  Under a cabinet, Shelf or cove, Bed or Outside, then the fixture for
+  that place (a desk lamp or a desk tape light, a ceiling track light or
+  a window track light, a pendant, a chandelier, puck lights, a porch
+  light, 46 in all). The kind picks the light's icon and its part in the
+  room's moods. The table is one file, `web/js/kinds.js`, shared by the
+  app and the hub.
 - **Automations:** things the home does by itself. Three guided setups
   (Welcome lights before sunset, a Wake-up light that rises slowly before
   the alarm, Goodnight and Leaving buttons) and a from-scratch editor:
@@ -72,8 +80,16 @@ Pico bindings from its cached config.
   scenes stay in the Hue app; scenes made here can mix both),
   with live state from the bridge's event stream. Rooms, sliders, moods,
   scenes, automations, sleep timers and Pico buttons all work on them, so
-  one button can drive a Caséta dimmer and a Hue lamp together. On, off
-  and brightness for now; colour and white temperature come later.
+  one button can drive a Caséta dimmer and a Hue lamp together. A lamp
+  that can do white temperature gets a Warmth slider on its page (Candle
+  to Daylight, over the lamp's own range); a colour lamp gets swatches and,
+  behind "More colours…", a hue strip and a saturation slider. The disc,
+  the room row and the scene tiles glow in the lamp's actual colour. A
+  scene saved from what is on keeps each Hue lamp's colour or warmth with
+  its brightness, and the scene editor has a Colour (or Warmth) row per
+  lamp. The connector reads what each lamp can do from the bridge (its
+  gamut and mirek range) and clamps every request to it, so nothing is
+  ever sent that the lamp cannot show.
 - **Autosave with Undo.** Nothing to remember to save.
 - **Recent activity:** what was pressed and what happened, for "who left
   the lights on" and for tuning the double-press timing.
@@ -165,6 +181,9 @@ re-executes itself. Pairing is untouched. A connector older than 0.3.0
 does not understand the command; run the install line once by hand and
 it takes care of itself from then on. Bump `VERSION` in `agent/agent.py`
 whenever the connector changes; the hub reads it to know what "latest" is.
+Connector 0.8.0 is the first that understands the `color` action and the
+object form of scene levels; older connectors ignore colour and apply the
+brightness alone.
 
 ## Configure
 
@@ -193,6 +212,18 @@ A worked example, a 3-button Pico in the kitchen:
 | Raise | hold ends | Group Kitchen → stop |
 | Raise | single | Group Kitchen → step +10 |
 
+Action types (`hub/validate.js` is the schema): `level`, `step`, `raise`,
+`lower`, `stop`, `cap`, `fan`, `scene`, `preset`, `cycle`, `cycle_presets`,
+`timer`, `cancel_timer`, `delay`, and `color`. `color` is
+`{type: "color", target, kelvin: 1000-10000 | hex: "#rrggbb", level?: 0-100,
+fade?: seconds}` with exactly one of `kelvin` and `hex`; it reaches only the
+Hue lamps in the target that can do what it asks (white temperature for
+`kelvin`, colour for `hex`) and turns them on. A scene's `levels[id]` is a
+number, a fan speed, or `{level, kelvin}` / `{level, hex}` for a Hue lamp.
+The connector reports a lamp's abilities in the inventory (`color: true`,
+`ct: true`, `ct_range: [kelvin_min, kelvin_max]`) and its state carries
+`color: {mode: "ct" | "xy" | null, kelvin, xy, hex}`.
+
 Single click on a button that also has a double click binding waits the
 double window (default 350 ms) before firing. A button with no double
 binding fires instantly.
@@ -220,7 +251,8 @@ web/              the PWA: index.html, styles.css, light.css, motion.css, js/{co
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
 agent/adddevice.py  add a device from the app: association mode, device heard, create (experimental)
-agent/hue.py      Philips Hue bridge: pairing, lights and rooms as hue_ devices, levels, event stream
+agent/hue.py      Philips Hue bridge: pairing, lights and rooms as hue_ devices, levels, colour and warmth, event stream
+agent/color.py    CIE xy <-> hex with gamut clamping, kelvin <-> mirek, a black-body tint (no dependencies)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js
 ```
@@ -233,6 +265,7 @@ APP_PASSWORD=dev AGENT_TOKEN=dev npm start     # http://localhost:4400
 cd agent && python test_engine.py             # gesture timing tests
 cd agent && python test_adddevice.py          # add-device session against a stub bridge
 cd agent && python test_hue.py                # Hue client against a fake bridge (needs aiohttp)
+cd agent && python test_color.py              # colour maths: round trips, gamut clamping, kelvin
 ```
 
 Without a bridge, a fake agent that speaks the same protocol is all the

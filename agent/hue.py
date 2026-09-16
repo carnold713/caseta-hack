@@ -7,8 +7,13 @@ rooms and scenes, listens to its event stream for live state, and sets levels wi
 Everything Hue is namespaced with "hue_" so it sits beside the Caseta devices in the same
 dictionaries the action runner already reads: a light is "hue_<uuid>" (type HueLight or
 HueSwitch, area "hue_<room uuid>", zone set so it counts as controllable, current_state 0..100),
-a room is an area "hue_<uuid>". Hue's own scenes are not imported (this app makes its own). Colour is
-left for later; this pass is on, off, brightness, rooms and live state.
+a room is an area "hue_<uuid>". Hue's own scenes are not imported (this app makes its own).
+
+A light that can do colour or white temperature says so in its device dict: "color" is
+{"gamut": {"red": [x, y], "green": [x, y], "blue": [x, y]} or None, "xy": [x, y] or None} (None when
+the lamp has no colour), "ct" is {"min": mirek, "max": mirek, "mirek": current or None} (None when it
+has no tunable white), and "color_mode" is "ct", "xy" or None: which of the two the lamp is showing.
+set_color takes kelvin or a hex colour, in the app's units; color.py does the conversions.
 """
 from __future__ import annotations
 
@@ -20,6 +25,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import aiohttp
+
+from color import GAMUT_C, gamut_from_hue, hex_to_xy, kelvin_to_hex, kelvin_to_mirek, mirek_to_kelvin, xy_from_hue, xy_to_hex
 
 LOG = logging.getLogger("hue")
 DISCOVERY_URL = "https://discovery.meethue.com/"
@@ -196,8 +203,9 @@ class Hue:
                 "device_id": did, "name": (lt.get("metadata") or {}).get("name") or "Hue light", "device_name": (lt.get("metadata") or {}).get("name") or "Hue light",
                 "type": "HueLight" if dimmable else "HueSwitch", "model": "Hue", "serial": lt["id"],
                 "zone": lt["id"], "area": device_room.get(owner), "current_state": int(round(bri)) if on else 0, "fan_speed": None,
-                "hue_owner": owner, "color": bool(lt.get("color")), "ct": bool(lt.get("color_temperature")),
+                "hue_owner": owner, "color": _color_of(lt.get("color")), "ct": _ct_of(lt.get("color_temperature")),
             }
+            devices[did]["color_mode"] = _mode_of(devices[did], bool((lt.get("color_temperature") or {}).get("mirek_valid")))
         sc: Dict[str, dict] = {}
         for s in scenes:
             group = (s.get("group") or {})
@@ -221,6 +229,46 @@ class Hue:
             body["dynamics"] = {"duration": int(float(fade_s) * 1000)}
         await self._put(f"/clip/v2/resource/light/{d['zone']}", body)
         d["current_state"] = int(level)
+        if self._on_state:
+            self._on_state(device_id)
+
+    async def set_color(self, device_id: str, kelvin: Optional[float] = None, hex: Optional[str] = None, fade_s: Optional[float] = None, level: Optional[int] = None) -> None:  # noqa: A002
+        """White temperature (kelvin, clamped to the lamp's range) or a colour (hex, clamped to its gamut), in one
+        request. A colour change turns the lamp on, the same rule brightness follows; a level of 0 turns it off instead."""
+        d = self.devices.get(device_id)
+        if not d:
+            raise RuntimeError(f"unknown Hue light {device_id}")
+        if level is not None and int(level) <= 0:
+            await self.set_level(device_id, 0, fade_s)
+            return
+        body: Dict[str, Any] = {"on": {"on": True}}
+        if level is not None and d.get("type") == "HueLight":
+            body["dimming"] = {"brightness": max(1, min(100, int(level)))}
+        ct, color = d.get("ct"), d.get("color")
+        mirek: Optional[int] = None
+        xy: Optional[List[float]] = None
+        if kelvin is not None and ct:
+            mirek = max(int(ct["min"]), min(int(ct["max"]), kelvin_to_mirek(kelvin)))
+            body["color_temperature"] = {"mirek": mirek}
+        elif hex is not None and color:
+            x, y = hex_to_xy(hex, color.get("gamut") or GAMUT_C)
+            xy = [x, y]
+            body["color"] = {"xy": {"x": x, "y": y}}
+        else:
+            raise RuntimeError(f"{d.get('name')} cannot do that colour")
+        if fade_s:
+            body["dynamics"] = {"duration": int(float(fade_s) * 1000)}
+        await self._put(f"/clip/v2/resource/light/{d['zone']}", body)
+        if level is not None:
+            d["current_state"] = int(level)
+        elif d["current_state"] <= 0:
+            d["current_state"] = int(d.get("_bri") or 100)
+        if mirek is not None:
+            ct["mirek"] = mirek
+            d["color_mode"] = "ct"
+        if xy is not None:
+            color["xy"] = xy
+            d["color_mode"] = "xy"
         if self._on_state:
             self._on_state(device_id)
 
@@ -265,8 +313,67 @@ class Hue:
                     d["_on"] = bool(item["on"].get("on"))
                 if "dimming" in item:
                     d["_bri"] = float(item["dimming"].get("brightness", d.get("_bri", 100)))
+                ct_valid: Optional[bool] = None
+                if "color_temperature" in item and d.get("ct"):
+                    cte = item["color_temperature"] or {}
+                    if cte.get("mirek") is not None:
+                        d["ct"]["mirek"] = int(cte["mirek"])
+                    if "mirek_valid" in cte:
+                        ct_valid = bool(cte["mirek_valid"])
+                if "color" in item and d.get("color"):
+                    xy = xy_from_hue(item["color"])
+                    if xy:
+                        d["color"]["xy"] = xy
+                        if ct_valid is None:
+                            ct_valid = False
+                if ct_valid is not None:
+                    d["color_mode"] = _mode_of(d, ct_valid)
                 on = d.get("_on", d["current_state"] > 0)
                 bri = d.get("_bri", d["current_state"] or 100)
                 d["current_state"] = int(round(bri)) if on else 0
                 if self._on_state:
                     self._on_state(did)
+
+
+# ----- colour and white temperature, as the device dict carries them -----
+def _color_of(color: Optional[dict]) -> Optional[dict]:
+    if not color:
+        return None
+    return {"gamut": gamut_from_hue(color), "xy": xy_from_hue(color)}
+
+
+def _ct_of(ct: Optional[dict]) -> Optional[dict]:
+    if not ct:
+        return None
+    schema = ct.get("mirek_schema") or {}
+    lo = int(schema.get("mirek_minimum") or 153)
+    hi = int(schema.get("mirek_maximum") or 500)
+    mirek = ct.get("mirek")
+    return {"min": lo, "max": hi, "mirek": int(mirek) if mirek is not None else None}
+
+
+def _mode_of(d: dict, ct_valid: bool) -> Optional[str]:
+    if ct_valid and d.get("ct") and d["ct"].get("mirek") is not None:
+        return "ct"
+    if d.get("color") and d["color"].get("xy"):
+        return "xy"
+    return None
+
+
+def color_state(d: dict) -> Optional[dict]:
+    """What the app shows for a lamp: {"mode", "kelvin", "xy", "hex"}, or None for a lamp with neither."""
+    ct, color = d.get("ct"), d.get("color")
+    if not ct and not color:
+        return None
+    mode = d.get("color_mode")
+    kelvin = mirek_to_kelvin(ct["mirek"]) if ct and ct.get("mirek") else None
+    xy = list(color["xy"]) if color and color.get("xy") else None
+    if mode == "xy" and xy:
+        hex_str: Optional[str] = xy_to_hex(xy[0], xy[1], 1.0, color.get("gamut") or GAMUT_C)
+    elif kelvin:
+        hex_str = kelvin_to_hex(kelvin)
+    elif xy:
+        hex_str = xy_to_hex(xy[0], xy[1], 1.0, color.get("gamut") or GAMUT_C)
+    else:
+        hex_str = None
+    return {"mode": mode, "kelvin": kelvin, "xy": xy, "hex": hex_str}

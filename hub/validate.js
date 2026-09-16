@@ -3,13 +3,25 @@
 // is where a malformed document gets rejected.
 
 const GESTURES = new Set(['single', 'double', 'hold_start', 'hold_end', 'hold']);
-const ACTION_TYPES = new Set(['level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer', 'cap', 'cycle_presets']);
+const ACTION_TYPES = new Set(['level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer', 'cap', 'cycle_presets', 'color']);
 const FAN_SPEEDS = new Set(['Off', 'Low', 'Medium', 'MediumHigh', 'High']);
+// The kinds of light and their roles, the same table the app loads (it works as a script and as a module).
+const KIND_DEF = require('../web/js/kinds.js');
 
 function fail(msg) { const e = new Error(msg); e.status = 400; throw e; }
 
 function isId(v) { return typeof v === 'string' && v.length > 0 && v.length <= 64; }
 function isLevel(v) { return Number.isInteger(v) && v >= 0 && v <= 100; }
+// Colour for a Hue lamp: a white temperature in kelvin, or a colour as #rrggbb. Never both.
+function isKelvin(v) { return Number.isInteger(v) && v >= 1000 && v <= 10000; }
+function isHex(v) { return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v); }
+function checkColorPair(o, where) {
+  const hasK = o.kelvin != null, hasH = o.hex != null;
+  if (hasK === hasH) fail(`${where}: give kelvin or hex, one of them`);
+  if (hasK && !isKelvin(o.kelvin)) fail(`${where}: kelvin must be 1000-10000`);
+  if (hasH && !isHex(o.hex)) fail(`${where}: hex must be #rrggbb`);
+  if (hasH) o.hex = o.hex.toLowerCase();
+}
 // d:<device> a single device, a:<area> a room, g:<group> a custom group, h:all every light and switch.
 function isOneTarget(v) { return typeof v === 'string' && (/^(d|a|g):[A-Za-z0-9_-]+$/.test(v) || v === 'h:all' || v === 'h:shades' || v === 'h:fans'); }
 // A target is one id or a list of them (several specific lights under one command, no named set needed).
@@ -36,6 +48,13 @@ function validateAction(a, where) {
       // hold-to-dim stops at a glow instead of clicking off; hold-to-brighten can stop short of full
       if (a.floor != null && !(isLevel(a.floor) && a.floor >= 1)) fail(`${where}: floor must be 1-100`);
       if (a.ceiling != null && !isLevel(a.ceiling)) fail(`${where}: ceiling must be 0-100`);
+      break;
+    case 'color':
+      // white temperature or a colour for the Hue lamps in the target that can do it (the connector skips the rest)
+      if (!isTarget(a.target)) fail(`${where}: color needs a target`);
+      checkColorPair(a, where);
+      if (a.level != null && !isLevel(a.level)) fail(`${where}: color level must be 0-100`);
+      if (a.fade != null && !(typeof a.fade === 'number' && a.fade >= 0 && a.fade <= 60)) fail(`${where}: fade must be 0-60 seconds`);
       break;
     case 'cap':
       // lower only the lights that are above `level`; leave dimmer ones alone
@@ -111,10 +130,10 @@ function validateConfig(cfg) {
   // What each light is for. Optional; the app uses it to build room moods.
   out.settings.roles = {};
   for (const [k, v] of Object.entries(s.roles || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && ['ambient', 'task', 'accent', 'decor'].includes(v)) out.settings.roles[k] = v;
-  // The kind of lamp (a picture, not a category); the app derives the role from it.
-  const KINDS = { ceiling: 'ambient', pendant: 'ambient', downlights: 'ambient', desk: 'task', reading: 'task', cabinet: 'task', floor: 'accent', table: 'accent', picture: 'accent' };
+  // The kind of lamp: a place and a fixture (`desk-lamp`, `ceiling-track`), from the table the app uses too
+  // (web/js/kinds.js). The role comes from it. The nine old one-word ids are accepted and written back as the new id.
   out.settings.light_kinds = {};
-  for (const [k, v] of Object.entries(s.light_kinds || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && KINDS[v]) { out.settings.light_kinds[k] = v; if (!out.settings.roles[k]) out.settings.roles[k] = KINDS[v]; }
+  for (const [k, v] of Object.entries(s.light_kinds || {})) { const kid = KIND_DEF.normalize(v); if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && kid) { out.settings.light_kinds[k] = kid; if (!out.settings.roles[k]) out.settings.roles[k] = KIND_DEF.ROLES[kid]; } }
   out.settings.night_look = ['auto', 'always', 'never'].includes(s.night_look) ? s.night_look : 'auto';
   // Per-room colour keys and per-remote appearance overrides (model layout and finish), set from the app.
   out.settings.room_colors = {};
@@ -148,7 +167,13 @@ function validateConfig(cfg) {
       if (!isId(k)) fail(`preset ${p.id}: bad device id`);
       if (typeof v === 'string' && FAN_SPEEDS.has(v)) levels[k] = v;
       else if (isLevel(v)) levels[k] = v;
-      else fail(`preset ${p.id}: level for ${k} must be 0-100 or a fan speed`);
+      else if (v && typeof v === 'object' && !Array.isArray(v)) {
+        // a Hue lamp's brightness with its colour: {level, kelvin} or {level, hex}
+        if (!isLevel(v.level)) fail(`preset ${p.id}: level for ${k} must be 0-100`);
+        checkColorPair(v, `preset ${p.id}, ${k}`);
+        levels[k] = v.kelvin != null ? { level: v.level, kelvin: v.kelvin } : { level: v.level, hex: v.hex };
+      }
+      else fail(`preset ${p.id}: level for ${k} must be 0-100, a fan speed, or a level with a colour`);
     }
     out.presets.push({ id: p.id, name: p.name.trim().slice(0, 60), levels, fade: typeof p.fade === 'number' && p.fade >= 0 && p.fade <= 60 ? p.fade : null,
       area: typeof p.area === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(p.area) ? p.area : null,

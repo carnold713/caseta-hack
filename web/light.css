@@ -69,7 +69,7 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 /* the vertical well: white, a hairline, radius 12, filling with blue from the bottom; a grip in the fill */
 .vcol { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
 .vslider { position: relative; width: 112px; height: 280px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
-.vslider::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--p, 0%); background: var(--blue); border-radius: 0 0 var(--r-md) var(--r-md); }
+.vslider::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--p, 0%); background: var(--vfill, var(--blue)); border-radius: 0 0 var(--r-md) var(--r-md); transition: background .255s var(--ease); }
 .vslider::after { content: ""; position: absolute; left: 50%; width: 40px; height: 4px; margin-left: -20px; bottom: calc(var(--p, 0%) - 12px); border-radius: 2px; background: rgba(255,255,255,.4); }
 .vslider:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); }
 .vslider .vtip { position: absolute; left: 50%; transform: translateX(-50%); z-index: 2; bottom: calc(var(--p, 0%) + 12px); height: 32px; padding: 0 12px; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-1); color: var(--text); font-size: 14px; line-height: 32px; font-weight: 500; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s var(--ease); }
@@ -154,3 +154,31 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .td-ring.big .td-cap { color: var(--text-2); }
 .now .td .chips { justify-content: center; }
 .now .td .btn.primary { margin-top: 12px; }
+
+/* ---------- colour and warmth (Hue lamps; js/color.js): a warmth slider on a warm-to-cool track, swatches, and a hue strip behind "More colours…" ---------- */
+.ccol { margin: 0 0 8px; }
+.ld .ccol { margin: -4px 0 12px; }
+.crow { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; touch-action: pan-y; } /* a sideways drag on its slider is the slider's, never a page pan (as .sliderwrap) */
+.crow .clab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; line-height: 16px; color: var(--text-2); }
+.crow .clab .t { font-size: 16px; line-height: 20px; font-weight: 500; color: var(--text); }
+.crow .clab .d { white-space: nowrap; }
+/* a slider whose track is a gradient: the value is a place on it, not an amount, so the grip is a white bar that shows on any colour */
+.slider.grad { --track-grad: linear-gradient(to right, #fff, #fff); }
+.slider.grad::-webkit-slider-runnable-track { background: var(--track-grad); box-shadow: inset 0 0 0 1px var(--line-2); }
+.slider.grad::-webkit-slider-thumb { width: 8px; height: 28px; margin-top: 6px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3); }
+.slider.grad::-moz-range-track { background: var(--track-grad); }
+.slider.grad::-moz-range-progress { background: transparent; }
+.slider.grad::-moz-range-thumb { width: 8px; height: 28px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3); }
+/* swatches: round chips of the colour itself; the blue ring marks the one the lamp is showing */
+.swatches { padding-top: 4px; padding-bottom: 6px; }
+.swatch { flex: none; width: 40px; height: 40px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); outline: 2px solid transparent; outline-offset: 2px; transition: outline-color .255s var(--ease); }
+.swatch.sel, .swatch:focus-visible { outline-color: var(--blue); }
+.swatches .chip { align-self: center; }
+/* the value row inside the component ("More colours…") sits on a hairline, not in a card */
+.ccol > .item.vrow { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 48px; padding: 8px 0; text-align: left; color: inherit; border-top: 1px solid var(--line); }
+.ccol > .vrow-body { padding: 0 0 8px; }
+.sheet .ccol .chips.scroll { margin: 0 -24px; padding-left: 24px; padding-right: 24px; }
+.vrow-body .ccol .chips.scroll { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+/* the dot beside a colour's name */
+.cdot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px; margin-right: 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.cdot.none { box-shadow: inset 0 0 0 1px var(--line-2); }

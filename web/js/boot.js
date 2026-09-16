@@ -61,7 +61,7 @@ document.addEventListener('click', async e => {
     case 'scene-edit': openSceneEditor(d.id); break;
     case 'scene-capture': sceneCapture(); break;
     case 'scene-delete': sceneDelete(d.id); break;
-    case 'scene-sw': { const p = presets().find(x => x.id === S.sceneEdit); const on = !(p.levels[d.id] > 0); p.levels[d.id] = on ? 100 : 0; el.classList.toggle('on', on); markEdited(p); saveSoon(); break; }
+    case 'scene-sw': { const p = presets().find(x => x.id === S.sceneEdit); const on = !(levelOf(p.levels[d.id]) > 0); sceneLevel(d.id, on ? 100 : 0); el.classList.toggle('on', on); break; }
     case 'scene-suggest': sceneSuggest(d.id); break;
     case 'install-help': openInstallHelp(); break;
     case 'activity': openActivity(); break;
@@ -119,7 +119,7 @@ document.addEventListener('input', e => {
     const t = el.dataset.slide; const v = Number(el.value);
     const row = el.closest('.light');
     const lv = row && row.querySelector('.lv'); if (lv) lv.textContent = v === 0 ? 'Off' : `${v}%`;
-    const disc = row && row.querySelector('[data-ldisc]'); if (disc) { disc.style.backgroundColor = lampColor(v); disc.dataset.fill = lampColor(v); disc.classList.toggle('off', v <= 0); }
+    const disc = row && row.querySelector('[data-ldisc]'); if (disc) { const c = lightFill(disc.dataset.ldisc, v); disc.style.backgroundColor = c; disc.dataset.fill = c; disc.classList.toggle('off', v <= 0); }
     sendLevel(t, v);
   }
   if (el.dataset.house) {

@@ -40,23 +40,25 @@ async function command(action) {
   try { await api('/api/command', { method: 'POST', body: JSON.stringify(action) }); return true; }
   catch (e) { toast(e.message, { err: true }); return false; }
 }
-// Brightness while a finger is moving: one level command in flight per target, the newest value always
-// goes next and everything between is dropped. Echoes from the bridge are ignored for a moment after.
+// While a finger is moving: one command in flight per target and kind (brightness, colour), the newest value
+// always goes next and everything between is dropped. Echoes from the bridge are ignored for a moment after.
 const LV = { inflight: {}, latest: {}, quiet: {} };
-function sendLevel(target, level, extra) {
-  const key = JSON.stringify(target);
-  LV.latest[key] = { target, level, extra: extra || {} };
+function sendGated(key, target, action) {
+  LV.latest[key] = { target, action };
   if (LV.inflight[key]) return;
   LV.inflight[key] = (async () => {
     while (LV.latest[key]) {
       const p = LV.latest[key]; delete LV.latest[key];
-      await command({ type: 'level', target: p.target, level: p.level, fade: 0, ...p.extra });
-      LV.quiet[key] = Date.now() + 1500;
+      await command(p.action);
+      LV.quiet[JSON.stringify(p.target)] = Date.now() + 1500;
       for (const t of Array.isArray(p.target) ? p.target : [p.target]) LV.quiet[JSON.stringify(t)] = Date.now() + 1500;
     }
     delete LV.inflight[key];
   })();
 }
+function sendLevel(target, level, extra) { sendGated(JSON.stringify(target), target, { type: 'level', target, level, fade: 0, ...(extra || {}) }); }
+// Colour or white temperature for a Hue lamp: payload is {kelvin} or {hex}, with an optional level.
+function sendColor(target, payload) { sendGated('color:' + JSON.stringify(target), target, { type: 'color', target, fade: 0, ...payload }); }
 // True while a target was set from this phone recently: the bridge's own echo must not pull the slider back.
 function levelQuiet(target) { const q = LV.quiet[JSON.stringify(target)]; return !!(q && q > Date.now()); }
 // Autosave. Every edit calls save(); the previous config is kept for a one-tap Undo.
@@ -116,6 +118,9 @@ const controllable = () => devices().filter(d => ['light', 'switch', 'fan', 'cov
 const remotes = () => devices().filter(d => d.domain === 'pico').sort(byName);
 function byName(a, b) { return (areaName(a.area) + a.name).localeCompare(areaName(b.area) + b.name); }
 const level = id => { const s = S.states[id]; return s && s.level != null ? s.level : null; };
+// A scene's entry for a light is a number, a fan speed, or {level, kelvin?, hex?} for a Hue lamp with its colour.
+function levelOf(v) { if (v && typeof v === 'object') return Number(v.level) || 0; if (typeof v === 'number') return v; return v && v !== 'Off' ? 100 : 0; }
+function colorOf(v) { if (!v || typeof v !== 'object') return null; if (v.kelvin != null) return { mode: 'ct', kelvin: v.kelvin }; if (v.hex) return { mode: 'xy', hex: v.hex }; return null; }
 const isOn = id => (level(id) || 0) > 0 || !!((S.states[id] || {}).fan_speed && S.states[id].fan_speed !== 'Off');
 const buttonsOf = pid => Object.values(S.inv.buttons || {}).filter(b => b.device_id === pid).sort((a, b) => a.button_number - b.button_number);
 const groups = () => (S.config && S.config.groups) || [];

@@ -28,7 +28,8 @@ const lvText = v => (v > 0 ? `${v}%` : 'Off');
 const lvLabel = (v, dim) => (dim ? lvText(v) : v > 0 ? 'On' : 'Off'); // a switch is on or off, never a percentage
 const discSize = lv => Math.round(24 + 32 * clamp(lv, 0, 100) / 100);
 const heroSize = lv => Math.round(140 + 60 * clamp(lv, 0, 100) / 100);
-function lampHTML(lv, size, inner, cls = '', dark = false) { return `<span class="lamp ${lv > 0 ? '' : 'off'} ${cls}" style="width:${size}px;height:${size}px;background:${lampColor(lv, dark)}">${inner || ''}</span>`; }
+// `fill` overrides the ramp: a Hue lamp's disc is painted in its own colour (js/color.js lampFill).
+function lampHTML(lv, size, inner, cls = '', dark = false, fill = null) { return `<span class="lamp ${lv > 0 ? '' : 'off'} ${cls}" style="width:${size}px;height:${size}px;background:${fill || lampColor(lv, dark)}">${inner || ''}</span>`; }
 // One tween, only when something actually changed. Without GSAP (or under reduced motion) the value is set outright.
 function tween(el, vars, done) {
   if (!el) return;
@@ -37,36 +38,65 @@ function tween(el, vars, done) {
 }
 function elFrom(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
 
-// ---------- lamp kinds and roles (E) ----------
-const KINDS = [
-  ['ceiling', 'Ceiling', 'ambient'], ['pendant', 'Pendant', 'ambient'], ['downlights', 'Downlights', 'ambient'],
-  ['desk', 'Desk lamp', 'task'], ['reading', 'Reading light', 'task'], ['cabinet', 'Under-cabinet', 'task'],
-  ['floor', 'Floor lamp', 'accent'], ['table', 'Table lamp', 'accent'], ['picture', 'Picture light', 'accent'],
-];
-const KIND_ROLE = Object.fromEntries(KINDS.map(k => [k[0], k[2]]));
+// ---------- lamp kinds and roles (E): the table is web/js/kinds.js (KIND_DEF), shared with the hub ----------
+// A kind is a place and a fixture (`desk-lamp`, `ceiling-track`). KINDS keeps the old [id, label, role] shape for readers of it.
+const KINDS = Object.values(KIND_DEF.KINDS).map(k => [k.id, k.label, k.role]);
+const KIND_ROLE = KIND_DEF.ROLES;
 const ROLE_LABEL = { ambient: 'Ambient', task: 'Task', accent: 'Accent', decor: 'Decor' };
 const ROLE_CAP = { ambient: 'Ambient · fills the room', task: 'Task · light for your hands', accent: 'Accent · lamps and glow' };
-function lightKind(id) { return ((S.config && S.config.settings.light_kinds) || {})[id] || null; }
+function kindLabel(k) { const x = KIND_DEF.KINDS[KIND_DEF.normalize(k)]; return x ? x.label : null; }
+// The stored id, read as the id in the table: the nine old one-word ids ("pendant") still resolve ("ceiling-pendant").
+function lightKind(id) { return KIND_DEF.normalize(((S.config && S.config.settings.light_kinds) || {})[id]); }
 function lightRole(id) { const r = ((S.config && S.config.settings.roles) || {})[id]; if (r) return r; const k = lightKind(id); return k ? KIND_ROLE[k] : null; }
-function lightIcon(d) { const k = lightKind(d.device_id); return k ? `lamp-${k}` : domainIcon(d.domain); }
+function lightIcon(d) { const k = lightKind(d.device_id); return k ? KIND_DEF.KINDS[k].icon : domainIcon(d.domain); }
 const roomLights = aid => controllable().filter(d => (d.area || 'none') === aid && (d.domain === 'light' || d.domain === 'switch'));
 const roomDimmers = aid => roomLights(aid).filter(d => d.domain === 'light');
 function meanLevel(ids) { const xs = ids.map(id => level(id) || 0); return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0; }
 const roomMean = aid => meanLevel(roomLights(aid).map(d => d.device_id));
 
-// The kind sheet on its own, or as a step of the sort walk (SORT set: a caption, Next / Done and Skip in the footer).
+// The kind picker (docs/ux-progressive.md 5): two questions in one sheet, "Where is this light?" then "What is it?".
+// On its own, or as a step of the sort walk (SORT set: a "Light n of N" caption, Next / Done and Skip in the footer).
+// KP is the open picker: the light, the place chosen on step 1 (null while on step 1), where the back arrow goes from step 1.
+let KP = null;
 function openKindSheet(id, opts = {}) {
   const d = dev(id); if (!d) return;
-  const w = SORT && SORT.list.includes(id) ? SORT : null;
-  const capn = w ? `Light ${w.list.indexOf(id) + 1} of ${w.list.length}` : '';
-  showSheet(w ? 'sort' : 'kind', 'What kind of light is this?', kindBodyHTML(id), { sub: `${esc(d.name)} · ${esc(areaName(d.area))}. Moods use it to know what to dim.`, back: !!opts.back, onBack: opts.back || null, cap: capn, top: true });
-  if (w) sheet.onClose = () => { SORT = null; SHEET_KEY = null; };
+  const cur = lightKind(id);
+  KP = { id, place: cur ? KIND_DEF.KINDS[cur].place : null, back: opts.back || null };  // a set kind lands on step 2, step 1 one tap back
+  kindRender();
+  if (SORT && SORT.list.includes(id)) sheet.onClose = () => { SORT = null; SHEET_KEY = null; KP = null; };
 }
-function kindBodyHTML(id) {
+function kindRender() {
+  if (!KP) return;
+  const { id } = KP; const d = dev(id); if (!d) return;
   const w = SORT && SORT.list.includes(id) ? SORT : null;
-  if (!w) return kindGridHTML(id);
-  const i = w.list.indexOf(id); const next = w.list[i + 1];
-  return kindGridHTML(id) + `<div class="sfoot"><button class="btn primary lg block" data-act="sort-next" data-id="${id}">${next ? `Next: ${esc(dev(next).name)}` : 'Done'}</button><button class="btn ghost block" data-act="sort-skip" data-id="${id}">Skip this one</button></div>`;
+  const place = KP.place ? KIND_DEF.placeOf(KP.place) : null;
+  const who = `${esc(d.name)} · ${esc(areaName(d.area))}`;
+  const onBack = place ? () => { KP.place = null; kindRender(); } : KP.back;
+  showSheet(w ? 'sort' : 'kind', place ? 'What is it?' : 'Where is this light?', (place ? kindFixturesHTML(id, place) : kindPlacesHTML(id)) + kindFootHTML(id, !!place),
+    { sub: place ? `${who} · ${esc(place.name)}` : `${who}. Moods use it to know what to dim.`, back: !!onBack, onBack, cap: w ? `Light ${w.list.indexOf(id) + 1} of ${w.list.length}` : '', top: true });
+}
+// Step 1: the places. The row's second line names a few of its fixtures, or the kind already chosen there.
+function kindPlacesHTML(id) {
+  const cur = lightKind(id); const curPlace = cur ? KIND_DEF.KINDS[cur].place : null;
+  const rows = KIND_DEF.PLACES.map(p => {
+    const sel = curPlace === p.id;
+    const sub = sel ? kindLabel(cur) : cap(p.fixtures.slice(0, 3).map(f => f.name.toLowerCase()).join(', ')) + (p.fixtures.length > 3 ? ', …' : '');
+    return `<button class="item pick ${sel ? 'sel' : ''}" data-act="kind-place" data-id="${id}" data-p="${p.id}">${ICON(p.icon)}<div class="grow"><div class="t">${p.name}</div><div class="d">${esc(sub)}</div></div>${sel ? `<span class="chk">${ICON('check')}</span>` : `<span class="chev">${ICON('chev', 'sm')}</span>`}</button>`;
+  });
+  return `<div class="card pad0 list">${rows.join('')}</div>`;
+}
+// Step 2: that place's fixtures, each with its icon and its role. Tapping the chosen one again clears it.
+function kindFixturesHTML(id, place) {
+  const cur = lightKind(id);
+  const rows = place.fixtures.map(f => `<button class="item pick ${cur === f.id ? 'sel' : ''}" data-act="kind-pick" data-id="${id}" data-k="${f.id}">${ICON(f.icon)}<div class="grow"><div class="t">${f.name}</div><div class="d">${ROLE_CAP[f.role]}</div></div>${cur === f.id ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`);
+  return `<div class="card pad0 list">${rows.join('')}</div>` + (cur && KIND_DEF.KINDS[cur].place === place.id ? `<p class="faint small" style="margin:16px 0 0">Tap the chosen one again to clear it.</p>` : '');
+}
+// The sort walk's footer. Next / Done sits on step 2, and on step 1 once the light has a kind; Skip is always there.
+function kindFootHTML(id, step2) {
+  const w = SORT && SORT.list.includes(id) ? SORT : null; if (!w) return '';
+  const next = w.list[w.list.indexOf(id) + 1];
+  const go = step2 || lightKind(id) ? `<button class="btn primary lg block" data-act="sort-next" data-id="${id}">${next ? `Next: ${esc(dev(next).name)}` : 'Done'}</button>` : '';
+  return `<div class="sfoot">${go}<button class="btn ghost block" data-act="sort-skip" data-id="${id}">Skip this one</button></div>`;
 }
 // The sort walk (docs/ux-progressive.md 3.3): the kind sheet for each untagged dimmable light in turn, one toast at the end.
 let SORT = null;
@@ -85,18 +115,14 @@ function sortStep(id, skipped) {
   if (n) { save({ quiet: true, render: true }).then(() => toast(`${plural(n, 'light')} sorted`, { undo: async () => { S.config = JSON.parse(prev); await save({ msg: 'Undone' }); } })); }
   else render();
 }
-function kindGridHTML(id) {
-  const cur = lightKind(id);
-  return ['ambient', 'task', 'accent'].map(role => `<div class="kind-cap">${ROLE_CAP[role]}</div><div class="kind-grid">${KINDS.filter(k => k[2] === role).map(k =>
-    `<button class="kind ${cur === k[0] ? 'sel' : ''}" data-act="kind-pick" data-id="${id}" data-k="${k[0]}">${ICON('lamp-' + k[0])}<span class="t">${k[1]}</span>${cur === k[0] ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`).join('')
-    + `<p class="faint small" style="margin:16px 0 0">Tap the chosen one again to clear it.</p>`;
-}
+function pickPlace(id, p) { if (KP && KP.id === id && KIND_DEF.placeOf(p)) { KP.place = p; kindRender(); } }
 function pickKind(id, k) {
+  if (!KIND_ROLE[k]) return;
   const s = S.config.settings; s.light_kinds = s.light_kinds || {}; s.roles = s.roles || {};
-  if (s.light_kinds[id] === k) { delete s.light_kinds[id]; delete s.roles[id]; }
+  if (lightKind(id) === k) { delete s.light_kinds[id]; delete s.roles[id]; }
   else { s.light_kinds[id] = k; s.roles[id] = KIND_ROLE[k]; }
   saveSoon();
-  sheet.update(kindBodyHTML(id));
+  if (KP && KP.id === id) kindRender();
   const d = dev(id); if (!d) return;
   document.querySelectorAll(`[data-act="kind-open"][data-id="${id}"]`).forEach(b => { b.innerHTML = ICON(lightIcon(d)); });
   document.querySelectorAll('.tile[data-tgt] .face').forEach(f => { delete f.dataset.k; });
@@ -105,19 +131,19 @@ function pickKind(id, k) {
 
 // ---------- tiles: a little picture of the light each one controls ----------
 function tileItems(t) {
-  if (t.startsWith('p:')) { const p = presets().find(x => x.id === t.slice(2)); if (!p) return []; return Object.entries(p.levels).filter(([id]) => dev(id)).map(([id, v]) => ({ lv: typeof v === 'number' ? v : (v && v !== 'Off' ? 100 : 0), icon: lightIcon(dev(id)) })); }
+  if (t.startsWith('p:')) { const p = presets().find(x => x.id === t.slice(2)); if (!p) return []; return Object.entries(p.levels).filter(([id]) => dev(id)).map(([id, v]) => { const lv = levelOf(v), c = colorOf(v); return { lv, icon: lightIcon(dev(id)), fill: c && lv > 0 ? lampFill(c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex, lv) : null }; }); }
   if (t.startsWith('s:')) return [{ lv: 0, icon: 'scene' }];
-  return targetDevices(t).map(id => { const d = dev(id); return { lv: isOn(id) ? (level(id) || 100) : 0, icon: d.domain === 'light' || d.domain === 'switch' ? lightIcon(d) : domainIcon(d.domain) }; });
+  return targetDevices(t).map(id => { const d = dev(id); const lv = isOn(id) ? (level(id) || 100) : 0; return { lv, icon: d.domain === 'light' || d.domain === 'switch' ? lightIcon(d) : domainIcon(d.domain), fill: colorState(id) && lv > 0 ? lightFill(id, lv) : null }; });
 }
 function tileFaceHTML(items) {
   if (!items.length) return `<div class="cluster one">${lampHTML(0, 44, ICON('bulb', 'sm'))}</div>`;
-  if (items.length === 1) return `<div class="cluster one">${lampHTML(items[0].lv, 44, ICON(items[0].icon, 'sm'))}</div>`;
+  if (items.length === 1) return `<div class="cluster one">${lampHTML(items[0].lv, 44, ICON(items[0].icon, 'sm'), '', false, items[0].fill)}</div>`;
   const xs = items.slice(0, 4);
-  return `<div class="cluster ${['', 'one', 'two', 'three', 'four'][xs.length]}">${xs.map(i => lampHTML(i.lv, 28, ICON(i.icon, 'sm'))).join('')}</div>`;
+  return `<div class="cluster ${['', 'one', 'two', 'three', 'four'][xs.length]}">${xs.map(i => lampHTML(i.lv, 28, ICON(i.icon, 'sm'), '', false, i.fill)).join('')}</div>`;
 }
 function paintTiles() {
   document.querySelectorAll('.tile[data-tgt] .face').forEach(face => {
-    const items = tileItems(face.parentElement.dataset.tgt); const k = items.map(i => `${i.lv}/${i.icon}`).join(',');
+    const items = tileItems(face.parentElement.dataset.tgt); const k = items.map(i => `${i.lv}/${i.icon}/${i.fill || ''}`).join(',');
     if (face.dataset.k === k) return;
     face.dataset.k = k; face.innerHTML = tileFaceHTML(items);
   });
@@ -157,7 +183,7 @@ function moodLevels(aid, mood) {
 // Which mood the room is in right now, if any (within a couple of percent). A room with mood scenes is matched against them.
 function levelsMatch(lv) {
   const ids = Object.keys(lv).filter(dev); if (!ids.length) return false;
-  return ids.every(id => { const cur = level(id) || 0, want = typeof lv[id] === 'number' ? lv[id] : (lv[id] && lv[id] !== 'Off' ? 100 : 0); return dev(id).domain === 'switch' || dev(id).domain === 'fan' ? (cur > 0) === (want > 0) : Math.abs(cur - want) <= 2; });
+  return ids.every(id => { const cur = level(id) || 0, want = levelOf(lv[id]); return dev(id).domain === 'switch' || dev(id).domain === 'fan' ? (cur > 0) === (want > 0) : Math.abs(cur - want) <= 2; });
 }
 function moodMatch(aid) {
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
@@ -176,7 +202,7 @@ function moodRowHTML(aid) {
 async function applyMood(aid, mid) {
   const m = moodById(mid); if (!m) return;
   const p = (typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []).find(x => x.mood === mid);
-  if (p) { for (const [id, v] of Object.entries(p.levels)) if (dev(id)) S.states[id] = { ...(S.states[id] || {}), level: typeof v === 'number' ? v : (v && v !== 'Off' ? 100 : 0) }; paintState(); await command({ type: 'preset', preset_id: p.id }); return; }
+  if (p) { for (const [id, v] of Object.entries(p.levels)) if (dev(id)) S.states[id] = { ...(S.states[id] || {}), level: levelOf(v) }; paintState(); await command({ type: 'preset', preset_id: p.id }); return; }
   const lv = moodLevels(aid, m);
   const byLevel = {};
   for (const [id, v] of Object.entries(lv)) { (byLevel[v] = byLevel[v] || []).push(`d:${id}`); S.states[id] = { ...(S.states[id] || {}), level: v }; }
@@ -267,7 +293,7 @@ function paintLightDiscs() {
   document.querySelectorAll('[data-ldisc]').forEach(el => {
     const id = el.dataset.ldisc; const d = dev(id); if (!d) return;
     const lv = d.domain === 'light' || d.domain === 'switch' ? (level(id) || 0) : (isOn(id) ? 100 : 0);
-    const c = lampColor(lv);
+    const c = lightFill(id, lv);
     el.classList.toggle('off', lv <= 0);
     if (el.dataset.fill === c) return;
     if (el.dataset.fill) tween(el, { backgroundColor: c }); else el.style.backgroundColor = c;
@@ -405,13 +431,15 @@ let LD = null;
 function openLightSheet(id) {
   const d = dev(id); if (!d) return;
   const lv = level(id) || 0, t = `d:${id}`, dim = d.domain === 'light', role = lightRole(id);
-  LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null };
+  const colour = colorState(id); // a Hue lamp's {mode, kelvin, hex}; null for a Caseta light
+  LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null, color: colour ? { ...colour } : null, more: false };
   const well = `<div class="vcol"><div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"><div class="vtip">${lvText(lv)}</div></div>
       <div class="vsteps"><button class="iconbtn down" data-act="ld-step" data-d="-10" aria-label="Dimmer">${ICON('chev')}</button><button class="iconbtn up" data-act="ld-step" data-d="10" aria-label="Brighter">${ICON('chev')}</button></div></div>`;
   const body = `<div class="ld" id="ld" data-id="${id}">
-    <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lampColor(lv)}" role="button" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
+    <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lightFill(id, lv)}" role="button" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
       ${dim ? well : `<div class="ld-swcol"><button class="sw ${lv > 0 ? 'on' : ''}" data-act="ld-toggle" aria-label="On or off"></button></div>`}</div>
     <div class="ld-level">${lvLabel(lv, dim)}</div>
+    ${d.ct || d.color ? colorCtlHTML('ld', id, d, colour, {}) : ''}
     ${moodRowHTML(d.area || 'none')}
     <div class="ld-actions">
       <button class="rbtn" data-act="ld-timer" data-t="${t}"><span class="c">${ICON('clock')}</span><span>Sleep timer</span></button>
@@ -436,7 +464,12 @@ function wireLightSheet() {
   const root = $('#ld'); if (!root || !LD) return;
   const disc = root.querySelector('.ld-disc'), sl = root.querySelector('.vslider');
   const st = { lv: LD.lv };
-  const apply = v => { const s = heroSize(v); disc.style.width = disc.style.height = `${s}px`; disc.style.background = lampColor(v); disc.classList.toggle('off', v <= 0); };
+  // the disc glows in the lamp's own colour when it has one; the well's fill takes the same tint
+  const fill = v => { const h = stateHex(LD.color); return h && v > 0 ? lampFill(h, v) : lampColor(v); };
+  const tintWell = () => { if (sl) { const h = stateHex(LD.color); if (h) sl.style.setProperty('--vfill', lampFill(h, 100)); else sl.style.removeProperty('--vfill'); } };
+  const apply = v => { const s = heroSize(v); disc.style.width = disc.style.height = `${s}px`; disc.style.background = fill(v); disc.classList.toggle('off', v <= 0); };
+  tintWell();
+  LD.paintColor = () => { tintWell(); apply(LD.lv); colorPaint(root.querySelector('.ccol'), LD.color); };
   // the disc follows the finger with an 80ms lag, so it breathes rather than snaps
   const quick = window.gsap && MOTION.d > 0 ? gsap.quickTo(st, 'lv', { duration: .08, ease: 'power3.out', onUpdate: () => apply(st.lv) }) : v => { st.lv = v; apply(v); };
   LD.show = (v, animate) => {
@@ -466,11 +499,31 @@ function wireLightSheet() {
   const discUp = () => { const g = LD.drag0; if (!g) return; LD.drag0 = null; if (LD.dim) endDrag(); if (!g.moved) { const v = LD.lv > 0 ? 0 : (LD.dim ? S.config.settings.group_on_level : 100); LD.show(v); sendNow(v); LD.lastSend = Date.now(); } };
   disc.addEventListener('pointerup', discUp); disc.addEventListener('pointercancel', () => { LD.drag0 = null; if (LD.dim) endDrag(); });
 }
+// The light sheet's colour controls (js/color.js): every change goes to the lamp at once, one in flight, newest wins.
+colorHost('ld', {
+  cur: id => (LD && LD.id === id ? LD.color : colorState(id)),
+  opts: () => ({ more: !!(LD && LD.more) }),
+  more: (id, open) => { if (LD && LD.id === id) LD.more = open; },
+  set(id, v) {
+    if (!LD || LD.id !== id || !v) return;
+    const prev = LD.color || {};
+    LD.color = v.kelvin != null ? { ...prev, mode: 'ct', kelvin: v.kelvin, hex: kelvinHex(v.kelvin) } : { ...prev, mode: 'xy', hex: v.hex };
+    S.states[id] = { ...(S.states[id] || {}), color: { ...((S.states[id] || {}).color || {}), ...LD.color } };
+    // a colour change turns the lamp on (the connector sends on: true); show it at full until the echo says otherwise
+    if (LD.lv <= 0) { LD.show(100); S.states[id].level = 100; }
+    LD.lastSend = Date.now();
+    sendColor(`d:${id}`, v);
+    LD.paintColor(); paintState();
+  },
+});
 // A real state change while the sheet is open moves the disc once (never while the thumb is on it).
 function paintLightDetail() {
   const root = $('#ld'); if (!root || !LD || !LD.show || LD.dragging || Date.now() - LD.lastSend < 800 || levelQuiet(`d:${LD.id}`)) return;
   const v = level(LD.id) || 0;
   if (v !== LD.lv) LD.show(v, true);
+  // the lamp's colour changed elsewhere (the Hue app, a scene): the disc and the controls follow
+  const c = colorState(LD.id);
+  if (c && LD.paintColor && JSON.stringify(c) !== JSON.stringify(LD.color)) { LD.color = { ...c }; LD.paintColor(); }
 }
 
 // ---------- sleep-timer dial (F) ----------
@@ -615,6 +668,7 @@ document.addEventListener('click', e => {
     case 'lamp-room': openRoomCard(d.id); break;
     case 'light-open': openLightSheet(d.id); break;
     case 'kind-open': openKindSheet(d.id); break;
+    case 'kind-place': pickPlace(d.id, d.p); break;
     case 'kind-pick': pickKind(d.id, d.k); break;
     case 'mood': applyMood(d.area, d.mood); break;
     case 'mood-save': openMoodSave(d.area); break;

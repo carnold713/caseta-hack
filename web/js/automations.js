@@ -823,7 +823,7 @@ function guessRole(name) {
 }
 function roomMoodPresets(aid) { return MOOD_ORDER.map(m => presets().find(p => p.area === aid && p.mood === m)).filter(Boolean); }
 const roomHasMoods = aid => roomMoodPresets(aid).length > 0;
-const presetMax = p => Math.max(0, ...Object.values(p.levels || {}).map(v => (typeof v === 'number' ? v : (v && v !== 'Off' ? 100 : 0))));
+const presetMax = p => Math.max(0, ...Object.values(p.levels || {}).map(levelOf));
 // Write (or refresh) the five moods of a room as ordinary scenes. A mood the person changed is left alone.
 function makeMoods(aid) {
   let made = 0, kept = 0;

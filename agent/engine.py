@@ -5,8 +5,10 @@ Gesture engine: turns raw Press/Release events from a Pico button into
 Timing lives in config.settings (double_ms, hold_ms).
 
 Actions are the same JSON shape the hub validates (see hub/validate.js):
-    level, step, raise, lower, stop, fan, scene, preset, delay, cycle
+    level, step, raise, lower, stop, fan, scene, preset, delay, cycle, color
 Targets are "d:<device_id>" or "g:<group_id>".
+color: {target, kelvin | hex, level?, fade?} reaches only the Hue lights in the target that can do it.
+A preset level may be {level, kelvin?, hex?} for such a lamp; anything else is a number or a fan speed.
 """
 from __future__ import annotations
 
@@ -137,6 +139,7 @@ class ActionRunner:
         self._floors: Dict[str, dict] = {}  # device_id -> {"floor": n} while a hold-to-dim ramp is running
         # Hue lights live in the same device dict under "hue_" ids; the agent sets these to route them
         self.hue_set: Optional[Callable[[str, int, Optional[float]], Awaitable[None]]] = None
+        self.hue_color: Optional[Callable[..., Awaitable[None]]] = None  # (device_id, kelvin=, hex=, fade_s=, level=)
         self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None
 
     @property
@@ -226,6 +229,20 @@ class ActionRunner:
             return 0
         lvl = dev.get("current_state", -1)
         return int(lvl) if isinstance(lvl, (int, float)) and lvl >= 0 else 0
+
+    def _hue_can(self, device_id: str, what: str) -> bool:
+        """Does this Hue lamp do white temperature ("ct") or colour ("color")? Caseta devices never do."""
+        if not device_id.startswith("hue_"):
+            return False
+        bridge = self._bridge()
+        dev = bridge.devices.get(device_id) if bridge else None
+        return bool(dev and dev.get(what))
+
+    async def _set_color(self, device_id: str, kelvin: Optional[float], hex_str: Optional[str], level: Optional[int], fade: Optional[float]) -> None:
+        if self.hue_color is None:
+            raise RuntimeError("Hue bridge not connected")
+        fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
+        await self.hue_color(device_id, kelvin=kelvin, hex=hex_str, fade_s=float(fs) if fs is not None else None, level=level)
 
     def _is_fan(self, device_id: str) -> bool:
         bridge = self._bridge()
@@ -367,6 +384,16 @@ class ActionRunner:
                     continue
                 if isinstance(level, str):
                     coros.append(bridge.set_fan(device_id, level))
+                elif isinstance(level, dict):
+                    # {level, kelvin?, hex?}: a Hue lamp's colour and brightness in one request; a lamp that cannot
+                    # do the colour asked for (or a colour on a lamp that lost it) just takes the level
+                    lv = int(level.get("level", 0) or 0)
+                    kelvin = level.get("kelvin") if self._hue_can(device_id, "ct") else None
+                    hex_str = level.get("hex") if kelvin is None and self._hue_can(device_id, "color") else None
+                    if kelvin is not None or hex_str is not None:
+                        coros.append(self._set_color(device_id, kelvin, hex_str, lv, fade))
+                    else:
+                        coros.append(self._set_level(device_id, lv, fade))
                 else:
                     coros.append(self._set_level(device_id, int(level), fade))
             await asyncio.gather(*coros)
@@ -387,7 +414,7 @@ class ActionRunner:
                 lv = p.get("levels", {})
                 if not lv:
                     return 1e9
-                return sum(abs(self._level_of(d) - (0 if isinstance(v, str) else int(v))) for d, v in lv.items() if d in bridge.devices) / len(lv)
+                return sum(abs(self._level_of(d) - _preset_level(v)) for d, v in lv.items() if d in bridge.devices) / len(lv)
             ranked = sorted((distance(presets[i]), n) for n, i in enumerate(ids) if i in presets)
             current = ranked[0][1] if ranked and ranked[0][0] < 8 else -1
             nxt = ids[(current + 1) % len(ids)]
@@ -416,6 +443,19 @@ class ActionRunner:
             if level == "off":
                 level = 0
             await asyncio.gather(*(self._set_level(d, int(level), fade) for d in targets))
+            return None
+
+        if t == "color":
+            # white temperature or a colour, only for the Hue lamps in the target that can do it; the rest are left alone
+            kelvin, hex_str = a.get("kelvin"), a.get("hex")
+            want = "ct" if kelvin is not None else "color"
+            lamps = [d for d in targets if self._hue_can(d, want)]
+            if not lamps:
+                raise RuntimeError(f"none of {a.get('target')} can change {'warmth' if want == 'ct' else 'colour'}")
+            self._cancel_timers_touching(lamps)
+            self._clear_floors(lamps)
+            level = a.get("level")
+            await asyncio.gather(*(self._set_color(d, kelvin, hex_str, int(level) if level is not None else None, a.get("fade")) for d in lamps))
             return None
 
         if t == "cap":
@@ -475,6 +515,15 @@ class ActionRunner:
             return None
 
         raise RuntimeError(f"unknown action type {t}")
+
+
+def _preset_level(v: Any) -> int:
+    """A preset entry as a brightness for the cycle distance: a number, {level, kelvin?, hex?}, or a fan speed (counted as 0, as before)."""
+    if isinstance(v, dict):
+        return int(v.get("level", 0) or 0)
+    if isinstance(v, str):
+        return 0
+    return int(v)
 
 
 _LIGHT_TYPES = {
