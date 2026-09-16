@@ -66,7 +66,7 @@ async def main():
     out = await s.create("69709128", "Hall remote", "23")
     comm, url, body = bridge.calls[1]
     assert (comm, url) == ("CreateRequest", "/device")
-    assert body == {"Device": {"Name": "Hall remote", "SerialNumber": 69709128, "AssociatedArea": {"href": "/area/23"}}}, body
+    assert body == {"Device": {"Name": "Hall remote", "SerialNumber": 69709128, "AssociatedArea": {"href": "/area/23"}, "DeviceType": "Pico3ButtonRaiseLower", "ModelNumber": "PJ2-3BRL-GXX-X01"}}, body
     assert bridge.calls[2] == ("UpdateRequest", STATUS_URL, {"SystemStatus": {"InAssociationMode": False}})
     assert out["created"]["status"] == "201 Created" and out["name"] == "Hall remote"
     assert not s.active and not s.heard
@@ -91,7 +91,8 @@ async def main():
     bridge3.subscriptions[HEARD_URL](heard)
     out = await s3.create("69709128", "Hall remote", "23")
     creates = [c for c in bridge3.calls if c[1] == "/device"]
-    assert len(creates) == 2 and creates[1][2]["Device"]["DeviceType"] == "Pico3ButtonRaiseLower" and creates[1][2]["Device"]["ModelNumber"] == "PJ2-3BRL-GXX-X01", creates
+    assert len(creates) == 2 and creates[0][2]["Device"]["DeviceType"] == "Pico3ButtonRaiseLower" and creates[0][2]["Device"]["ModelNumber"] == "PJ2-3BRL-GXX-X01", creates
+    assert "DeviceType" not in creates[1][2]["Device"], creates
     assert out["created"]["status"] == "201 Created"
     assert any(e["kind"] == "variant failed" for e in s3.log)
 

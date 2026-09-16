@@ -38,7 +38,7 @@ from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
 from sun import sun_times
 
-VERSION = "0.6.2"
+VERSION = "0.6.3"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -478,7 +478,14 @@ class Agent:
                     detail = await self.adder.stop()
                 elif kind == "add_create":
                     detail = await self.adder.create(action.get("serial"), action.get("name"), action.get("area"))
-                    await self._refresh()  # the bridge now lists the new device
+                    # the bridge lists a new device a few seconds after creating it: re-read until it shows up
+                    serial = str(action.get("serial") or "")
+                    for attempt in range(6):
+                        if attempt:
+                            await asyncio.sleep(2)
+                        await self._refresh()
+                        if self.bridge and any(str(d.get("serial") or "") == serial for d in self.bridge.devices.values()):
+                            break
                     detail["devices"] = len(self.bridge.devices) if self.bridge else 0
                 else:
                     await self.runner.run_one(action)

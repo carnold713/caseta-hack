@@ -126,3 +126,22 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .rbtn.m-hold { background-image: none; }
 .rbtn.m-hold .c { background-image: linear-gradient(90deg, var(--m-warm-deep), var(--m-warm-deep)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .rbtn.m-hold.holding .c { animation: m-hold 1s linear forwards; }
+
+/* ---------- the Now view as a flyout card, with its panels and the timer ring ---------- */
+.sheet.now { max-height: 86dvh; }
+.sheet.now .now-art { width: 200px; height: 200px; margin-top: 0; }
+.sheet.now .sh { min-height: 0; padding-bottom: 0; }
+.now-top { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.now-top .t2 { margin: 0; }
+.now-back { width: 36px; height: 36px; border-radius: 50%; background: var(--now-2); color: var(--on-dark); display: grid; place-items: center; flex: none; }
+.rbtn .c { position: relative; }
+.rbtn .rring { position: absolute; inset: -4px; width: 64px; height: 64px; }
+.rbtn .rring .track { stroke: rgba(255,255,255,.14); stroke-width: 3; }
+.rbtn .rring .prog { stroke: var(--on-dark); stroke-width: 3; stroke-linecap: round; }
+.rbtn.timing .c { background: var(--now-2); }
+.rbtn.timing .c svg.i { animation: m-breathe 2.6s ease-in-out infinite; }
+.td-ring.big .track { stroke: rgba(255,255,255,.12); }
+.td-ring.big .prog { stroke: var(--on-dark); }
+.td-ring.big .td-cap { color: var(--on-dark-2); }
+.now .td .chips { justify-content: center; }
+.now .td .btn.primary { margin-top: 12px; }

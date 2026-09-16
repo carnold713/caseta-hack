@@ -283,32 +283,93 @@ function nowArtHTML(rooms) {
   if (!rooms.length) return lampHTML(0, 96, ICON('moon', 'lg'), '', true);
   // one lit room fills the square like album art; more rooms share it
   const n = Math.min(rooms.length, 6);
-  const base = n <= 1 ? 112 : n === 2 ? 80 : n <= 4 ? 64 : 52;
+  const base = n <= 1 ? 96 : n === 2 ? 60 : n <= 4 ? 52 : 44;  // the square is 200px with 20px padding: two grown discs must fit side by side
   return rooms.slice(0, 6).map(r => lampHTML(r.level, Math.round(base + base * 0.35 * clamp(r.level, 0, 100) / 100), ICON(r.icon, n <= 2 ? '' : 'sm'), '', true)).join('');
 }
 function nowSub(rooms, on, lv) {
   if (!on.length) return 'Everything is off';
   return `${plural(on.length, 'light')} · ${lv}% on average${rooms.length > 6 ? ` · ${rooms.length - 6} more rooms` : ''}`;
 }
-function nowViewHTML() {
+const NOW = { panel: 'main' };
+// The running timer that covers the lit lights, soonest first (the house timer or a room's).
+function nowTimer() {
+  const lit = new Set(litLights().map(d => d.device_id)); if (!lit.size) return null;
+  let best = null;
+  for (const [t, v] of Object.entries(S.timers || {})) {
+    if (!v || !v.ends_at) continue;
+    if (!targetDevices(tsplit(t)).some(id => lit.has(id))) continue;
+    if (!best || v.ends_at < best.v.ends_at) best = { t, v };
+  }
+  return best;
+}
+function nowRingHTML(t, v, size, width, cls) {
+  const total = timerTotal(t, v.ends_at), f = clamp(minutesLeft(v.ends_at) / total, 0, 1);
+  const r = size / 2 - width, c = 2 * Math.PI * r;
+  return `<svg class="tring ${cls}" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true" style="--w:${width}"><circle class="track" cx="${size / 2}" cy="${size / 2}" r="${r}"/><circle class="prog" cx="${size / 2}" cy="${size / 2}" r="${r}" style="stroke-dasharray:${c};stroke-dashoffset:${c * (1 - f)}"/></svg>`;
+}
+function nowActionsHTML() {
+  const rb = (act, icon, label, extra = '', inner = '') => `<button class="rbtn ${act === 'alloff' ? 'm-hold' : ''}" data-act="${act}" ${extra}><span class="c">${ICON(icon)}${inner}</span><span>${label}</span></button>`;
+  const tm = nowTimer();
+  const timer = tm
+    ? `<button class="rbtn timing" data-act="now-panel" data-p="timer-active" data-ring="${esc(tm.t)}" data-ends="${tm.v.ends_at}" data-c="${(2 * Math.PI * 28).toFixed(2)}"><span class="c">${ICON('clock')}${nowRingHTML(tm.t, tm.v, 64, 3, 'rring')}</span><span data-countdown-min="${tm.v.ends_at}">${minutesLeft(tm.v.ends_at)} min</span></button>`
+    : rb('now-panel', 'clock', 'Sleep timer', 'data-p="timer"');
+  return `${rb('alloff', 'power', 'All off', 'title="Hold for shades and fans"')}${rb('now-night', 'moon', 'Night')}${timer}${rb('now-panel', 'scene', 'Scenes', 'data-p="scenes"')}`;
+}
+function nowMainHTML() {
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const rows = areas().map(a => {
     const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return '';
     const t = `a:${a.id}`; const on = targetOn(t);
     return `<div class="item"><span class="lamp ${on ? '' : 'off'}" data-onchip="${t}" style="width:36px;height:36px;background:${lampColor(on ? roomMean(a.id) : 0, true)}">${ICON(roomIcon(a.name), 'sm')}</span><button class="grow" data-act="now-room" data-id="${a.id}"><div class="n">${esc(a.name)}</div><div class="lv" data-roomsum="${a.id}">${esc(roomSummary(a.id))}</div></button><button class="sw ${on ? 'on' : ''}" data-tgt="${t}" data-act="toggle" data-t="${t}"></button></div>`;
   }).join('');
-  const rb = (act, icon, label, extra = '') => `<button class="rbtn ${act === 'alloff' ? 'm-hold' : ''}" data-act="${act}" ${extra}><span class="c">${ICON(icon)}</span><span>${label}</span></button>`;
-  return `<div class="now" id="nowview">
-    <div class="now-art" id="now-art" data-k="${rooms.map(r => r.id + ':' + r.level).join(',')}">${nowArtHTML(rooms)}</div>
+  return `<div class="now-art" id="now-art" data-k="${rooms.map(r => r.id + ':' + r.level).join(',')}">${nowArtHTML(rooms)}</div>
     <div class="t2 now-head" id="now-head">${lightNowHeadline(rooms)}</div>
     <div class="now-sub" id="now-sub">${nowSub(rooms, on, lv)}</div>
     <div class="now-level ${on.length ? '' : 'dim'}">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${lv}" style="--p:${lv}%" data-house="1" aria-label="House brightness" ${on.length ? '' : 'disabled'}><span class="nb-num">${lv}</span></div>
-    <div class="now-actions">${rb('alloff', 'power', 'All off', 'title="Hold for shades and fans"')}${rb('now-night', 'moon', 'Night')}${rb('now-timer', 'clock', 'Sleep timer')}${rb('nav', 'scene', 'Scenes', 'data-view="scenes"')}</div>
-    <div class="h2">Rooms</div><div class="card pad0 list now-rooms">${rows}</div></div>`;
+    <div class="now-actions" id="now-actions" data-tk="${nowTimerKey()}">${nowActionsHTML()}</div>
+    <div class="h2">Rooms</div><div class="card pad0 list now-rooms">${rows}</div>`;
 }
-function openNowView() { sheet.open('', nowViewHTML(), { dark: true, full: true }); }
+function nowTimerKey() { const tm = nowTimer(); return tm ? `${tm.t}@${tm.v.ends_at}@${minutesLeft(tm.v.ends_at)}` : ''; }
+const nowTop = title => `<div class="now-top"><button class="now-back" data-act="now-panel" data-p="main" aria-label="Back">${ICON('back', 'sm')}</button><div class="t2">${title}</div></div>`;
+function nowPanelHTML(p) {
+  if (p === 'scenes') {
+    const list = [...presets().filter(x => !x.mood).map(x => ({ id: 'p:' + x.id, name: x.name, sub: plural(Object.keys(x.levels).length, 'light') })), ...lutronScenes().map(x => ({ id: 's:' + x.scene_id, name: x.name, sub: 'From the Lutron app' }))];
+    const moods = roomsLit().map(r => { const ps = presets().filter(x => x.area === r.id && x.mood); if (!ps.length) return ''; return `<div class="h2">${esc(r.name)} moods</div><div class="chips scroll">${ps.map(x => `<button class="chip" data-act="run-scene" data-t="p:${x.id}">${esc((x.name.split('·')[1] || x.name).trim())}</button>`).join('')}</div>`; }).join('');
+    const rows = list.map(x => `<button class="item" data-act="run-scene" data-t="${x.id}"><span class="ic">${ICON('play', 'sm')}</span><div class="grow"><div class="n">${esc(x.name)}</div><div class="lv">${esc(x.sub)}</div></div></button>`).join('');
+    return nowTop('Scenes') + (rows ? `<div class="card pad0 list now-rooms">${rows}</div>` : `<p class="now-sub" style="text-align:left">No scenes yet. Set the lights how you like them and save the look on the Scenes tab.</p>`) + moods;
+  }
+  if (p === 'timer') {
+    const ids = litLights(); if (!ids.length) return nowTop('Sleep timer') + '<p class="now-sub" style="text-align:left">Nothing is on.</p>';
+    const t = ids.map(x => `d:${x.device_id}`).join('|');
+    return nowTop('Sleep timer') + `<p class="now-sub" style="text-align:left;margin-top:-4px">${esc(cap(targetName(tsplit(t))))} fade off when the time is up.</p>` + dialHTML(t, 20, true);
+  }
+  if (p === 'timer-active') {
+    const tm = nowTimer(); if (!tm) return nowMainHTML();
+    const tgt = tsplit(tm.t); const lv = meanLevel(targetDevices(tgt)); const left = minutesLeft(tm.v.ends_at);
+    return nowTop('Sleep timer') + `<div class="td" id="td-active">
+      <div class="td-ring big" data-ring="${esc(tm.t)}" data-ends="${tm.v.ends_at}" data-c="${RING_C.toFixed(2)}">${nowRingHTML(tm.t, tm.v, 240, 12, '')}
+        <div class="td-centre"><div class="td-cap">${tm.v.level ? 'Down to ' + tm.v.level + '% in' : 'Off in'}</div><div class="td-min display" data-countdown-min="${tm.v.ends_at}">${left} min</div>${lampHTML(lv, 96, timerLampInner(tm.t), 'td-lamp', true)}</div>
+      </div>
+      <p class="now-sub" style="margin:-4px 0 16px">${esc(cap(targetName(tgt)))}</p>
+      <button class="btn lg block" data-act="now-panel" data-p="timer">Change the time</button>
+      <button class="btn primary lg block" data-act="cancel-timer" data-t="${esc(tm.t)}" data-stay="1" style="margin-top:8px">Cancel the timer</button></div>`;
+  }
+  return nowMainHTML();
+}
+function nowShow(p) {
+  NOW.panel = p;
+  const root = $('#nowview'); if (!root) return;
+  root.innerHTML = nowPanelHTML(p);
+  const sb = root.closest('.sb'); if (sb) sb.scrollTop = 0;
+  if (p === 'timer') wireDial();
+  if (window.Motion) Motion.pageIn(root, { force: true });
+}
+function nowViewHTML() { NOW.panel = 'main'; return `<div class="now" id="nowview">${nowMainHTML()}</div>`; }
+function openNowView() { sheet.open('', nowViewHTML(), { dark: true, cls: 'now' }); }
 function paintNow() {
   const root = $('#nowview'); if (!root) return;
+  if (NOW.panel === 'timer-active' && !nowTimer()) { nowShow('main'); return; }
+  if (NOW.panel !== 'main') { root.querySelectorAll('[data-countdown-min]').forEach(el => { el.textContent = `${minutesLeft(Number(el.dataset.countdownMin))} min`; }); return; }
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const art = root.querySelector('#now-art'); const k = rooms.map(r => r.id + ':' + r.level).join(',');
   if (art.dataset.k !== k) { art.dataset.k = k; art.innerHTML = nowArtHTML(rooms); }
@@ -317,6 +378,8 @@ function paintNow() {
   root.querySelector('#now-sub').textContent = nowSub(rooms, on, lv);
   const sl = root.querySelector('[data-house]');
   if (sl && !sl.dataset.drag) { sl.value = lv; sl.style.setProperty('--p', `${lv}%`); sl.disabled = !on.length; sl.parentElement.classList.toggle('dim', !on.length); root.querySelector('.nb-num').textContent = lv; }
+  const acts = root.querySelector('#now-actions'); const tk = nowTimerKey();
+  if (acts && acts.dataset.tk !== tk) { acts.dataset.tk = tk; acts.innerHTML = nowActionsHTML(); }
 }
 
 // ---------- light detail sheet (B), on the dark surface ----------
@@ -393,20 +456,23 @@ function snapMinutes(f) { const raw = f * 120; let best = TIMER_STEPS[0]; for (c
 function knobPos(min) { const a = (min / 120) * 2 * Math.PI; return { x: 120 + 114 * Math.sin(a), y: 120 - 114 * Math.cos(a) }; }
 function timerLampInner(t) { const ids = targetDevices(tsplit(t)); const d = ids.length === 1 ? dev(ids[0]) : null; return ICON(d ? lightIcon(d) : 'bulb', 'lampart md'); }
 // t is a target, or several joined by | (the house timer from the Now view); the agent keys timers the same way.
-function sleepDialSheet(t, opts = {}) {
-  const tgt = tsplit(t); const ids = targetDevices(tgt); const lv = meanLevel(ids); const min = 20;
+function dialHTML(t, min, stay = false) {
+  const tgt = tsplit(t); const ids = targetDevices(tgt); const lv = meanLevel(ids);
   TD = { t, min, dragging: false };
-  const p = knobPos(min);
-  const body = `<div class="td" id="td">
+  const p = knobPos(min); const st = stay ? 'data-stay="1"' : '';
+  return `<div class="td" id="td">
     <div class="td-ring" role="slider" aria-label="Minutes" aria-valuemin="5" aria-valuemax="120" aria-valuenow="${min}" tabindex="0">
       <svg class="tring" viewBox="0 0 240 240" width="240" height="240" aria-hidden="true"><circle class="track" cx="120" cy="120" r="114"/><circle class="prog" cx="120" cy="120" r="114" style="stroke-dasharray:${RING_C};stroke-dashoffset:${RING_C * (1 - min / 120)}"/></svg>
-      <div class="td-centre"><div class="td-cap">Off in</div><div class="td-min display">${min} min</div>${lampHTML(lv, 96, timerLampInner(t), 'td-lamp')}</div>
+      <div class="td-centre"><div class="td-cap">Off in</div><div class="td-min display">${min} min</div>${lampHTML(lv, 96, timerLampInner(t), 'td-lamp', stay)}</div>
       <div class="td-knob" style="left:${p.x}px;top:${p.y}px"></div>
     </div>
-    <div class="chips">${TIMER_CHIPS.map(m => `<button class="chip ${m === min ? 'sel' : ''}" data-act="timer" data-t="${esc(t)}" data-m="${m}">${m} min</button>`).join('')}</div>
-    <button class="btn primary lg block" data-act="timer" data-t="${esc(t)}" data-m="${min}">Start</button>
+    <div class="chips">${TIMER_CHIPS.map(m => `<button class="chip ${m === min ? 'sel' : ''}" data-act="timer" data-t="${esc(t)}" data-m="${m}" ${st}>${m} min</button>`).join('')}</div>
+    <button class="btn primary lg block" data-act="timer" data-t="${esc(t)}" data-m="${min}" ${st}>Start</button>
   </div>`;
-  sheet.open('Sleep timer', body, { sub: `${esc(cap(targetName(tgt)))} fades off when the time is up.`, back: !!opts.back, onBack: opts.back || null });
+}
+function sleepDialSheet(t, opts = {}) {
+  const body = dialHTML(t, 20);
+  sheet.open('Sleep timer', body, { sub: `${esc(cap(targetName(tsplit(t))))} fades off when the time is up.`, back: !!opts.back, onBack: opts.back || null });
   wireDial();
 }
 function wireDial() {
@@ -451,14 +517,16 @@ function timerBlockHTML(t, v) {
 function paintRings() {
   document.querySelectorAll('[data-ring]').forEach(el => {
     const t = el.dataset.ring, endsAt = Number(el.dataset.ends);
-    const total = timerTotal(t, endsAt), f = clamp(minutesLeft(endsAt) / total, 0, 1);
-    if (f.toFixed(3) !== el.dataset.f) { el.dataset.f = f.toFixed(3); tween(el.querySelector('.prog'), { strokeDashoffset: RING40_C * (1 - f) }); }
-    const lv = meanLevel(targetDevices(tsplit(t))); const s = 12 + 16 * lv / 100, c = lampColor(lv);
-    const disc = el.querySelector('.lamp'); if (disc.dataset.lv !== String(lv)) { if (disc.dataset.lv != null) tween(disc, { width: s, height: s, backgroundColor: c }); disc.dataset.lv = lv; }
+    const total = timerTotal(t, endsAt), f = clamp(minutesLeft(endsAt) / total, 0, 1); const C = Number(el.dataset.c) || RING40_C;
+    if (f.toFixed(3) !== el.dataset.f) { el.dataset.f = f.toFixed(3); tween(el.querySelector('.prog'), { strokeDashoffset: C * (1 - f) }); }
+    const lv = meanLevel(targetDevices(tsplit(t))); const s = 12 + 16 * lv / 100, c = lampColor(lv, !!el.closest('.dark'));
+    const disc = el.querySelector('.lamp'); if (disc && !disc.classList.contains('td-lamp') && disc.dataset.lv !== String(lv)) { if (disc.dataset.lv != null) tween(disc, { width: s, height: s, backgroundColor: c }); disc.dataset.lv = lv; }
+    if (disc && disc.classList.contains('td-lamp') && disc.dataset.lv !== String(lv)) { disc.dataset.lv = lv; disc.style.background = c; disc.classList.toggle('off', lv <= 0); }
+    el.querySelectorAll('[data-countdown-min]').forEach(m => { m.textContent = `${minutesLeft(endsAt)} min`; });
   });
   const td = $('#td'); if (td && TD && !TD.dragging) { const disc = td.querySelector('.td-lamp'); const lv = meanLevel(targetDevices(tsplit(TD.t))); if (disc && disc.dataset.lv !== String(lv)) { if (disc.dataset.lv != null) tween(disc, { backgroundColor: lampColor(lv) }); disc.dataset.lv = lv; disc.classList.toggle('off', lv <= 0); } }
 }
-setInterval(() => { if (document.querySelector('[data-ring]')) paintRings(); }, 15000);
+setInterval(() => { if (document.querySelector('[data-ring]')) paintRings(); if (typeof paintNow === 'function') paintNow(); }, 15000);
 
 // ---------- night look (H): the light surfaces go warm grey; the dark ones, the text and the lamp ramp stay ----------
 const THEME_COLOR = { day: '#F1F2F3', night: '#ECEAE5' };
@@ -530,7 +598,7 @@ document.addEventListener('click', e => {
     case 'now-open': openNowView(); break;
     case 'now-room': sheet.close(); openRoomCard(d.id); break;
     case 'now-night': for (const r of roomsLit()) applyMood(r.id, 'night'); break;
-    case 'now-timer': { const ids = litLights(); if (!ids.length) { toast('Nothing is on'); break; } sleepDialSheet(ids.map(x => `d:${x.device_id}`).join('|'), { back: openNowView }); break; }
+    case 'now-panel': nowShow(d.p); break;
     case 'timer': rememberTimer(d.t, Number(d.m)); break; // boot.js sends it; this remembers how long it was
     case 'night-look': setNightLook(d.v); break;
     case 'sort-go': openKindSheet(d.id); break;

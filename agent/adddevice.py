@@ -203,8 +203,9 @@ class AddSession:
         serial_v: Any = int(serial_s) if serial_s.isdigit() else serial_s
         rec = next((h for h in self.heard if h["serial"] == serial_s), None) or {}
         base = {"Name": name_s, "SerialNumber": serial_v, "AssociatedArea": {"href": f"/area/{area_s}"}}
-        # LEAP is undocumented: try the shape the community script used, then richer and plainer ones
-        variants: List[tuple] = [("plain", dict(base))]
+        # LEAP is undocumented. A real bridge refused the plain shape the community script used and took the
+        # one that carries the DeviceType and ModelNumber it reported, so that goes first; the others stay as fallbacks.
+        variants: List[tuple] = []
         if rec.get("device_type") or rec.get("model"):
             full = dict(base)
             if rec.get("device_type"):
@@ -212,6 +213,7 @@ class AddSession:
             if rec.get("model"):
                 full["ModelNumber"] = rec["model"]
             variants.append(("with DeviceType and ModelNumber", full))
+        variants.append(("plain", dict(base)))
         variants.append(("serial as text", {**base, "SerialNumber": serial_s}))
         last_exc: Optional[Exception] = None
         created: Optional[dict] = None

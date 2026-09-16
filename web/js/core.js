@@ -74,7 +74,7 @@ function connectWS() {
         render(); break;
       case 'inventory': S.inv = m.inventory; render(); break;
       case 'state': Object.assign(S.states, m.states); paintState(); break;
-      case 'timers': S.timers = m.timers || {}; if (S.view === 'home') render(); break;
+      case 'timers': S.timers = m.timers || {}; if (S.view === 'home' && !sheet.isOpen()) render(); if (typeof paintNow === 'function') paintNow(); break;
       case 'config': if (JSON.stringify(m.config) !== S.lastSaved) { S.config = m.config; S.lastSaved = JSON.stringify(m.config); render(); } break;
       case 'agent': S.agent = { online: m.online, info: m.info || null }; render(); break;
       case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
@@ -322,7 +322,7 @@ const sheet = {
   open(title, body, opts = {}) {
     const root = $('#sheet-root');
     const sh = root.querySelector('.sh');
-    root.querySelector('.sheet').className = 'sheet' + (opts.dark ? ' dark' : '') + (opts.full ? ' full' : '');
+    root.querySelector('.sheet').className = 'sheet' + (opts.dark ? ' dark' : '') + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '');
     sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
     sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
     root.querySelector('.sb').innerHTML = body;
