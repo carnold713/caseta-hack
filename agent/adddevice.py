@@ -160,6 +160,18 @@ class AddSession:
         self._send({"type": "add_state", "state": self.state(), "reason": reason})
         return self.state()
 
+    async def _appeared(self, serial_s: str) -> bool:
+        """After a failed create: did the bridge add the device anyway?"""
+        try:
+            bridge = self._need_bridge()
+            await bridge._load_devices()  # noqa: SLF001
+            for d in bridge.devices.values():
+                if str(d.get("serial") or "") == serial_s:
+                    return True
+        except Exception as exc:  # noqa: BLE001
+            self._note("error", "/device", error=f"could not re-read devices: {exc}")
+        return False
+
     async def create(self, serial: Any, name: Any, area_id: Any) -> dict:
         serial_s = str(serial or "").strip()
         name_s = str(name or "").strip()[:60]
@@ -168,8 +180,35 @@ class AddSession:
             raise ValueError("serial, name and room are required")
         # the bridge reports the serial as a number; send it back the same way
         serial_v: Any = int(serial_s) if serial_s.isdigit() else serial_s
-        body = {"Device": {"Name": name_s, "SerialNumber": serial_v, "AssociatedArea": {"href": f"/area/{area_s}"}}}
-        resp = await self._request("CreateRequest", "/device", body)
+        rec = next((h for h in self.heard if h["serial"] == serial_s), None) or {}
+        base = {"Name": name_s, "SerialNumber": serial_v, "AssociatedArea": {"href": f"/area/{area_s}"}}
+        # LEAP is undocumented: try the shape the community script used, then richer and plainer ones
+        variants: List[tuple] = [("plain", dict(base))]
+        if rec.get("device_type") or rec.get("model"):
+            full = dict(base)
+            if rec.get("device_type"):
+                full["DeviceType"] = rec["device_type"]
+            if rec.get("model"):
+                full["ModelNumber"] = rec["model"]
+            variants.append(("with DeviceType and ModelNumber", full))
+        variants.append(("serial as text", {**base, "SerialNumber": serial_s}))
+        last_exc: Optional[Exception] = None
+        created: Optional[dict] = None
+        for label, dev in variants:
+            try:
+                resp = await self._request("CreateRequest", "/device", {"Device": dev})
+                created = _resp(resp)
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                self._note("variant failed", "/device", request={"variant": label}, error=str(exc))
+                if await self._appeared(serial_s):
+                    self._note("appeared", "/device", response={"serial": serial_s, "note": "the bridge added it despite the error"})
+                    created = {"status": "appeared after error"}
+                    break
+        if created is None:
+            assert last_exc is not None
+            raise last_exc
         self.heard = [h for h in self.heard if h["serial"] != serial_s]
         await self.stop("created")
-        return {"created": _resp(resp), "name": name_s, "area": area_s}
+        return {"created": created, "name": name_s, "area": area_s}

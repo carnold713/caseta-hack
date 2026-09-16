@@ -22,8 +22,17 @@ class StubBridge:
         self.calls = []
         self.subscriptions = {}
 
+    fail_first = 0   # how many create attempts should fail
+    devices = {}
+
+    async def _load_devices(self):
+        pass
+
     async def _request(self, comm, url, body=None):
         self.calls.append((comm, url, body))
+        if url == "/device" and comm == "CreateRequest" and self.fail_first > 0:
+            self.fail_first -= 1
+            raise RuntimeError("500 InternalServerError")
         if url == "/device" and comm == "CreateRequest":
             return Response(Header("201 Created", url, "OneDeviceDefinition", None), "CreateResponse", {"Device": {"href": "/device/42"}})
         return Response(Header("204 NoContent", url, None, None), "UpdateResponse", None)
@@ -75,6 +84,36 @@ async def main():
         raise AssertionError("expected an error")
     except RuntimeError as exc:
         assert "not connected" in str(exc)
+    # the bridge rejects the plain shape and accepts the one with DeviceType and ModelNumber
+    bridge3 = StubBridge(); bridge3.fail_first = 1
+    s3 = AddSession(lambda: bridge3, sent.append)
+    await s3.start()
+    bridge3.subscriptions[HEARD_URL](heard)
+    out = await s3.create("69709128", "Hall remote", "23")
+    creates = [c for c in bridge3.calls if c[1] == "/device"]
+    assert len(creates) == 2 and creates[1][2]["Device"]["DeviceType"] == "Pico3ButtonRaiseLower" and creates[1][2]["Device"]["ModelNumber"] == "PJ2-3BRL-GXX-X01", creates
+    assert out["created"]["status"] == "201 Created"
+    assert any(e["kind"] == "variant failed" for e in s3.log)
+
+    # every shape fails but the device shows up anyway: counted as added
+    bridge4 = StubBridge(); bridge4.fail_first = 9; bridge4.devices = {"9": {"serial": 69709128}}
+    s4 = AddSession(lambda: bridge4, sent.append)
+    await s4.start()
+    bridge4.subscriptions[HEARD_URL](heard)
+    out = await s4.create("69709128", "Hall remote", "23")
+    assert out["created"]["status"] == "appeared after error" and not s4.active
+
+    # every shape fails and nothing appears: the last error surfaces
+    bridge5 = StubBridge(); bridge5.fail_first = 9
+    s5 = AddSession(lambda: bridge5, sent.append)
+    await s5.start()
+    bridge5.subscriptions[HEARD_URL](heard)
+    try:
+        await s5.create("69709128", "Hall remote", "23")
+        raise AssertionError("expected an error")
+    except RuntimeError as exc:
+        assert "500" in str(exc)
+    assert len([c for c in bridge5.calls if c[1] == "/device"]) == 3
     print("adddevice: ok")
 
 
