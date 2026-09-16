@@ -70,7 +70,7 @@ function connectWS() {
         S.sun = m.sun || null; S.nextRuns = m.next_runs || {};
         S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
         // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
-        if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); }, 900); break; } }
+        if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); if (typeof openGreeting === 'function') openGreeting(); }, 900); break; } }
         render(); break;
       case 'inventory': S.inv = m.inventory; render(); break;
       case 'state': Object.assign(S.states, m.states); paintState(); break;
@@ -318,15 +318,13 @@ function statusLine() {
 // ---------- sheet ----------
 const sheet = {
   el: null,
-  // opts: sub, back, onBack, full (100dvh), cls. `dark` and `question` are accepted and ignored: every sheet is white and every header is the dialog kind.
+  // opts: sub, cap (a small caption above the title, "1 of 3"), back, onBack, full (100dvh), cls. `dark` and `question` are accepted and ignored: every sheet is white and every header is the dialog kind.
   open(title, body, opts = {}) {
     const root = $('#sheet-root');
-    const sh = root.querySelector('.sh');
     // a sheet re-opened while already open (a step in a flow) keeps its height; a fresh one sizes to its content
     if (root.classList.contains('in')) sheet.lockHeight(); else root.querySelector('.sheet').style.height = '';
     root.querySelector('.sheet').className = 'sheet' + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '');
-    sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
-    sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow"><h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
+    sheet.header(title, opts);
     root.querySelector('.sb').innerHTML = body;
     root.classList.add('open'); requestAnimationFrame(() => { root.classList.add('in'); if (window.Motion) Motion.sheetIn(root); });
     // after the root is shown: a hidden element keeps its old scroll offset and ignores writes to scrollTop
@@ -334,6 +332,12 @@ const sheet = {
     sheet.onBack = opts.onBack || null;
     sheet.stackTitle = title;
     document.body.style.overflow = 'hidden';
+  },
+  // The header alone: the close circle, the back circle when there is somewhere to go back to, the caption, the title, the sub line.
+  header(title, opts = {}) {
+    const sh = $('#sheet-root .sh');
+    sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle');
+    sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close">${ICON('x')}</button><div class="grow">${opts.cap ? `<div class="stepcap">${opts.cap}</div>` : ''}<h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
   },
   close() {
     const root = $('#sheet-root'); root.classList.remove('in');
@@ -348,6 +352,108 @@ const sheet = {
   update(body) { sheet.lockHeight(); const sb = $('#sheet-root .sb'); if (sb) sb.innerHTML = body; },
   isOpen() { return $('#sheet-root').classList.contains('open'); },
 };
+
+// ---------- sheets that re-render in place ----------
+let SHEET_KEY = null;
+// Same key while the sheet is open: swap the body (and the header) and keep the scroll position; otherwise open afresh.
+function showSheet(key, title, body, opts = {}) {
+  const root = $('#sheet-root');
+  if (SHEET_KEY === key && root.classList.contains('open') && root.classList.contains('in')) {
+    if (opts.grow) root.querySelector('.sheet').style.height = ''; else sheet.lockHeight();  // a step swap keeps the sheet's height, as a re-open does; `grow` lets a sheet that gains rows size to them
+    const sb = root.querySelector('.sb'); const top = sb.scrollTop; sb.innerHTML = body; sb.scrollTop = opts.top ? 0 : top;
+    sheet.header(title, opts);
+    sheet.onBack = opts.onBack || null; return;
+  }
+  SHEET_KEY = key; sheet.open(title, body, opts);
+}
+function closeSheet() { SHEET_KEY = null; sheet.close(); }
+
+// ---------- the walk: one question per step, in one sheet (docs/ux-progressive.md 2.0) ----------
+// def: { key, title, sub, state, primary, doneAct, onDone(w), onClose(w), cls, steps: [step] }
+// step: { id, kind: pick | multi | time | custom | plan, title, sub, body(w), valid(w), skip(w), onPick(w, v), next, noNext, foot(w) }
+// A pick row is `data-act="walk-pick" data-v="..."`: tapping records the answer (or hands it to onPick, which returns
+// false when it has handled the step itself) and advances. Nothing is written until the plan's primary.
+const WALK = { cur: null };
+function walk(def) {
+  const w = { def, key: def.key || ('walk-' + uid()), state: def.state || {}, i: 0, ret: null, exp: {} };
+  WALK.cur = w;
+  sheet.onClose = () => { if (WALK.cur === w) WALK.cur = null; SHEET_KEY = null; if (def.onClose) def.onClose(w); };
+  walkRender(w);
+  return w;
+}
+const walkSteps = w => w.def.steps.filter(s => !(s.skip && s.skip(w)));
+const walkIs = key => !!(WALK.cur && WALK.cur.def.key === key);
+function walkRender(w) {
+  if (!w || WALK.cur !== w) return;
+  const steps = walkSteps(w);
+  let step = w.def.steps[w.i];
+  // the current step stopped applying (its answer is now known): move on to the next one that shows
+  if (!steps.includes(step)) { step = steps.find(s => w.def.steps.indexOf(s) > w.i) || steps[steps.length - 1]; w.i = w.def.steps.indexOf(step); }
+  const idx = steps.indexOf(step), n = steps.length;
+  const cap = `${idx === 0 && w.def.title ? esc(w.def.title) + ' · ' : ''}${idx + 1} of ${n}`;
+  const title = typeof step.title === 'function' ? step.title(w) : step.title;
+  const sub = step.sub != null ? (typeof step.sub === 'function' ? step.sub(w) : step.sub) : (idx === 0 ? (w.def.sub || '') : '');
+  const ok = !step.valid || !!step.valid(w);
+  let foot = '';
+  if (step.foot) foot = step.foot(w);
+  else if (step.kind === 'plan') foot = `<div class="sfoot"><button class="btn primary lg block" data-act="${w.def.doneAct || 'walk-done'}" ${ok ? '' : 'disabled'}>${esc(w.def.primary || 'Done')}</button><button class="btn ghost block" data-act="sheet-close">Not now</button></div>`;
+  else if (step.kind !== 'pick' && !step.noNext) foot = walkNextFoot(step.next || 'Next', ok);
+  showSheet(w.key, title, step.body(w) + foot, { sub, cap, back: idx > 0 || w.ret != null, onBack: () => walkBack(w), top: true, cls: 'walk' + (w.def.cls ? ' ' + w.def.cls : '') });
+  if (window.Motion) Motion.pageIn($('#sheet-root .sb'), { force: true });
+}
+const walkNextFoot = (label, ok) => `<div class="sfoot"><button class="btn primary lg block" data-act="walk-next" ${ok ? '' : 'disabled'}>${esc(label)}</button></div>`;
+function walkAdvance(w) {
+  if (w.ret != null) { w.i = w.ret; w.ret = null; walkRender(w); return; }
+  const steps = walkSteps(w); const idx = steps.indexOf(w.def.steps[w.i]);
+  if (idx < steps.length - 1) { w.i = w.def.steps.indexOf(steps[idx + 1]); walkRender(w); }
+}
+function walkBack(w) {
+  if (w.ret != null) { w.i = w.ret; w.ret = null; walkRender(w); return; }
+  const steps = walkSteps(w); const idx = steps.indexOf(w.def.steps[w.i]);
+  if (idx > 0) { w.i = w.def.steps.indexOf(steps[idx - 1]); walkRender(w); } else sheet.close();
+}
+// From the plan, a value row reopens its step; coming back lands on the plan again.
+function walkGoto(w, id) {
+  const i = w.def.steps.findIndex(s => s.id === id); if (i < 0) return;
+  const plan = w.def.steps.findIndex(s => s.kind === 'plan');
+  if (plan >= 0 && w.i === plan) w.ret = plan;
+  w.i = i; walkRender(w);
+}
+function walkPick(w, v) {
+  const step = w.def.steps[w.i];
+  if (step.onPick) { if (step.onPick(w, v) === false) return; } else w.state[step.id] = v;
+  walkAdvance(w);
+}
+// A pick row: the title, an optional second line, a check when it is the current answer.
+function pickRow(v, title, sub = '', sel = false, glyph = '') {
+  return `<button class="item pick ${sel ? 'sel' : ''}" data-act="walk-pick" data-v="${esc(v)}">${glyph}<div class="grow"><div class="t">${title}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div>${sel ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`;
+}
+// The plan step: the summary in a tip, then value rows for the numbers.
+function planHTML(sentence, rows) { return `<div class="tip top plan"><div class="grow"><span class="cap">Here's the plan</span><div class="t">${sentence}</div></div></div>${rows ? `<div class="card pad0 list" style="margin-top:16px">${rows}</div>` : ''}`; }
+// A value row: the question as the title, the current answer at the right. `act` decides what a tap does.
+function valueRow(title, val, act, data = '', opts = {}) {
+  return `<button class="item vrow ${opts.open ? 'open' : ''}" data-act="${act}" ${data}><div class="grow"><div class="t">${title}</div>${opts.sub ? `<div class="d">${opts.sub}</div>` : ''}</div><span class="val">${val}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+}
+// A value row that expands in place, inside a walk: the chips sit under the row.
+function walkValueRow(w, k, title, val, body) {
+  const open = !!w.exp[k];
+  return valueRow(title, val, 'walk-expand', `data-k="${k}"`, { open }) + (open ? `<div class="vrow-body">${body}</div>` : '');
+}
+// The More row: always the last card on a screen; the second line names what is behind it.
+function moreRow(sub, act, title = 'More') {
+  return `<div class="card pad0 list morerow"><button class="item" data-act="${act}"><div class="grow"><div class="t">${title}</div><div class="d">${sub}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const w = WALK.cur; if (!w) return;
+  switch (el.dataset.act) {
+    case 'walk-next': walkAdvance(w); break;
+    case 'walk-pick': walkPick(w, el.dataset.v); break;
+    case 'walk-goto': walkGoto(w, el.dataset.id); break;
+    case 'walk-expand': w.exp[el.dataset.k] = !w.exp[el.dataset.k]; walkRender(w); break;
+    case 'walk-done': if (w.def.onDone) w.def.onDone(w); break;
+  }
+});
 
 // ---------- toast ----------
 let toastTimer;
@@ -380,7 +486,7 @@ function render() {
   nb.classList.add('show'); app.classList.add('hasbar');
   paintState(); paintLive();
   if (S.view === 'home' && window.LightField) { const lf = document.getElementById('lightfield'); if (lf) LightField.init(lf, roomsForLight); }
-  const pageKey = S.view + (nested ? '/' + S.remote : '');
+  const pageKey = S.view + (nested ? '/' + (S.remote || 'more') : '');
   if (window.Motion) {
     if (!S._launched) { S._launched = true; Motion.pageIn(v, { launch: true }); }
     else if (S._lastPage !== pageKey) Motion.pageIn(v);

@@ -6,7 +6,9 @@ document.addEventListener('click', async e => {
   const act = el.dataset.act; const d = el.dataset;
   switch (act) {
     case 'nav': e.preventDefault(); S.view = d.view; location.hash = S.view; if (sheet.isOpen()) sheet.close(); render(); window.scrollTo(0, 0); break;
-    case 'conn': S.view = 'settings'; location.hash = 'settings'; render(); break;
+    case 'conn': S.view = 'settings'; S.settingsMore = false; location.hash = 'settings'; render(); break;
+    case 'settings-more': S.settingsMore = true; render(); window.scrollTo(0, 0); break;
+    case 'settings-back': S.settingsMore = false; render(); window.scrollTo(0, 0); break;
     case 'toggle': toggleTarget(d.t); break;
     case 'fav': toggleFav(d.t); break;
     case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
@@ -22,6 +24,16 @@ document.addEventListener('click', async e => {
     case 'remote-open': S.remote = d.id; render(); window.scrollTo(0, 0); picoPhotoAvailable(dev(d.id)).then(u => { if (u) render(); }); break;
     case 'remote-back': S.remote = null; render(); break;
     case 'remote-look': openLookSheet(); break;
+    case 'remote-more': S.remoteLutron = false; remoteMoreSheet(); break;
+    case 'remote-lutron': S.remoteLutron = !S.remoteLutron; remoteMoreSheet(); break;
+    case 'usual-hide': try { localStorage.setItem(`usualHidden:${d.id}`, '1'); } catch (_) { /* ignore */ } { const t = $('#usualtip'); if (t) t.remove(); } break;
+    case 'recipe-more': recipeMoreSheet(); break;
+    case 'recipe-night': S.night = true; renderRecipeSheet(); break;
+    case 'recipe-clear': applyRecipe('nothing'); break;
+    case 'recipe-all': S.recipeAll = true; renderRecipeSheet(); break;
+    case 'pick-open': S.pickOpen = !S.pickOpen; renderRecipeSheet(); break;
+    case 'scene-lights': openSceneLightsSheet(); break;
+    case 'scene-more': sceneMoreSheet(); break;
     case 'look-model': setLook('model', d.m); break;
     case 'look-finish': setLook('finish', d.f); break;
     case 'button-open': if (window.Motion) Motion.press(el); S.pickTargets = null; S.advCustom = null; openButtonSheet(Number(d.n)); break;
@@ -161,7 +173,7 @@ document.addEventListener('submit', async e => {
 // The splash: the brand blue with the wordmark, then a 255ms fade into whatever the first page is.
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 300); } }, 255);
 $('#sheet-root .scrim').addEventListener('click', () => sheet.close());
-document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; if (S.view !== 'remotes') S.remote = null; location.hash = S.view; render(); window.scrollTo(0, 0); }));
+document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; if (S.view !== 'remotes') S.remote = null; S.settingsMore = false; location.hash = S.view; render(); window.scrollTo(0, 0); }));
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1).split('/')[0]; if (v && VIEWS[v] && v !== S.view) { S.view = v; render(); } });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet.isOpen()) sheet.close(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

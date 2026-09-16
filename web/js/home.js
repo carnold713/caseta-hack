@@ -17,9 +17,9 @@ VIEWS.home = {
     const timers = Object.entries(S.timers || {});
     if (timers.length) h += '<div class="spacer"></div>' + timers.map(([t, v]) => timerBlockHTML(t, v)).join('');
     h += `<div id="comingup">${typeof comingUpHTML === 'function' ? comingUpHTML() : ''}</div>`;
+    // one card of advice at most (docs/ux-progressive.md 2.1a): not connected beats everything, then the Next card, then nothing
     if (!S.agent.online) h += `<div class="spacer"></div><button class="tip" data-act="nav" data-view="settings"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected to your home</div><div class="d">Showing the last known state. Your remotes keep working from their saved settings.</div></div><span class="go">${ICON('chev')}</span></button>`;
-    h += sortBlockHTML();
-    h += typeof moodsTipHTML === 'function' ? moodsTipHTML() : '';
+    else if (typeof nextCardHTML === 'function') h += nextCardHTML();
     h += '<div class="h2">Rooms</div>';
     h += areas().map(roomCard).join('');
     return h;
@@ -27,18 +27,27 @@ VIEWS.home = {
   after() {
     tickCountdowns();
     if (!controllable().length && !S.agent.online && !S._setupShown) { S._setupShown = true; setTimeout(openSetupSheet, 350); }
+    // the moment the connector's first snapshot lands, the connect walk has done its job
+    if (walkIs('connect') && controllable().length && S.agent.online) closeSheet();
   },
 };
 
-// Nothing connected yet: the page carries a tip, and on Home a sheet slides over it once.
+// Nothing connected yet: the page carries a tip, and on Home a walk slides over it once.
 function setupEmpty() {
   return `<button class="tip" data-act="setup-open" style="margin-top:8px"><div class="grow"><span class="cap">Get started</span><div class="t">Let's connect your home</div><div class="d">A small helper program links this app to your Lutron bridge. About ten minutes, once.</div></div><span class="go">${ICON('chev')}</span></button>`;
 }
+// Connect your home (docs/ux-progressive.md 2.18): two steps, and the second stays until the home connects.
 function openSetupSheet() {
   const demo = { device_id: '', name: 'Pico', type: 'Pico3ButtonRaiseLower', area: null };
-  sheet.open("Let's connect your home", `<p class="body">A small helper program on a computer or Raspberry Pi in your house links this app to your Lutron bridge. About ten minutes, once.</p>
-    <div class="stage sm">${picoSVG(demo, { width: 76, model: 'PJ2-3BRL' })}</div>
-    <button class="btn primary lg block" data-act="nav" data-view="settings">Show me how</button><button class="btn ghost block" data-act="sheet-close">Later</button>`);
+  const line = `curl -fsSL "${location.origin}/install.sh?token=${S.token}" | sh`;
+  walk({ key: 'connect', title: "Let's connect your home", steps: [
+    { id: 'computer', kind: 'pick', title: 'Do you have a computer at home that stays on?', sub: 'A Mac, a Raspberry Pi, a NAS, an old laptop. A small helper program on it links this app to your Lutron bridge. About ten minutes, once.',
+      body: () => `<div class="stage sm">${picoSVG(demo, { width: 76, model: 'PJ2-3BRL' })}</div><div class="card pad0 list">${pickRow('yes', 'Yes, show me how')}<button class="item" data-act="sheet-close"><div class="grow"><div class="t">Not yet</div></div></button></div>` },
+    { id: 'paste', kind: 'custom', noNext: true, title: 'Paste this line on that computer', sub: 'Open the Terminal app on it, paste this line, press Enter.',
+      body: () => `<div class="code"><code>${esc(line)}</code><button class="iconbtn sm" data-act="copy" data-text="${esc(line)}">${ICON('copy', 'sm')}</button></div>
+        <p class="body" style="margin:16px 0 0">When it asks, press the small black button on the back of your Lutron bridge.</p>
+        <p class="d" style="margin:12px 0 0">The moment it connects, the dot at the top turns green and your rooms appear. It starts again by itself after a restart.</p>` },
+  ] });
 }
 function favTile(t) {
   const d = t.startsWith('d:') ? dev(t.slice(2)) : null;

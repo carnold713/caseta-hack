@@ -54,9 +54,36 @@ const roomDimmers = aid => roomLights(aid).filter(d => d.domain === 'light');
 function meanLevel(ids) { const xs = ids.map(id => level(id) || 0); return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0; }
 const roomMean = aid => meanLevel(roomLights(aid).map(d => d.device_id));
 
+// The kind sheet on its own, or as a step of the sort walk (SORT set: a caption, Next / Done and Skip in the footer).
 function openKindSheet(id, opts = {}) {
   const d = dev(id); if (!d) return;
-  sheet.open('What kind of light is this?', kindGridHTML(id), { sub: `${esc(d.name)} · ${esc(areaName(d.area))}. Moods use it to know what to dim.`, back: !!opts.back, onBack: opts.back || null });
+  const w = SORT && SORT.list.includes(id) ? SORT : null;
+  const capn = w ? `Light ${w.list.indexOf(id) + 1} of ${w.list.length}` : '';
+  showSheet(w ? 'sort' : 'kind', 'What kind of light is this?', kindBodyHTML(id), { sub: `${esc(d.name)} · ${esc(areaName(d.area))}. Moods use it to know what to dim.`, back: !!opts.back, onBack: opts.back || null, cap: capn, top: true });
+  if (w) sheet.onClose = () => { SORT = null; SHEET_KEY = null; };
+}
+function kindBodyHTML(id) {
+  const w = SORT && SORT.list.includes(id) ? SORT : null;
+  if (!w) return kindGridHTML(id);
+  const i = w.list.indexOf(id); const next = w.list[i + 1];
+  return kindGridHTML(id) + `<div class="sfoot"><button class="btn primary lg block" data-act="sort-next" data-id="${id}">${next ? `Next: ${esc(dev(next).name)}` : 'Done'}</button><button class="btn ghost block" data-act="sort-skip" data-id="${id}">Skip this one</button></div>`;
+}
+// The sort walk (docs/ux-progressive.md 3.3): the kind sheet for each untagged dimmable light in turn, one toast at the end.
+let SORT = null;
+function untaggedLights() { const kinds = S.config.settings.light_kinds || {}; return controllable().filter(d => d.domain === 'light' && !kinds[d.device_id]).map(d => d.device_id); }
+function openSortWalk() {
+  const list = untaggedLights(); if (!list.length) return;
+  SORT = { list, prev: JSON.stringify(S.config), done: 0 };
+  openKindSheet(list[0]);
+}
+function sortStep(id, skipped) {
+  const w = SORT; if (!w) return;
+  if (!skipped && lightKind(id)) w.done++;
+  const next = w.list[w.list.indexOf(id) + 1];
+  if (next) { openKindSheet(next); return; }
+  const n = w.done, prev = w.prev; SORT = null; closeSheet();
+  if (n) { save({ quiet: true, render: true }).then(() => toast(`${plural(n, 'light')} sorted`, { undo: async () => { S.config = JSON.parse(prev); await save({ msg: 'Undone' }); } })); }
+  else render();
 }
 function kindGridHTML(id) {
   const cur = lightKind(id);
@@ -69,20 +96,11 @@ function pickKind(id, k) {
   if (s.light_kinds[id] === k) { delete s.light_kinds[id]; delete s.roles[id]; }
   else { s.light_kinds[id] = k; s.roles[id] = KIND_ROLE[k]; }
   saveSoon();
-  sheet.update(kindGridHTML(id));
+  sheet.update(kindBodyHTML(id));
   const d = dev(id); if (!d) return;
   document.querySelectorAll(`[data-act="kind-open"][data-id="${id}"]`).forEach(b => { b.innerHTML = ICON(lightIcon(d)); });
   document.querySelectorAll('.tile[data-tgt] .face').forEach(f => { delete f.dataset.k; });
-  const blk = $('#sortblock'); if (blk && Object.keys(s.light_kinds).length) blk.remove();
   paintLight();
-}
-// A one-time nudge on Home while nothing is tagged. Dismissable, remembered on this phone.
-function sortBlockHTML() {
-  const kinds = (S.config.settings.light_kinds) || {};
-  const untagged = controllable().filter(d => d.domain === 'light' && !kinds[d.device_id]);
-  if (Object.keys(kinds).length || !untagged.length) return '';
-  try { if (localStorage.getItem('sortLightsDismissed')) return ''; } catch (_) { /* ignore */ }
-  return `<div class="spacer"></div><div class="tip sortblock" id="sortblock"><div class="grow"><span class="cap">Tip</span><div class="t">Let's sort your lights</div><div class="d">Tap the disc next to a light to say what kind of lamp it is. Then Relax, Dinner and Movie know what to dim.</div><button class="btn ghost" data-act="sort-dismiss">Not now</button></div><button class="go" data-act="sort-go" data-id="${untagged[0].device_id}" title="Start with ${esc(untagged[0].name)}">${ICON('chev')}</button></div>`;
 }
 
 // ---------- tiles: a little picture of the light each one controls ----------
@@ -153,7 +171,7 @@ function moodRowHTML(aid) {
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
   if (!ps.length) return `<div class="moodrow" data-moods="${aid}"><div class="moods"><button class="chip" data-act="roles-open" data-area="${aid}">${ICON('plus', 'sm')}Make moods…</button></div></div>`;
   const cur = moodMatch(aid);
-  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 32, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}</div><div class="moodfoot"><button class="btn ghost" data-act="roles-open" data-area="${aid}">Change what each light is for</button></div></div>`;
+  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 32, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}<button class="chip sm change" data-act="roles-open" data-area="${aid}" title="Change what each light is for">${ICON('dots', 'sm')}Change</button></div></div>`;
 }
 async function applyMood(aid, mid) {
   const m = moodById(mid); if (!m) return;
@@ -329,7 +347,7 @@ function nowMainHTML() {
     <div class="t1 now-head" id="now-head">${lightNowHeadline(rooms)}</div>
     <div class="now-sub" id="now-sub">${nowSub(rooms, on, lv)}</div>
     <div class="display now-big" id="now-big">${on.length ? lv + '%' : 'Off'}</div>
-    <div class="now-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv : 'Off'}</span></div>
+    <div class="now-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"></div>
     <div class="now-actions" id="now-actions" data-tk="${nowTimerKey()}">${nowActionsHTML()}</div>
     <div class="h2">Rooms</div><div class="card pad0 list now-rooms">${rows}</div>`;
 }
@@ -370,7 +388,8 @@ function nowShow(p) {
   if (window.Motion) Motion.pageIn(root, { force: true });
 }
 function nowViewHTML() { NOW.panel = 'main'; return `<div class="now" id="nowview">${nowMainHTML()}</div>`; }
-function openNowView() { sheet.open('', nowViewHTML(), { full: true, cls: 'now' }); }
+// The Now view is a flyout card that stops short of the top of the screen (86dvh, one height for all its panels), never a full-height sheet.
+function openNowView() { sheet.open('', nowViewHTML(), { cls: 'now' }); }
 function paintNow() {
   const root = $('#nowview'); if (!root) return;
   if (NOW.panel === 'timer-active' && !nowTimer()) { nowShow('main'); return; }
@@ -382,7 +401,7 @@ function paintNow() {
   if (head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
   root.querySelector('#now-sub').textContent = nowSub(rooms, on, lv);
   const sl = root.querySelector('[data-house]');
-  if (sl && !sl.dataset.drag) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); root.querySelector('.nb-num').textContent = on.length ? lv : 'Off'; const big = root.querySelector('#now-big'); if (big) big.textContent = on.length ? `${lv}%` : 'Off'; }
+  if (sl && !sl.dataset.drag) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); const big = root.querySelector('#now-big'); if (big) big.textContent = on.length ? `${lv}%` : 'Off'; }
   const acts = root.querySelector('#now-actions'); const tk = nowTimerKey();
   if (acts && acts.dataset.tk !== tk) { acts.dataset.tk = tk; acts.innerHTML = nowActionsHTML(); }
 }
@@ -403,12 +422,21 @@ function openLightSheet(id) {
     <div class="ld-actions">
       <button class="rbtn" data-act="ld-timer" data-t="${t}"><span class="c">${ICON('clock')}</span><span>Sleep timer</span></button>
       <button class="rbtn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}"><span class="c">${ICON('star')}</span><span>Favourite</span></button>
-      <button class="rbtn" data-act="ld-kind" data-id="${id}"><span class="c">${ICON(lightIcon(d))}</span><span>What kind</span></button>
+      <button class="rbtn" data-act="ld-more" data-id="${id}"><span class="c">${ICON('dots')}</span><span>More</span></button>
     </div>
-    ${String(id).startsWith('hue_') ? '' : `<button class="btn ghost block ld-remove" data-act="dev-remove" data-id="${id}">Remove from my home</button>`}
   </div>`;
   sheet.open(esc(d.name), body, { sub: `${esc(areaName(d.area))}${role ? ` · ${ROLE_LABEL[role]}` : ''}` });
   wireLightSheet();
+}
+// The light page's More (2.2): what kind of light it is, and removing it from the home.
+function lightMoreSheet(id) {
+  const d = dev(id); if (!d) return;
+  const k = lightKind(id); const kind = k ? (KINDS.find(x => x[0] === k) || [])[1] : null; const role = lightRole(id);
+  const body = `<div class="card pad0 list">
+    ${valueRow('What kind of light is this?', kind ? esc(kind) : 'Not set', 'ld-kind', `data-id="${id}"`)}
+    ${String(id).startsWith('hue_') ? '' : `<button class="item ld-remove" data-act="dev-remove" data-id="${id}">${ICON('trash')}<div class="grow"><div class="t">Remove from my home</div><div class="d">It leaves your Lutron bridge.</div></div><span class="chev">${ICON('x', 'sm')}</span></button>`}
+  </div>`;
+  showSheet('light-more', esc(d.name), body, { sub: `${esc(areaName(d.area))}${kind ? ` · ${esc(kind)}` : role ? ` · ${ROLE_LABEL[role]}` : ''}`, back: true, onBack: () => openLightSheet(id) });
 }
 function wireLightSheet() {
   const root = $('#ld'); if (!root || !LD) return;
@@ -602,14 +630,16 @@ document.addEventListener('click', e => {
     case 'ld-toggle': if (LD && LD.show) { const v = LD.lv > 0 ? 0 : 100; LD.show(v); S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); command({ type: 'level', target: `d:${LD.id}`, level: v }); paintState(); } break;
     case 'ld-timer': { const id = LD && LD.id; sleepTimerSheet(d.t, { back: id ? () => openLightSheet(id) : null }); break; }
     case 'ld-fav': toggleFav(d.t); el.classList.toggle('on', S.config.favorites.includes(d.t)); break;
-    case 'ld-kind': { const id = d.id; openKindSheet(id, { back: () => openLightSheet(id) }); break; }
+    case 'ld-kind': { const id = d.id; openKindSheet(id, { back: () => lightMoreSheet(id) }); break; }
+    case 'ld-more': lightMoreSheet(d.id); break;
+    case 'sort-next': sortStep(d.id, false); break;
+    case 'sort-skip': sortStep(d.id, true); break;
     case 'now-open': openNowView(); break;
     case 'now-room': sheet.close(); openRoomCard(d.id); break;
     case 'now-night': for (const r of roomsLit()) applyMood(r.id, 'night'); break;
     case 'now-panel': nowShow(d.p); break;
     case 'timer': rememberTimer(d.t, Number(d.m)); break; // boot.js sends it; this remembers how long it was
     case 'night-look': setNightLook(d.v); break;
-    case 'sort-go': openKindSheet(d.id); break;
-    case 'sort-dismiss': try { localStorage.setItem('sortLightsDismissed', '1'); } catch (_) { /* ignore */ } { const b = $('#sortblock'); if (b) b.remove(); } break;
+    case 'sort-go': openSortWalk(); break;
   }
 });

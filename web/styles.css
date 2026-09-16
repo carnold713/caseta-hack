@@ -551,6 +551,36 @@ input.slider { pointer-events: none; }
 .ad-done p { margin: 0 auto; max-width: 320px; }
 .tip .btn.sm { flex: none; }
 
+/* ---------- progressive disclosure (docs/ux-progressive.md): walks, value rows, group captions in a list ---------- */
+/* the step caption above a sheet's title: "Welcome lights · 1 of 4" */
+.sheet .sh .stepcap { font-size: 12px; line-height: 16px; color: var(--text-2); margin-bottom: 4px; padding-right: 40px; }
+.sheet .sh.hasback .stepcap { padding-top: 48px; }
+.sheet .sh.hasback .stepcap + h2 { padding-top: 0; }
+/* a walk keeps one height across its steps; the lock lands at a size that fits a question and its answers */
+.sheet.walk { min-height: 62dvh; }
+/* a value row: the question and its answer; open, the chevron turns and the chips sit under it */
+.item.vrow .chev svg { transition: transform .255s var(--ease); }
+.item.vrow.open .chev svg { transform: rotate(90deg); }
+.vrow-body { padding: 0 16px 16px; }
+.vrow-body .chips.scroll { margin: 0 -16px; padding: 2px 16px 4px; }
+.vrow-body .chips.days { flex-wrap: wrap; }
+.vrow-body > p.d:first-child { margin: 0; }
+.list > .vrow-body + .item::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
+/* a caption that groups rows inside one list card */
+.list > .lcap { position: relative; font-size: 12px; line-height: 16px; color: var(--text-2); padding: 14px 16px 4px; }
+.list > .item + .lcap::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
+/* a pick row (one answer): plain weight until it is the answer */
+.list > .item.pick .t { font-weight: 400; }
+.list > .item.pick.sel .t { font-weight: 500; }
+.list > .item.done .t, .list > .item.done .d { color: var(--text-2); }
+.item.recipe.all .t { color: var(--blue); font-weight: 500; }
+.tip.plan .t { font-size: 18px; line-height: 24px; }
+/* a details row inside a list card (More settings › How your home connects) */
+.item > details.more > summary { padding: 0; min-height: 0; }
+.item > details.more > summary > div { flex: 1; min-width: 0; }
+.item > details.more > summary .t { font-size: 16px; line-height: 20px; font-weight: 500; }
+.item > details.more > summary .d { margin-top: 2px; font-weight: 400; }
+
 /* ---------- swipe to close: while a finger drags a sheet, nothing else moves it ---------- */
 .sheet.swiping { transition: none !important; }
 .sheet .sb { overscroll-behavior: contain; }

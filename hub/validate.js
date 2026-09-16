@@ -90,6 +90,8 @@ function validateConfig(cfg) {
   out.settings.night_level = clampInt(s.night_level, 1, 100, 30);
   out.settings.home_name = typeof s.home_name === 'string' ? s.home_name.trim().slice(0, 40) : '';
   out.settings.auto_update = s.auto_update !== false;
+  // The app greeted this home once (the "Your home is connected" sheet); a second phone does not see it again.
+  out.settings.greeted = s.greeted === true;
   // Where and when: timezone comes from the phone (IANA name), location from the phone's GPS, both optional.
   out.settings.timezone = typeof s.timezone === 'string' && /^[A-Za-z_]+(\/[A-Za-z_+-]+){0,2}$/.test(s.timezone) ? s.timezone : null;
   out.settings.location = s.location && typeof s.location.lat === 'number' && typeof s.location.lng === 'number' && Math.abs(s.location.lat) <= 90 && Math.abs(s.location.lng) <= 180

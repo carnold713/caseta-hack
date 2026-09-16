@@ -178,15 +178,14 @@ VIEWS.automations = {
   top() { return `<div class="t1">Automations</div>${statusCircle()}`; },
   body() {
     if (!controllable().length && !S.agent.online) return setupEmpty();
-    let h = `<p class="body" style="margin:0 0 16px">Things your home does by itself. They keep running even when your phone is off.</p>`;
+    let h = `<div class="spacer"></div>`;
     if (!S.agent.online) h += `<div class="tip"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected right now</div><div class="d">Your home keeps running these on its own. This list may be a little behind.</div></div></div><div class="spacer"></div>`;
     h += tzTipHTML();
-    h += windDownCardHTML();
+    h += windDownRowHTML();
     const list = topLevel();
     if (!list.length) return h + emptyStateHTML();
     h += `<div class="h2">Your automations</div><div class="card pad0 list" id="auto-list">${list.map(autoRowHTML).join('')}</div>`;
     h += `<div class="spacer"></div><div class="card pad0 list"><button class="item" data-act="au-new"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">New automation</div></div></button></div>`;
-    h += `<p class="d" style="margin:16px 0 0">Have timers in the Lutron app? Keep them in one place, here or there, so they don't fight.</p>`;
     return h;
   },
 };
@@ -204,7 +203,7 @@ function guidedRowsHTML() {
   return `<div class="card pad0 list">${rows.map(([act, ic, t, d]) => `<button class="item" data-act="${act}">${ICON(ic)}<div class="grow"><div class="t">${t}</div><div class="d">${d}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>`;
 }
 function emptyStateHTML() {
-  return `<div class="h2">Your automations</div><div class="tip"><div class="grow"><span class="cap">Get started</span><div class="t">Let your home take care of the evenings</div><div class="d">Lights on before you get home, a lamp that wakes you gently, one button for goodnight. Each takes about a minute.</div></div><span class="go">${ICON('plus')}</span></div><div class="spacer"></div>${guidedRowsHTML()}`;
+  return `<div class="h2">Your automations</div><div class="tip"><div class="grow"><span class="cap">Get started</span><div class="t">What should your home do on its own?</div><div class="d">Each of these takes about a minute.</div></div></div><div class="spacer"></div>${guidedRowsHTML()}`;
 }
 function tzTipHTML() {
   const home = S.config.settings.timezone, phone = phoneTZ();
@@ -220,7 +219,7 @@ function paintSun() {
   const wh = $('#wd-home'); if (wh) wh.innerHTML = windDownCaptionHTML();
   const wt = $('#wd-today'); if (wt) wt.textContent = todaySentence();
   if (WH && SHEET_KEY === 'when') renderWhenSheet();
-  if (GS && SHEET_KEY === 'setup') renderSetup();
+  if (WALK.cur && SHEET_KEY === WALK.cur.key) walkRender(WALK.cur);
   if (AE && SHEET_KEY === 'editor') renderEditor();
 }
 
@@ -238,24 +237,9 @@ function comingUpHTML() {
   return `<div class="h2">Coming up<a class="link" data-act="nav" data-view="automations" href="#automations">See all</a></div><div class="card pad0 list">${rows.map(row).join('')}</div>`;
 }
 
-// ---------- sheets that re-render in place ----------
-let SHEET_KEY = null;
-// Same key while the sheet is open: swap the body and keep the scroll position; otherwise open afresh.
-function showSheet(key, title, body, opts = {}) {
-  const root = $('#sheet-root');
-  if (SHEET_KEY === key && root.classList.contains('open') && root.classList.contains('in')) {
-    const sb = root.querySelector('.sb'); const top = sb.scrollTop; sb.innerHTML = body; sb.scrollTop = top;
-    const h = root.querySelector('.sh h2'); if (h) h.innerHTML = title;
-    const sub = root.querySelector('.sh .sub'); if (sub && opts.sub) sub.innerHTML = opts.sub;
-    sheet.onBack = opts.onBack || null; return;
-  }
-  SHEET_KEY = key; sheet.open(title, body, opts);
-}
-function closeSheet() { SHEET_KEY = null; sheet.close(); }
-
-// ---------- New automation ----------
+// ---------- New automation ---------- (showSheet and SHEET_KEY live in core.js)
 function openNewAutomation() {
-  showSheet('new', 'What would you like to set up?', guidedRowsHTML(), { sub: 'Three ready-made ones, or start from scratch.' });
+  showSheet('new', 'What would you like to set up?', `${guidedRowsHTML()}<p class="d" style="margin:16px 0 0">Have timers in the Lutron app? Keep them in one place, here or there, so they don't fight.</p>`, { sub: 'Three ready-made ones, or start from scratch.' });
 }
 
 // ---------- the editor (4.1) ----------
@@ -263,18 +247,13 @@ let AE = null; // { id, draft, draftOff, isNew, L, Sh, customName, dayWarn }
 const aeSc = () => (AE ? scById(AE.id) || AE.draft : null);
 const aeInConfig = () => !!(AE && scById(AE.id));
 const aeOff = () => (AE ? pairOf(aeSc()) || AE.draftOff : null);
+// An existing automation opens the editor; a new one is made in a walk (2.14) and only reaches the editor once it exists.
 function openEditor(id) {
+  if (!(id && scById(id))) { openNewAutoWalk(); return; }
   sheet.onClose = () => { AE = null; WH = null; S.advCustom = null; SHEET_KEY = null; };
-  if (id && scById(id)) {
-    const sc = scById(id); const { L, Sh } = splitT(targetsOf(sc));
-    if (!L.length && !Sh.length && lightRooms()[0]) L.push(`a:${lightRooms()[0].id}`);
-    AE = { id, draft: null, draftOff: null, isNew: false, L, Sh, customName: sc.name !== autoName(sc, L, Sh, !!pairOf(sc)), dayWarn: false };
-  } else {
-    const room = lightRooms()[0]; const L = room ? [`a:${room.id}`] : ['h:all'];
-    const draft = { id: uid(), name: '', enabled: true, at: null, days: [...ALL_DAYS], actions: AUTO_RECIPES[0].mk(L, []), only_if: null, skip_until: null, kind: 'custom' };
-    draft.name = autoName(draft, L, []);
-    AE = { id: draft.id, draft, draftOff: null, isNew: true, L, Sh: [], customName: false, dayWarn: false };
-  }
+  const sc = scById(id); const { L, Sh } = splitT(targetsOf(sc));
+  if (!L.length && !Sh.length && lightRooms()[0]) L.push(`a:${lightRooms()[0].id}`);
+  AE = { id, draft: null, draftOff: null, isNew: false, L, Sh, customName: sc.name !== autoName(sc, L, Sh, !!pairOf(sc)), dayWarn: false, exp: {} };
   renderEditor();
 }
 // Save when the automation exists (it has a time); until then the sheet holds it in memory.
@@ -326,33 +305,120 @@ function daysHTML(days, act, warn) {
 }
 function setDay(days, i, warnHost) { const j = days.indexOf(i); if (j >= 0) { if (days.length === 1) { warnHost.dayWarn = true; return; } days.splice(j, 1); } else days.push(i); warnHost.dayWarn = false; days.sort(); }
 const QUICK_DAYS = { all: ALL_DAYS, weekdays: [1, 2, 3, 4, 5], weekends: [0, 6] };
+// The chip row of lights an automation can pick from: the picked ones, the rooms, everything, all shades, and "Specific lights…".
+function targetChipsHTML(sel, act, moreAct) {
+  const chipsT = [...sel, ...lightRooms().map(a => `a:${a.id}`), 'h:all', ...(hasShades() ? ['h:shades'] : [])].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
+  const chipName = t => t === 'h:shades' ? 'All shades' : cap(targetName(t));
+  return `<div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="${act}" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(chipName(t))}</button>`).join('')}<button class="chip" data-act="${moreAct}">${ICON('dots', 'sm')}Specific lights…</button></div>`;
+}
+function recipeRowsHTML(L, Sh, rid, act) {
+  const chk = `<span class="chk">${ICON('check', 'sm')}</span>`;
+  return AUTO_RECIPES.filter(x => recipeApplies(x, L, Sh)).map(x => `<button class="item recipe ${rid === x.id ? 'sel' : ''}" data-act="${act}" data-r="${x.id}"><div class="grow"><div class="t">${x.t}</div>${x.d ? `<div class="d">${x.d}</div>` : ''}</div>${rid === x.id ? chk : ''}</button>`).join('');
+}
 function renderEditor() {
   const sc = aeSc(); if (!sc) return;
   const off = aeOff(); const { L, Sh } = AE; const inCfg = aeInConfig();
   const rid = autoRecipeOf(sc, L, Sh); const r = AUTO_RECIPES.find(x => x.id === rid);
-  const fresh = AE.isNew && !sc.at;
-  const title = fresh ? 'What should happen, and when?' : esc(sc.name);
-  const sub = fresh ? 'Pick a time, the lights, and what they do. It saves as you go.' : esc(ruleLine(sc, off));
+  const title = esc(sc.name);
+  const sub = esc(ruleLine(sc, off));
   const showOff = r ? (r.on || r.open) : leavesOn(sc.actions);
   const offLabel = r && r.open ? 'Then open again' : 'Then turn off again';
   const offVal = off ? whenValue(off.at) : (r && r.open ? 'Leave them closed' : 'Leave them on');
   const when = `<div class="card pad0 list"><button class="item" data-act="ae-when"><div class="grow"><div class="t">When?</div></div><span class="val">${sc.at ? esc(whenValue(sc.at)) : `<span class="odot"></span>Pick a time`}</span><span class="chev">${ICON('chev', 'sm')}</span></button>
     ${showOff ? `<button class="item" data-act="ae-off"><div class="grow"><div class="t">${offLabel}</div></div><span class="val">${esc(offVal)}</span><span class="chev">${ICON('chev', 'sm')}</span></button>` : ''}</div>`;
   const sel = [...L, ...Sh];
-  const chipsT = [...sel, ...lightRooms().map(a => `a:${a.id}`), 'h:all', ...(hasShades() ? ['h:shades'] : [])].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
-  const chipName = t => t === 'h:shades' ? 'All shades' : cap(targetName(t));
   const broken = (sc.actions || []).some(a => a.target && !targetExists(a.target));
-  const which = `<div class="h2">Which lights?</div><div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="ae-target" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(chipName(t))}</button>`).join('')}<button class="chip" data-act="ae-target-more">${ICON('dots', 'sm')}Specific lights…</button></div>
-    ${broken ? `<p class="d" style="margin:8px 0 0"><span class="odot"></span>Points at something that is gone. Pick again.</p>` : sel.length > 1 ? `<p class="d" style="margin:8px 0 0">${esc(cap(targetName(packTarget(sel))))}</p>` : ''}`;
-  const chk = `<span class="chk">${ICON('check', 'sm')}</span>`;
-  const list = AUTO_RECIPES.filter(x => recipeApplies(x, L, Sh)).map(x => `<button class="item recipe ${rid === x.id ? 'sel' : ''}" data-act="ae-recipe" data-r="${x.id}"><div class="grow"><div class="t">${x.t}</div>${x.d ? `<div class="d">${x.d}</div>` : ''}</div>${rid === x.id ? chk : ''}</button>`).join('');
-  const custom = rid === 'custom' ? `<div class="tip" style="margin-top:12px"><div class="grow"><span class="cap">Custom</span><div class="t">${esc(describe(sc.actions))}</div></div></div>` : '';
-  const what = `<div class="h2">What should happen?</div><div class="card pad0 list">${list}</div>${custom}`;
-  const days = `<div class="h2">Which days?</div>${daysHTML(sc.days, 'ae', AE.dayWarn)}`;
+  const lightsBody = `${targetChipsHTML(sel, 'ae-target', 'ae-target-more')}${broken ? `<p class="d" style="margin:8px 0 0"><span class="odot"></span>Points at something that is gone. Pick again.</p>` : ''}`;
+  const rows = valueRow('Which lights?', esc(cap(targetName(packTarget(sel)))), 'ae-exp', 'data-k="L"', { open: AE.exp.L, sub: broken ? '<span class="odot"></span>Points at something that is gone' : '' }) + (AE.exp.L ? `<div class="vrow-body">${lightsBody}</div>` : '')
+    + valueRow('What happens', r ? esc(r.t) : 'Custom', 'ae-what')
+    + valueRow('Which days?', esc(daysText(sc.days)), 'ae-exp', 'data-k="D"', { open: AE.exp.D }) + (AE.exp.D ? `<div class="vrow-body">${daysHTML(sc.days, 'ae', AE.dayWarn)}</div>` : '');
+  const body = `<div class="card pad0 list" style="margin-top:8px">${rows}</div>`;
   const actions = `<div class="stack" style="margin-top:24px"><button class="btn block" data-act="ae-try">${ICON('play', 'sm')} Try it now</button>${inCfg ? `<button class="btn block" data-act="ae-skip">${esc(skipLabel(sc))}</button>` : ''}</div>
-    <div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="ae-more"><div class="grow"><div class="t">More options</div><div class="d">Name, skip it when, fade, fine-tune, delete</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+    <div style="margin-top:16px">${moreRow('Name, skip it when, fade, fine-tune, delete', 'ae-more')}</div>`;
   const foot = `<div class="sfoot"><button class="btn primary lg block" data-act="ae-done" ${sc.at ? '' : 'disabled'}>Done</button></div>`;
-  showSheet('editor', title, `${when}${which}${what}${days}${actions}${foot}`, { sub });
+  showSheet('editor', title, `${when}${body}${actions}${foot}`, { sub });
+}
+// "What happens": the recipe list on its own sheet, back to the editor.
+function openWhatSheet() {
+  const sc = aeSc(); if (!sc) return;
+  const rid = autoRecipeOf(sc, AE.L, AE.Sh);
+  const custom = rid === 'custom' ? `<div class="tip" style="margin-top:12px"><div class="grow"><span class="cap">Custom</span><div class="t">${esc(describe(sc.actions))}</div></div></div>` : '';
+  showSheet('ae-what', 'What should happen?', `<div class="card pad0 list">${recipeRowsHTML(AE.L, AE.Sh, rid, 'ae-recipe')}</div>${custom}`, { sub: esc(cap(targetName(packTarget([...AE.L, ...AE.Sh])))), back: true, onBack: renderEditor });
+}
+
+// ---------- "Something else": the walk for a new automation (2.14) ----------
+let NW = null; // { L, Sh, rid, sceneAct, off, offAt, days, name, customName, dayWarn }
+const nwShades = () => !NW.L.length && NW.Sh.length > 0;
+function nwActions() { if (NW.sceneAct) return [NW.sceneAct]; const r = AUTO_RECIPES.find(x => x.id === NW.rid && recipeApplies(x, NW.L, NW.Sh)) || AUTO_RECIPES.find(x => recipeApplies(x, NW.L, NW.Sh)); return r ? r.mk(NW.L, NW.Sh) : []; }
+function nwLeavesOn() { return leavesOn(nwActions()); }
+function nwOffAt() {
+  const s = S.config.settings;
+  if (NW.off === 'bedtime') return { type: 'time', time: s.night_start, offset_min: 0 };
+  if (NW.off === 'sunrise') return { type: 'sunrise', time: null, offset_min: 0 };
+  if (NW.off === 'time' && NW.offAt) return NW.offAt;
+  return null;
+}
+function nwDraft() {
+  const sc = { id: uid(), name: '', enabled: true, at: whAt(), days: [...NW.days], actions: nwActions(), only_if: null, skip_until: null, kind: 'custom' };
+  const offAt = nwLeavesOn() ? nwOffAt() : null;
+  const off = offAt ? makePair(sc, offAt, NW.L, NW.Sh) : null;
+  sc.name = NW.customName && NW.name ? NW.name : autoName(sc, NW.L, NW.Sh, !!off);
+  if (off) off.name = sc.name;
+  return { sc, off };
+}
+// "Bedroom on, 20 minutes before sunset. Off at 10pm. Every day."
+function nwSentence() {
+  const { sc, off } = nwDraft();
+  const what = autoName(sc, NW.L, NW.Sh, false);
+  return `${what}, ${whenClause(sc.at)}. ${off ? `${off.actions.some(a => a.type === 'raise') ? 'Open' : 'Off'} ${whenClause(off.at)}. ` : ''}${daysText(NW.days)}.`;
+}
+function openNewAutoWalk() {
+  const room = lightRooms()[0]; const L = room ? [`a:${room.id}`] : ['h:all'];
+  NW = { L, Sh: [], rid: 'on', sceneAct: null, off: 'leave', offAt: null, days: [...ALL_DAYS], name: '', customName: false, dayWarn: false, nameOpen: false };
+  WH = { mode: 'at', type: 'time', time: '18:00', rel: 'at', mins: 20, render: renderSetup };
+  const s = S.config.settings;
+  walk({ key: 'newauto', state: NW, primary: 'Turn it on', onClose: () => { NW = null; WH = null; }, onDone: nwSave, steps: [
+    { id: 'lights', kind: 'multi', title: 'Which lights?', valid: () => NW.L.length + NW.Sh.length > 0, body: () => targetChipsHTML([...NW.L, ...NW.Sh], 'nw-target', 'nw-target-more') + (NW.L.length + NW.Sh.length > 1 ? `<p class="d" style="margin:8px 0 0">${esc(cap(targetName(packTarget([...NW.L, ...NW.Sh]))))}</p>` : '') },
+    { id: 'what', kind: 'pick', title: 'What should they do?', body: () => `<div class="card pad0 list">${AUTO_RECIPES.filter(x => recipeApplies(x, NW.L, NW.Sh)).map(x => pickRow(x.id, x.t, x.d || '', !NW.sceneAct && NW.rid === x.id)).join('')}</div>${NW.sceneAct ? `<p class="d" style="margin:8px 0 0">Runs the ${esc(targetName(NW.sceneAct.type === 'preset' ? 'p:' + NW.sceneAct.preset_id : 's:' + NW.sceneAct.scene_id))} scene</p>` : ''}`,
+      onPick: (w, rid) => { if (rid === 'scene') { openNwScenePicker(); return false; } NW.rid = rid; NW.sceneAct = null; } },
+    { id: 'when', kind: 'custom', title: 'When?', sub: 'Pick a clock time, or follow the sun.', next: 'Use this time', valid: () => WH.type === 'time' || !!S.config.settings.location, body: () => whenBodyHTML(WH) },
+    { id: 'off', kind: 'pick', title: () => nwShades() ? 'Then open again?' : 'Then turn off again?', skip: () => !nwLeavesOn(),
+      body: () => `<div class="card pad0 list">${pickRow('leave', nwShades() ? 'Leave them closed' : 'Leave them on', '', NW.off === 'leave')}${pickRow('bedtime', `At bedtime (${fmtTime(s.night_start)})`, '', NW.off === 'bedtime')}${pickRow('sunrise', 'At sunrise', '', NW.off === 'sunrise')}${pickRow('time', 'Pick a time…', NW.off === 'time' && NW.offAt ? cap(whenClause(NW.offAt)) : '', NW.off === 'time', ICON('clock'))}</div>`,
+      onPick: (w, v) => { if (v === 'time') { openNwOffTime(); return false; } NW.off = v; } },
+    { id: 'plan', kind: 'plan', body: w => {
+      const { sc } = nwDraft();
+      const days = walkValueRow(w, 'days', 'Which days?', esc(daysText(NW.days)), daysHTML(NW.days, 'nw', NW.dayWarn));
+      const name = valueRow('Name', esc(sc.name), 'nw-name', '', { open: NW.nameOpen }) + (NW.nameOpen ? `<div class="vrow-body"><input class="input" id="nw-name" value="${esc(NW.customName ? NW.name : sc.name)}" maxlength="60" aria-label="Name"></div>` : '');
+      return planHTML(esc(nwSentence()), days + name);
+    } },
+  ] });
+}
+function openNwScenePicker() {
+  const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.mood ? 'Room mood' : 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
+  NW.scenePick = items;
+  const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="nw-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="empty"><h3>No scenes yet</h3><p>Make one on the Scenes tab first.</p></div>`;
+  showSheet('nw-scene', 'Which scene?', body, { back: true, onBack: renderSetup });
+}
+// "Pick a time…" for the off pair: the When body on its own sheet, back to the walk.
+function openNwOffTime() {
+  const cur = NW.offAt;
+  NW.atWH = WH;
+  WH = { mode: 'off', type: cur ? cur.type : 'time', time: cur && cur.time ? cur.time : (S.config.settings.night_start || '22:00'), rel: cur && cur.offset_min ? (cur.offset_min < 0 ? 'before' : 'after') : 'at', mins: cur && cur.offset_min ? Math.abs(cur.offset_min) : 20, render: renderNwOffTime };
+  renderNwOffTime();
+}
+function renderNwOffTime() {
+  const canUse = WH.type === 'time' || !!S.config.settings.location;
+  const back = () => { WH = NW.atWH; renderSetup(); };
+  showSheet('nw-off', nwShades() ? 'Open again when?' : 'Turn off again when?', `${whenBodyHTML(WH)}<div class="sfoot"><button class="btn primary lg block" data-act="nw-off-use" ${canUse ? '' : 'disabled'}>Use this time</button></div>`, { sub: 'Pick a clock time, or follow the sun.', back: true, onBack: back });
+}
+function nwOffUse() { NW.offAt = whAt(); NW.off = 'time'; WH = NW.atWH; walkAdvance(WALK.cur); }
+function nwSave() {
+  if (!NW || !WALK.cur) return;
+  const { sc, off } = nwDraft();
+  const msg = nwSentence();
+  S.config.schedules.push(sc); if (off) S.config.schedules.push(off);
+  closeSheet(); goAutomations();
+  save({ msg });
 }
 
 // ---------- the When sheet (4.2) ----------
@@ -363,8 +429,9 @@ function openWhenSheet(mode) {
   renderWhenSheet();
 }
 function whAt() { const w = WH; return w.type === 'time' ? { type: 'time', time: w.time, offset_min: 0 } : { type: w.type, time: null, offset_min: w.rel === 'at' ? 0 : (w.rel === 'before' ? -w.mins : w.mins) }; }
-function renderWhenSheet() {
-  const w = WH; if (!w) return; const loc = S.config.settings.location;
+// The body of the When question: at a time, or around the sun; the location step inline when the sun needs it.
+function whenBodyHTML(w) {
+  const loc = S.config.settings.location;
   let body = `<div class="chips">${[['time', 'At a time'], ['sunset', 'Sunset'], ['sunrise', 'Sunrise']].map(([v, l]) => `<button class="chip ${w.type === v ? 'sel' : ''}" data-act="wh-type" data-v="${v}">${l}</button>`).join('')}</div>`;
   if (w.type === 'time') body += `<div class="when-time"><input type="time" class="time-big" id="wh-time" value="${w.time}" aria-label="Time"></div>`;
   else {
@@ -374,8 +441,14 @@ function renderWhenSheet() {
     body += `<p class="body" style="margin:16px 0 0">${cap(whenClause(at))}. ${hm ? `Today that's ${fmtTime(hm)}.` : loc ? "Today's time will show once your home is connected." : ''}</p>`;
     body += locationStepHTML();
   }
+  return body;
+}
+function renderWhenSheet() {
+  const w = WH; if (!w) return;
+  if (w.render) { w.render(); return; }  // the When body inside a walk or another sheet draws itself
+  const loc = S.config.settings.location;
   const canUse = w.type === 'time' || !!loc;
-  body += `<div class="sfoot"><button class="btn primary lg block" data-act="wh-use" ${canUse ? '' : 'disabled'}>Use this time</button>${w.mode === 'off' && aeOff() ? `<button class="btn ghost block" data-act="wh-leave">Leave them on</button>` : ''}</div>`;
+  const body = whenBodyHTML(w) + `<div class="sfoot"><button class="btn primary lg block" data-act="wh-use" ${canUse ? '' : 'disabled'}>Use this time</button>${w.mode === 'off' && aeOff() ? `<button class="btn ghost block" data-act="wh-leave">Leave them on</button>` : ''}</div>`;
   showSheet('when', w.mode === 'off' ? 'Turn off again when?' : 'When?', body, { sub: 'Pick a clock time, or follow the sun.', back: true, onBack: renderEditor });
 }
 function whUse() {
@@ -399,14 +472,20 @@ function locationStepHTML() {
   if (loc) { const hm = sunAt('sunset', 0); return `<p class="d" style="margin:12px 0 0">Near ${esc(loc.name || 'your home')}${hm ? ` · sunset today ${fmtTime(hm)}` : ''} <a data-act="loc-city" href="#">Change</a></p>`; }
   return `<div class="tip top" style="margin-top:16px"><div class="grow"><span class="cap">Location</span><div class="t">Where is your home?</div><div class="d">${LOC.denied ? "Your phone didn't share its location. Pick the nearest city instead." : "Sunset moves through the year, so the app needs to know roughly where you are. It's kept on your own hub."}</div><div class="row wrap" style="margin-top:12px"><button class="btn sm primary" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button><button class="btn ghost" data-act="loc-city">Pick the nearest city instead</button></div></div></div>`;
 }
+// The location question as a walk step's body: the title is the question, so only the sentence and the two ways to answer.
+function locationBodyHTML() {
+  return `<p class="body">${LOC.denied ? "Your phone didn't share its location. Pick the nearest city instead." : "Sunset moves through the year, so the app needs to know roughly where you are. It's kept on your own hub."}</p>
+    <div class="stack" style="margin-top:20px"><button class="btn primary lg block" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button><button class="btn ghost block" data-act="loc-city">Pick the nearest city instead</button></div>`;
+}
 // Whatever asked for the location is drawn again once it is known.
 function locRepaint() {
   if (WH && SHEET_KEY === 'when') renderWhenSheet();
-  else if (GS && SHEET_KEY === 'setup') renderSetup();
+  else if (WALK.cur && SHEET_KEY === WALK.cur.key) walkRender(WALK.cur);
+  else if (WH && WH.render && SHEET_KEY === 'nw-off') renderNwOffTime();
   else if (SHEET_KEY === 'city') { /* the picker closes itself */ }
   else if (!sheet.isOpen() || SHEET_KEY === null) render();
 }
-function locBack() { if (WH) renderWhenSheet(); else if (GS) renderSetup(); else { closeSheet(); render(); } }
+function locBack() { if (WALK.cur) { if (WH && WH.render === renderNwOffTime) renderNwOffTime(); else walkRender(WALK.cur); } else if (WH) renderWhenSheet(); else { closeSheet(); render(); } }
 function useMyLocation() {
   if (!navigator.geolocation) { LOC.denied = true; locRepaint(); return; }
   LOC.busy = true; locRepaint();
@@ -480,18 +559,45 @@ const OUTSIDE_RE = /outside|outdoor|porch|patio|garden|entry|hall|exterior|yard|
 const BEDROOM_RE = /bed|nursery|guest/i;
 const HALL_RE = /hall|entry|foyer|landing|stairs|mud/i;
 function roomMatches(t, re) { const aid = t.startsWith('a:') ? t.slice(2) : t.startsWith('d:') ? ((dev(t.slice(2)) || {}).area || 'none') : null; return !!aid && re.test(areaName(aid)); }
+// Each setup is a walk (docs/ux-progressive.md 2.16): one question per step, the plan at the end, saved by the plan's primary (`gs-save`).
 function openWelcomeSetup() {
   const pre = lightRooms().filter(a => OUTSIDE_RE.test(a.name)).map(a => `a:${a.id}`);
-  GS = { kind: 'welcome', targets: pre, shades: [], until: 'bedtime', untilTime: '22:00', low: false, level: 60, offset: 20, more: false };
-  sheet.onClose = () => { GS = null; SHEET_KEY = null; };
-  renderSetup();
+  GS = { kind: 'welcome', targets: pre, shades: [], until: 'bedtime', untilTime: '22:00', low: false, level: 60, offset: 20 };
+  const s = S.config.settings; const shades = () => controllable().filter(d => d.domain === 'cover');
+  walk({ key: 'setup', title: 'Welcome lights', sub: 'Lights on before you reach the door, off at bedtime.', state: GS, primary: 'Turn it on', doneAct: 'gs-save', onClose: () => { GS = null; }, steps: [
+    { id: 'targets', kind: 'multi', title: 'Which lights should come on before you get home?', valid: () => GS.targets.length > 0, body: () => {
+      const chipsT = [...GS.targets, ...lightRooms().map(a => `a:${a.id}`), 'h:all'].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
+      return `<div class="chips scroll">${chipsT.map(t => chip('gs-target', esc(cap(targetName(t))), GS.targets.includes(t), `data-t="${esc(t)}"`)).join('')}<button class="chip" data-act="gs-target-more">${ICON('dots', 'sm')}Specific lights…</button></div><p class="d" style="margin:8px 0 0">${GS.targets.length ? esc(cap(targetName(packTarget(GS.targets)))) : 'Pick at least one light'}</p>`;
+    } },
+    { id: 'shades', kind: 'multi', title: 'Close any shades too?', skip: () => !shades().length, body: () => `<div class="chips">${shades().map(d => chip('gs-shade', esc(d.name), GS.shades.includes(`d:${d.device_id}`), `data-t="d:${d.device_id}"`)).join('')}</div><p class="d" style="margin:8px 0 0">${GS.shades.length ? `${plural(GS.shades.length, 'shade')} close with the lights` : 'None: the shades stay as they are'}</p>` },
+    { id: 'until', kind: 'pick', title: 'Until when?', body: () => `<div class="card pad0 list">${pickRow('bedtime', `Bedtime (${fmtTime(s.night_start)})`, '', GS.until === 'bedtime')}${pickRow('sunrise', 'Sunrise', sunAt('sunrise') ? fmtTime(sunAt('sunrise')) + ' today' : '', GS.until === 'sunrise')}${pickRow('time', 'Pick a time…', '', GS.until === 'time')}</div>
+      ${GS.until === 'time' ? `<div class="when-time"><input type="time" class="time-big" id="gs-until-time" value="${GS.untilTime}" aria-label="Off at"></div>` : ''}
+      ${GS.targets.some(t => roomMatches(t, OUTSIDE_RE)) ? `<label class="check" style="margin-top:16px"><input type="checkbox" class="cb" id="gs-low" ${GS.low ? 'checked' : ''}><span>Leave the outside lights on low until morning</span></label>` : ''}`,
+      onPick: (w, v) => { GS.until = v; if (v === 'time') { walkRender(w); return false; } }, foot: w => GS.until === 'time' ? walkNextFoot('Next', true) : '' },
+    { id: 'loc', kind: 'custom', noNext: true, title: 'Where is your home?', skip: () => !!S.config.settings.location, body: locationBodyHTML },
+    { id: 'plan', kind: 'plan', body: w => planHTML(esc(welcomePreview(GS)),
+      walkValueRow(w, 'level', 'Brightness', `${GS.level}%`, `<div class="chips">${[40, 60, 80, 100].map(v => chip('gs-level', `${v}%`, GS.level === v, `data-v="${v}"`)).join('')}</div>`)
+      + walkValueRow(w, 'offset', 'Comes on', GS.offset ? `${GS.offset} minutes before sunset` : 'At sunset', `<div class="chips">${[0, 10, 20, 30, 45].map(v => chip('gs-offset', v ? `${v} min before` : 'At sunset', GS.offset === v, `data-v="${v}"`)).join('')}</div>`)) },
+  ] });
 }
+function wakeShade(g) { const lampD = g.lamp ? dev(g.lamp) : null; return lampD ? controllable().find(d => d.domain === 'cover' && (d.area || 'none') === (lampD.area || 'none')) : null; }
 function openWakeupSetup() {
   const beds = dimmers().filter(d => BEDROOM_RE.test(areaName(d.area)));
   const lamp = beds.find(d => /lamp/i.test(d.name)) || beds[0] || dimmers()[0];
-  GS = { kind: 'wakeup', lamp: lamp ? lamp.device_id : null, alarm: '06:30', days: [1, 2, 3, 4, 5], shade: false, minutes: 25, end: 50, dayWarn: false, more: false };
-  sheet.onClose = () => { GS = null; SHEET_KEY = null; };
-  renderSetup();
+  GS = { kind: 'wakeup', lamp: lamp ? lamp.device_id : null, alarm: '06:30', days: [1, 2, 3, 4, 5], shade: false, minutes: 25, end: 50, dayWarn: false };
+  walk({ key: 'setup', title: 'Wake-up light', sub: 'One lamp rises slowly from dark to soft, ending at the time you pick.', state: GS, primary: 'Turn it on', doneAct: 'gs-save', onClose: () => { GS = null; }, steps: [
+    { id: 'lamp', kind: 'pick', title: 'Which lamp should wake you?', skip: () => dimmers().length === 1, body: () => {
+      const lampD = GS.lamp ? dev(GS.lamp) : null; const shown = [...beds]; if (lampD && !shown.includes(lampD)) shown.unshift(lampD);
+      return `<div class="card pad0 list">${shown.map(d => pickRow(d.device_id, esc(d.name), esc(areaName(d.area)), GS.lamp === d.device_id, lampHTML(level(d.device_id) || 0, 28, ''))).join('')}<button class="item" data-act="gs-lamp-more">${ICON('dots')}<div class="grow"><div class="t">Another light…</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+    }, onPick: (w, v) => { GS.lamp = v; } },
+    { id: 'alarm', kind: 'time', title: 'What time do you wake up?', sub: () => `It starts ${GS.minutes} minutes before, so it's soft by then.`, valid: () => GS.days.length > 0, body: () => `<div class="when-time" style="margin-top:8px"><input type="time" class="time-big" id="gs-alarm" value="${GS.alarm}" aria-label="Wake up at"></div><div class="h2">Which days?</div>${daysHTML(GS.days, 'gs', GS.dayWarn)}` },
+    { id: 'shade', kind: 'pick', title: 'Open the shade too?', sub: () => { const sh = wakeShade(GS); return sh ? esc(sh.name) : ''; }, skip: () => !wakeShade(GS), body: () => `<div class="card pad0 list">${pickRow('yes', 'Yes, at the time I wake', '', GS.shade)}${pickRow('no', 'No', '', !GS.shade)}</div>`, onPick: (w, v) => { GS.shade = v === 'yes'; } },
+    { id: 'plan', kind: 'plan', body: w => planHTML(esc(wakeupPreview(GS)),
+      valueRow('Which lamp?', esc((dev(GS.lamp) || {}).name || 'Pick a lamp'), 'walk-goto', 'data-id="lamp"')
+      + valueRow('Wakes you at', `${fmtTime(GS.alarm)} · ${esc(daysText(GS.days))}`, 'walk-goto', 'data-id="alarm"')
+      + walkValueRow(w, 'minutes', 'Takes', `${GS.minutes} minutes`, `<div class="chips">${[15, 25, 40].map(v => chip('gs-minutes', `${v} minutes`, GS.minutes === v, `data-v="${v}"`)).join('')}</div>`)
+      + walkValueRow(w, 'end', 'Ends at', `${GS.end}%`, `<div class="chips">${[30, 50, 70].map(v => chip('gs-end', `${v}%`, GS.end === v, `data-v="${v}"`)).join('')}</div>`)) },
+  ] });
 }
 function openButtonsSetup() {
   const rs = remotes(); if (!rs.length) return;
@@ -502,39 +608,36 @@ function openButtonsSetup() {
   const hallLights = controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && HALL_RE.test(areaName(d.area)));
   const door = hallLights[0] || controllable().find(d => d.domain === 'light' || d.domain === 'switch');
   const pathT = path ? [`g:${path.id}`] : hallRooms.length ? [`a:${hallRooms[0].id}`] : (lightRooms()[0] ? [`a:${lightRooms()[0].id}`] : []);
-  GS = { kind: 'buttons', gn: { on: true, remote: bedRemote.device_id, button: defaultHoldButton(bedRemote), path: pathT }, lv: { on: true, remote: hallRemote.device_id, button: defaultHoldButton(hallRemote), door: door ? `d:${door.device_id}` : null } };
-  sheet.onClose = () => { GS = null; SHEET_KEY = null; };
-  renderSetup();
+  const same = hallRemote.device_id === bedRemote.device_id;
+  GS = { kind: 'buttons', gn: { on: true, remote: bedRemote.device_id, button: defaultHoldButton(bedRemote), path: pathT }, lv: { on: true, remote: hallRemote.device_id, button: defaultHoldButton(hallRemote, same ? defaultHoldButton(bedRemote) : null), door: door ? `d:${door.device_id}` : null } };
+  const remoteRows = (key, skipLabel) => { const cur = GS[key]; const sorted = [...rs].sort((a, b) => (a.device_id === (key === 'gn' ? bedRemote : hallRemote).device_id ? -1 : b.device_id === (key === 'gn' ? bedRemote : hallRemote).device_id ? 1 : 0)); return `<div class="card pad0 list">${sorted.map(d => pickRow(d.device_id, esc(d.name), esc(areaName(d.area)), cur.on && cur.remote === d.device_id, `<div class="remote-thumb">${picoArt(d, { width: 40 })}</div>`)).join('')}${pickRow('skip', skipLabel, '', !cur.on, ICON('x'))}</div>`; };
+  const pickRemote = (key, v) => { if (v === 'skip') { GS[key].on = false; return; } GS[key].on = true; GS[key].remote = v; GS[key].button = defaultHoldButton(dev(v), key === 'lv' && GS.gn.on && GS.gn.remote === v ? GS.gn.button : null); };
+  const doorLights = () => controllable().filter(d => d.domain === 'light' || d.domain === 'switch').sort((a, b) => (HALL_RE.test(areaName(b.area)) ? 1 : 0) - (HALL_RE.test(areaName(a.area)) ? 1 : 0));
+  // the chosen button first, so "Hold Off" is in view on a five-button remote
+  const buttonChips = (act, pid, cur) => { const d = dev(pid); if (!d) return ''; const ns = picoSlots(d).filter(s => s.real).map(s => s.n).sort((a, b) => (a === cur ? -1 : b === cur ? 1 : a - b)); return `<div class="chips scroll">${ns.map(n => chip(act, `Hold ${esc(buttonLabel(pid, n))}`, cur === n, `data-n="${n}"`)).join('')}</div>`; };
+  const replaces = (pid, n) => { const acts = gestureActions(pid, n, 'hold'); return acts.length ? `<p class="d" style="margin:8px 0 0">This replaces: ${esc(describe(acts))}</p>` : ''; };
+  const holdName = k => `Hold ${esc(buttonLabel(GS[k].remote, GS[k].button))} on the ${esc(dev(GS[k].remote).name)}`;
+  walk({ key: 'setup', title: 'Goodnight and Leaving', sub: 'One hold shuts the house down and leaves one light on for a moment.', state: GS, primary: 'Set up the buttons', doneAct: 'gs-save', onClose: () => { GS = null; }, steps: [
+    { id: 'gnRemote', kind: 'pick', title: 'Which remote is by your bed?', sub: 'Holding a button on it will be Goodnight.', skip: () => rs.length === 1, body: () => remoteRows('gn', 'Skip Goodnight'), onPick: (w, v) => pickRemote('gn', v) },
+    { id: 'gnPath', kind: 'multi', title: 'Which lights light the way to bed?', sub: 'They stay dim for two minutes after everything else goes off.', skip: () => !GS.gn.on, body: () => { const gnLights = [...GS.gn.path, ...groups().filter(x => /night path/i.test(x.name)).map(x => `g:${x.id}`), ...lightRooms().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v)); return `<div class="chips scroll">${gnLights.map(t => chip('gs-gn-path', esc(cap(targetName(t))), GS.gn.path.includes(t), `data-t="${esc(t)}"`)).join('')}</div><p class="d" style="margin:8px 0 0">${GS.gn.path.length ? esc(cap(targetName(packTarget(GS.gn.path)))) : 'None: everything goes off at once'}</p>`; } },
+    { id: 'lvRemote', kind: 'pick', title: 'Which remote is by the door you leave from?', sub: 'Holding a button on it will be Leaving.', skip: () => rs.length === 1, body: () => remoteRows('lv', 'Skip Leaving'), onPick: (w, v) => pickRemote('lv', v) },
+    { id: 'lvDoor', kind: 'pick', title: 'Which light is by that door?', sub: 'It stays on for two minutes after everything else goes off.', skip: () => !GS.lv.on, body: () => `<div class="card pad0 list">${doorLights().map(d => pickRow(`d:${d.device_id}`, esc(d.name), esc(areaName(d.area)), GS.lv.door === `d:${d.device_id}`, lampHTML(level(d.device_id) || 0, 28, ''))).join('')}</div>`, onPick: (w, v) => { GS.lv.door = v; } },
+    { id: 'plan', kind: 'plan', valid: () => (GS.gn.on && GS.gn.remote) || (GS.lv.on && GS.lv.remote), body: w => planHTML(esc(buttonsPreview(GS)),
+      (GS.gn.on ? walkValueRow(w, 'gn', 'Goodnight button', holdName('gn'), buttonChips('gs-gn-button', GS.gn.remote, GS.gn.button) + replaces(GS.gn.remote, GS.gn.button)) : valueRow('Goodnight button', 'Skipped', 'walk-goto', 'data-id="gnRemote"'))
+      + (GS.lv.on ? walkValueRow(w, 'lv', 'Leaving button', holdName('lv'), buttonChips('gs-lv-button', GS.lv.remote, GS.lv.button) + replaces(GS.lv.remote, GS.lv.button)) : valueRow('Leaving button', 'Skipped', 'walk-goto', 'data-id="lvRemote"'))) },
+  ] });
 }
-function defaultHoldButton(d) { const real = picoSlots(d).filter(s => s.real).map(s => s.n); return real.includes(2) ? 2 : real[real.length - 1]; }
+// The bottom (Off) button, or the last real one; `avoid` keeps Leaving off the button Goodnight already took on the same remote.
+function defaultHoldButton(d, avoid = null) { const real = picoSlots(d).filter(s => s.real).map(s => s.n); const order = [2, ...real.slice().reverse()]; return order.find(n => real.includes(n) && n !== avoid) ?? real[real.length - 1]; }
 function chip(act, label, sel, data = '') { return `<button class="chip ${sel ? 'sel' : ''}" data-act="${act}" ${data}>${sel ? ICON('check', 'sm') : ''}${label}</button>`; }
-function renderSetup() {
-  const g = GS; if (!g) return;
-  if (g.kind === 'welcome') return renderWelcome(g);
-  if (g.kind === 'wakeup') return renderWakeup(g);
-  return renderButtons(g);
-}
+// The setups and the new-automation walk redraw through the walk; anything that changes their state calls this.
+function renderSetup() { if (WALK.cur) walkRender(WALK.cur); }
 function welcomePreview(g) {
   if (!g.targets.length) return 'Pick at least one light.';
   const s = S.config.settings; const onHm = sunAt('sunset', -g.offset);
   const off = g.until === 'bedtime' ? `at ${fmtTime(s.night_start)}` : g.until === 'sunrise' ? `at sunrise${sunAt('sunrise') ? ` (${fmtTime(sunAt('sunrise'))})` : ''}` : `at ${fmtTime(g.untilTime)}`;
   const rel = g.offset ? `${g.offset} minutes before sunset` : 'at sunset';
   return onHm ? `Today: on at ${fmtTime(onHm)}, ${rel}. Off ${off}.` : `On ${rel}. Off ${off}.`;
-}
-function renderWelcome(g) {
-  const s = S.config.settings; const loc = s.location;
-  const chipsT = [...g.targets, ...lightRooms().map(a => `a:${a.id}`), 'h:all'].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
-  let body = `<div class="h2">Which lights come on?</div><div class="chips scroll">${chipsT.map(t => chip('gs-target', esc(cap(targetName(t))), g.targets.includes(t), `data-t="${esc(t)}"`)).join('')}<button class="chip" data-act="gs-target-more">${ICON('dots', 'sm')}Specific lights…</button></div>`;
-  const shades = controllable().filter(d => d.domain === 'cover');
-  if (shades.length) body += `<div class="h2">Close any shades?</div><div class="chips">${shades.map(d => chip('gs-shade', esc(d.name), g.shades.includes(`d:${d.device_id}`), `data-t="d:${d.device_id}"`)).join('')}</div>`;
-  body += `<div class="h2">Until when?</div><div class="chips">${chip('gs-until', `Bedtime (${fmtTime(s.night_start)})`, g.until === 'bedtime', 'data-v="bedtime"')}${chip('gs-until', 'Sunrise', g.until === 'sunrise', 'data-v="sunrise"')}${chip('gs-until', 'Pick a time', g.until === 'time', 'data-v="time"')}</div>`;
-  if (g.until === 'time') body += `<div class="when-time"><input type="time" class="time-big" id="gs-until-time" value="${g.untilTime}" aria-label="Off at"></div>`;
-  if (g.targets.some(t => roomMatches(t, OUTSIDE_RE))) body += `<label class="check" style="margin-top:16px"><input type="checkbox" class="cb" id="gs-low" ${g.low ? 'checked' : ''}><span>Leave the outside lights on low until morning</span></label>`;
-  if (!loc) body += locationStepHTML();
-  body += `<div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">Preview</span><div class="t">${esc(welcomePreview(g))}</div></div></div>`;
-  body += `<details class="more" data-more="1" ${g.more ? 'open' : ''}><summary>More options${ICON('chev', 'sm')}</summary><div><p class="d" style="margin:0 0 6px">Brightness ${g.level}%</p><div class="chips">${[40, 60, 80, 100].map(v => chip('gs-level', `${v}%`, g.level === v, `data-v="${v}"`)).join('')}</div><p class="d" style="margin:12px 0 6px">Comes on: ${g.offset ? `${g.offset} minutes before sunset` : 'at sunset'}</p><div class="chips">${[0, 10, 20, 30, 45].map(v => chip('gs-offset', v ? `${v} min before` : 'At sunset', g.offset === v, `data-v="${v}"`)).join('')}</div></div></details>`;
-  body += `<div class="sfoot"><button class="btn primary lg block" data-act="gs-save" ${g.targets.length && loc ? '' : 'disabled'}>Turn it on</button></div>`;
-  showSheet('setup', 'Welcome lights', body, { sub: 'Lights on before you reach the door, off at bedtime.' });
 }
 function saveWelcome(g) {
   const s = S.config.settings; if (!g.targets.length || !s.location) return;
@@ -559,22 +662,9 @@ function wakeupPreview(g) {
   if (!g.lamp) return 'Pick a lamp.';
   return `Starts at ${fmtTime(hmAdd(g.alarm, -g.minutes))}, reaches ${g.end}% by ${fmtTime(g.alarm)}. Skipped if the lamp is already on.`;
 }
-function renderWakeup(g) {
-  const beds = dimmers().filter(d => BEDROOM_RE.test(areaName(d.area)));
-  const lampD = g.lamp ? dev(g.lamp) : null;
-  const shown = [...beds]; if (lampD && !shown.includes(lampD)) shown.unshift(lampD);
-  let body = `<div class="h2">Which lamp?</div><div class="chips scroll">${shown.map(d => chip('gs-lamp', esc(d.name), g.lamp === d.device_id, `data-id="${d.device_id}"`)).join('')}<button class="chip" data-act="gs-lamp-more">${ICON('dots', 'sm')}Another light…</button></div>`;
-  body += `<div class="h2">Wake up at</div><div class="when-time"><input type="time" class="time-big" id="gs-alarm" value="${g.alarm}" aria-label="Wake up at"></div>`;
-  body += `<div class="h2">Which days?</div>${daysHTML(g.days, 'gs', g.dayWarn)}`;
-  const shade = lampD ? controllable().find(d => d.domain === 'cover' && (d.area || 'none') === (lampD.area || 'none')) : null;
-  if (shade) body += `<div class="card pad0 list" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">Open the shade too</div><div class="d">${esc(shade.name)}, at the time you wake</div></div><button class="sw ${g.shade ? 'on' : ''}" data-act="gs-shade-tgl" aria-label="Open the shade too"></button></div></div>`;
-  body += `<div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">Preview</span><div class="t">${esc(wakeupPreview(g))}</div></div></div>`;
-  body += `<details class="more" data-more="1" ${g.more ? 'open' : ''}><summary>More options${ICON('chev', 'sm')}</summary><div><p class="d" style="margin:0 0 6px">Takes</p><div class="chips">${[15, 25, 40].map(v => chip('gs-minutes', `${v} minutes`, g.minutes === v, `data-v="${v}"`)).join('')}</div><p class="d" style="margin:12px 0 6px">Ends at</p><div class="chips">${[30, 50, 70].map(v => chip('gs-end', `${v}%`, g.end === v, `data-v="${v}"`)).join('')}</div></div></details>`;
-  body += `<div class="sfoot"><button class="btn primary lg block" data-act="gs-save" ${g.lamp ? '' : 'disabled'}>Turn it on</button></div>`;
-  showSheet('setup', 'Wake-up light', body, { sub: 'One lamp rises slowly from dark to soft, ending at the time you pick.' });
-}
+// "Another light…": every dimmer in the house, as a sub-step of the wake-up walk; picking one answers the step.
 function openLampPicker() {
-  const rows = lightRooms().map(a => { const ds = dimmers().filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="gs-lamp-pick" data-id="${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${GS.lamp === d.device_id ? ICON('check', 'sm') : ''}</button>`).join('')}</div>`; }).join('');
+  const rows = lightRooms().map(a => { const ds = dimmers().filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="gs-lamp-pick" data-id="${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${GS.lamp === d.device_id ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
   showSheet('lamp', 'Which light?', rows || '<div class="empty"><p>No dimmable lights found.</p></div>', { sub: 'A dimmer, so it can rise slowly.', back: true, onBack: renderSetup });
 }
 function saveWakeup(g) {
@@ -597,23 +687,6 @@ function buttonsPreview(g) {
   if (!parts.length) return 'Turn on at least one of the two.';
   if (hasFans() || hasShades()) parts.push(hasFans() && hasShades() ? 'Fans stop and shades close.' : hasFans() ? 'Fans stop.' : 'Shades close.');
   return parts.join(' ');
-}
-function renderButtons(g) {
-  const rs = remotes();
-  const remoteChips = (act, cur) => `<div class="chips scroll">${rs.map(d => chip(act, esc(d.name), cur === d.device_id, `data-id="${d.device_id}"`)).join('')}</div>`;
-  // the chosen button first, so "Hold Off" is in view on a five-button remote
-  const buttonChips = (act, pid, cur) => { const d = dev(pid); if (!d) return ''; const ns = picoSlots(d).filter(s => s.real).map(s => s.n).sort((a, b) => (a === cur ? -1 : b === cur ? 1 : a - b)); return `<div class="chips scroll">${ns.map(n => chip(act, `Hold ${esc(buttonLabel(pid, n))}`, cur === n, `data-n="${n}"`)).join('')}</div>`; };
-  const replaces = (pid, n) => { const acts = gestureActions(pid, n, 'hold'); return acts.length ? `<p class="d" style="margin:8px 0 0">This replaces: ${esc(describe(acts))}</p>` : ''; };
-  const card = (key, title, sub, inner) => `<div class="card"><div class="row"><div class="grow"><div class="t">${title}</div><div class="d">${sub}</div></div><button class="sw ${g[key].on ? 'on' : ''}" data-act="gs-card" data-k="${key}" aria-label="Set this up"></button></div>${g[key].on ? inner : ''}</div>`;
-  const gnLights = [...g.gn.path, ...groups().filter(x => /night path/i.test(x.name)).map(x => `g:${x.id}`), ...lightRooms().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
-  const gn = `<p class="d" style="margin:12px 0 6px">Which remote?</p>${remoteChips('gs-gn-remote', g.gn.remote)}<p class="d" style="margin:12px 0 6px">Which button?</p>${buttonChips('gs-gn-button', g.gn.remote, g.gn.button)}${replaces(g.gn.remote, g.gn.button)}<p class="d" style="margin:12px 0 6px">Which lights light the way to bed?</p><div class="chips scroll">${gnLights.map(t => chip('gs-gn-path', esc(cap(targetName(t))), g.gn.path.includes(t), `data-t="${esc(t)}"`)).join('')}</div>`;
-  const doorLights = controllable().filter(d => d.domain === 'light' || d.domain === 'switch').sort((a, b) => (HALL_RE.test(areaName(b.area)) ? 1 : 0) - (HALL_RE.test(areaName(a.area)) ? 1 : 0));
-  const lv = `<p class="d" style="margin:12px 0 6px">Which remote?</p>${remoteChips('gs-lv-remote', g.lv.remote)}<p class="d" style="margin:12px 0 6px">Which button?</p>${buttonChips('gs-lv-button', g.lv.remote, g.lv.button)}${replaces(g.lv.remote, g.lv.button)}<p class="d" style="margin:12px 0 6px">Which light is by the door?</p><div class="chips scroll">${doorLights.map(d => chip('gs-lv-door', esc(d.name), g.lv.door === `d:${d.device_id}`, `data-t="d:${d.device_id}"`)).join('')}</div>`;
-  let body = `<div class="stack" style="margin-top:8px">${card('gn', 'Goodnight', 'Set this up', gn)}${card('lv', 'Leaving', 'Set this up', lv)}</div>`;
-  body += `<div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">Preview</span><div class="t">${esc(buttonsPreview(g))}</div></div></div>`;
-  const ok = (g.gn.on && g.gn.remote) || (g.lv.on && g.lv.remote);
-  body += `<div class="sfoot"><button class="btn primary lg block" data-act="gs-save" ${ok ? '' : 'disabled'}>Set up the buttons</button></div>`;
-  showSheet('setup', 'Goodnight and Leaving', body, { sub: 'One hold on a remote shuts the house down and leaves one light on for a moment.' });
 }
 // Everything off, one light kept (dim, or on) for two minutes, fans and shades when the house has them.
 function shutdownActions(keep, mode) {
@@ -668,15 +741,24 @@ function curveLevelNow() {
 function windDownCaption() {
   const s = S.config.settings; const { wd } = wdSettings();
   if (!s.location) return `Without your home's location, dimming starts at ${fmtTime(wd.earliest || '18:00')}. <a data-act="loc-use" href="#">Use my location</a>`;
-  return `Dimming starts after sunset and is lowest here. From then until ${fmtTime(s.night_end)}, on means ${s.night_level}%. Early mornings are soft too.`;
+  return `Dimming starts after sunset and is lowest here. From then until ${fmtTime(s.night_end)}, on means ${s.night_level}%. Early mornings are soft too. This is also when night starts for your remotes.`;
 }
-function windDownCardHTML() {
+// The Automations tab's row (2.12): the toggle at the right, the sheet behind the row itself.
+function windDownRowHTML() {
   const s = S.config.settings; const { ad } = wdSettings(); const on = !!ad.enabled;
-  return `<div class="card wd"><div class="row"><div class="grow"><div class="t">Evening wind-down</div></div><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div>
-    <p class="body" style="margin:8px 0 0">As the evening goes on, lights you turn on come on a little dimmer, so the house feels calmer late. Set a level yourself and it stays.</p>
-    ${on ? `<div class="row" style="margin-top:16px"><div class="grow"><div class="t">When does the house go quiet?</div></div><input type="time" class="wd-time" value="${s.night_start}" data-wd="night_start" aria-label="When does the house go quiet?"></div>
+  const sub = on ? `Quiet from ${fmtTime(s.night_start)} · lights come on dimmer as the evening goes on.` : 'Lights you turn on come on a little dimmer late in the evening.';
+  return `<div class="card pad0 list wd"><div class="item"><button class="auto-main" data-act="wd-open"><div class="grow"><div class="t">Evening wind-down</div><div class="d">${esc(sub)}</div></div></button><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div></div>`;
+}
+const windDownCardHTML = windDownRowHTML;
+// The wind-down sheet (2.15): the toggle, the sentence, and when on the quiet time, its caption and the Advanced row.
+function openWindDownSheet() {
+  const s = S.config.settings; const { ad } = wdSettings(); const on = !!ad.enabled;
+  const body = `<div class="card pad0 list wd"><div class="item"><div class="grow"><div class="t">Evening wind-down</div><div class="d">${on ? 'On' : 'Off'}</div></div><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div></div>
+    <p class="body" style="margin:16px 0 0">As the evening goes on, lights you turn on come on a little dimmer, so the house feels calmer late. Set a level yourself and it stays.</p>
+    ${on ? `<div class="card pad0 list wd" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">When does the house go quiet?</div></div><input type="time" class="wd-time" value="${s.night_start}" data-wd="night_start" aria-label="When does the house go quiet?"></div></div>
     <p class="d" id="wd-cap" style="margin:8px 0 0">${windDownCaption()}</p>
-    <button class="btn ghost" data-act="wd-advanced" style="margin-top:8px">Advanced: change the levels</button>` : ''}</div>`;
+    <div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="wd-advanced"><div class="grow"><div class="t">Advanced: change the levels</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>` : ''}`;
+  showSheet('wd', 'Evening wind-down', body, { top: true, grow: true });
 }
 // The Home caption while the curve is below full.
 function windDownCaptionHTML() {
@@ -708,8 +790,9 @@ function openWindDownAdvanced() {
   </div>
   <div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">Today</span><div class="t" id="wd-today">${esc(todaySentence())}</div></div></div>
   <div class="card pad0 list" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">Also gently lower lights nobody has touched for 20 minutes</div><div class="d">Over a minute, only lights above the curve. Turn it off if it ever fights you.</div></div><button class="sw ${wd.nudge ? 'on' : ''}" data-act="wd-nudge" aria-label="Gently lower untouched lights"></button></div>
-    <button class="item" data-act="wd-curve"><div class="grow"><div class="t">Curve by the hour</div><div class="d">Set the level for each time of day yourself</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
-  showSheet('wd-adv', 'Evening wind-down', body, { sub: 'The numbers behind the curve. Task lights (counters, desks, mirrors) are never dimmed, and pressing a top button twice is always full brightness.' });
+    <button class="item" data-act="wd-curve"><div class="grow"><div class="t">Curve by the hour</div><div class="d">Set the level for each time of day yourself</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>
+  <p class="d" style="margin:16px 0 0">Task lights (counters, desks, mirrors) are never dimmed. Pressing a top button twice is always full brightness.</p>`;
+  showSheet('wd-adv', 'Evening wind-down', body, { sub: 'The numbers behind the curve.', back: true, onBack: openWindDownSheet });
 }
 function wdSet(k, v) {
   const s = S.config.settings; const { wd } = wdSettings(); v = Number(v);
@@ -766,10 +849,10 @@ function renderRolesSheet() {
   const { aid, roles } = RS; const ds = roomLights(aid); const has = roomHasMoods(aid);
   const rows = ds.map(d => `<div class="item" style="flex-wrap:wrap"><div class="grow"><div class="t">${esc(d.name)}</div>${d.domain === 'switch' ? '<div class="d">On or off only: on in Bright, off in the others.</div>' : ''}</div><div class="chips" style="flex-basis:100%;margin-top:6px">${ROLE_CHIPS.map(([r, l]) => `<button class="chip ${roles[d.device_id] === r ? 'sel' : ''}" data-act="rl-pick" data-id="${d.device_id}" data-r="${r}">${l}</button>`).join('')}</div></div>`).join('');
   const walk = RS.walk; const nextAid = walk ? walk[walk.indexOf(aid) + 1] : null;
-  const body = `<p class="d">Main is the ceiling. Task is where hands work: counters, desks, mirrors. Lamps are lamps, sconces and anything for atmosphere. Decor is lit to be looked at: a lit shelf, cabinet interiors, string lights.</p>
+  const body = `<p class="d">Main is the ceiling light. Task is where hands work. Lamps are for atmosphere. Decor is lit to be looked at.</p>
     <div class="card pad0 list" style="margin-top:12px">${rows}</div>
     <div class="sfoot"><button class="btn primary lg block" data-act="rl-make">${has ? 'Update moods' : 'Make moods'}</button>${walk ? `<button class="btn ghost block" data-act="rl-skip">${nextAid ? `Next: ${esc(areaName(nextAid))}` : 'Skip this room'}</button>` : ''}</div>`;
-  showSheet('roles', `What kind of light is each one in the ${esc(areaName(aid))}?`, body, { sub: 'We guessed from the names. Fix any that are wrong.', back: !!RS.back, onBack: RS.back });
+  showSheet('roles', `What kind of light is each one in the ${esc(areaName(aid))}?`, body, { sub: 'We guessed from the names. Fix any that are wrong.', back: !!RS.back, onBack: RS.back, cap: walk ? `Room ${walk.indexOf(aid) + 1} of ${walk.length}` : '', top: true });
 }
 function rolesMake() {
   const { aid, roles, walk } = RS; const s = S.config.settings; s.roles = s.roles || {};
@@ -787,13 +870,8 @@ function rolesAdvance(walk, aid, msg) {
   if (msg) save({ msg });
   if (after) setTimeout(after, msg ? 0 : 350);
 }
+// Rooms the moods walk visits: every room with two or more lights. (The Home tip that offered it is now the Next card, next.js.)
 function moodsWalkRooms() { return lightRooms().filter(a => roomLights(a.id).length >= 2).map(a => a.id); }
-function moodsTipHTML() {
-  if (lightRooms().some(a => roomHasMoods(a.id))) return '';
-  const walk = moodsWalkRooms(); if (!walk.length) return '';
-  try { if (localStorage.getItem('moodsTipDismissed')) return ''; } catch (_) { /* ignore */ }
-  return `<div class="spacer"></div><div class="tip top" id="moodstip"><div class="grow"><span class="cap">Moods</span><div class="t">Give your rooms moods</div><div class="d">Say which lights are lamps and which is the main light, and each room gets Bright, Relax, Dinner, Movie and Night.</div><button class="btn ghost" data-act="moods-dismiss">${ICON('x', 'sm')} Not now</button></div><button class="go" data-act="moods-walk" title="Start with ${esc(areaName(walk[0]))}">${ICON('chev')}</button></div>`;
-}
 // The Scenes tab's "Room moods" section: one row per room that has them.
 function roomMoodsSectionHTML() {
   const rooms = lightRooms().filter(a => roomHasMoods(a.id)); if (!rooms.length) return '';
@@ -802,7 +880,7 @@ function roomMoodsSectionHTML() {
 function openRoomMoodsSheet(aid) {
   const ps = roomMoodPresets(aid); const ch = ps.filter(p => p.edited).length;
   const rows = ps.map(p => { const m = moodById(p.mood); return `<div class="item"><button class="ic" data-act="run-scene" data-t="p:${p.id}" title="Run">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${p.edited ? 'Changed by you' : 'Suggested'} · ${plural(Object.keys(p.levels).length, 'light')}</div></div><button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}" title="Edit">${ICON('edit', 'sm')}</button></div>`; }).join('');
-  const body = `<div class="card pad0 list">${rows}</div><div class="stack" style="margin-top:16px"><button class="btn block" data-act="rl-open" data-area="${aid}">Change what each light is for</button></div>`;
+  const body = `<div class="card pad0 list">${rows}</div><div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="rl-open" data-area="${aid}">${ICON('dots')}<div class="grow"><div class="t">Change what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   showSheet('roommoods', `${esc(areaName(aid))} moods`, body, { sub: `${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}` });
 }
 
@@ -820,12 +898,22 @@ document.addEventListener('click', e => {
     case 'tz-keep': try { localStorage.setItem('tzKeep', `${S.config.settings.timezone}|${phoneTZ()}`); } catch (_) { /* ignore */ } render(); break;
     case 'tz-phone': S.config.settings.timezone = phoneTZ(); save({ msg: `Following this phone's clock` }); break;
     // the editor
-    case 'ae-new': openEditor(null); break;
+    case 'ae-new': openNewAutoWalk(); break;
     case 'ae-when': openWhenSheet('at'); break;
     case 'ae-off': openWhenSheet('off'); break;
+    case 'ae-exp': AE.exp[d.k] = !AE.exp[d.k]; renderEditor(); break;
+    case 'ae-what': openWhatSheet(); break;
     case 'ae-target': aeToggleTarget(d.t); break;
     case 'ae-target-more': openTargetPicker([...AE.L, ...AE.Sh], list => { const { L, Sh } = splitT(list); aeSetTargets(L, Sh); }, renderEditor, { shades: true }); break;
     case 'ae-recipe': aeApplyRecipe(d.r); break;
+    // the new-automation walk
+    case 'nw-target': { const all = [...NW.L, ...NW.Sh]; const i = all.indexOf(d.t); const next = i >= 0 ? all.filter(x => x !== d.t) : normalizeTargets([...all, d.t], d.t); const { L, Sh } = splitT(next); NW.L = L; NW.Sh = Sh; renderSetup(); break; }
+    case 'nw-target-more': SHEET_KEY = 'nw-pick'; openTargetPicker([...NW.L, ...NW.Sh], list => { const { L, Sh } = splitT(list); NW.L = L; NW.Sh = Sh; renderSetup(); }, renderSetup, { shades: true }); break;
+    case 'nw-scene': { const it = NW.scenePick[Number(d.i)]; if (!it) break; NW.sceneAct = it.a; NW.rid = 'scene'; walkAdvance(WALK.cur); break; }
+    case 'nw-off-use': nwOffUse(); break;
+    case 'nw-day': setDay(NW.days, Number(d.d), NW); renderSetup(); break;
+    case 'nw-days': NW.days = [...QUICK_DAYS[d.v]]; NW.dayWarn = false; renderSetup(); break;
+    case 'nw-name': NW.nameOpen = !NW.nameOpen; renderSetup(); if (NW.nameOpen) { const i = $('#nw-name'); if (i) i.focus(); } break;
     case 'ae-scene': { const it = AE.scenePick[Number(d.i)]; if (!it) break; const sc = aeSc(); sc.actions = [it.a]; const off = aeOff(); if (off) off.actions = makePair(sc, off.at, AE.L, AE.Sh).actions; aeSave(); break; }
     case 'ae-day': { const sc = aeSc(); setDay(sc.days, Number(d.d), AE); if (AE.dayWarn) renderEditor(); else aeSave(`Runs ${daysText(sc.days).toLowerCase()}`); break; }
     case 'ae-days': { const sc = aeSc(); sc.days = [...QUICK_DAYS[d.v]]; AE.dayWarn = false; aeSave(`Runs ${daysText(sc.days).toLowerCase()}`); break; }
@@ -849,29 +937,23 @@ document.addEventListener('click', e => {
     case 'gs-wakeup': openWakeupSetup(); break;
     case 'gs-buttons': openButtonsSetup(); break;
     case 'gs-target': { const i = GS.targets.indexOf(d.t); if (i >= 0) GS.targets.splice(i, 1); else GS.targets = normalizeTargets([...GS.targets, d.t], d.t); renderSetup(); break; }
-    case 'gs-target-more': openTargetPicker(GS.targets, list => { GS.targets = list; renderSetup(); }, renderSetup); break;
+    case 'gs-target-more': SHEET_KEY = 'gs-pick'; openTargetPicker(GS.targets, list => { GS.targets = list; renderSetup(); }, renderSetup); break;
     case 'gs-shade': { const i = GS.shades.indexOf(d.t); if (i >= 0) GS.shades.splice(i, 1); else GS.shades.push(d.t); renderSetup(); break; }
-    case 'gs-until': GS.until = d.v; renderSetup(); break;
     case 'gs-level': GS.level = Number(d.v); renderSetup(); break;
     case 'gs-offset': GS.offset = Number(d.v); renderSetup(); break;
-    case 'gs-lamp': GS.lamp = d.id; renderSetup(); break;
     case 'gs-lamp-more': openLampPicker(); break;
-    case 'gs-lamp-pick': GS.lamp = d.id; renderSetup(); break;
+    case 'gs-lamp-pick': if (WALK.cur) walkPick(WALK.cur, d.id); break;
     case 'gs-day': setDay(GS.days, Number(d.d), GS); renderSetup(); break;
     case 'gs-days': GS.days = [...QUICK_DAYS[d.v]]; GS.dayWarn = false; renderSetup(); break;
-    case 'gs-shade-tgl': GS.shade = !GS.shade; renderSetup(); break;
     case 'gs-minutes': GS.minutes = Number(d.v); renderSetup(); break;
     case 'gs-end': GS.end = Number(d.v); renderSetup(); break;
-    case 'gs-card': GS[d.k].on = !GS[d.k].on; renderSetup(); break;
-    case 'gs-gn-remote': GS.gn.remote = d.id; GS.gn.button = defaultHoldButton(dev(d.id)); renderSetup(); break;
     case 'gs-gn-button': GS.gn.button = Number(d.n); renderSetup(); break;
     case 'gs-gn-path': { const i = GS.gn.path.indexOf(d.t); if (i >= 0) GS.gn.path.splice(i, 1); else GS.gn.path = normalizeTargets([...GS.gn.path, d.t], d.t); renderSetup(); break; }
-    case 'gs-lv-remote': GS.lv.remote = d.id; GS.lv.button = defaultHoldButton(dev(d.id)); renderSetup(); break;
     case 'gs-lv-button': GS.lv.button = Number(d.n); renderSetup(); break;
-    case 'gs-lv-door': GS.lv.door = d.t; renderSetup(); break;
-    case 'gs-save': if (GS.kind === 'welcome') saveWelcome(GS); else if (GS.kind === 'wakeup') saveWakeup(GS); else saveButtons(GS); break;
+    case 'gs-save': if (!GS) break; if (GS.kind === 'welcome') saveWelcome(GS); else if (GS.kind === 'wakeup') saveWakeup(GS); else saveButtons(GS); break;
     // wind-down
-    case 'wd-toggle': { const { ad } = wdSettings(); ad.enabled = !ad.enabled; save({ msg: ad.enabled ? 'Evening wind-down is on' : 'Evening wind-down is off' }); break; }
+    case 'wd-open': openWindDownSheet(); break;
+    case 'wd-toggle': { const { ad } = wdSettings(); ad.enabled = !ad.enabled; save({ msg: ad.enabled ? 'Evening wind-down is on' : 'Evening wind-down is off', render: S.view === 'automations' || S.view === 'home' }); if (SHEET_KEY === 'wd') openWindDownSheet(); break; }
     case 'wd-advanced': openWindDownAdvanced(); break;
     case 'wd-set': wdSet(d.k, d.v); break;
     case 'wd-nudge': { const { wd } = wdSettings(); wd.nudge = !wd.nudge; el.classList.toggle('on', wd.nudge); save({ msg: wd.nudge ? 'Untouched lights will lower gently' : 'Untouched lights are left alone', render: false }); break; }
@@ -885,7 +967,6 @@ document.addEventListener('click', e => {
     case 'rl-make': rolesMake(); break;
     case 'rl-skip': rolesAdvance(RS.walk, RS.aid, null); break;
     case 'moods-walk': { const walk = moodsWalkRooms(); if (walk.length) openRolesSheet(walk[0], { walk }); break; }
-    case 'moods-dismiss': try { localStorage.setItem('moodsTipDismissed', '1'); } catch (_) { /* ignore */ } { const b = $('#moodstip'); if (b) b.remove(); } break;
     case 'rm-open': openRoomMoodsSheet(d.area); break;
   }
 });
@@ -895,6 +976,7 @@ document.addEventListener('change', e => {
   if (el.id === 'gs-until-time' && GS) { GS.untilTime = el.value || GS.untilTime; renderSetup(); return; }
   if (el.id === 'gs-alarm' && GS) { GS.alarm = el.value || GS.alarm; renderSetup(); return; }
   if (el.id === 'gs-low' && GS) { GS.low = el.checked; renderSetup(); return; }
+  if (el.id === 'nw-name' && NW) { const v = el.value.trim(); NW.name = v; NW.customName = !!v; renderSetup(); return; }
   if (el.id === 'ae-name' && AE) { const sc = aeSc(); const v = el.value.trim(); const auto = autoName(sc, AE.L, AE.Sh, !!aeOff()); sc.name = v || auto; AE.customName = !!v && v !== auto; syncPair(sc); if (AE.draftOff) AE.draftOff.name = sc.name; aeSaveSoon(); const h = $('#sheet-root .sh .sub'); if (h) h.textContent = sc.name; return; }
   if (el.id === 'ae-onlyif' && AE) { aeSc().only_if = el.value || null; aeSaveSoon(); return; }
   if (el.id === 'ae-fade' && AE) { const sc = aeSc(); for (const a of sc.actions) if (a.type === 'level') { if (el.value === '') delete a.fade; else a.fade = Number(el.value); } aeSaveSoon(); return; }
@@ -905,4 +987,3 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'city-q') { const l = $('#city-list'); if (l) l.innerHTML = cityListHTML(el.value); }
 });
-document.addEventListener('toggle', e => { const el = e.target; if (el && el.dataset && el.dataset.more != null && GS) GS.more = el.open; }, true);

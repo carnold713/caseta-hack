@@ -43,43 +43,46 @@ function adPicked() { return adHeard().find(h => h.serial === AD.pick) || { seri
 function adLeft() { return Math.max(0, AD_SECONDS - Math.round((Date.now() - AD.startedAt) / 1000)); }
 const adClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-// ----- the sheet -----
+// ----- the walk (docs/ux-progressive.md 2.19): what are you adding, hold its button, name it, added -----
+const AD_STEPS = ['kind', 'listen', 'name', 'done'];
+const AD_GLYPH = { dimmer: 'bulb', plug: 'plug', pico: 'remote', shade: 'shade', fan: 'fan' };
 function openAddDevice() {
-  Object.assign(AD, { open: true, step: 'listen', pick: null, name: '', area: null, error: null, showLog: false, created: null });
-  adShow(true);
-  adStart();
+  Object.assign(AD, { open: true, step: 'kind', pick: null, name: '', area: null, error: null, showLog: false, created: null, startedAt: 0, nudged: false });
+  walk({ key: 'add', title: 'Add a device', sub: 'Without the Lutron app. This part of the bridge is undocumented, so if it says no, the Lutron app still works as before.', state: AD,
+    onClose: () => { AD.open = false; clearInterval(AD.tick); AD.tick = null; if (adActive()) adStop(); },
+    steps: [
+      { id: 'kind', kind: 'pick', title: 'What are you adding?', body: () => { adAt('kind'); return `<div class="card pad0 list">${AD_KINDS.map(k => `<button class="item pick" data-act="ad-kind" data-k="${k[0]}">${ICON(AD_GLYPH[k[0]])}<div class="grow"><div class="t">${k[1]}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>`; } },
+      { id: 'listen', kind: 'custom', noNext: true, title: 'Hold its button', body: () => { adAt('listen'); return adListenHTML(); } },
+      { id: 'name', kind: 'custom', title: 'Name it', sub: 'Give it a name and a room.', body: () => { adAt('name'); return adNameHTML(); }, foot: () => `<div class="sfoot"><button class="btn primary lg block" data-act="ad-create" ${AD.area && !AD.busy ? '' : 'disabled'}>${AD.busy ? 'Adding...' : 'Add to my home'}</button></div>` },
+      { id: 'done', kind: 'custom', title: 'Added', body: () => { adAt('done'); return adDoneHTML(); }, foot: () => `<div class="sfoot"><button class="btn primary lg block" data-act="ad-again">Add another</button><button class="btn ghost block" data-act="sheet-close">Done</button></div>` },
+    ] });
+  AD.open = true;
 }
-function adShow(full) {
-  const subs = { listen: 'Without the Lutron app. Dimmers, switches, plug-ins, Pico remotes, shades and fan controls.', name: 'Give it a name and a room.', done: '' };
-  const body = AD.step === 'listen' ? adListenHTML() : AD.step === 'name' ? adNameHTML() : adDoneHTML();
-  const title = AD.step === 'name' ? 'Name it' : AD.step === 'done' ? 'Added' : 'Add a device';
-  if (full || !sheet.isOpen() || !AD.open) {
-    sheet.open(title, body, { sub: subs[AD.step], back: AD.step === 'name', onBack: () => { AD.step = 'listen'; AD.error = null; adShow(true); } });
-    AD.open = true;
-    sheet.onClose = () => { AD.open = false; clearInterval(AD.tick); AD.tick = null; if (adActive()) adStop(); };
-  } else sheet.update(body);
-  if (AD.step === 'listen' && !AD.tick) AD.tick = setInterval(adTick, 1000);
-  if (AD.step !== 'listen' && AD.tick) { clearInterval(AD.tick); AD.tick = null; }
+// The step being drawn: the listening clock runs only on the listen step.
+function adAt(step) {
+  AD.step = step;
+  if (step === 'listen' && !AD.tick) AD.tick = setInterval(adTick, 1000);
+  if (step !== 'listen' && AD.tick) { clearInterval(AD.tick); AD.tick = null; }
 }
+function adGo(step) { AD.step = step; const w = WALK.cur; if (walkIs('add')) { w.i = AD_STEPS.indexOf(step); walkRender(w); } }
+// Redraw the current step in place (the bridge said something, the clock ran out).
+function adShow() { if (AD.open && walkIs('add')) walkRender(WALK.cur); }
 function adTick() {
-  const el = document.querySelector('[data-ad-left]'); if (!el) return;
-  el.textContent = adActive() ? `· ${adClock(adLeft())} left` : '';
+  const el = document.querySelector('[data-ad-left]'); if (el) el.textContent = adActive() ? `· ${adClock(adLeft())} left` : '';
+  // after 45 seconds with nothing heard, the "Nothing found?" advice appears
+  if (!AD.nudged && AD.startedAt && Date.now() - AD.startedAt >= 45000 && !adHeard().length) { AD.nudged = true; adShow(); }
 }
 function adListenHTML() {
   const kind = AD_KINDS.find(k => k[0] === AD.kind) || AD_KINDS[0];
-  const chips = AD_KINDS.map(k => `<button class="chip ${k[0] === AD.kind ? 'sel' : ''}" data-act="ad-kind" data-k="${k[0]}">${k[1]}</button>`).join('');
   const active = adActive();
   const status = AD.busy ? 'Getting the bridge ready...' : active ? `Listening <span data-ad-left>· ${adClock(adLeft())} left</span>` : AD.error ? '' : 'Stopped listening';
   const heard = adHeard();
   const found = heard.length ? `<div class="h2">Found</div><div class="card pad0 list">${heard.map(h => `<button class="item" data-act="ad-pick" data-serial="${esc(h.serial)}">${ICON(adGlyph(h.device_type))}<div class="grow"><div class="t">${esc(adTypeName(h.device_type))}</div><div class="d">${h.model ? esc(h.model) + ' · ' : ''}serial ${esc(h.serial)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>` : '';
-  const err = AD.error ? `<div class="tip"><div class="grow"><span class="cap">Something went wrong</span><div class="t">${esc(AD.error)}</div><div class="d">Is the connector online and the bridge reachable?</div></div><button class="btn sm" data-act="ad-start">Try again</button></div>` : '';
-  return `<div class="tip"><div class="grow"><span class="cap">Experimental</span><div class="t">Adding without the Lutron app</div><div class="d">This uses the same bridge connection the Lutron app uses, but that part of it is not documented. If the bridge says no, the Lutron app still works as before.</div></div></div>
-    <div class="h2">What are you adding?</div><div class="chips scroll">${chips}</div>
-    <div class="h2">Hold its button</div>
-    <div class="tip"><div class="grow"><span class="cap">${active ? 'The bridge is listening' : 'Step 1'}</span><div class="t">${esc(kind[2])}</div><div class="d ad-status">${status}</div></div>${active || AD.busy ? '<div class="dots ad-dots"><i></i><i></i><i></i><i></i></div>' : `<button class="btn sm" data-act="ad-start">Listen again</button>`}</div>
-    ${err}${found}
-    <p class="small faint" style="margin:16px 0 0">Nothing found? Let go, wait a moment, and hold again. The bridge only hears a device that is not already part of a home; one that came from another home needs a factory reset first.</p>
-    ${adLogHTML()}`;
+  const err = AD.error ? `<div class="tip" style="margin-top:8px"><div class="grow"><span class="cap">Something went wrong</span><div class="t">${esc(AD.error)}</div><div class="d">Is the connector online and the bridge reachable?</div></div><button class="btn sm" data-act="ad-start">Try again</button></div>` : '';
+  const waited = AD.startedAt && Date.now() - AD.startedAt >= 45000;
+  const nothing = !heard.length && !AD.busy && !AD.error && (waited || !active) ? `<p class="d" style="margin:16px 0 0">Nothing found? Let go, wait a moment, and hold again. The bridge only hears a device that is not already part of a home; one that came from another home needs a factory reset first.</p>${active ? '' : `<button class="btn block" data-act="ad-start" style="margin-top:12px">Listen again</button>`}` : '';
+  return `<div class="tip"><div class="grow"><span class="cap">${active ? 'The bridge is listening' : kind[1]}</span><div class="t">${esc(kind[2])}</div><div class="d ad-status">${status}</div></div>${active || AD.busy ? '<div class="dots ad-dots"><i></i><i></i><i></i><i></i></div>' : ''}</div>
+    ${err}${found}${nothing}${AD.error ? adLogHTML() : ''}`;
 }
 function adNameHTML() {
   const h = adPicked(); const rooms = adRooms();
@@ -87,14 +90,11 @@ function adNameHTML() {
     <label class="field"><span>Name</span><input class="input" id="ad-name" value="${esc(AD.name)}" placeholder="${esc(adDefaultName(h.device_type))}" maxlength="60" autocomplete="off"></label>
     <div class="h2">Which room?</div><div class="chips" data-ad-rooms>${rooms.map(a => `<button class="chip ${AD.area === a.id ? 'sel' : ''}" data-act="ad-area" data-id="${esc(a.id)}">${esc(a.name)}</button>`).join('') || '<p class="muted">No rooms yet. Make one in the Lutron app first.</p>'}</div>
     <p class="small faint" style="margin:12px 0 0">Need a new room? For now rooms are still made in the Lutron app. Add the device to any room and move it later.</p>
-    ${AD.error ? `<div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">The bridge said no</span><div class="t">${esc(AD.error)}</div><div class="d">Try once more. If it keeps failing, the technical details below are what to send along.</div></div></div>` : ''}
-    ${adLogHTML()}
-    <div class="sfoot"><button class="btn primary lg block" data-act="ad-create" ${AD.area && !AD.busy ? '' : 'disabled'}>${AD.busy ? 'Adding...' : 'Add to my home'}</button></div>`;
+    ${AD.error ? `<div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">The bridge said no</span><div class="t">${esc(AD.error)}</div><div class="d">Try once more. If it keeps failing, the technical details below are what to send along.</div></div></div>${adLogHTML()}` : ''}`;
 }
 function adDoneHTML() {
   const c = AD.created || {};
-  return `<div class="ad-done">${ICON('check', 'xl tick')}<div class="t2">Added ${esc(c.name)}</div><p class="muted">It is in ${esc(c.room)} and shows up there in a moment. A dimmer or switch works right away; a remote is ready to set up on the Remotes tab.</p></div>
-    <div class="sfoot"><button class="btn primary lg block" data-act="ad-again">Add another</button><button class="btn ghost block" data-act="sheet-close">Done</button></div>`;
+  return `<div class="ad-done">${ICON('check', 'xl tick')}<div class="t2">Added ${esc(c.name)}</div><p class="muted">It is in ${esc(c.room)} and shows up there in a moment. A dimmer or switch works right away; a remote is ready to set up on the Remotes tab.</p></div>`;
 }
 function adLogHTML() {
   const log = (S.add && S.add.log) || [];
@@ -106,7 +106,7 @@ function adLogHTML() {
 function adTakeState(r) { const st = (r && r.detail) || r; if (st && typeof st.active === 'boolean') S.add = { ...(S.add || {}), ...st }; }
 async function adStart() {
   if (AD.busy) return;
-  AD.busy = true; AD.error = null; AD.startedAt = Date.now(); adShow();
+  AD.busy = true; AD.error = null; AD.startedAt = Date.now(); AD.nudged = false; adShow();
   try { adTakeState(await api('/api/adddevice', { method: 'POST', body: JSON.stringify({ op: 'start' }) })); }
   catch (e) { AD.error = e.message; }
   AD.busy = false; if (AD.open) adShow();
@@ -120,7 +120,7 @@ async function adCreate() {
   AD.busy = true; AD.error = null; adShow();
   try {
     await api('/api/adddevice', { method: 'POST', body: JSON.stringify({ op: 'create', serial: AD.pick, name, area: AD.area }) });
-    AD.created = { name, room }; AD.step = 'done'; AD.busy = false; adShow(true);
+    AD.created = { name, room }; AD.busy = false; adGo('done');
     toast(`${name} added to ${room}`);
   } catch (e) { AD.error = e.message; AD.busy = false; adShow(); }
 }
@@ -131,7 +131,7 @@ function openRemoveDevice(id) {
   const isPico = d.domain === 'pico';
   const uses = bindings().filter(b => isPico ? b.device_id === id : [...b.actions, ...((b.night && b.night.actions) || [])].some(a => tlist(a.target).includes('d:' + id))).length;
   sheet.open(`Remove ${esc(d.name)}?`, `<div class="tip"><div class="grow"><span class="cap">${esc(areaName(d.area))}</span><div class="t">It leaves your Lutron bridge</div><div class="d">It stops working until it is added again${isPico ? ', and its button settings here are cleared' : uses ? `, and the ${plural(uses, 'button')} that used it forget it` : ''}. The Lutron app will not list it any more either.</div></div></div>
-    ${adLogHTML()}
+    ${AD.showLog ? adLogHTML() : ''}
     <div class="sfoot"><button class="btn primary lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="sheet-close">Keep it</button></div>`, { sub: 'This part of the bridge is not documented either; if it says no, the Lutron app can still remove it.' });
 }
 function forgetDevice(id) {
@@ -180,12 +180,12 @@ document.addEventListener('click', e => {
   const d = el.dataset;
   switch (d.act) {
     case 'ad-open': openAddDevice(); break;
-    case 'ad-kind': AD.kind = d.k; adShow(); break;
+    case 'ad-kind': AD.kind = d.k; adGo('listen'); adStart(); break;   // listening starts once it knows what to listen for
     case 'ad-start': adStart(); break;
-    case 'ad-pick': { AD.pick = d.serial; AD.name = ''; AD.error = null; const rooms = adRooms(); AD.area = rooms.length === 1 ? rooms[0].id : AD.area; AD.step = 'name'; adShow(true); break; }
+    case 'ad-pick': { AD.pick = d.serial; AD.name = ''; AD.error = null; const rooms = adRooms(); AD.area = rooms.length === 1 ? rooms[0].id : AD.area; adGo('name'); break; }
     case 'ad-area': AD.area = d.id; document.querySelectorAll('[data-ad-rooms] .chip').forEach(c => c.classList.toggle('sel', c.dataset.id === d.id)); { const b = document.querySelector('[data-act="ad-create"]'); if (b) b.disabled = !AD.area || AD.busy; } break;
     case 'ad-create': adCreate(); break;
-    case 'ad-again': Object.assign(AD, { step: 'listen', pick: null, name: '', error: null, created: null }); adShow(true); adStart(); break;
+    case 'ad-again': Object.assign(AD, { pick: null, name: '', error: null, created: null }); adGo('listen'); adStart(); break;
     case 'ad-log': AD.showLog = !AD.showLog; if (AD.open) adShow(); else { const cur = el.closest('.sb'); if (cur && cur.querySelector('[data-act="dev-remove-go"]')) openRemoveDevice(cur.querySelector('[data-act="dev-remove-go"]').dataset.id); } break;
     case 'dev-remove': AD.showLog = false; openRemoveDevice(d.id); break;
     case 'dev-remove-go': removeDevice(d.id, el); break;
