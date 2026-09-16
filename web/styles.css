@@ -446,3 +446,6 @@ input.slider { pointer-events: none; }
 /* ---------- swipe to close: while a finger drags a sheet, nothing else moves it ---------- */
 .sheet.swiping { transition: none !important; }
 .sheet .sb { overscroll-behavior: contain; }
+/* a mouse dragging a horizontal row */
+.chips.scroll.dragging, .tiles.dragging, .moods.dragging, .ln-row.dragging { cursor: grabbing; scroll-behavior: auto; user-select: none; }
+@media (hover: hover) and (pointer: fine) { .chips.scroll, .tiles, .moods, .ln-row { cursor: grab; } }

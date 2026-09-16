@@ -70,3 +70,37 @@
   });
   document.addEventListener('pointercancel', e => { if (g && e.pointerId === g.id) g = null; });
 })();
+
+/* Horizontal rows on a desktop. Chip rows, scene tiles and mood rows scroll sideways under a finger;
+   a mouse gets the same: drag the row to scroll it (a real drag, not a click), and a wheel over the
+   row scrolls it sideways when the row has somewhere to go. */
+(function () {
+  'use strict';
+  const ROWS = '.chips.scroll, .tiles, .moods, .ln-row, .now .chips.scroll';
+  const SLOP = 6;
+  let g = null;
+  const rowOf = el => (el && el.closest ? el.closest(ROWS) : null);
+  const canScroll = row => row.scrollWidth > row.clientWidth + 1;
+  document.addEventListener('wheel', e => {
+    const row = rowOf(e.target); if (!row || !canScroll(row)) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;             // a sideways wheel already works
+    const before = row.scrollLeft;
+    row.scrollLeft += e.deltaY;
+    if (row.scrollLeft !== before) e.preventDefault();               // at either end, let the page scroll
+  }, { passive: false });
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const row = rowOf(e.target); if (!row || !canScroll(row)) return;
+    g = { row, x0: e.clientX, left: row.scrollLeft, id: e.pointerId, dragging: false };
+  });
+  document.addEventListener('pointermove', e => {
+    if (!g || e.pointerId !== g.id) return;
+    const dx = e.clientX - g.x0;
+    if (!g.dragging) { if (Math.abs(dx) < SLOP) return; g.dragging = true; g.row.classList.add('dragging'); try { g.row.setPointerCapture(g.id); } catch (_) { /* fine */ } }
+    g.row.scrollLeft = g.left - dx;
+  });
+  const end = e => { if (!g || e.pointerId !== g.id) return; const was = g.dragging; const row = g.row; g = null; if (was) { row.classList.remove('dragging'); row._swallow = true; setTimeout(() => { row._swallow = false; }, 0); } };
+  document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+  // the click that ends a drag is not a tap on whatever chip the mouse happened to stop on
+  document.addEventListener('click', e => { const row = rowOf(e.target); if (row && row._swallow) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+})();
