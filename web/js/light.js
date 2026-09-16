@@ -281,8 +281,7 @@ function paintMoodRows() {
 // ---------- the house: every light that is on, its mean level, and one slider for all of them ----------
 function litLights() { return controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && (level(d.device_id) || 0) > 0); }
 function houseLevel() { const ls = litLights(); return ls.length ? meanLevel(ls.map(d => d.device_id)) : 0; }
-let houseGate = null, housePending = null;
-// Shared by the bar and the Now view: one command per 120ms while dragging, the last value always lands.
+// Shared by the bar and the Now view: one command in flight while dragging, the last value always lands.
 function setHouseLevel(v) {
   v = clamp(Math.round(v), 1, 100);
   // dims what is on; when nothing is on, sliding is how the house comes on: every light goes to that level
@@ -290,13 +289,8 @@ function setHouseLevel(v) {
   const ids = lit.length ? lit : controllable().filter(d => d.domain === 'light' || d.domain === 'switch').map(d => d.device_id);
   if (!ids.length) return;
   for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level: v };
-  housePending = { ids, v };
-  if (houseGate) return;
-  houseGate = setTimeout(() => {
-    houseGate = null; const p = housePending; housePending = null; if (!p) return;
-    command({ type: 'level', target: p.ids.map(id => `d:${id}`), level: p.v, fade: 0 });
-    paintState();
-  }, 120);
+  sendLevel(ids.map(id => `d:${id}`), v);
+  paintState();
 }
 
 // ---------- the Now view: the app's now playing, for the house, on a white dialog ----------
@@ -453,10 +447,9 @@ function wireLightSheet() {
     if (sl) { sl.style.setProperty('--p', `${v}%`); sl.setAttribute('aria-valuenow', v); sl.querySelector('.vtip').textContent = lvText(v); }
     const sw = root.querySelector('[data-act="ld-toggle"]'); if (sw) sw.classList.toggle('on', v > 0);
   };
-  // one command per 120ms while dragging, the last value always lands
-  let pendingV = null, gate = null;
-  const sendNow = v => { S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); command({ type: 'level', target: `d:${LD.id}`, level: v, fade: 0 }); paintState(); };
-  const queue = v => { pendingV = v; if (gate) return; gate = setTimeout(() => { gate = null; if (pendingV != null) { const x = pendingV; pendingV = null; sendNow(x); } }, 120); };
+  // one command in flight while dragging, the last value always lands (sendLevel drops the ones between)
+  const sendNow = v => { S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); sendLevel(`d:${LD.id}`, v); paintState(); };
+  const queue = sendNow;
   LD.set = v => { v = clamp(Math.round(v), 0, 100); if (v === LD.lv) return; LD.show(v); queue(v); };
   const startDrag = () => { LD.dragging = true; if (LD.stTween) LD.stTween.kill(); if (sl) sl.classList.add('drag'); };
   const endDrag = () => { LD.dragging = false; LD.lastSend = Date.now(); if (sl) sl.classList.remove('drag'); };
@@ -475,7 +468,7 @@ function wireLightSheet() {
 }
 // A real state change while the sheet is open moves the disc once (never while the thumb is on it).
 function paintLightDetail() {
-  const root = $('#ld'); if (!root || !LD || !LD.show || LD.dragging || Date.now() - LD.lastSend < 800) return;
+  const root = $('#ld'); if (!root || !LD || !LD.show || LD.dragging || Date.now() - LD.lastSend < 800 || levelQuiet(`d:${LD.id}`)) return;
   const v = level(LD.id) || 0;
   if (v !== LD.lv) LD.show(v, true);
 }

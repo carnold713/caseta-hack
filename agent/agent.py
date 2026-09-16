@@ -39,7 +39,7 @@ from adddevice import AddSession
 from hue import Hue
 from sun import sun_times
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -112,6 +112,9 @@ class Agent:
         self._index_bindings()
         self._state_flush: Optional[asyncio.Task] = None
         self._dirty_states: Dict[str, dict] = {}
+        # Level commands run in a lane per target, latest wins: a fast swipe sends a stream of levels
+        # and only the newest one still matters, so anything waiting behind a bridge round-trip is dropped.
+        self._lanes: Dict[str, dict] = {}
         self.runner.local_time = self.local_time
         self.runner.sunset_hm = self.sunset_hm
         self._fired: Dict[str, str] = self._load_fired()  # schedule id -> local date it last fired
@@ -499,6 +502,9 @@ class Agent:
             if action.get("type") == "update":
                 await self._update_and_restart(cid)
                 return
+            if action.get("type") == "level":
+                self._queue_level(cid, action)
+                return
             try:
                 kind = action.get("type")
                 if kind == "refresh":
@@ -544,6 +550,34 @@ class Agent:
             except Exception as exc:  # noqa: BLE001
                 LOG.error("command %s failed: %s", action, exc)
                 self.send({"type": "result", "id": cid, "ok": False, "error": str(exc)})
+
+    def _queue_level(self, cid, action: dict) -> None:
+        """Latest wins per target: a level waiting behind a bridge round-trip is superseded, not sent."""
+        key = json.dumps(action.get("target"), sort_keys=True)
+        lane = self._lanes.get(key)
+        if lane is not None:
+            waiting = lane.get("next")
+            if waiting is not None:
+                self.send({"type": "result", "id": waiting[0], "ok": True, "detail": {"superseded": True}})
+            lane["next"] = (cid, action)
+            return
+        self._lanes[key] = {"next": (cid, action)}
+        asyncio.create_task(self._level_lane(key))
+
+    async def _level_lane(self, key: str) -> None:
+        lane = self._lanes[key]
+        try:
+            while lane.get("next") is not None:
+                cid, action = lane["next"]
+                lane["next"] = None
+                try:
+                    await self.runner.run_one(action)
+                    self.send({"type": "result", "id": cid, "ok": True, "detail": None})
+                except Exception as exc:  # noqa: BLE001
+                    LOG.error("command %s failed: %s", action, exc)
+                    self.send({"type": "result", "id": cid, "ok": False, "error": str(exc)})
+        finally:
+            self._lanes.pop(key, None)
 
     async def _update_and_restart(self, cid) -> None:
         LOG.info("update requested by the hub")

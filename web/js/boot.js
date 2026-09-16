@@ -107,7 +107,6 @@ document.addEventListener('change', e => {
   else if (el.id === 'scene-fade') sceneEdit('fade', el.value);
   else if (el.id === 'group-name') { const g = groups().find(x => x.id === S.groupEdit); if (g) { g.name = el.value.trim() || 'Untitled'; saveSoon(); } }
 });
-let slideTimer = null;
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'pw') { const b = document.querySelector('[data-form="login"] .btn.primary'); if (b) b.disabled = !el.value; const f = $('#pwfield'); if (f && f.classList.contains('err')) { f.classList.remove('err'); f.querySelector('span').textContent = 'Password'; } return; }
@@ -121,7 +120,7 @@ document.addEventListener('input', e => {
     const row = el.closest('.light');
     const lv = row && row.querySelector('.lv'); if (lv) lv.textContent = v === 0 ? 'Off' : `${v}%`;
     const disc = row && row.querySelector('[data-ldisc]'); if (disc) { disc.style.backgroundColor = lampColor(v); disc.dataset.fill = lampColor(v); disc.classList.toggle('off', v <= 0); }
-    clearTimeout(slideTimer); slideTimer = setTimeout(() => { command({ type: 'level', target: t, level: v, fade: 0 }); }, 120);
+    sendLevel(t, v);
   }
   if (el.dataset.house) {
     // the house dimmer on the Light now bar and the Now view: the number follows the finger, one command per 120ms

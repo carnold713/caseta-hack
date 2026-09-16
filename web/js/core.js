@@ -40,6 +40,25 @@ async function command(action) {
   try { await api('/api/command', { method: 'POST', body: JSON.stringify(action) }); return true; }
   catch (e) { toast(e.message, { err: true }); return false; }
 }
+// Brightness while a finger is moving: one level command in flight per target, the newest value always
+// goes next and everything between is dropped. Echoes from the bridge are ignored for a moment after.
+const LV = { inflight: {}, latest: {}, quiet: {} };
+function sendLevel(target, level, extra) {
+  const key = JSON.stringify(target);
+  LV.latest[key] = { target, level, extra: extra || {} };
+  if (LV.inflight[key]) return;
+  LV.inflight[key] = (async () => {
+    while (LV.latest[key]) {
+      const p = LV.latest[key]; delete LV.latest[key];
+      await command({ type: 'level', target: p.target, level: p.level, fade: 0, ...p.extra });
+      LV.quiet[key] = Date.now() + 1500;
+      for (const t of Array.isArray(p.target) ? p.target : [p.target]) LV.quiet[JSON.stringify(t)] = Date.now() + 1500;
+    }
+    delete LV.inflight[key];
+  })();
+}
+// True while a target was set from this phone recently: the bridge's own echo must not pull the slider back.
+function levelQuiet(target) { const q = LV.quiet[JSON.stringify(target)]; return !!(q && q > Date.now()); }
 // Autosave. Every edit calls save(); the previous config is kept for a one-tap Undo.
 let saveTimer = null;
 async function save(opts = {}) {
@@ -271,7 +290,7 @@ function pulseGesture(n, g) {
 function paintState() {
   document.querySelectorAll('[data-lvl]').forEach(el => {
     const id = el.dataset.lvl; const v = level(id);
-    if (el.classList.contains('slider')) { if (document.activeElement !== el && !el.dataset.drag) { el.value = v == null ? 0 : v; el.style.setProperty('--p', `${v || 0}%`); } }
+    if (el.classList.contains('slider')) { if (document.activeElement !== el && !el.dataset.drag && !levelQuiet(`d:${id}`)) { el.value = v == null ? 0 : v; el.style.setProperty('--p', `${v || 0}%`); } }
     else if (el.classList.contains('sw')) el.classList.toggle('on', isOn(id));
     else if (el.dataset.speed) el.classList.toggle('on', (S.states[id] || {}).fan_speed === el.dataset.speed);
     else el.textContent = v == null ? '' : v === 0 ? 'Off' : `${v}%`;

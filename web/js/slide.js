@@ -41,7 +41,7 @@
   function finish(changed) {
     const inp = g.inp; g = null;
     if (changed) inp.dispatchEvent(new Event('change', { bubbles: true }));
-    if (inp.dataset.slide || inp.dataset.house) setTimeout(() => { delete inp.dataset.drag; if (typeof paintState === 'function') paintState(); }, 800);
+    if (inp.dataset.slide || inp.dataset.house) setTimeout(() => { delete inp.dataset.drag; if (typeof paintState === 'function') paintState(); }, 1500);
   }
 
   document.addEventListener('pointerdown', e => {
