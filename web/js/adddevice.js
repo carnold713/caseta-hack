@@ -125,6 +125,47 @@ async function adCreate() {
   } catch (e) { AD.error = e.message; AD.busy = false; adShow(); }
 }
 
+// ----- removing a device (the same experimental path, one request) -----
+function openRemoveDevice(id) {
+  const d = dev(id); if (!d) return;
+  const isPico = d.domain === 'pico';
+  const uses = bindings().filter(b => isPico ? b.device_id === id : [...b.actions, ...((b.night && b.night.actions) || [])].some(a => tlist(a.target).includes('d:' + id))).length;
+  sheet.open(`Remove ${esc(d.name)}?`, `<div class="tip"><div class="grow"><span class="cap">${esc(areaName(d.area))}</span><div class="t">It leaves your Lutron bridge</div><div class="d">It stops working until it is added again${isPico ? ', and its button settings here are cleared' : uses ? `, and the ${plural(uses, 'button')} that used it forget it` : ''}. The Lutron app will not list it any more either.</div></div></div>
+    ${adLogHTML()}
+    <div class="sfoot"><button class="btn primary lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="sheet-close">Keep it</button></div>`, { sub: 'This part of the bridge is not documented either; if it says no, the Lutron app can still remove it.' });
+}
+function forgetDevice(id) {
+  const t = 'd:' + id; const cfg = S.config;
+  cfg.bindings = bindings().filter(b => b.device_id !== id);
+  for (const b of cfg.bindings) { const strip = list => list.map(a => { if (!a.target) return a; const rest = tlist(a.target).filter(x => x !== t); return rest.length === tlist(a.target).length ? a : (rest.length ? { ...a, target: packTarget(rest) } : null); }).filter(Boolean); b.actions = strip(b.actions); if (b.night) b.night.actions = strip(b.night.actions); }
+  cfg.bindings = cfg.bindings.filter(b => b.actions.length || (b.night && b.night.actions.length));
+  for (const sc of cfg.schedules || []) sc.actions = sc.actions.map(a => { if (!a.target) return a; const rest = tlist(a.target).filter(x => x !== t); return rest.length ? { ...a, target: packTarget(rest) } : null; }).filter(Boolean);
+  cfg.schedules = (cfg.schedules || []).filter(sc => sc.actions.length);
+  for (const p of cfg.presets) delete p.levels[id];
+  for (const g of cfg.groups) g.device_ids = g.device_ids.filter(x => x !== id);
+  cfg.favorites = cfg.favorites.filter(f => f !== t);
+  if (cfg.settings.light_kinds) delete cfg.settings.light_kinds[id];
+  if (cfg.settings.roles) delete cfg.settings.roles[id];
+  if (cfg.settings.remote_looks) delete cfg.settings.remote_looks[id];
+}
+async function removeDevice(id, btn) {
+  const d = dev(id); if (!d) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
+  try {
+    await api('/api/removedevice', { method: 'POST', body: JSON.stringify({ id }) });
+    forgetDevice(id);
+    delete S.inv.devices[id];
+    if (S.remote === id) S.remote = null;
+    sheet.close();
+    await save({ msg: `${d.name} removed`, quiet: true, render: true });
+    toast(`${d.name} removed from your home`);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Remove'; }
+    toast(`The bridge said no: ${e.message}`, { err: true });
+    AD.showLog = true; openRemoveDevice(id);  // the same sheet again, with the technical details open
+  }
+}
+
 window.AddDevice = {
   onMessage(m) {
     S.add = S.add || { active: false, heard: [], log: [] };
@@ -145,7 +186,9 @@ document.addEventListener('click', e => {
     case 'ad-area': AD.area = d.id; document.querySelectorAll('[data-ad-rooms] .chip').forEach(c => c.classList.toggle('sel', c.dataset.id === d.id)); { const b = document.querySelector('[data-act="ad-create"]'); if (b) b.disabled = !AD.area || AD.busy; } break;
     case 'ad-create': adCreate(); break;
     case 'ad-again': Object.assign(AD, { step: 'listen', pick: null, name: '', error: null, created: null }); adShow(true); adStart(); break;
-    case 'ad-log': AD.showLog = !AD.showLog; adShow(); break;
+    case 'ad-log': AD.showLog = !AD.showLog; if (AD.open) adShow(); else { const cur = el.closest('.sb'); if (cur && cur.querySelector('[data-act="dev-remove-go"]')) openRemoveDevice(cur.querySelector('[data-act="dev-remove-go"]').dataset.id); } break;
+    case 'dev-remove': AD.showLog = false; openRemoveDevice(d.id); break;
+    case 'dev-remove-go': removeDevice(d.id, el); break;
   }
 });
 document.addEventListener('input', e => { if (e.target.id === 'ad-name') AD.name = e.target.value; });

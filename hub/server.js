@@ -127,6 +127,13 @@ app.post('/api/refresh', requireAuth, async (req, res) => {
   try { res.json(await sendCommand({ type: 'refresh' })); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
+// Remove a device from the bridge (experimental, like adding).
+app.post('/api/removedevice', requireAuth, async (req, res) => {
+  const id = String((req.body || {}).id || '').trim();
+  if (!/^[0-9]{1,12}$/.test(id)) return res.status(400).json({ error: 'a device id is required' });
+  try { res.json(await sendCommand({ type: 'remove_device', id }, 40000)); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
 // Add a device to the bridge from the app (experimental; the LEAP steps live in agent/adddevice.py).
 app.post('/api/adddevice', requireAuth, async (req, res) => {
   const b = req.body || {};

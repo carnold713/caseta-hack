@@ -117,6 +117,14 @@ async def main():
     assert len([c for c in bridge5.calls if c[1] == "/device"]) == 3
     # after the last failure it read the room back for the log (no existing Pico to read in the stub)
     assert ("ReadRequest", "/area/23", None) in bridge5.calls, bridge5.calls
+    # removing sends a DeleteRequest for the device and refuses a bad id
+    bridge6 = StubBridge(); s6 = AddSession(lambda: bridge6, sent.append)
+    out = await s6.remove("42")
+    assert bridge6.calls[-1] == ("DeleteRequest", "/device/42", None) and out["id"] == "42"
+    try:
+        await s6.remove("x"); raise AssertionError("expected an error")
+    except ValueError:
+        pass
     print("adddevice: ok")
 
 

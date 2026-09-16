@@ -41,7 +41,8 @@ function remoteDetail(d) {
     <div class="card pad0 list">${rows}</div>
     ${usualLayoutHTML(d, true)}
     <div class="spacer"></div>
-    <div class="tip"><details class="more grow"><summary>This remote may still do what the Lutron app set up${ICON('chev', 'sm')}</summary><div class="body">Both things happen: what the Lutron app programmed and what you set here. To make a remote fully yours, open the Lutron app, tap this remote, and remove the lights it controls (keep it paired). Leave it as is if you only want to add a double press or a hold on top.</div></details></div>`;
+    <div class="tip"><details class="more grow"><summary>This remote may still do what the Lutron app set up${ICON('chev', 'sm')}</summary><div class="body">Both things happen: what the Lutron app programmed and what you set here. To make a remote fully yours, open the Lutron app, tap this remote, and remove the lights it controls (keep it paired). Leave it as is if you only want to add a double press or a hold on top.</div></details></div>
+    <div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="dev-remove" data-id="${d.device_id}"><div class="grow"><div class="t">Remove this remote from my home</div><div class="d">It leaves the bridge and stops working until it is added again.</div></div><span class="chev">${ICON('x', 'sm')}</span></button></div>`;
 }
 // The usual layout (docs/ux-flows.md 8): top on, bottom off, hold to brighten or dim, the round button a mood.
 // A tip above the Buttons on a fresh remote; a link row under them once it has settings. Four-button scene remotes get neither.

@@ -38,7 +38,7 @@ from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
 from sun import sun_times
 
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -485,6 +485,16 @@ class Agent:
                             await asyncio.sleep(2)
                         await self._refresh()
                         if self.bridge and any(str(d.get("serial") or "") == serial for d in self.bridge.devices.values()):
+                            break
+                    detail["devices"] = len(self.bridge.devices) if self.bridge else 0
+                elif kind == "remove_device":
+                    did = str(action.get("id") or "")
+                    detail = await self.adder.remove(did)
+                    for attempt in range(6):
+                        if attempt:
+                            await asyncio.sleep(2)
+                        await self._refresh()
+                        if not (self.bridge and did in self.bridge.devices):
                             break
                     detail["devices"] = len(self.bridge.devices) if self.bridge else 0
                 else:

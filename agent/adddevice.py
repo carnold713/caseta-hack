@@ -236,3 +236,11 @@ class AddSession:
         self.heard = [h for h in self.heard if h["serial"] != serial_s]
         await self.stop("created")
         return {"created": created, "name": name_s, "area": area_s}
+
+    async def remove(self, device_id: Any) -> dict:
+        """Take a device out of the bridge: DeleteRequest /device/{id}. Undocumented like the rest; logged."""
+        did = str(device_id or "").strip()
+        if not did.isdigit():
+            raise ValueError("a device id is required")
+        resp = await self._request("DeleteRequest", f"/device/{did}")
+        return {"removed": _resp(resp), "id": did}

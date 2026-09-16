@@ -62,8 +62,10 @@ Pico bindings from its cached config.
   pick a room. It speaks the same undocumented bridge protocol the Lutron
   app uses (`agent/adddevice.py` lists the four requests) and logs every
   exchange behind "Show technical details" so a bridge that answers
-  differently can be understood from the phone. New rooms still come from
-  the Lutron app for now.
+  differently can be understood from the phone. Removing works the same
+  way: "Remove from my home" on a light's page or a remote's page sends
+  the bridge a delete and clears everything here that used the device. New
+  rooms still come from the Lutron app for now.
 - **Autosave with Undo.** Nothing to remember to save.
 - **Recent activity:** what was pressed and what happened, for "who left
   the lights on" and for tuning the double-press timing.
