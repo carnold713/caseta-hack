@@ -114,6 +114,8 @@ async def main():
     except RuntimeError as exc:
         assert "500" in str(exc)
     assert len([c for c in bridge5.calls if c[1] == "/device"]) == 3
+    # after the last failure it read the room back for the log (no existing Pico to read in the stub)
+    assert ("ReadRequest", "/area/23", None) in bridge5.calls, bridge5.calls
     print("adddevice: ok")
 
 

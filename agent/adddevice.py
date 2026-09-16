@@ -160,6 +160,27 @@ class AddSession:
         self._send({"type": "add_state", "state": self.state(), "reason": reason})
         return self.state()
 
+    async def _peek(self, rec: dict, area_s: str) -> None:
+        """Every create shape failed: read back how this bridge describes a device like it, and the room,
+        so the log shows the shape a create should mirror."""
+        try:
+            bridge = self._need_bridge()
+            want = str(rec.get("device_type") or "")
+            like = None
+            for d in bridge.devices.values():
+                t = str(d.get("type") or "")
+                if t == "SmartBridge":
+                    continue
+                if t == want or (like is None and (t.startswith("Pico") == want.startswith("Pico"))):
+                    like = d
+                    if t == want:
+                        break
+            if like and like.get("device_id"):
+                await self._request("ReadRequest", f"/device/{like['device_id']}")
+            await self._request("ReadRequest", f"/area/{area_s}")
+        except Exception:  # noqa: BLE001
+            pass  # already logged by _request; this is diagnosis, not the feature
+
     async def _appeared(self, serial_s: str) -> bool:
         """After a failed create: did the bridge add the device anyway?"""
         try:
@@ -207,6 +228,7 @@ class AddSession:
                     created = {"status": "appeared after error"}
                     break
         if created is None:
+            await self._peek(rec, area_s)
             assert last_exc is not None
             raise last_exc
         self.heard = [h for h in self.heard if h["serial"] != serial_s]

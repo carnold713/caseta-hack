@@ -38,7 +38,7 @@ from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
 from sun import sun_times
 
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
