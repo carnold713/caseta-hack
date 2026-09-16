@@ -427,7 +427,7 @@ details.more > div { margin-top: 8px; }
 .pico-svg .pk.live .pk-shape, .pico-svg .pk:active .pk-shape { transform: scale(.94); fill: var(--blue-20); }
 .pico-svg .pk-dot { fill: var(--blue); }
 .pico-svg.overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
-.pico-svg.overlay rect:first-child, .pico-svg.overlay .pk-shape, .pico-svg.overlay text, .pico-svg.overlay circle, .pico-svg.overlay path, .pico-svg.overlay line { fill: transparent; stroke: transparent; }
+.pico-svg.overlay rect, .pico-svg.overlay .pk-shape, .pico-svg.overlay text, .pico-svg.overlay circle, .pico-svg.overlay path, .pico-svg.overlay line { fill: transparent; stroke: transparent; }
 .pico-svg.overlay .pk.sel .pk-shape { stroke: var(--blue); }
 .pico-svg.overlay .pk.live .pk-shape { fill: var(--blue-20); }
 .pico-photo { position: relative; }
@@ -588,3 +588,4 @@ input.slider { pointer-events: none; }
 .chips.scroll.dragging, .tiles.dragging, .moods.dragging, .ln-row.dragging { cursor: grabbing; scroll-behavior: auto; user-select: none; }
 @media (hover: hover) and (pointer: fine) { .chips.scroll, .tiles, .moods, .ln-row { cursor: grab; } }
 .nb-off.dark { background: var(--surface); color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.pico-svg.overlay g, .pico-svg.overlay .pk-shape { filter: none; }
