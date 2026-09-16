@@ -442,3 +442,7 @@ input.slider { pointer-events: none; }
 .ad-done .t2 { margin: 12px 0 4px; }
 .ad-done p { margin: 0 auto; max-width: 320px; }
 .tip .btn.sm { flex: none; }
+
+/* ---------- swipe to close: while a finger drags a sheet, nothing else moves it ---------- */
+.sheet.swiping { transition: none !important; }
+.sheet .sb { overscroll-behavior: contain; }
