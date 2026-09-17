@@ -116,6 +116,7 @@ function settingsHomePage() {
 // Nanoleaf controllers, and looking again.
 function settingsDevicesPage() {
   const info = S.agent.info || {};
+  const nHidden = hiddenDevices().length;
   return `
     <div class="gh">Rooms</div>
     <div class="card pad0 list">
@@ -126,12 +127,35 @@ function settingsDevicesPage() {
       <button class="item" data-act="ad-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a device</div><div class="d">Without the Lutron app</div></div></button>
       ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div></button>`; })()}
       <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
+      ${nHidden ? valueRow('Hidden devices', esc(plural(nHidden, 'device')), 'hidden-open', '', { sub: 'Removed here but the bridge still lists them' }) : ''}
     </div>
     <div class="gh">Nanoleaf</div>
     <div class="card pad0 list">
       ${nanoleafList().map(d => `<button class="item" data-act="nl-device" data-serial="${esc(d.serial)}"><div class="ic">${ICON('link', 'sm')}</div><div class="grow"><div class="t">${esc(d.name || 'Nanoleaf')}</div><div class="d">${esc(d.model || 'Light panels')}${d.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}
       <button class="item" data-act="nl-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">${nanoleafList().length ? 'Connect another Nanoleaf' : 'Connect a Nanoleaf'}</div><div class="d">Each one pairs on its own, hold its power button until it flashes</div></div></button>
     </div>`;
+}
+// A device removed from the app is kept hidden even if the bridge keeps listing it (js/adddevice.js), so a
+// removal never comes back on its own. This is the one place to see that list and undo it if something was
+// hidden by mistake or a removal did not go the way it looked like it did.
+function settingsHiddenSheet() {
+  const ids = hiddenDevices();
+  const rows = ids.map(id => {
+    const d = (S.inv.devices || {})[id];
+    const name = d ? d.name : 'A device the bridge still lists';
+    const sub = d ? `${cap(d.domain === 'pico' ? 'remote' : (d.domain || 'device'))}${d.type ? ` · ${d.type}` : ''}` : `id ${id}`;
+    return `<button class="item" data-act="hidden-unhide" data-id="${esc(id)}">${ICON(d && d.domain === 'pico' ? 'remote' : 'bulb', 'sm')}<div class="grow"><div class="t">${esc(name)}</div><div class="d">${esc(sub)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+  }).join('');
+  showSheet('hidden', 'Hidden devices', `<div class="card pad0 list">${rows || '<div class="item"><div class="grow"><div class="d">None hidden.</div></div></div>'}</div>
+    <p class="d" style="margin:16px 0 0">A device you removed stays off every list even if your bridge goes on reporting it, so a removal sticks. Tap one to bring it back.</p>`,
+    { detent: 'medium', sub: 'Removed here but the bridge still lists them', back: true, onBack: () => { S.settingsPage = 'devices'; render(); } });
+}
+function hiddenUnhide(id) {
+  const d = (S.inv.devices || {})[id];
+  unhideDevice(id);
+  save({ quiet: true, render: false });
+  if (hiddenDevices().length) settingsHiddenSheet(); else { S.settingsPage = 'devices'; render(); }
+  toast(`${d ? d.name : 'The device'} is no longer hidden`, { undo: async () => { hideDevice(id); await save({ msg: 'Hidden again', quiet: true }); if (S.settingsPage === 'devices') render(); } });
 }
 // Light sets: a hand-picked mix of lights, for a button or an automation to point at.
 function settingsSetsPage() {
@@ -161,7 +185,7 @@ function howToHTML() {
   return `<div class="muted" style="margin-top:8px">
     <p style="margin:0 0 8px"><b style="color:var(--text)">1.</b> Pick a computer that stays on and is on your home Wi-Fi: a Mac, a Raspberry Pi, a NAS, an old laptop.</p>
     <p style="margin:0 0 4px"><b style="color:var(--text)">2.</b> Open the Terminal app on it, paste this line, press Enter:</p>
-    <div class="code"><code>${esc(line)}</code><button class="iconbtn sm" data-act="copy" data-text="${esc(line)}">${ICON('copy', 'sm')}</button></div>
+    <div class="code"><code>${esc(line)}</code><button class="iconbtn sm" data-act="copy" data-text="${esc(line)}" aria-label="Copy">${ICON('copy', 'sm')}</button></div>
     <p style="margin:8px 0"><b style="color:var(--text)">3.</b> When it asks, press the small black button on the back of your Lutron bridge.</p>
     <p style="margin:0">That's it. The moment it connects, the dot at the top turns green and your rooms appear. It starts again by itself after a restart.</p>
   </div>`;

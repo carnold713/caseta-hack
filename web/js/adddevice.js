@@ -101,12 +101,27 @@ function adListenHTML() {
 }
 function adNameHTML() {
   const h = adPicked(); const rooms = adRooms();
+  const newChip = `<button class="chip" data-act="ad-newroom-open">${ICON('plus', 'sm')}New room</button>`;
   return `<div class="card"><div class="row">${ICON(adGlyph(h.device_type), 'lg')}<div class="grow"><div class="t">${esc(adTypeName(h.device_type))}</div><div class="d">${h.model ? esc(h.model) + ' · ' : ''}serial ${esc(h.serial)}</div></div></div></div>
     <label class="field"><span>Name</span><input class="input" id="ad-name" value="${esc(AD.name)}" placeholder="${esc(adDefaultName(h.device_type))}" maxlength="60" autocomplete="off"></label>
-    <div class="h2">Which room?</div><div class="chips" data-ad-rooms>${rooms.map(a => `<button class="chip ${AD.area === a.id ? 'sel' : ''}" data-act="ad-area" data-id="${esc(a.id)}">${esc(a.name)}</button>`).join('') || '<p class="muted">No rooms yet. Make one under Settings, Rooms.</p>'}</div>
+    <div class="h2">Which room?</div><div class="chips" data-ad-rooms>${rooms.map(a => `<button class="chip ${AD.area === a.id ? 'sel' : ''}" data-act="ad-area" data-id="${esc(a.id)}">${esc(a.name)}</button>`).join('')}${newChip}</div>
     ${adLutronNote()}
-    <p class="small faint" style="margin:12px 0 0">Need a new room? Make one under Settings, Rooms, and it appears here. Rooms belong to this app now, Philips Hue rooms included.</p>
     ${AD.error ? `<div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">The bridge said no</span><div class="t">${esc(AD.error)}</div><div class="d">Try once more. If it keeps failing, the technical details below are what to send along.</div></div></div>${adLogHTML()}` : ''}`;
+}
+// "New room", right where a room is picked (docs' owner example: adding a room should show up wherever a person
+// would think to add one). A compact sheet, one field, the same shape rooms.js uses; back returns to this step
+// without losing anything typed on it (the name field is not part of AD state, so it is untouched either way).
+function adNewRoomSheet() {
+  showSheet('ad-newroom', 'Name this room', `<label class="field"><span>Name</span><input class="input" id="ad-room-name" placeholder="New room" maxlength="40" autocomplete="off"></label>
+    <div class="sfoot"><button class="btn primary lg block" data-act="ad-newroom-save">Add</button></div>`,
+    { detent: 'compact', sub: 'It appears everywhere at once: Home, your remotes, your scenes.', back: true, onBack: () => adShow() });
+  setTimeout(() => { const i = document.getElementById('ad-room-name'); if (i) i.focus(); }, 350);
+}
+function adNewRoomSave() {
+  const input = document.getElementById('ad-room-name');
+  const room = roomsCreateQuiet((input && input.value) || '');
+  AD.area = room.id;
+  adShow();
 }
 function adDoneHTML() {
   const c = AD.created || {};
@@ -244,6 +259,8 @@ document.addEventListener('click', e => {
     case 'ad-pick': { AD.pick = d.serial; AD.name = ''; AD.error = null; const rooms = adRooms(); AD.area = rooms.length === 1 ? rooms[0].id : AD.area; adGo('name'); break; }
     // the room decides whether the "which Lutron room will be used" line is needed, so the step is drawn again
     case 'ad-area': AD.area = d.id; adShow(); break;
+    case 'ad-newroom-open': adNewRoomSheet(); break;
+    case 'ad-newroom-save': adNewRoomSave(); break;
     case 'ad-create': adCreate(); break;
     case 'ad-again': Object.assign(AD, { pick: null, name: '', error: null, created: null }); adGo('listen'); adStart(); break;
     case 'ad-log': AD.showLog = !AD.showLog; if (AD.open) adShow(); else { const cur = el.closest('.sb'); if (cur && cur.querySelector('[data-act="dev-remove-go"]')) openRemoveDevice(cur.querySelector('[data-act="dev-remove-go"]').dataset.id); } break;

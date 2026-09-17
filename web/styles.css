@@ -362,8 +362,10 @@ select.input { appearance: none; -webkit-appearance: none; background-image: url
 .tile .label { min-width: 0; max-width: 112px; text-align: center; }
 .tile .n { font-size: 14px; line-height: 16px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112px; }
 .tile .s { font-size: 12px; line-height: 16px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112px; }
-/* the corner button on a tile face: edit your own look, or what a Lutron one is. 32px with a 48px hit box. */
+/* the corner button on a tile face: edit your own look, or what a Lutron one is. 32px with a 48px hit box
+   (the ::before is the hit slop itself: same trick as .sw, no visible change). */
 .tile .face .tile-edit { position: absolute; right: 6px; bottom: 6px; width: 32px; height: 32px; background: var(--surface); box-shadow: var(--shadow-1); color: var(--text-2); }
+.tile .face .tile-edit::before { content: ""; position: absolute; inset: -8px; }
 /* Edit mode: the pencils appear, and the whole tile opens its editor instead of running it */
 .tile.editing .face { box-shadow: inset 0 0 0 2px var(--blue); }
 .tile .face .tile-edit svg.i { width: 18px; height: 18px; }

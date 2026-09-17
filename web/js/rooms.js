@@ -162,18 +162,29 @@ function roomDeviceRow(d, fromRoom) {
 }
 
 // ----- making, renaming, deleting -----
-function roomsNew() {
+// A room, made without navigating anywhere: the shape roomsNew() below builds for the Rooms page, but also the
+// one a room picker elsewhere in the app can call in place (the add-device flow's "Which room?", a light's own
+// "Move to a different room"), so making a room is reachable from wherever a person would think to make one, not
+// only from Settings › Rooms (the owner's own example). Named it when given a name; otherwise "New room[, 2, ...]".
+// opts.save: false skips this function's own save when the caller is about to mutate S.config again right away
+// and save that instead (roomsMoveNewRoom below): two independent saves fired back to back race on the network,
+// and if the first one's (stale) response lands after the second's, it silently undoes the second's change.
+function roomsCreateQuiet(name, opts = {}) {
   ensureRooms();
   const names = new Set(appRooms().map(r => r.name.toLowerCase()));
-  let name = 'New room', n = 2;
-  while (names.has(name.toLowerCase())) name = `New room ${n++}`;
-  const room = { id: uid(), name, device_ids: [], bridge_area: null, hue_room: null };
+  let n = String(name || '').trim().slice(0, 40);
+  if (!n) { n = 'New room'; let i = 2; while (names.has(n.toLowerCase())) n = `New room ${i++}`; }
+  else if (names.has(n.toLowerCase())) { let i = 2; while (names.has(`${n} ${i}`.toLowerCase())) i++; n = `${n} ${i}`; }
+  const room = { id: uid(), name: n, device_ids: [], bridge_area: null, hue_room: null };
   S.config.settings.rooms = [...appRooms(), room];
-  save({ quiet: true, render: false }).then(() => {
-    S.roomsEdit = room.id; S.view = 'rooms'; render(); window.scrollTo(0, 0);
-    setTimeout(() => { const i = document.getElementById('room-name'); if (i) { i.focus(); i.select(); } }, 120);
-    bridgeMakeRoom(room.id);
-  });
+  if (opts.save !== false) save({ quiet: true, render: false });
+  bridgeMakeRoom(room.id);
+  return room;
+}
+function roomsNew() {
+  const room = roomsCreateQuiet();
+  S.roomsEdit = room.id; S.view = 'rooms'; render(); window.scrollTo(0, 0);
+  setTimeout(() => { const i = document.getElementById('room-name'); if (i) { i.focus(); i.select(); } }, 120);
 }
 function roomsRename(id, value) {
   const r = roomById(id); if (!r) return;
@@ -194,14 +205,25 @@ function roomsDelete(id) {
 }
 
 // ----- moving a device between rooms -----
-function roomsMoveSheet(deviceId, fromRoom) {
+// opts.back / opts.onBack let a caller that is itself a sheet (a light's own page, "no room" anywhere a device
+// shows it) push this in place of replacing itself outright; the Rooms page calls it with neither, since there it
+// is the page underneath, not a sheet.
+function roomsMoveSheet(deviceId, fromRoom, opts = {}) {
   const d = dev(deviceId); if (!d) return;
   const rooms = [...appRooms()].sort((a, b) => a.name.localeCompare(b.name));
   const rows = rooms.map(r => pickRow(r.id, esc(r.name), r.id === fromRoom ? 'Where it is now' : '', r.id === fromRoom, lampHTML(0, 28, ICON(roomIcon(r.name), 'sm')))).join('');
-  sheet.open(`Which room is ${esc(d.name)} in?`, `<div class="card pad0 list" data-rooms-pick>${rows}</div>
+  const newChip = `<button class="item" data-act="rooms-move-new" data-id="${esc(deviceId)}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">New room</div></div></button>`;
+  showSheet('rooms-move', `Which room is ${esc(d.name)} in?`, `<div class="card pad0 list" data-rooms-pick>${rows}${newChip}</div>
     <p class="d" style="margin:16px 0 0">It moves here straight away. ${String(deviceId).startsWith('hue_') ? 'Your Hue bridge is told too, so the Hue app agrees.' : 'Your Lutron bridge is asked to move it too; if it says no, the app still has it right.'}</p>`,
-    { detent: 'medium', sub: 'Everything in the app follows at once.' });
+    { detent: 'medium', sub: 'Everything in the app follows at once.', back: !!opts.back, onBack: opts.onBack || null });
   sheet.onPickRoom = deviceId;
+}
+// "New room", right from the move sheet: the same test as the add-device flow (a room should be makeable
+// wherever a person would think to move something into one), without leaving the picker.
+function roomsMoveNewRoom(deviceId) {
+  // one save, from roomsMoveTo, carries both the new room and the move: see roomsCreateQuiet's opts.save.
+  const room = roomsCreateQuiet(null, { save: false });
+  roomsMoveTo(deviceId, room.id);
 }
 async function roomsMoveTo(deviceId, roomId) {
   const d = dev(deviceId); if (!d) return;
@@ -307,6 +329,7 @@ document.addEventListener('click', e => {
     case 'rooms-new': roomsNew(); break;
     case 'rooms-delete': roomsDelete(d.id); break;
     case 'rooms-move': roomsMoveSheet(d.id, d.from); break;
+    case 'rooms-move-new': roomsMoveNewRoom(d.id); break;
     case 'rooms-add': roomsAddSheet(d.id); break;
     case 'rooms-move-to': roomsMoveTo(d.id, d.room); break;
     case 'walk-pick': if (sheet.onPickRoom && document.querySelector('[data-rooms-pick]')) { const id = sheet.onPickRoom; sheet.onPickRoom = null; roomsMoveTo(id, d.v); } break;

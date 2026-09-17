@@ -42,7 +42,7 @@ function openSetupSheet() {
     { id: 'computer', kind: 'pick', title: 'Do you have a computer at home that stays on?', sub: 'A Mac, a Raspberry Pi, a NAS, an old laptop. A small helper program on it links this app to your Lutron bridge. About ten minutes, once.',
       body: () => `<div class="stage sm">${picoSVG(demo, { width: 76, model: 'PJ2-3BRL' })}</div><div class="card pad0 list">${pickRow('yes', 'Yes, show me how')}<button class="item" data-act="sheet-close"><div class="grow"><div class="t">Not yet</div></div></button></div>` },
     { id: 'paste', kind: 'custom', noNext: true, title: 'Paste this line on that computer', sub: 'Open the Terminal app on it, paste this line, press Enter.',
-      body: () => `<div class="code"><code>${esc(line)}</code><button class="iconbtn sm" data-act="copy" data-text="${esc(line)}">${ICON('copy', 'sm')}</button></div>
+      body: () => `<div class="code"><code>${esc(line)}</code><button class="iconbtn sm" data-act="copy" data-text="${esc(line)}" aria-label="Copy">${ICON('copy', 'sm')}</button></div>
         <p class="body" style="margin:16px 0 0">When it asks, press the small black button on the back of your Lutron bridge.</p>
         <p class="d" style="margin:12px 0 0">The moment it connects, the dot at the top turns green and your rooms appear. It starts again by itself after a restart.</p>` },
   ] });

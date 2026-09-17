@@ -480,11 +480,13 @@ function openColourSheet(id) {
   const body = `<div class="ld-ccol">${colorCtlHTML('ld', id, d, LD.color, { more: !!LD.more, bare, full: true })}</div>`;
   showSheet('light-colour', colourTitle(d), body, { detent: d.color ? 'large' : 'compact', sub: `${esc(d.name)} · ${esc(devAreaName(d))}`, back: true, onBack: () => openLightSheet(id) });
 }
-// The light page's More (2.2): what kind of light it is, and removing it from the home.
+// The light page's More (2.2): its room (docs' owner example: a light's own page is where you'd think to move a
+// light to a different room), what kind of light it is, and removing it from the home.
 function lightMoreSheet(id) {
   const d = dev(id); if (!d) return;
   const k = lightKind(id); const kind = k ? (KINDS.find(x => x[0] === k) || [])[1] : null; const role = lightRole(id);
   const body = `<div class="card pad0 list">
+    ${valueRow('Room', esc(devAreaName(d)), 'ld-room', `data-id="${id}"`)}
     ${valueRow('Kind of light', kind ? esc(kind) : 'Not set', 'ld-kind', `data-id="${id}"`)}
     ${/^(hue_|nanoleaf_)/.test(String(id)) ? '' : `<button class="item ld-remove" data-act="dev-remove" data-id="${id}">${ICON('trash')}<div class="grow"><div class="t">Remove from my home</div><div class="d">It leaves your Lutron bridge.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`}
   </div>`;
@@ -738,6 +740,7 @@ document.addEventListener('click', e => {
     case 'ld-timer': { const id = LD && LD.id; if (id && !(level(id) > 0)) break; sleepTimerSheet(d.t, { back: id ? () => openLightSheet(id) : null }); break; }
     case 'ld-fav': toggleFav(d.t); el.classList.toggle('on', S.config.favorites.includes(d.t)); break;
     case 'ld-kind': { const id = d.id; openKindSheet(id, { back: () => lightMoreSheet(id) }); break; }
+    case 'ld-room': { const id = d.id; if (typeof roomsMoveSheet === 'function') roomsMoveSheet(id, devArea(dev(id)), { back: true, onBack: () => lightMoreSheet(id) }); break; }
     case 'ld-more': lightMoreSheet(d.id); break;
     case 'sort-next': sortStep(d.id, false); break;
     case 'sort-skip': sortStep(d.id, true); break;

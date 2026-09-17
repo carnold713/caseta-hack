@@ -32,6 +32,9 @@ document.addEventListener('click', async e => {
     case 'remote-look': openLookSheet(); break;
     case 'remote-more': S.remoteLutron = false; remoteMoreSheet(); break;
     case 'remote-lutron': S.remoteLutron = !S.remoteLutron; remoteMoreSheet(); break;
+    case 'remote-room': { const id = S.remote; if (id && typeof roomsMoveSheet === 'function') roomsMoveSheet(id, devArea(dev(id)), { back: true, onBack: () => remoteMoreSheet() }); break; }
+    case 'hidden-open': settingsHiddenSheet(); break;
+    case 'hidden-unhide': hiddenUnhide(d.id); break;
     case 'usual-hide': try { localStorage.setItem(`usualHidden:${d.id}`, '1'); } catch (_) { /* ignore */ } { const t = $('#usualtip'); if (t) { if (window.gsap && !Motion.reduced()) { t.style.overflow = 'hidden'; gsap.to(t, { height: 0, opacity: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, duration: 0.255, ease: 'power2.inOut', onComplete: () => t.remove() }); } else t.remove(); } } break;
     case 'recipe-more': recipeMoreSheet(); break;
     case 'recipe-night': S.night = true; renderRecipeSheet(); break;
