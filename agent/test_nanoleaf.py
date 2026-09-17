@@ -1,6 +1,8 @@
 """The Nanoleaf client against a couple of small fake controllers: pairing two of them, loading their state,
-setting a level, a colour and white temperature, set_warmth's three promises, forgetting one, and the
-Kelvin<->mirek boundary. Run: python test_nanoleaf.py  (needs aiohttp)"""
+setting a level, a colour and white temperature, set_warmth's three promises, forgetting one, the
+Kelvin<->mirek boundary, and that "on" is sent unconditionally (even against a cache-drifted light that
+this module still believes is on) rather than gated on the module's own cached state. Run:
+python test_nanoleaf.py  (needs aiohttp)"""
 import asyncio
 import json
 import tempfile
@@ -115,9 +117,14 @@ async def main():
         # hue 300, sat 80 is a magenta-ish colour; xy lands inside the fallback gamut every Hue-shaped lamp uses
         assert in_gamut(tuple(b["color"]["xy"]), GAMUT_C), b["color"]
 
-        # setting a level while already on: brightness alone, no duration ever sent (the unit is not
-        # confirmed, see nanoleaf.py), and no redundant "on" resent since the panel is already lit
+        # setting a level while already on: "on" still goes out first (unconditionally, every time a call
+        # means to turn the light on, not just when the cache says it was off; see nanoleaf.py's note on
+        # turning on), brightness follows as a second put, and no duration is ever sent (the unit is not
+        # confirmed, see nanoleaf.py)
+        n_puts_before = len(a_state["puts"])
         await nl.set_level(nid("SN-AAA"), 40)
+        assert len(a_state["puts"]) == n_puts_before + 2, "on is resent even though the cache already said on"
+        assert a_state["puts"][-2] == {"on": {"value": True}}, a_state["puts"][-2]
         assert a_state["puts"][-1] == {"brightness": {"value": 40}}, a_state["puts"][-1]
         assert "duration" not in json.dumps(a_state["puts"][-1])
         await nl.set_level(nid("SN-AAA"), 0)
@@ -130,6 +137,29 @@ async def main():
         assert len(a_state["puts"]) == n_puts_before + 2, "off to on is two puts, not one"
         assert a_state["puts"][-2] == {"on": {"value": True}}, a_state["puts"][-2]
         assert a_state["puts"][-1] == {"ct": {"value": 4000}}, a_state["puts"][-1]
+
+        # cache-drift scenario: the module's own cached belief says this light is already on (it was just
+        # turned on above), but the real controller has since gone dark behind its back (someone flipped it
+        # at the wall, or a previous optimistic write never actually took). The old _was_off-gated logic
+        # would have looked at the stale cache, concluded "already on" and skipped the standalone "on" PUT,
+        # leaving a brightness-only body sent to a genuinely off panel. Confirm "on" still goes out.
+        assert nl.devices[nid("SN-AAA")]["current_state"] > 0, "cache believes the light is on"
+        a_state["on"] = False   # the controller's own truth has drifted away from the cache
+        n_puts_before = len(a_state["puts"])
+        await nl.set_level(nid("SN-AAA"), 55)
+        assert len(a_state["puts"]) == n_puts_before + 2, "on must be sent even though the cache said on"
+        assert a_state["puts"][-2] == {"on": {"value": True}}, a_state["puts"][-2]
+        assert a_state["puts"][-1] == {"brightness": {"value": 55}}, a_state["puts"][-1]
+        assert a_state["on"] is True and a_state["bri"] == 55, "the fake controller actually turned on this time"
+
+        # same drift, via set_color: the cache again believes the light is on, the controller has drifted off
+        assert nl.devices[nid("SN-AAA")]["current_state"] > 0, "cache believes the light is on"
+        a_state["on"] = False
+        n_puts_before = len(a_state["puts"])
+        await nl.set_color(nid("SN-AAA"), kelvin=3500)
+        assert len(a_state["puts"]) == n_puts_before + 2, "on must be sent even though the cache said on"
+        assert a_state["puts"][-2] == {"on": {"value": True}}, a_state["puts"][-2]
+        assert a_state["on"] is True, "the fake controller actually turned on this time"
         await nl.set_color(nid("SN-AAA"), kelvin=500)     # below the range: the warmest it does
         assert a_state["puts"][-1]["ct"]["value"] == 1200, a_state["puts"][-1]
         await nl.set_color(nid("SN-AAA"), kelvin=20000, level=30)   # above it: the coolest, with a brightness

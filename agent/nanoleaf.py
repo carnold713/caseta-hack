@@ -37,9 +37,16 @@ hardware, every state change this module sends is instant: no duration field is 
 A note on turning on: real controllers have been reported to drop "on" when it arrives bundled with
 brightness or colour in the same PUT while the panel was off, which is consistent with an owner seeing a
 brightness drag turn a dark panel on (many PUTs go out as the slider moves, so a later one gets through)
-while a single toggle tap does not (it sends exactly one). So a light actually off gets "on" as its own
-PUT first, then the rest as a second one; a light already on gets one PUT, as before, since there is
-nothing there to drop.
+while a single toggle tap does not (it sends exactly one). So "on" always goes out as its own PUT first,
+then brightness or colour follows as a second one, every time a call means to turn the light on. This
+used to be conditional on this module's own cached belief that the light was off (`_was_off`), but that
+cache is only ever refreshed by a poll (every POLL_SECONDS) or set optimistically by this module's own
+prior command, never by anything the panel itself pushes: there is no event stream here (unlike Hue's
+CLIP v2). A brightness-only PUT sent to a panel that is genuinely off can be silently accepted by real
+firmware with no error, so the cache would then read "on" at the new level until the next poll corrects
+it back, which looks exactly like a toggle turning a light on and then reverting a few seconds later.
+Sending "on" unconditionally, every time, costs one small extra request against an already-on panel
+(harmless and idempotent) and closes that gap for good.
 """
 from __future__ import annotations
 
@@ -262,20 +269,18 @@ class Nanoleaf:
                     self.errors[e["serial"]] = str(exc)
 
     # ----- control -----
-    def _was_off(self, device_id: str) -> bool:
-        d = self.devices.get(device_id)
-        return not bool(d and int(d.get("current_state") or 0) > 0)
-
-    async def _turn_on_first(self, host: str, token: str, device_id: str) -> None:
-        """See the module docstring's note on turning on: "on" goes out alone, before anything it might
-        otherwise be bundled with, whenever the light was off. A light already on skips this entirely."""
-        if self._was_off(device_id):
-            await self._put_state(host, token, {"on": {"value": True}})
+    async def _send_on(self, host: str, token: str) -> None:
+        """See the module docstring's note on turning on: "on" always goes out as its own PUT, before
+        anything it might otherwise be bundled with, whenever a call means to turn the light on. This is
+        unconditional on purpose, not gated on this module's cached belief about the light's state: that
+        cache can drift (stale poll, or an earlier optimistic write that assumed a PUT took effect), and
+        an already-on panel accepting a redundant "on" is harmless."""
+        await self._put_state(host, token, {"on": {"value": True}})
 
     async def set_level(self, device_id: str, level: int, fade_s: Optional[float] = None) -> None:  # noqa: ARG002 (fade_s: see module docstring)
         e = self._entry(device_id)
         if level > 0:
-            await self._turn_on_first(e["host"], e["token"], device_id)
+            await self._send_on(e["host"], e["token"])
             await self._put_state(e["host"], e["token"], {"brightness": {"value": max(1, min(100, int(level)))}})
         else:
             await self._put_state(e["host"], e["token"], {"on": {"value": False}})
@@ -314,7 +319,7 @@ class Nanoleaf:
             raise RuntimeError(f"{d.get('name')} cannot do that colour")
         # the body is validated and ready before anything is sent, so a colour the panel cannot do never
         # turns it on first and then fails: either both PUTs happen, or neither does
-        await self._turn_on_first(e["host"], e["token"], device_id)
+        await self._send_on(e["host"], e["token"])
         await self._put_state(e["host"], e["token"], body)
         if level is not None:
             d["current_state"] = int(level)
