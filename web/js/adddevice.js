@@ -38,7 +38,10 @@ function adGlyph(t) {
   return 'bulb';
 }
 function adDefaultName(t) { const n = adTypeName(t); return /^Pico/.test(n) ? 'New remote' : `New ${n.toLowerCase()}`; }
-function adRooms() { return Object.values(S.inv.areas || {}).filter(a => a && a.id && a.name).sort((a, b) => a.name.localeCompare(b.name)); }
+// Rooms a Lutron device can be put in. A Philips Hue room belongs to the Hue bridge, and the Lutron bridge
+// refuses to create a device in one, so those are not offered here.
+const hueRooms = () => Object.values(S.inv.areas || {}).filter(a => a && String(a.id).startsWith('hue_'));
+function adRooms() { return Object.values(S.inv.areas || {}).filter(a => a && a.id && a.name && !String(a.id).startsWith('hue_')).sort((a, b) => a.name.localeCompare(b.name)); }
 function adPicked() { return adHeard().find(h => h.serial === AD.pick) || { serial: AD.pick }; }
 function adLeft() { return Math.max(0, AD_SECONDS - Math.round((Date.now() - AD.startedAt) / 1000)); }
 const adClock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -89,7 +92,7 @@ function adNameHTML() {
   return `<div class="card"><div class="row">${ICON(adGlyph(h.device_type), 'lg')}<div class="grow"><div class="t">${esc(adTypeName(h.device_type))}</div><div class="d">${h.model ? esc(h.model) + ' · ' : ''}serial ${esc(h.serial)}</div></div></div></div>
     <label class="field"><span>Name</span><input class="input" id="ad-name" value="${esc(AD.name)}" placeholder="${esc(adDefaultName(h.device_type))}" maxlength="60" autocomplete="off"></label>
     <div class="h2">Which room?</div><div class="chips" data-ad-rooms>${rooms.map(a => `<button class="chip ${AD.area === a.id ? 'sel' : ''}" data-act="ad-area" data-id="${esc(a.id)}">${esc(a.name)}</button>`).join('') || '<p class="muted">No rooms yet. Make one in the Lutron app first.</p>'}</div>
-    <p class="small faint" style="margin:12px 0 0">Need a new room? For now rooms are still made in the Lutron app. Add the device to any room and move it later.</p>
+    <p class="small faint" style="margin:12px 0 0">Need a new room? For now rooms are still made in the Lutron app. Add the device to any room and move it later.${hueRooms().length ? ` Rooms from your Philips Hue bridge are not listed: a Lutron device has to live in a Lutron room. It can still control any light once it is added, Hue lamps included.` : ''}</p>
     ${AD.error ? `<div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">The bridge said no</span><div class="t">${esc(AD.error)}</div><div class="d">Try once more. If it keeps failing, the technical details below are what to send along.</div></div></div>${adLogHTML()}` : ''}`;
 }
 function adDoneHTML() {

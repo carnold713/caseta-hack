@@ -199,6 +199,9 @@ class AddSession:
         area_s = str(area_id or "").strip()
         if not serial_s or not name_s or not area_s:
             raise ValueError("serial, name and room are required")
+        if area_s.startswith("hue_"):
+            # A Philips Hue room lives on the Hue bridge. The Lutron bridge has no such area and answers 400.
+            raise ValueError("that room belongs to your Philips Hue bridge, so a Lutron device cannot go in it: pick a room that came from the Lutron bridge")
         # the bridge reports the serial as a number; send it back the same way
         serial_v: Any = int(serial_s) if serial_s.isdigit() else serial_s
         rec = next((h for h in self.heard if h["serial"] == serial_s), None) or {}
