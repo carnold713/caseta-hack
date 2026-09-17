@@ -46,6 +46,13 @@ VIEWS.rooms = {
 };
 
 const roomById = id => (id ? appRooms().find(r => r.id === id) || null : null);
+// A short "· Hue" / "· Nanoleaf" suffix for a device row, or nothing for a plain Lutron device.
+function bridgeTag(deviceId) {
+  const id = String(deviceId);
+  if (id.startsWith('hue_')) return ' · Hue';
+  if (id.startsWith('nanoleaf_')) return ' · Nanoleaf';
+  return '';
+}
 // Every device the app can file in a room: the lights, switches, fans, shades and the remotes.
 const fileable = () => [...controllable(), ...remotes()];
 
@@ -124,8 +131,9 @@ function roomEditHTML(r) {
 }
 // What the bridges know about this room, in plain words. Never a promise the bridge did not keep.
 function roomWhereHTML(r, mine) {
-  const hasLutron = mine.some(d => !String(d.device_id).startsWith('hue_'));
+  const hasLutron = mine.some(d => !/^(hue_|nanoleaf_)/.test(String(d.device_id)));
   const hasHue = mine.some(d => String(d.device_id).startsWith('hue_'));
+  const hasNanoleaf = mine.some(d => String(d.device_id).startsWith('nanoleaf_'));
   const lines = [];
   if (r.bridge_area) lines.push('Your Lutron bridge has a room of its own for this, so a new Lutron device can be filed straight into it.');
   else if (hasLutron) lines.push('Your Lutron bridge has no room of its own for this one. Everything here works anyway: its lights stay in whatever Lutron room they were in, and this app is what decides where they live.');
@@ -133,13 +141,14 @@ function roomWhereHTML(r, mine) {
   else lines.push('This room is the app\'s own. If you add a Lutron device to it, the bridge will be asked for a room to match, and told where to put it.');
   if (r.hue_room) lines.push('It is also a room on your Philips Hue bridge, so renaming it here renames it there.');
   else if (hasHue) lines.push('Its Hue lamps keep their own Hue room until you move one from here.');
+  if (hasNanoleaf) lines.push('A Nanoleaf controller has no room of its own to match: this app is the only place it is filed.');
   return `<div class="tip" style="margin-top:8px"><div class="grow"><span class="cap">Where it lives</span>${lines.map(l => `<div class="d">${esc(l)}</div>`).join('')}</div></div>`;
 }
 function roomDeviceRow(d, fromRoom) {
   const isPico = d.domain === 'pico';
   const glyph = isPico ? ICON('remote', 'sm') : ICON(typeof lightIcon === 'function' ? lightIcon(d) : 'bulb', 'sm');
   const lv = isPico ? 0 : (level(d.device_id) || 0);
-  return `<button class="item" data-act="rooms-move" data-id="${esc(d.device_id)}" data-from="${esc(fromRoom)}">${lampHTML(lv, 28, glyph)}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(isPico ? 'Remote' : cap(d.domain === 'cover' ? 'shade' : d.domain))}${String(d.device_id).startsWith('hue_') ? ' · Hue' : ''}</div></div><span class="val">${esc(fromRoom === 'none' ? 'Elsewhere' : areaName(fromRoom))}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+  return `<button class="item" data-act="rooms-move" data-id="${esc(d.device_id)}" data-from="${esc(fromRoom)}">${lampHTML(lv, 28, glyph)}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(isPico ? 'Remote' : cap(d.domain === 'cover' ? 'shade' : d.domain))}${bridgeTag(d.device_id)}</div></div><span class="val">${esc(fromRoom === 'none' ? 'Elsewhere' : areaName(fromRoom))}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`;
 }
 
 // ----- making, renaming, deleting -----
@@ -205,7 +214,7 @@ function roomsAddSheet(roomId) {
   const groupsByRoom = [...new Set(others.map(devArea))]
     .map(id => ({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) }))
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map(a => { const ds = others.filter(d => devArea(d) === a.id); return ds.length ? `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="rooms-move-to" data-id="${esc(d.device_id)}" data-room="${esc(roomId)}">${lampHTML(d.domain === 'pico' ? 0 : (level(d.device_id) || 0), 28, ICON(d.domain === 'pico' ? 'remote' : (typeof lightIcon === 'function' ? lightIcon(d) : 'bulb'), 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(d.domain === 'pico' ? 'Remote' : cap(d.domain === 'cover' ? 'shade' : d.domain))}${String(d.device_id).startsWith('hue_') ? ' · Hue' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>` : ''; })
+    .map(a => { const ds = others.filter(d => devArea(d) === a.id); return ds.length ? `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="rooms-move-to" data-id="${esc(d.device_id)}" data-room="${esc(roomId)}">${lampHTML(d.domain === 'pico' ? 0 : (level(d.device_id) || 0), 28, ICON(d.domain === 'pico' ? 'remote' : (typeof lightIcon === 'function' ? lightIcon(d) : 'bulb'), 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(d.domain === 'pico' ? 'Remote' : cap(d.domain === 'cover' ? 'shade' : d.domain))}${bridgeTag(d.device_id)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>` : ''; })
     .join('');
   sheet.open(`Move something into ${esc(r.name)}`, groupsByRoom || `<div class="tip"><div class="grow"><div class="t">Everything is already in this room</div></div></div>`, { detent: 'large', sub: 'Tap anything to move it here.' });
 }
@@ -253,6 +262,8 @@ async function bridgeMoveDevice(deviceId, roomId) {
     } catch (e) { toast(`Moved here. Your Hue bridge did not follow: ${friendlyError(e.message)}`); }
     return;
   }
+  // Nanoleaf has no bridge-native room to keep in step with: the app's own room is the only place this lives.
+  if (String(deviceId).startsWith('nanoleaf_')) return;
   if (!r.bridge_area) return;   // nothing to ask of a bridge that has no room for this
   try { await roomsApi({ op: 'device_move', id: deviceId, area: r.bridge_area }); }
   catch (e) { toast(`Moved here. Your Lutron bridge kept it where it was: ${friendlyError(e.message)}`); }

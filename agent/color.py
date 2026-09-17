@@ -1,10 +1,14 @@
-"""Colour maths for Hue lights, with no dependencies.
+"""Colour maths for the app's lights, with no dependencies.
 
-The Hue bridge speaks CIE 1931 xy for colour and mirek (1e6 / kelvin) for white temperature. The
-app speaks hex and kelvin. This module converts between them the way Philips documents it: sRGB
-gamma, the Wide RGB D65 matrix, and a clamp to the light's gamut triangle (a colour a lamp cannot
-make becomes the nearest one it can). kelvin_to_hex paints a white tone for the app's discs; it is
-an approximation of a black body, good enough for a swatch and never sent to a bridge.
+The Hue bridge speaks CIE 1931 xy for colour and mirek (1e6 / kelvin) for white temperature. Nanoleaf
+speaks hue (0-360) and saturation (0-100) for colour and kelvin directly for white temperature. The
+app speaks hex and kelvin throughout, and the two connectors convert at the boundary into one shared
+shape (xy for colour, mirek for white); hsv_to_rgb and rgb_to_hsv are what Nanoleaf's hue/sat crosses
+through on the way to and from that shape (hue.py and nanoleaf.py both go through xy from there).
+This module converts between them the way Philips documents it: sRGB gamma, the Wide RGB D65 matrix,
+and a clamp to the light's gamut triangle (a colour a lamp cannot make becomes the nearest one it
+can). kelvin_to_hex paints a white tone for the app's discs; it is an approximation of a black body,
+good enough for a swatch and never sent to a bridge or a Nanoleaf controller.
 """
 from __future__ import annotations
 
@@ -132,6 +136,47 @@ def xy_to_rgb(x: float, y: float, bri: float = 1.0, gamut: Optional[Gamut] = Non
 
 def xy_to_hex(x: float, y: float, bri: float = 1.0, gamut: Optional[Gamut] = None) -> str:
     return rgb_to_hex(*xy_to_rgb(x, y, bri, gamut))
+
+
+# ----- HSV <-> RGB (Nanoleaf speaks hue 0-360 and saturation 0-100 natively, not xy) -----
+def hsv_to_rgb(h: float, s: float, v: float = 100.0) -> Tuple[int, int, int]:
+    """h in 0..360, s and v in 0..100 -> r, g, b in 0..255."""
+    hh = float(h) % 360.0
+    ss = max(0.0, min(100.0, float(s))) / 100.0
+    vv = max(0.0, min(100.0, float(v))) / 100.0
+    c = vv * ss
+    x = c * (1 - abs((hh / 60.0) % 2 - 1))
+    m = vv - c
+    if hh < 60:
+        r, g, b = c, x, 0.0
+    elif hh < 120:
+        r, g, b = x, c, 0.0
+    elif hh < 180:
+        r, g, b = 0.0, c, x
+    elif hh < 240:
+        r, g, b = 0.0, x, c
+    elif hh < 300:
+        r, g, b = x, 0.0, c
+    else:
+        r, g, b = c, 0.0, x
+    return tuple(int(round((ch + m) * 255)) for ch in (r, g, b))  # type: ignore[return-value]
+
+
+def rgb_to_hsv(r: float, g: float, b: float) -> Tuple[float, float, float]:
+    """r, g, b in 0..255 -> h in 0..360, s and v in 0..100."""
+    rr, gg, bb = r / 255.0, g / 255.0, b / 255.0
+    mx, mn = max(rr, gg, bb), min(rr, gg, bb)
+    d = mx - mn
+    if d == 0:
+        hh = 0.0
+    elif mx == rr:
+        hh = 60.0 * (((gg - bb) / d) % 6)
+    elif mx == gg:
+        hh = 60.0 * (((bb - rr) / d) + 2)
+    else:
+        hh = 60.0 * (((rr - gg) / d) + 4)
+    ss = 0.0 if mx == 0 else d / mx
+    return (round(hh % 360.0, 1), round(ss * 100, 1), round(mx * 100, 1))
 
 
 # ----- white temperature -----

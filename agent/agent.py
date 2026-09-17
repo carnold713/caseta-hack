@@ -38,9 +38,10 @@ import daylight
 from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
 from hue import Hue, color_state
+from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -108,9 +109,14 @@ class Agent:
         self.runner = ActionRunner(lambda: self.bridge, lambda: self.config, on_timer=self._on_timer)
         self.adder = AddSession(lambda: self.bridge, self.send)  # "Add a device" from the app
         self.hue = Hue(DATA_DIR, on_state=self._on_hue_state, on_loaded=self._merge_hue)
-        self.runner.hue_set = self.hue.set_level
-        self.runner.hue_color = self.hue.set_color
-        self.runner.hue_scene = self.hue.recall_scene
+        self.nanoleaf = Nanoleaf(DATA_DIR, on_state=self._on_nanoleaf_state, on_loaded=self._merge_nanoleaf)
+        # One callback slot per kind of action on ActionRunner (unchanged from when only Hue existed); what agent.py
+        # hands it is a small dispatcher that looks at the device id's prefix and calls the matching backend, keyed
+        # by this table, so a third backend is one more entry here rather than a new call site in engine.py.
+        self._backends: Dict[str, Any] = {"hue_": self.hue, "nanoleaf_": self.nanoleaf}
+        self.runner.hue_set = self._level_set_bridge
+        self.runner.hue_color = self._color_set
+        self.runner.hue_scene = self._scene_recall
         self.runner.memory_file = DATA_DIR / "last_on.json"
         self.runner.load_memory()
         self._index_bindings()
@@ -218,8 +224,43 @@ class Agent:
         if self.bridge and self.bridge.devices:
             self._wire_subscriptions()
             self._merge_hue(send=False)
+            self._merge_nanoleaf(send=False)
             self.send({"type": "inventory", "inventory": self.inventory()})
             self.send({"type": "state", "states": self.all_states()})
+
+    # ---------- dispatch: which backend a device id belongs to ----------
+    def _backend_for(self, device_id: str) -> Optional[Any]:
+        did = str(device_id)
+        for prefix, backend in self._backends.items():
+            if did.startswith(prefix):
+                return backend
+        return None
+
+    async def _level_set_bridge(self, device_id: str, level: int, fade_s: Optional[float]) -> None:
+        backend = self._backend_for(device_id)
+        if backend is None:
+            raise RuntimeError(f"no light backend for {device_id}")
+        await backend.set_level(device_id, level, fade_s)
+
+    async def _color_set(self, device_id: str, kelvin: Optional[float] = None, hex: Optional[str] = None, fade_s: Optional[float] = None, level: Optional[int] = None) -> None:  # noqa: A002
+        backend = self._backend_for(device_id)
+        if backend is None:
+            raise RuntimeError(f"no light backend for {device_id}")
+        await backend.set_color(device_id, kelvin=kelvin, hex=hex, fade_s=fade_s, level=level)
+
+    async def _scene_recall(self, scene_id: str) -> None:
+        backend = self._backend_for(scene_id)
+        if backend is None or not hasattr(backend, "recall_scene"):
+            raise RuntimeError(f"no backend can recall scene {scene_id}")
+        await backend.recall_scene(scene_id)
+
+    async def _warmth_set(self, device_id: str, kelvin: float, fade_s: Optional[float] = None, level: Optional[int] = None) -> bool:
+        """Follow the day's own path to a lamp (agent.py's _follow_apply), one backend removed: same three
+        promises as Hue.set_warmth and Nanoleaf.set_warmth, for whichever backend this id belongs to."""
+        backend = self._backend_for(device_id)
+        if backend is None:
+            return False
+        return await backend.set_warmth(device_id, kelvin, fade_s=fade_s, level=level)
 
     # ---------- Hue: its lights, rooms and scenes sit in the bridge's dictionaries under hue_ ids ----------
     def _merge_hue(self, send: bool = True) -> None:
@@ -237,7 +278,29 @@ class Agent:
             self.send({"type": "hue", "hue": self.hue.info()})
 
     def _on_hue_state(self, device_id: str) -> None:
-        d = self.hue.devices.get(device_id)
+        self._on_light_state(self.hue.devices, device_id)
+
+    # ---------- Nanoleaf: a list of directly-paired controllers, each its own light in the same dictionaries ----------
+    def _merge_nanoleaf(self, send: bool = True) -> None:
+        if not self.bridge:
+            return
+        for k in [k for k in self.bridge.devices if str(k).startswith("nanoleaf_")]:
+            if k not in self.nanoleaf.devices:
+                del self.bridge.devices[k]
+        for k, v in self.nanoleaf.devices.items():
+            self.bridge.devices[k] = v
+        if send:
+            self.send({"type": "inventory", "inventory": self.inventory()})
+            self.send({"type": "state", "states": self.all_states()})
+            self.send({"type": "nanoleaf", "nanoleaf": self.nanoleaf.info()})
+
+    def _on_nanoleaf_state(self, device_id: str) -> None:
+        self._on_light_state(self.nanoleaf.devices, device_id)
+
+    def _on_light_state(self, devices: Dict[str, dict], device_id: str) -> None:
+        """Shared by every backend's on_state callback: update what the app is told, and let follow-the-day
+        and a hold-to-dim ramp react the same way regardless of whose light this is."""
+        d = devices.get(device_id)
         if not d:
             return
         st = _state_of(d)
@@ -275,8 +338,10 @@ class Agent:
                 "area": d.get("area"),
                 "domain": _domain(d.get("type")),
             }
-            if str(did).startswith("hue_") and (d.get("color") or d.get("ct")):
-                # what the lamp can do, in the app's units: the mirek range becomes kelvin, widest first
+            if d.get("color") or d.get("ct"):
+                # what the lamp can do, in the app's units: the mirek range becomes kelvin, widest first.
+                # Only Hue and Nanoleaf devices ever set "color"/"ct" on their dict at all, so the dict's own
+                # shape is what gates this, not which backend the id happens to belong to.
                 devices[did]["color"] = bool(d.get("color"))
                 devices[did]["ct"] = bool(d.get("ct"))
                 if d.get("ct"):
@@ -291,7 +356,7 @@ class Agent:
         areas = {aid: {"id": aid, "name": a.get("name"), "parent_id": a.get("parent_id")} for aid, a in b.areas.items()}
         scenes = {sid: {"scene_id": sid, "name": s.get("name")} for sid, s in b.scenes.items()}
         return {"devices": devices, "buttons": buttons, "areas": areas, "scenes": scenes,
-                "bridge": {"host": BRIDGE_HOST}, "hue": self.hue.info()}
+                "bridge": {"host": BRIDGE_HOST}, "hue": self.hue.info(), "nanoleaf": self.nanoleaf.info()}
 
     def all_states(self) -> Dict[str, dict]:
         assert self.bridge
@@ -615,7 +680,7 @@ class Agent:
             # and it only ever comes down: a lamp already dimmer than the curve is left where it is
             level = int(curve) if curve is not None and here > curve else None
             try:
-                ok = await self.hue.set_warmth(did, daylight.mirek_to_kelvin(mirek), fade_s=fade, level=level)
+                ok = await self._warmth_set(did, daylight.mirek_to_kelvin(mirek), fade_s=fade, level=level)
             except Exception as exc:  # noqa: BLE001
                 LOG.warning("follow the day: %s did not take it (%s)", did, exc)
                 continue
@@ -659,6 +724,7 @@ class Agent:
                         "type": "hello", "version": VERSION, "commit": current_commit(), "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
                         "timers": self.runner.timers, "sun": self.sun_today(), "next_runs": self.next_fire_times(), "hue": self.hue.info(),
+                        "nanoleaf": self.nanoleaf.info(),
                         "follow": self.follow_state(),
                         "health": self.health(),
                     }))
@@ -741,6 +807,15 @@ class Agent:
                 elif kind == "hue_forget":
                     detail = await self.hue.forget()
                     self._merge_hue()
+                elif kind == "nanoleaf_discover":
+                    detail = {"devices": await self.nanoleaf.discover()}
+                elif kind == "nanoleaf_pair":
+                    detail = await self.nanoleaf.pair(str(action.get("host") or ""))
+                    self._merge_nanoleaf()
+                    self.send({"type": "nanoleaf", "nanoleaf": self.nanoleaf.info()})
+                elif kind == "nanoleaf_forget":
+                    detail = await self.nanoleaf.forget(str(action.get("serial") or ""))
+                    self._merge_nanoleaf()
                 elif kind == "remove_device":
                     did = str(action.get("id") or "")
                     detail = await self.adder.remove(did)
@@ -879,9 +954,10 @@ class Agent:
         assert self.bridge
         await self.bridge.connect()
         self._wire_subscriptions()
-        # connect() rebuilds the bridge's own dictionaries, so the Hue lights have to be put back beside them
-        # or they would disappear from the app until the next Hue load.
+        # connect() rebuilds the bridge's own dictionaries, so the Hue and Nanoleaf lights have to be put back
+        # beside them or they would disappear from the app until the next load of each.
         self._merge_hue(send=False)
+        self._merge_nanoleaf(send=False)
         self.send({"type": "inventory", "inventory": self.inventory()})
         self.send({"type": "state", "states": self.all_states()})
 
@@ -907,13 +983,17 @@ def _domain(t: Optional[str]) -> str:
         return "light"
     if t == "HueSwitch":
         return "switch"
+    if t == "NanoleafLight":
+        return "light"
     return "other"
 
 
 def _state_of(d: dict) -> dict:
     lvl = d.get("current_state", -1)
     st = {"level": int(lvl) if isinstance(lvl, (int, float)) and lvl >= 0 else None, "fan_speed": d.get("fan_speed")}
-    if str(d.get("device_id", "")).startswith("hue_"):
+    if d.get("color") is not None or d.get("ct") is not None:
+        # Any backend's lamp that says it can do colour or white temperature, not just Hue's: color_state
+        # only reads the dict shape, so it already works for a Nanoleaf light unchanged.
         c = color_state(d)  # {"mode": "ct" | "xy" | None, "kelvin", "xy", "hex"} for a lamp that can do either
         if c:
             st["color"] = c
@@ -929,6 +1009,7 @@ async def main() -> None:
     agent = Agent()
     await agent.connect_bridge()
     await agent.hue.start()  # no-op until a Hue bridge is paired from the app
+    await agent.nanoleaf.start()  # no-op until a Nanoleaf controller is paired from the app
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -946,6 +1027,7 @@ async def main() -> None:
     watch.cancel()
     follow.cancel()
     await agent.hue.stop()
+    await agent.nanoleaf.stop()
     if agent.bridge:
         await agent.bridge.close()
 

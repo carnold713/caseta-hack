@@ -112,7 +112,8 @@ function settingsHomePage() {
       <div class="item disc" style="flex-wrap:wrap"><button class="dsum grow" data-act="settings-how" aria-expanded="${S.settingsHow ? 'true' : 'false'}"><div><div class="t">How your home connects</div><div class="d">The helper program, and the line that installs it</div></div>${ICON('chev', 'sm')}</button><div class="dwrap ${S.settingsHow ? 'open' : ''}"><div>${howToHTML()}</div></div></div>
     </div>`;
 }
-// Rooms and lights: the rooms themselves, adding a device without the Lutron app, the Hue bridge, and looking again.
+// Rooms and lights: the rooms themselves, adding a device without the Lutron app, the Hue bridge, any paired
+// Nanoleaf controllers, and looking again.
 function settingsDevicesPage() {
   const info = S.agent.info || {};
   return `
@@ -125,6 +126,11 @@ function settingsDevicesPage() {
       <button class="item" data-act="ad-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a device</div><div class="d">Without the Lutron app</div></div></button>
       ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div></button>`; })()}
       <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
+    </div>
+    <div class="gh">Nanoleaf</div>
+    <div class="card pad0 list">
+      ${nanoleafList().map(d => `<button class="item" data-act="nl-device" data-serial="${esc(d.serial)}"><div class="ic">${ICON('link', 'sm')}</div><div class="grow"><div class="t">${esc(d.name || 'Nanoleaf')}</div><div class="d">${esc(d.model || 'Light panels')}${d.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}
+      <button class="item" data-act="nl-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">${nanoleafList().length ? 'Connect another Nanoleaf' : 'Connect a Nanoleaf'}</div><div class="d">Each one pairs on its own, hold its power button until it flashes</div></div></button>
     </div>`;
 }
 // Light sets: a hand-picked mix of lights, for a button or an automation to point at.

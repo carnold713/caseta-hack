@@ -141,7 +141,7 @@ function connectWS() {
       // a timer's block belongs on Home; when the news arrives while a sheet is still sliding shut, render once it has
       case 'timers': S.timers = m.timers || {}; if (S.view === 'home') { if (sheet.isOpen()) setTimeout(() => { if (S.view === 'home' && !sheet.isOpen()) render(); }, 420); else render(); } else paintNowBar(); break;
       case 'config': if (JSON.stringify(m.config) !== S.lastSaved) { S.config = m.config; S.lastSaved = JSON.stringify(m.config); render(); } break;
-      case 'agent': S.agent = { online: m.online, info: m.info || null }; connChanged(!!m.online); render(); if (window.Hue) Hue.onAgent(); break;
+      case 'agent': S.agent = { online: m.online, info: m.info || null }; connChanged(!!m.online); render(); if (window.Hue) Hue.onAgent(); if (window.Nanoleaf) Nanoleaf.onAgent(); break;
       case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
       // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
       case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; noteSunClock(); if (typeof paintSun === 'function') paintSun(); if (typeof paintFollow === 'function') paintFollow(); break;

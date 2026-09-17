@@ -26,6 +26,7 @@
       ['track', 'Track light', 'Wall track light', 'ambient', 'lamp-track'],
       ['tape', 'Tape light', 'Wall tape light', 'accent', 'lamp-tape'],
       ['mirror', 'Mirror light', 'Mirror light', 'task', 'lamp-mirror'],
+      ['panels', 'Light panels', 'Wall light panels', 'accent', 'lamp-panels'],
     ] },
     { id: 'window', name: 'Window', icon: 'window', fixtures: [
       ['track', 'Track light', 'Window track light', 'ambient', 'lamp-track'],

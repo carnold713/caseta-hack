@@ -162,6 +162,15 @@ Pico bindings from its cached config.
   lamp. The connector reads what each lamp can do from the bridge (its
   gamut and mirek range) and clamps every request to it, so nothing is
   ever sent that the lamp cannot show.
+- **Nanoleaf too.** Settings › Nanoleaf: hold the power button on the
+  controller for 5-7 seconds until its panels flash, then tap Connect.
+  Unlike Hue there is no bridge, so this is a list, not one toggle: each
+  controller pairs on its own, joins the app as its own light, and can be
+  forgotten on its own without touching any other one. It has no room of
+  its own to match, so it files into one of your rooms exactly like a
+  Caséta device, and it is offered on/off, brightness, colour and warmth
+  and works with rooms, moods, scenes, automations and Follow the day the
+  same way a Hue lamp does. Built-in Nanoleaf effects are not part of this.
 - **Follow the day.** A lamp can keep its white matched to the time of day by
   itself, for as long as it is on: cool and bright around midday, warm in the
   evening, like daylight. The curve is anchored to your own sunrise, solar noon
@@ -371,7 +380,9 @@ agent/adddevice.py  add a device from the app: association mode, device heard, c
                   undocumented room requests (create an area, rename one, move a device)
 agent/hue.py      Philips Hue bridge: pairing, lights and rooms as hue_ devices, levels, colour and warmth,
                   room create/rename/delete and moving a lamp between rooms, event stream
-agent/color.py    CIE xy <-> hex with gamut clamping, kelvin <-> mirek, a black-body tint (no dependencies)
+agent/nanoleaf.py A list of directly-paired Nanoleaf controllers, each its own nanoleaf_ device: pairing,
+                  levels, colour and warmth, no bridge and no native room, a light poll instead of an event stream
+agent/color.py    CIE xy <-> hex with gamut clamping, kelvin <-> mirek, hue/sat <-> rgb, a black-body tint (no dependencies)
 agent/daylight.py Follow the day: the anchor table, the sun-anchored curve, mireds, and each lamp's own limits
 agent/sun.py      sunrise, sunset and solar noon for a date and a place (NOAA, no network)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
@@ -386,6 +397,7 @@ APP_PASSWORD=dev AGENT_TOKEN=dev npm start     # http://localhost:4400
 cd agent && python test_engine.py             # gesture timing tests
 cd agent && python test_adddevice.py          # add-device session against a stub bridge
 cd agent && python test_hue.py                # Hue client against a fake bridge (needs aiohttp)
+cd agent && python test_nanoleaf.py           # Nanoleaf client against two fake controllers (needs aiohttp)
 cd agent && python test_color.py              # colour maths: round trips, gamut clamping, kelvin
 cd agent && python test_daylight.py           # Follow the day: the anchors, mireds, a lamp's limits, a northern summer
 ```

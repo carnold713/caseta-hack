@@ -486,7 +486,7 @@ function lightMoreSheet(id) {
   const k = lightKind(id); const kind = k ? (KINDS.find(x => x[0] === k) || [])[1] : null; const role = lightRole(id);
   const body = `<div class="card pad0 list">
     ${valueRow('Kind of light', kind ? esc(kind) : 'Not set', 'ld-kind', `data-id="${id}"`)}
-    ${String(id).startsWith('hue_') ? '' : `<button class="item ld-remove" data-act="dev-remove" data-id="${id}">${ICON('trash')}<div class="grow"><div class="t">Remove from my home</div><div class="d">It leaves your Lutron bridge.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`}
+    ${/^(hue_|nanoleaf_)/.test(String(id)) ? '' : `<button class="item ld-remove" data-act="dev-remove" data-id="${id}">${ICON('trash')}<div class="grow"><div class="t">Remove from my home</div><div class="d">It leaves your Lutron bridge.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`}
   </div>`;
   void role;
   showSheet('light-more', esc(d.name), body, { detent: 'compact', sub: lightCaption(id), back: true, onBack: () => openLightSheet(id) });

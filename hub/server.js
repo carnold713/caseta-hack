@@ -140,6 +140,17 @@ app.post('/api/hue', requireAuth, async (req, res) => {
   try { res.json(await sendCommand(action, b.op === 'pair' ? 70000 : 25000)); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
+// Nanoleaf: unlike Hue there is no bridge, so this covers a list of directly-paired controllers, each with
+// its own address and its own held-button pairing. "forget" names which one by its serial.
+app.post('/api/nanoleaf', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!['discover', 'pair', 'forget'].includes(b.op)) return res.status(400).json({ error: 'op must be discover, pair or forget' });
+  const action = { type: `nanoleaf_${b.op}` };
+  if (b.op === 'pair') { const host = String(b.host || '').trim(); if (!/^[A-Za-z0-9.\-:]{1,64}$/.test(host)) return res.status(400).json({ error: "the controller's address is required" }); action.host = host; }
+  if (b.op === 'forget') { const serial = String(b.serial || '').trim(); if (!/^[A-Za-z0-9_-]{1,64}$/.test(serial)) return res.status(400).json({ error: 'which controller is required' }); action.serial = serial; }
+  try { res.json(await sendCommand(action, b.op === 'pair' ? 50000 : 25000)); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
 // Rooms on the bridges. The app owns its own rooms (config.settings.rooms); these are the best-effort attempts to
 // keep each bridge in step with them. Hue documents all of this; Lutron documents none of it and may say no, which
 // is not an error the app has to hide: the room still exists in the app either way.
@@ -289,7 +300,7 @@ wssAgent.on('connection', (ws, req) => {
 function handleAgentMessage(ws, msg) {
   switch (msg.type) {
     case 'hello':
-      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, health: msg.health || null, since: new Date().toISOString() };
+      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, nanoleaf: msg.nanoleaf || null, health: msg.health || null, since: new Date().toISOString() };
       if (agentInfo.update_available && config.settings.auto_update !== false && !updating) {
         console.log(`[hub] connector ${msg.version} is behind ${LATEST_AGENT_VERSION}, updating it`);
         setTimeout(() => sendCommand({ type: 'update' }, 15 * 60 * 1000).then(r => { updating = false; console.log('[hub] connector updated', JSON.stringify(r.detail)); }).catch(e => { updating = false; console.warn('[hub] connector update failed:', e.message); broadcast({ type: 'toast', level: 'error', msg: `Connector update failed: ${e.message}` }); }), 3000);
@@ -352,6 +363,9 @@ function handleAgentMessage(ws, msg) {
     }
     case 'hue':
       if (agentInfo) { agentInfo.hue = msg.hue || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
+      break;
+    case 'nanoleaf':
+      if (agentInfo) { agentInfo.nanoleaf = msg.nanoleaf || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     // What the connector has: the bridge, its buttons, how many button settings it holds and the last press
     // it saw. The app shows it in Settings so a dead button can be told apart from a dead link.

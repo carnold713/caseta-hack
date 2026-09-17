@@ -9,8 +9,9 @@ Actions are the same JSON shape the hub validates (see hub/validate.js):
 Targets are "d:<device_id>", "g:<group_id>", "a:<room>" or "h:all" / "h:shades" / "h:fans".
 "a:<room>" names one of the app's own rooms when the config carries them (settings.rooms), and the
 bridge's own area when it does not.
-color: {target, kelvin | hex, level?, fade?} reaches only the Hue lights in the target that can do it.
-A preset level may be {level, kelvin?, hex?} for such a lamp; anything else is a number or a fan speed.
+color: {target, kelvin | hex, level?, fade?} reaches only the Hue and Nanoleaf lights in the target
+that can do it. A preset level may be {level, kelvin?, hex?} for such a lamp; anything else is a
+number or a fan speed.
 """
 from __future__ import annotations
 
@@ -121,6 +122,10 @@ class GestureEngine:
 
 
 FAN_ORDER = ["Off", "Low", "Medium", "MediumHigh", "High"]
+# Every id prefix that names a light spoken to directly rather than through the Lutron bridge. A Caseta device
+# id never starts with one of these, so `device_id.startswith(BRIDGE_PREFIXES)` is how the runner tells a Hue
+# or a Nanoleaf light apart from one on the bridge without asking either backend anything.
+BRIDGE_PREFIXES = ("hue_", "nanoleaf_")
 
 
 class ActionRunner:
@@ -140,10 +145,14 @@ class ActionRunner:
         self.local_time: Optional[Callable[[], Any]] = None  # set by the agent: returns an aware datetime in the home's zone
         self.sunset_hm: Optional[Callable[[], Optional[str]]] = None  # set by the agent: today's sunset as HH:MM, or None
         self._floors: Dict[str, dict] = {}  # device_id -> {"floor": n} while a hold-to-dim ramp is running
-        # Hue lights live in the same device dict under "hue_" ids; the agent sets these to route them
+        # Hue and Nanoleaf lights live in the same device dict under "hue_"/"nanoleaf_" ids; the agent sets
+        # these to a small dispatcher that routes each call to whichever backend the id actually belongs to
+        # (see BRIDGE_PREFIXES above and agent.py's _level_set_bridge/_color_set/_scene_recall). The names
+        # stay "hue_*" because this is still one callback slot per kind of action, the same shape as when
+        # only Hue existed; only what agent.py hands them has changed.
         self.hue_set: Optional[Callable[[str, int, Optional[float]], Awaitable[None]]] = None
         self.hue_color: Optional[Callable[..., Awaitable[None]]] = None  # (device_id, kelvin=, hex=, fade_s=, level=)
-        self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None
+        self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None  # Hue's own scenes only; Nanoleaf has none
         # Follow the day (daylight.py). `color_watch` is told the device id whenever a colour or a warmth is set
         # from anywhere but the follow loop itself, which is how a lamp set by hand stops following. `follow_start`
         # is awaited for a scene entry that says "follow the day": it turns following on and sets the white for now.
@@ -167,7 +176,8 @@ class ActionRunner:
     # The rooms the app owns (config.settings.rooms). While the list is empty the connector reads the bridges'
     # own areas, exactly as it always has. Once there is a list, `a:<id>` names one of these rooms: the devices
     # filed in it by hand, plus whatever still sits in the bridge room it stands for and no other room has taken.
-    # Hue lamps are "hue_" ids in the same device dictionary, so a room of Hue lamps resolves like any other.
+    # Hue and Nanoleaf lamps are "hue_"/"nanoleaf_" ids in the same device dictionary, so a room holding
+    # either resolves like any other.
     def _app_rooms(self) -> List[dict]:
         rooms = (self._config().get("settings") or {}).get("rooms") or []
         return [r for r in rooms if isinstance(r, dict) and r.get("id")]
@@ -277,20 +287,20 @@ class ActionRunner:
         lvl = dev.get("current_state", -1)
         return int(lvl) if isinstance(lvl, (int, float)) and lvl >= 0 else 0
 
-    def _hue_can(self, device_id: str, what: str) -> bool:
-        """Does this Hue lamp do white temperature ("ct") or colour ("color")? Caseta devices never do."""
-        if not device_id.startswith("hue_"):
-            return False
+    def _color_can(self, device_id: str, what: str) -> bool:
+        """Does this lamp do white temperature ("ct") or colour ("color")? Only a Hue or a Nanoleaf light
+        ever sets either key on its device dict at all, so the dict's own shape is the whole answer: a
+        Caseta device never has "ct" or "color", whichever backend the id belongs to is beside the point."""
         bridge = self._bridge()
         dev = bridge.devices.get(device_id) if bridge else None
         return bool(dev and dev.get(what))
 
     async def _set_color(self, device_id: str, kelvin: Optional[float], hex_str: Optional[str], level: Optional[int], fade: Optional[float]) -> None:
         if self.hue_color is None:
-            raise RuntimeError("Hue bridge not connected")
+            raise RuntimeError("no light backend connected")
         fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
         # Every colour that comes through here was asked for by a person, a button or a scene, never by the follow
-        # loop (which talks to the Hue client itself), so it is what pauses a lamp that was following the day.
+        # loop (which talks to each backend directly), so it is what pauses a lamp that was following the day.
         if self.color_watch:
             self.color_watch(device_id)
         await self.hue_color(device_id, kelvin=kelvin, hex=hex_str, fade_s=float(fs) if fs is not None else None, level=level)
@@ -320,9 +330,9 @@ class ActionRunner:
             raise RuntimeError("bridge not connected")
         if device_id not in bridge.devices:
             raise RuntimeError(f"unknown device {device_id}")
-        if device_id.startswith("hue_"):
+        if device_id.startswith(BRIDGE_PREFIXES):
             if self.hue_set is None:
-                raise RuntimeError("Hue bridge not connected")
+                raise RuntimeError("no light backend connected")
             fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
             await self.hue_set(device_id, int(level), float(fs) if fs is not None else None)
             return
@@ -484,13 +494,13 @@ class ActionRunner:
                     # {level, follow: true}: the lamp follows the day from now on, starting at today's white.
                     lv = int(level.get("level", 0) or 0)
                     if level.get("follow"):
-                        if self._hue_can(device_id, "ct"):
+                        if self._color_can(device_id, "ct"):
                             coros.append(self._follow_entry(device_id, lv, fade))
                         else:
                             coros.append(self._set_level(device_id, lv, fade))
                         continue
-                    kelvin = level.get("kelvin") if self._hue_can(device_id, "ct") else None
-                    hex_str = level.get("hex") if kelvin is None and self._hue_can(device_id, "color") else None
+                    kelvin = level.get("kelvin") if self._color_can(device_id, "ct") else None
+                    hex_str = level.get("hex") if kelvin is None and self._color_can(device_id, "color") else None
                     if kelvin is not None or hex_str is not None:
                         coros.append(self._set_color(device_id, kelvin, hex_str, lv, fade))
                     else:
@@ -562,7 +572,7 @@ class ActionRunner:
             # white temperature or a colour, only for the Hue lamps in the target that can do it; the rest are left alone
             kelvin, hex_str = a.get("kelvin"), a.get("hex")
             want = "ct" if kelvin is not None else "color"
-            lamps = [d for d in targets if self._hue_can(d, want)]
+            lamps = [d for d in targets if self._color_can(d, want)]
             if not lamps:
                 raise RuntimeError(f"none of {a.get('target')} can change {'warmth' if want == 'ct' else 'colour'}")
             self._cancel_timers_touching(lamps)
@@ -607,7 +617,7 @@ class ActionRunner:
             return None
 
         if t in ("raise", "lower", "stop"):
-            targets = [d for d in targets if not d.startswith("hue_")]  # Hue has no raise/lower ramp
+            targets = [d for d in targets if not d.startswith(BRIDGE_PREFIXES)]  # neither Hue nor Nanoleaf has a raise/lower ramp
             fn = {"raise": bridge.raise_cover, "lower": bridge.lower_cover, "stop": bridge.stop_cover}[t]
             # raise_cover/lower_cover/stop_cover send the generic Raise/Lower/Stop zone commands,
             # which dimmers honour too (that is how a Pico's own raise/lower works).
