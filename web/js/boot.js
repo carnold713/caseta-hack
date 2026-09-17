@@ -195,6 +195,8 @@ window.addEventListener('hashchange', () => {
   if (v !== S.view || S.room) { S.view = v; S.room = null; S.roomPage = null; render(); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet.isOpen()) sheet.close(); });
+// a cold load straight onto #room/<area> (a shared link, a reload): read the room out of the hash before the first render
+if (S.view === 'room') { const parts = location.hash.slice(1).split('/'); S.room = parts[1] ? decodeURIComponent(parts[1]) : null; S.roomPage = parts[2] === 'setup' ? 'setup' : null; }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 if (S.token) connectWS();
 render();

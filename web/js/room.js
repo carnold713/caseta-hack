@@ -49,7 +49,7 @@ function roomPageHTML(aid) {
       : `<div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="roles-open" data-area="${aid}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Give this room moods</div><div class="d">Bright, Relax, Dinner, Movie and Night</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   }
   h += `<div class="gh">Lights</div><div class="card pad0 list lights">${ds.map(lightRow).join('')}</div>`;
-  h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="room-setup" data-area="${aid}"><div class="grow"><div class="t">Room setup</div><div class="d">What each light is for, its moods, the kind of each light</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+  h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="room-setup" data-area="${aid}"><div class="grow"><div class="t">Room setup</div><div class="d">What each light is for, moods, kinds</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   return h;
 }
 

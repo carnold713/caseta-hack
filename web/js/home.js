@@ -57,7 +57,8 @@ function sceneRowHTML() {
   const sc = homeScenes();
   const chip = s => { const items = tileItems(s.id); const it = items[0] || { lv: 0, icon: 'scene' }; return `<button class="chip" data-act="run-scene" data-t="${s.id}">${lampHTML(it.lv, 24, ICON(it.icon, 'sm'), '', false, it.fill)}${esc(s.name)}</button>`; };
   const seeAll = `<a class="link" data-act="scenes-open" href="#scenes">See all</a>`;
-  if (!sc.length) return `<div class="scenerow"><div class="gh">Scenes${seeAll}</div><div class="card pad0 list"><button class="item" data-act="scenes-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Make a scene</div><div class="d">Set the lights the way you like them, then save that look</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div></div>`;
+  // no scenes yet: the row says so and opens the Scenes page, where the one way to make one lives
+  if (!sc.length) return `<div class="scenerow"><div class="gh">Scenes${seeAll}</div><div class="card pad0 list"><button class="item" data-act="scenes-open"><div class="grow"><div class="t">No scenes yet</div><div class="d">Set the lights the way you like them, then save that look</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div></div>`;
   return `<div class="scenerow"><div class="gh">Scenes${seeAll}</div><div class="chips scroll">${sc.map(chip).join('')}</div></div>`;
 }
 function domainIcon(dm) { return { light: 'bulb', switch: 'plug', fan: 'fan', cover: 'shade' }[dm] || 'bulb'; }
@@ -86,7 +87,8 @@ function lightRowValue(d) {
   if (d.domain === 'cover') return isOn(id) ? 'Open' : 'Closed';
   const lv = level(id) || 0;
   // a lamp that can show colour says which colour it is showing: that is both the sign and the way in
-  if ((d.color || d.ct) && lv > 0 && typeof colourLabel === 'function') { const c = colorState(id); if (c && c.mode) return `${colourDot(c)}${esc(colourLabel(c))} · ${lv}%`; }
+  // the colour's name only: the kelvin behind it belongs on the light's page, not on a row
+  if ((d.color || d.ct) && lv > 0 && typeof colourLabel === 'function') { const c = colorState(id); if (c && c.mode) return `${colourDot(c)}${esc(String(colourLabel(c)).split(' · ')[0])} · ${lv}%`; }
   return lv > 0 ? `${lv}%` : 'Off';
 }
 function lightRow(d) {
