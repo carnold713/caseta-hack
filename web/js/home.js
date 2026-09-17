@@ -10,20 +10,21 @@ VIEWS.home = {
   },
   body() {
     const hasDevices = controllable().length > 0;
-    if (!hasDevices && !S.agent.online) return setupEmpty();
+    if (!hasDevices && connLost()) return setupEmpty();
     let h = `<div class="m-hero"><div class="m-lightfield" id="lightfield"></div>` + houseCardHTML() + lightNowHTML() + `</div>`;
     h += sceneRowHTML();
     h += `<div class="gh">Rooms</div><div class="card pad0 list rooms">${areas().map(roomRow).join('')}</div>`;
     const timers = Object.entries(S.timers || {});
     if (timers.length) h += `<div class="gh">Sleep timers</div>` + timers.map(([t, v]) => timerBlockHTML(t, v)).join('');
     // one row of advice at most (docs/ux-progressive.md 2.1a): not connected beats everything, then the Next row, then nothing
-    if (!S.agent.online) h += `<div class="card pad0 list nextrow"><button class="item" data-act="nav" data-view="settings"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected to your home</div><div class="d">Showing the last known state. Your remotes keep working.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+    // a drop is quiet for its first ten seconds: nothing is said until it has really failed (connState in core.js)
+    if (connLost()) h += `<div class="card pad0 list nextrow"><button class="item" data-act="nav" data-view="settings"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected to your home</div><div class="d">Showing the last known state. Your remotes keep working.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
     else if (typeof nextCardHTML === 'function') h += nextCardHTML();
     return h;
   },
   after() {
     tickCountdowns();
-    if (!controllable().length && !S.agent.online && !S._setupShown) { S._setupShown = true; setTimeout(openSetupSheet, 350); }
+    if (!controllable().length && connLost() && !S._setupShown) { S._setupShown = true; setTimeout(openSetupSheet, 350); }
     // the moment the connector's first snapshot lands, the connect walk has done its job
     if (walkIs('connect') && controllable().length && S.agent.online) closeSheet();
   },

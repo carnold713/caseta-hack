@@ -178,9 +178,9 @@ function unSkip(sc) { sc.skip_until = null; syncPair(sc); save({ msg: `${sc.name
 VIEWS.automations = {
   top() { return `<div class="t1">Automations</div>${statusCircle()}`; },
   body() {
-    if (!controllable().length && !S.agent.online) return setupEmpty();
+    if (!controllable().length && connLost()) return setupEmpty();
     let h = `<div class="spacer"></div>`;
-    if (!S.agent.online) h += `<div class="tip"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected right now</div><div class="d">Your home keeps running these on its own. This list may be a little behind.</div></div></div><div class="spacer"></div>`;
+    if (connLost()) h += `<div class="tip"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected right now</div><div class="d">Your home keeps running these on its own. This list may be a little behind.</div></div></div><div class="spacer"></div>`;
     h += nextCaptionHTML();
     h += tzTipHTML();
     h += windDownRowHTML();

@@ -627,3 +627,27 @@ editor; "Done" turns it off. **There is one way to make a scene**: the "+" in th
 on an empty page, one line saying what to do and one primary button. The "New scene" chip on Home,
 the "New scene" tile in the grid and the Now view's empty tip are all gone. The scene editor takes
 "Done" in its header and has lost its footer.
+
+### 7.4 A drop is quiet
+
+A hub restart, a phone changing network or a flaky link all look the same to the app: the WebSocket closes and
+`connectWS()` retries two seconds later. What the person used to see was the whole app going red, and sometimes
+blanking to "Let's connect your home", for the minute a redeploy takes.
+
+`connState()` in `web/js/core.js` replaces every `S.agent.online` test in the interface. It is `ok` while the socket
+is up and the connector is there, **`reconnecting` for the first ten seconds of trouble** (`RECONNECT_GRACE`), and
+`off` only after that. `connChanged()` starts the quiet window on a close or an offline connector, clears it when the
+home comes back, and books the single repaint that turns the dot red when the window runs out.
+
+- While it is `reconnecting`: the status dot is `--line-3` and breathes, its title is "Reconnecting", and **nothing
+  else on the page changes**: the headline still says what is on, the rooms are still there, no advice row appears,
+  and Settings' connection card says "Reconnecting" on a neutral tag rather than a red one. The dot does not play its
+  hello or lost animation on the way through.
+- Once it is `off`: the red dot, "Last known state", the "Not connected" row on Home and the tip on Automations, all
+  exactly as before.
+- **An empty snapshot never blanks the home.** A hub that has just restarted answers with an empty inventory until its
+  own connector is back. Both the `snapshot` and the `inventory` cases keep the devices, states and timers the app
+  already holds when the incoming list is empty and the app knows better.
+
+Measured by `$SC/reconnect_test.js`: eleven checks over a dropped socket, an empty snapshot from a restarting hub, the
+ten-second boundary and a real reconnect.

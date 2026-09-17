@@ -12,7 +12,29 @@ const S = {
   remote: null, room: null, roomPage: null,
   live: {}, lastSaved: null,
   sun: null, nextRuns: {}, // today's sun and the next run of each automation, from the connector (automations.js reads them)
+  // A drop is quiet until it has lasted: `troubleSince` is when the socket or the connector last went away.
+  // Nothing turns red until RECONNECT_GRACE has passed, and the app never blanks what it already knows.
+  troubleSince: 0, wsOpen: false,
 };
+const RECONNECT_GRACE = 10000;
+// 'ok' while the connector is there, 'reconnecting' for the first ten seconds of trouble, 'off' after that.
+function connState() {
+  if (S.agent.online && S.wsOpen) return 'ok';
+  if (!S.troubleSince) return S.agent.online ? 'ok' : 'off';
+  return Date.now() - S.troubleSince < RECONNECT_GRACE ? 'reconnecting' : 'off';
+}
+const connOk = () => connState() === 'ok';
+const connLost = () => connState() === 'off';
+// Called whenever the socket or the connector changes state: starts or clears the quiet window, and books the one
+// repaint that turns the dot red when the window runs out.
+let connTimer = null;
+function connChanged(ok) {
+  if (ok) { S.troubleSince = 0; clearTimeout(connTimer); connTimer = null; return; }
+  if (S.troubleSince) return;
+  S.troubleSince = Date.now();
+  clearTimeout(connTimer);
+  connTimer = setTimeout(() => { connTimer = null; if (!connOk()) render(); }, RECONNECT_GRACE + 50);
+}
 
 const ICON = (n, cls = '') => `<svg class="i ${cls}"><use href="#i-${n}"/></svg>`;
 const $ = s => document.querySelector(s);
@@ -82,23 +104,32 @@ function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${proto}://${location.host}/ws/app?token=${encodeURIComponent(S.token)}`);
   S.ws = ws;
+  ws.onopen = () => { S.wsOpen = true; };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
     switch (m.type) {
-      case 'snapshot':
+      case 'snapshot': {
         S.add = m.add || null;
-        S.inv = m.inventory; S.states = m.states; S.agent = m.agent; S.timers = m.timers || {}; S.activity = m.activity || [];
+        // A hub that has just restarted has an empty inventory until its connector is back. Keep the home we
+        // already know rather than blanking the app for the minute that takes.
+        const fresh = Object.keys((m.inventory && m.inventory.devices) || {}).length;
+        const known = Object.keys(S.inv.devices || {}).length;
+        if (fresh || !known) { S.inv = m.inventory; S.states = m.states; S.timers = m.timers || {}; }
+        S.agent = m.agent; S.activity = m.activity || [];
         S.sun = m.sun || null; S.nextRuns = m.next_runs || {};
         S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
+        S.wsOpen = true; connChanged(!!(m.agent && m.agent.online));
         // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
         if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); setTimeout(() => { if (typeof openGreeting === 'function') openGreeting(); }, 450); }, 900); break; } }
         render(); break;
-      case 'inventory': S.inv = m.inventory; render(); break;
+      }
+      // the same rule: an empty list from a hub that is still waiting for its connector is not news
+      case 'inventory': if (Object.keys((m.inventory && m.inventory.devices) || {}).length || !Object.keys(S.inv.devices || {}).length) { S.inv = m.inventory; render(); } break;
       case 'state': Object.assign(S.states, m.states); paintState(); break;
       // a timer's block belongs on Home; when the news arrives while a sheet is still sliding shut, render once it has
       case 'timers': S.timers = m.timers || {}; if (S.view === 'home') { if (sheet.isOpen()) setTimeout(() => { if (S.view === 'home' && !sheet.isOpen()) render(); }, 420); else render(); } else paintNowBar(); break;
       case 'config': if (JSON.stringify(m.config) !== S.lastSaved) { S.config = m.config; S.lastSaved = JSON.stringify(m.config); render(); } break;
-      case 'agent': S.agent = { online: m.online, info: m.info || null }; render(); if (window.Hue) Hue.onAgent(); break;
+      case 'agent': S.agent = { online: m.online, info: m.info || null }; connChanged(!!m.online); render(); if (window.Hue) Hue.onAgent(); break;
       case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
       // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
       case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; if (typeof paintSun === 'function') paintSun(); break;
@@ -107,7 +138,13 @@ function connectWS() {
       case 'toast': toast(m.msg, { err: m.level === 'error' }); break;
     }
   };
-  ws.onclose = () => { setTimeout(() => { if (S.token) connectWS(); }, 2000); };
+  // The hub restarting looks like this. Stay quiet: keep what we know on screen, say "Reconnecting" for ten
+  // seconds, and only then admit that the home is not there.
+  ws.onclose = () => {
+    S.wsOpen = false; connChanged(false);
+    if (S.ready) render();
+    setTimeout(() => { if (S.token) connectWS(); }, 2000);
+  };
 }
 
 // ---------- inventory helpers ----------
@@ -340,7 +377,7 @@ function tileSub(t) {
   const on = ds.filter(isOn).length; return on ? `${on} on` : 'Off';
 }
 function statusLine() {
-  if (!S.agent.online) return `<span class="faint">Last known state</span>`;
+  if (connLost()) return `<span class="faint">Last known state</span>`;
   const on = controllable().filter(d => d.domain !== 'cover' && isOn(d.device_id));
   if (!on.length) return 'Everything is off';
   const rooms = [...new Set(on.map(d => areaName(d.area)))].slice(0, 3);
@@ -623,14 +660,18 @@ function render() {
     else if (S._lastPage !== pageKey) Motion.pageIn(v);
     if (showPill && !S._barShown) { S._barShown = true; Motion.barIn(nb); }
   }
-  if (S._prevOnline !== undefined && S._prevOnline !== S.agent.online) { const dot = top.querySelector('.status .dot'); if (dot) dot.classList.add(S.agent.online ? 'm-dot-hello' : 'm-dot-lost'); }
-  S._prevOnline = S.agent.online;
+  // the dot only greets or grieves on a real change of state, never on the quiet ten seconds in between
+  const st = connState();
+  if (S._prevConn !== undefined && S._prevConn !== st && st !== 'reconnecting') { const dot = top.querySelector('.status .dot'); if (dot) dot.classList.add(st === 'ok' ? 'm-dot-hello' : 'm-dot-lost'); }
+  S._prevConn = st;
   S._lastView = S.view; S._lastPage = pageKey;
   if (view.after) view.after();
 }
 // The status circle at the top right: the link glyph with a green or red dot. Tap goes to Settings.
 function statusCircle() {
-  return `<button class="iconbtn status ${S.agent.online ? 'ok' : 'off'}" data-act="conn" title="${S.agent.online ? 'Connected' : 'Not connected'}">${ICON('link')}<span class="dot"></span></button>`;
+  const st = connState();
+  const title = st === 'ok' ? 'Connected' : st === 'reconnecting' ? 'Reconnecting' : 'Not connected';
+  return `<button class="iconbtn status ${st}" data-act="conn" title="${title}" aria-label="${title}">${ICON('link')}<span class="dot"></span></button>`;
 }
 const connPill = statusCircle;
 // The nested header (the Tenzing page header): a Back link on the first line, then the title (with an optional sub line) and the tools.

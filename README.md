@@ -81,6 +81,12 @@ Pico bindings from its cached config.
   the shades and fans). It slides away on a downward scroll and comes back
   on the way up, it is hidden outright while a sheet is open, and tapping
   it goes to Home. Four tabs: Home, Remotes, Automations, Settings.
+- **A drop is quiet.** The hub restarting, or a phone changing network, closes the app's WebSocket; it retries after
+  two seconds. For the first ten seconds the status dot is a neutral grey that breathes and reads "Reconnecting", the
+  page does not change a word, and nothing goes red. Only after ten seconds without the connector does the dot turn
+  red, the headline become "Last known state" and the "Not connected" row appear. A hub that has just come back has an
+  empty inventory until its own connector reconnects: the app keeps the home it already knows rather than blanking
+  itself for that minute.
 - **Sheets have three stops** and are never between them: compact (their own
   content, 180px to 40dvh), medium (56dvh) and large (92dvh). A sheet you are
   editing puts "Done" in its top right and has no footer; a sheet with a real

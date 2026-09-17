@@ -247,7 +247,8 @@ function roomsLit() {
 }
 // short: true for the bar's one line (18 characters of names), 'wide' for the Now view's 24px headline (26), false on Home.
 function lightNowHeadline(rooms, short = false) {
-  if (!S.agent.online) return 'Last known state';
+  // the quiet ten seconds change nothing on the page: the status dot is what says "Reconnecting" (core.js)
+  if (connLost()) return 'Last known state';
   if (!rooms.length) return 'Everything is off';
   const n = rooms.map(r => r.name);
   const budget = short === 'wide' ? 26 : 18;
@@ -380,7 +381,7 @@ function setHouseLevel(v) {
 // the mean level, the house dimmer, All off, and a "..." that carries Night, a house-wide sleep timer and the hold's
 // "everything off, and close the shades". The floating bar used to hold these; on Home nothing floats now.
 function nowSub(rooms, on, lv) {
-  if (!on.length) return S.agent.online ? 'Slide the dimmer or tap the power button to bring the lights up' : '';
+  if (!on.length) return connOk() ? 'Slide the dimmer or tap the power button to bring the lights up' : '';
   return `${plural(on.length, 'light')} · ${lv}%${rooms.length > 6 ? ` · ${rooms.length - 6} more rooms` : ''}`;
 }
 function houseCardHTML() {

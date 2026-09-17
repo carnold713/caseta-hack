@@ -23,6 +23,10 @@ function ago(ms) {
 function connectionTipHTML() {
   const nd = controllable().length, np = remotes().length;
   const everConnected = devices().length > 0;
+  // the quiet ten seconds after a drop: the card says what is happening without going red (connState in core.js)
+  if (connState() === 'reconnecting' && everConnected) {
+    return `<div class="tip"><div class="grow"><span class="cap">Connection</span><div class="t">Reconnecting</div><div class="d">${plural(nd, 'light')} · ${plural(np, 'remote')}</div><div class="d">The app lost its link for a moment. Everything on screen is the last thing your home said.</div></div><span class="tag">Reconnecting</span></div>`;
+  }
   if (S.agent.online) {
     const h = (S.agent.info || {}).health || null;
     // What the connector itself holds. A remote that does nothing is usually one of these three: the bridge

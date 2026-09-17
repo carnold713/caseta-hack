@@ -128,6 +128,8 @@ main.nested { position: relative; padding-top: 4px; margin-top: 0; }
 .iconbtn.status { position: relative; }
 .status .dot { position: absolute; top: 0; right: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px var(--bg); }
 .status.off .dot { background: var(--red); }
+/* a drop is quiet for its first ten seconds: a neutral dot that breathes, not the alert red (js/core.js connState) */
+.status.reconnecting .dot { background: var(--line-3); animation: m-breathe 1.6s ease-in-out infinite; }
 
 /* ---------- surfaces: cards and rows ---------- */
 .card { background: var(--surface); border-radius: var(--r-s); border: 1px solid var(--line); padding: 16px; }
