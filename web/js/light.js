@@ -341,19 +341,59 @@ function paintMoodRows() {
 }
 
 // ---------- the house: every light that is on, its mean level, and one slider for all of them ----------
+let POWEROFF = null;   // set while the "some lights are automated" sheet is open; read by its two buttons, in boot.js
 function litLights() { return controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && (level(d.device_id) || 0) > 0); }
 function houseLevel() { const ls = litLights(); return ls.length ? meanLevel(ls.map(d => d.device_id)) : 0; }
-// The power button: everything off while anything is lit; with the house dark it turns the lights on, either the
-// ones that were on before (the connector remembers them) or every light, as the Settings choice says.
+// Of the given lights, the ones an enabled automation turns on (never one whose action turns them off; that
+// automation already wants them dark, so the power button is not fighting it). A preset an automation runs is
+// not unpacked here, only a plain level or "back on" action, which covers the ordinary case.
+function autoOnLights(ids) {
+  const set = new Set(ids); const hit = new Set();
+  for (const sc of (typeof schedules === 'function' ? schedules() : [])) {
+    if (sc.enabled === false) continue;
+    for (const a of sc.actions || []) {
+      if (!((a.type === 'level' && a.level !== 'off' && a.level !== 0) || a.type === 'restore')) continue;
+      for (const id of targetDevices(a.target)) if (set.has(id)) hit.add(id);
+    }
+  }
+  return [...hit];
+}
+function turnOffLights(target) {
+  const ids = targetDevices(target);
+  if (!ids.length) return;   // nothing to turn off: an empty list is not a valid command, so this is a no-op
+  for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level: 0 };
+  paintState();
+  command({ type: 'level', target, level: 'off' });
+}
+// The power button: everything off while anything is lit, unless some of what is lit is on an automation, in
+// which case a short sheet asks first rather than quietly fighting it every time. With the house dark it turns
+// the lights on, either the ones that were on before (the connector remembers them) or every light, as the
+// Settings choice says.
 function powerButton() {
   if (litLights().length) {
-    for (const id of targetDevices('h:all')) S.states[id] = { ...(S.states[id] || {}), level: 0 };
-    paintState();
-    command({ type: 'level', target: 'h:all', level: 'off' });
+    const lit = litLights().map(d => d.device_id);
+    const auto = autoOnLights(lit);
+    if (auto.length) { openPowerOffSheet(lit, auto); return; }
+    turnOffLights('h:all');
     return;
   }
   const all = (S.config.settings.power_on || 'restore') === 'all';
   command(all ? { type: 'level', target: 'h:all', level: 'on' } : { type: 'restore', target: 'h:all' });
+}
+// The choice, once: turn everything off anyway, or leave the automated ones and turn off just the rest.
+// Closing the sheet without picking either leaves the house exactly as it was.
+function openPowerOffSheet(lit, auto) {
+  const names = auto.map(id => (dev(id) || {}).name).filter(Boolean);
+  const list = names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  const one = names.length === 1;
+  const rest = lit.filter(id => !auto.includes(id));
+  const body = `<p class="body" style="margin:0 0 20px">${esc(list)} ${one ? 'is' : 'are'} on an automation right now. Turn ${one ? 'it' : 'them'} off with everything else, or leave ${one ? 'it' : 'them'} on and turn off the rest of the house?</p>
+    <div class="card pad0 list">
+      <button class="item" data-act="poweroff-all"><div class="grow"><div class="t">Turn off everything</div></div></button>
+      <button class="item" data-act="poweroff-rest"><div class="grow"><div class="t">Leave ${one ? 'it' : 'them'} on</div><div class="d">${rest.length ? `${plural(rest.length, 'other light')} turn off` : 'Nothing else is on'}</div></div></button>
+    </div>`;
+  showSheet('poweroff', 'Some lights are automated', body, { detent: 'compact' });
+  POWEROFF = { lit, auto, rest };
 }
 function powerLabel() { return litLights().length ? 'All off' : ((S.config.settings.power_on || 'restore') === 'all' ? 'All on' : 'Lights back on'); }
 function powerTitle() { return litLights().length ? 'All off. Hold for shades and fans' : (powerLabel() + '. Hold for shades and fans'); }
