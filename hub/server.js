@@ -18,6 +18,7 @@ const APP_PASSWORD = process.env.APP_PASSWORD || '';
 const AGENT_TOKEN = process.env.AGENT_TOKEN || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256').update(`caseta-hack|${APP_PASSWORD}|${AGENT_TOKEN}`).digest('hex');
 
+const log = (...a) => console.log('[hub]', ...a);
 if (!APP_PASSWORD) console.warn('[hub] APP_PASSWORD is not set: the app is open to anyone who finds the URL');
 if (!AGENT_TOKEN) console.warn('[hub] AGENT_TOKEN is not set: any agent can connect');
 
@@ -295,9 +296,12 @@ function handleAgentMessage(ws, msg) {
       broadcast({ type: 'state', states: msg.states });
       break;
     case 'button':   // raw press/release, for the "listen" screen
+      // Logged so a remote that does nothing can be told apart from a remote that never reaches us at all.
+      if (msg.event === 'Press') log(`press ${msg.device_id}/${msg.button_number}`);
       broadcast(msg);
       break;
     case 'gesture':  // resolved single/double/hold
+      log(`gesture ${msg.gesture} on ${msg.device_id}/${msg.button_number} (${msg.bound ? 'bound' : 'nothing set for it'})`);
       broadcast(msg);
       record({ kind: 'pico', device_id: msg.device_id, button_number: msg.button_number, gesture: msg.gesture, bound: !!msg.bound });
       break;
@@ -316,9 +320,12 @@ function handleAgentMessage(ws, msg) {
       break;
     // What the connector has: the bridge, its buttons, how many button settings it holds and the last press
     // it saw. The app shows it in Settings so a dead button can be told apart from a dead link.
-    case 'health':
+    case 'health': {
+      const h = msg.health || {};
+      log(`connector holds ${h.bindings} button settings, bridge ${h.bridge_ok ? 'answering' : 'not answering'} with ${h.buttons} buttons, ${h.presses} presses seen`);
       if (agentInfo) { agentInfo.health = msg.health || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
+    }
     case 'add_heard':
       if (Array.isArray(msg.heard)) addSession.heard = msg.heard;
       broadcast({ type: 'add_heard', device: msg.device || null, heard: addSession.heard });
