@@ -115,16 +115,21 @@ async def main():
         # hue 300, sat 80 is a magenta-ish colour; xy lands inside the fallback gamut every Hue-shaped lamp uses
         assert in_gamut(tuple(b["color"]["xy"]), GAMUT_C), b["color"]
 
-        # setting a level: on with brightness, no duration ever sent (the unit is not confirmed, see nanoleaf.py)
+        # setting a level while already on: brightness alone, no duration ever sent (the unit is not
+        # confirmed, see nanoleaf.py), and no redundant "on" resent since the panel is already lit
         await nl.set_level(nid("SN-AAA"), 40)
-        assert a_state["puts"][-1] == {"on": {"value": True}, "brightness": {"value": 40}}, a_state["puts"][-1]
+        assert a_state["puts"][-1] == {"brightness": {"value": 40}}, a_state["puts"][-1]
         assert "duration" not in json.dumps(a_state["puts"][-1])
         await nl.set_level(nid("SN-AAA"), 0)
         assert a_state["puts"][-1] == {"on": {"value": False}} and nl.devices[nid("SN-AAA")]["current_state"] == 0
 
-        # white temperature: kelvin -> mirek -> clamped to the panel's own range -> kelvin again on the wire
+        # turning on from off: "on" goes out on its own first, then the rest as a second put, never bundled
+        # (see nanoleaf.py's note on turning on: a real controller has been seen to drop "on" when it is not alone)
+        n_puts_before = len(a_state["puts"])
         await nl.set_color(nid("SN-AAA"), kelvin=4000)
-        assert a_state["puts"][-1]["ct"]["value"] == 4000 and a_state["puts"][-1]["on"] == {"value": True}, a_state["puts"][-1]
+        assert len(a_state["puts"]) == n_puts_before + 2, "off to on is two puts, not one"
+        assert a_state["puts"][-2] == {"on": {"value": True}}, a_state["puts"][-2]
+        assert a_state["puts"][-1] == {"ct": {"value": 4000}}, a_state["puts"][-1]
         await nl.set_color(nid("SN-AAA"), kelvin=500)     # below the range: the warmest it does
         assert a_state["puts"][-1]["ct"]["value"] == 1200, a_state["puts"][-1]
         await nl.set_color(nid("SN-AAA"), kelvin=20000, level=30)   # above it: the coolest, with a brightness
@@ -152,7 +157,11 @@ async def main():
         assert nl.devices[nid("SN-BBB")]["current_state"] == 0
         ok = await nl.set_warmth(nid("SN-BBB"), 3000)
         assert ok is False and b_state["puts"][-1] == {"on": {"value": False}}, "a lamp that is off was left alone"
+        # set_level off to on is the same split as set_color's, checked above: "on" alone, then brightness alone
+        n_puts_before = len(b_state["puts"])
         await nl.set_level(nid("SN-BBB"), 50)
+        assert len(b_state["puts"]) == n_puts_before + 2
+        assert b_state["puts"][-2] == {"on": {"value": True}} and b_state["puts"][-1] == {"brightness": {"value": 50}}
         ok = await nl.set_warmth(nid("SN-BBB"), 3000)
         assert ok is True and "on" not in b_state["puts"][-1], "set_warmth never sends on"
         assert b_state["puts"][-1]["ct"]["value"] == 3003 and nl.devices[nid("SN-BBB")]["color_mode"] == "ct"

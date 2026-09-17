@@ -33,6 +33,13 @@ official OpenAPI documentation (forum.nanoleaf.me / the Confluence-hosted spec i
 reachable from here to confirm its time unit with confidence, and third-party wrappers that expose it do
 not document the unit either. Rather than risk a fade that runs for the wrong length of time on real
 hardware, every state change this module sends is instant: no duration field is ever included.
+
+A note on turning on: real controllers have been reported to drop "on" when it arrives bundled with
+brightness or colour in the same PUT while the panel was off, which is consistent with an owner seeing a
+brightness drag turn a dark panel on (many PUTs go out as the slider moves, so a later one gets through)
+while a single toggle tap does not (it sends exactly one). So a light actually off gets "on" as its own
+PUT first, then the rest as a second one; a light already on gets one PUT, as before, since there is
+nothing there to drop.
 """
 from __future__ import annotations
 
@@ -255,12 +262,23 @@ class Nanoleaf:
                     self.errors[e["serial"]] = str(exc)
 
     # ----- control -----
+    def _was_off(self, device_id: str) -> bool:
+        d = self.devices.get(device_id)
+        return not bool(d and int(d.get("current_state") or 0) > 0)
+
+    async def _turn_on_first(self, host: str, token: str, device_id: str) -> None:
+        """See the module docstring's note on turning on: "on" goes out alone, before anything it might
+        otherwise be bundled with, whenever the light was off. A light already on skips this entirely."""
+        if self._was_off(device_id):
+            await self._put_state(host, token, {"on": {"value": True}})
+
     async def set_level(self, device_id: str, level: int, fade_s: Optional[float] = None) -> None:  # noqa: ARG002 (fade_s: see module docstring)
         e = self._entry(device_id)
-        body: Dict[str, Any] = {"on": {"value": level > 0}}
         if level > 0:
-            body["brightness"] = {"value": max(1, min(100, int(level)))}
-        await self._put_state(e["host"], e["token"], body)
+            await self._turn_on_first(e["host"], e["token"], device_id)
+            await self._put_state(e["host"], e["token"], {"brightness": {"value": max(1, min(100, int(level)))}})
+        else:
+            await self._put_state(e["host"], e["token"], {"on": {"value": False}})
         d = self.devices.get(device_id)
         if d is not None:
             d["current_state"] = int(level)
@@ -277,7 +295,7 @@ class Nanoleaf:
             await self.set_level(device_id, 0, fade_s)
             return
         e = self._entry(device_id)
-        body: Dict[str, Any] = {"on": {"value": True}}
+        body: Dict[str, Any] = {}
         if level is not None:
             body["brightness"] = {"value": max(1, min(100, int(level)))}
         ct, color = d.get("ct"), d.get("color")
@@ -294,6 +312,9 @@ class Nanoleaf:
             xy = list(rgb_to_xy(r, g, b, GAMUT_C))
         else:
             raise RuntimeError(f"{d.get('name')} cannot do that colour")
+        # the body is validated and ready before anything is sent, so a colour the panel cannot do never
+        # turns it on first and then fails: either both PUTs happen, or neither does
+        await self._turn_on_first(e["host"], e["token"], device_id)
         await self._put_state(e["host"], e["token"], body)
         if level is not None:
             d["current_state"] = int(level)
