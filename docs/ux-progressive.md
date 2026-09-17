@@ -195,7 +195,7 @@ Most overwhelming, in order, with the reason:
 
 ### 2.1 Home
 
-**Glance (as built after the polish pass).** Title, status circle; the headline ("Kitchen and Bedroom are on", two names at most, then "and 2 more"); under it one line only when something is due within the hour ("Welcome lights off at 3pm · Skip") and the wind-down caption when it applies; the lamp row of every light (56px lit, 44px off, a starred light first; a lamp with colour wears the rainbow ring **and a 28px rainbow button on the disc's lower right, with a 44px target, that opens its page at Colour**, so the ring is never decoration; a name may take two lines in a 96px cell); **Rooms** as a section heading (18/24 500 `--text-2`, so it does not read like the room names under it), with the first card visible without scrolling at 390x844; sleep timers as rows; **Scenes** as one chip row under a small caption (a tap runs one, "New scene" is the last chip, a starred scene is first; the tile grid lives on the Scenes tab); **at most one row of advice** (2.1a) last, as a 56px list row. "Coming up" left Home: the Automations tab carries a one-line "Next: …" caption under its title. Favourite tiles left Home: the star pins a light to the front of the lamp row and the top of its room.
+**Glance (as built after the polish pass; superseded by 7.2).** Title, status circle; the headline ("Kitchen and Bedroom are on", two names at most, then "and 2 more"); under it one line only when something is due within the hour ("Welcome lights off at 3pm · Skip") and the wind-down caption when it applies; the lamp row of every light (56px lit, 44px off, a starred light first; a lamp with colour wears the rainbow ring **and a 28px rainbow button on the disc's lower right, with a 44px target, that opens its page at Colour**, so the ring is never decoration; a name may take two lines in a 96px cell); **Rooms** as a section heading (18/24 500 `--text-2`, so it does not read like the room names under it), with the first card visible without scrolling at 390x844; sleep timers as rows; **Scenes** as one chip row under a small caption (a tap runs one, "New scene" is the last chip, a starred scene is first; the tile grid lives on the Scenes tab); **at most one row of advice** (2.1a) last, as a 56px list row. "Coming up" left Home: the Automations tab carries a one-line "Next: …" caption under its title. Favourite tiles left Home: the star pins a light to the front of the lamp row and the top of its room.
 
 **2.1a One card at a time.** The `sortBlockHTML()` tip, the `moodsTipHTML()` tip and the setup tip are replaced by a single slot filled by `nextCardHTML()` (section 3). Priority when more than one applies: not connected (the existing "Not connected to your home" tip) beats everything; otherwise the Next card shows its one suggestion; otherwise nothing. Two cards never stack.
 
@@ -216,7 +216,7 @@ Most overwhelming, in order, with the reason:
 
 **Landing on Colour.** The rainbow button opens the page and scrolls **only as far as reveals the Colour section** (`c.offsetTop + c.offsetHeight - sb.clientHeight + 16`, and not at all when it is already in view), then washes the section in `--blue-10` for 600 ms (`.m-land`). Scrolling to the section's top used to clamp at the sheet's small overflow and cut the disc flat under the header without ever reaching Colour.
 
-### 2.3 Now view
+### 2.3 Now view · **superseded by 7.1**: the Now view is deleted; its headline, number, dimmer, All off, Night, sleep timer, scenes and room list are all on Home
 
 Titled "Light now"; its panels (Scenes, Sleep timer) use the sheet header's back arrow like every other flow, and **each panel eases to its own content** (`.sheet.now` is `min-height: 40dvh; max-height: 86dvh` and `nowShow` goes through `sheet.morph`), so three scene rows are not followed by 500px of white. "All off" is the primary blue like the bar; a caption under the round buttons says what the hold does and what the hollow button brings back; while it is held the sweep crosses it (`:active` sets `background-color`, never the `background` shorthand, which would reset `.m-hold`'s gradient). Sleep-timer chips pick a time on the dial and Start starts it, in every dial.
 
@@ -279,7 +279,7 @@ Unchanged. The body line stays: "Press a button on any remote to open it here."
 
 Unchanged. They are reached on request only.
 
-### 2.9 Scenes tab
+### 2.9 Scenes tab · **superseded by 7.3**: Scenes is a page pushed from Home, not a tab
 
 **The tiles are the scenes.** A three-column grid (`repeat(3, minmax(0, 1fr))`, never plain `1fr`, whose `minmax(auto, 1fr)` let a nowrap sub line set a track's width and pushed the page off the phone): "New scene" first, then one tile per scene, the face painted in the scene's own lamp colours. The face runs the scene; a 32px button in the face's lower right **opens** it, the pencil for your own looks (the scene editor) and `⋯` for a Lutron one (a small sheet: what it is, the star, "Try it").
 
@@ -540,3 +540,90 @@ A Hue lamp that can do white temperature or colour says so in the inventory (`ct
 4. **Scenes.** "New scene" and "Use the lights as they are" store, for a Hue lamp showing a colour, `{level, kelvin}` or `{level, hex}` beside the plain numbers of the other lights. In the editor, such a lamp's row keeps its slider and gains a value row under it: **"Colour"** (or **"Warmth"** for a white-only lamp) · a dot and the value ("Blue", "Warm · 2700 K", or "As it is" when the scene leaves the colour alone). Tapping it opens the same component in place, with an extra first chip **"As it is"** that returns the entry to a plain level. The row's slider changes the brightness and keeps the colour.
 5. **What stays brightness only.** The Now view, the Light now bar, the house dimmer, room sliders, moods and the room toggle: colour lives on the lamp's own page and in scenes, where a person adjusts one lamp or keeps a look.
 6. **Gestures.** The warmth, hue and saturation sliders are native range inputs, so `js/slide.js` gates them like every slider: a passing finger scrolls, a sideways drag or a tap sets. The swatch row scrolls sideways like any chip row.
+
+
+## 7. Information architecture v5, stages 1 to 3
+
+`docs/ia-v5.md` is the plan of record for this pass. It does not change what the app can do, what it
+looks like or how it saves: it changes where things live, how many of them you see at once, and how
+the bottom of the screen and the sheets feel. Stages 1 to 3 are built; 4 to 6 (the light page and
+colour, sheets that push instead of growing, Settings flattened) are still to come.
+
+### 7.1 The bottom of the screen, and the sheet
+
+**The bar became a pill, and only where Home is not.** The floating "Light now" bar was 108px tall
+with a 7px gap over a 57px tab bar: 172px of furniture on every page, forever. In its place:
+
+- **On Home, nothing floats.** The house controls moved to a **house card** at the top of the page,
+  which is where a person looks first: the headline, the count and the mean level, the house dimmer,
+  All off, and a "···" holding Night in every lit room, a house-wide sleep timer and "Everything off,
+  and close the shades" (the power button's hold still does the same thing).
+- **On Remotes, Automations and Settings** a 44px pill appears, and only when something is lit: a 28px
+  disc at the house's mean level, what is on in 14/16 500, a 32px blue power button, 12px gaps, 8px of
+  left padding and 6px of right, `--surface` on `--shadow-3`, radius 22, hugging its content between
+  160 and 280px, centred, 8px clear of the tab bar. Tapping it goes to Home.
+- **It behaves like an iOS toolbar:** away on a downward scroll of more than 24px, back on any upward
+  scroll or when the scroll stops; hidden outright while a sheet is open, so nothing sits under the
+  scrim pretending to be tappable; the disc carries the small clock badge in `--blue` while a timer runs.
+- **The hold's sweep** on the power button is a 3px `--blue-20` ring around it, not a background image.
+- **The tab bar** is 52px of content plus its 1px hairline and the safe area. Bottom furniture:
+  **104px where the pill shows, 53px where it does not**, against 172px everywhere before.
+
+**The sheet has three detents and is never between them.**
+
+| detent | height | which sheets |
+|---|---|---|
+| compact | its own content, 180px to 40dvh | a light's More, the remove confirm, the home's name, a button's three presses, "which mood", the greeting, the house menu, a Lutron scene |
+| medium | 56dvh | a light, a sleep timer dial, every step of every walk, preferences, the wind-down, the kind picker, the city picker, a remote's More, a press's More |
+| large | 92dvh | the press sheet, the lights picker, the fine-tune editor, the scene editor, the automation editor, the curve, activity, light sets, ideas |
+
+A medium sheet can be dragged up to large and back; a large one drops to medium on a downward flick
+that does not close it. Two stops in one sheet, never three. **A step swap inside a sheet at a fixed
+detent never moves the height**: the content crossfades behind the ghost and the title stays put.
+
+Spacing, top to bottom: a 20px grab zone with a 36x5 grabber 8px from the top; header padding
+8/20/12; the title 20/24 500 with its top 28px from the sheet's top; the sub line 14/16 400
+`--text-2` 2px under it; **12px between the header and the content**; content padding 0/20/20 plus
+the safe area; a footer only where there is a real primary action, 12/20/12 around a 50px button,
+74px over a 1px hairline. **Anything you are editing puts "Done" in its top right and has no footer**
+(the scene editor, in this pass; the automation editor, a light set and the home's name follow in
+stage 5). Open 320ms, close 220ms, a detent change 260ms, the scrim in over 255 and out over 200.
+
+### 7.2 Home is a list of rooms
+
+Top to bottom: the large title (24/28 700, collapsing to a 44px bar on scroll) with the connection
+dot; the house card; the line for anything due within the hour with its Skip, and the wind-down
+caption; **the starred lights** as one lamp row, and no row at all when nothing is starred (it used
+to print every light in the house); the scenes as one chip row with "See all"; **the rooms as one
+grouped inset list**, a disc, the name, what the room is doing, a chevron and a switch; one row of
+advice or nothing.
+
+Nothing on Home expands any more. **A room is a pushed page** (`web/js/room.js`, `#room/<area>`):
+its mood chips, its lights as one list, and one "Room setup" row. A light's row carries the name, its
+value ("62%", "Off", "Medium", or a colour dot and the colour's name for a lamp showing one), a
+chevron into the light's page and a switch. The sun button, the star, the rainbow button and the
+inline slider are gone from the row: the light's own page is one tap away and is a better dimmer than
+a 40px well in a list. Fan speeds and a shade's open/stop/close stay on the row, where they were.
+
+**Room setup** (`#room/<area>/setup`) is the room's More sheet as a page: what each light is for, the
+room's moods, and the kind of each light. Two of that sheet's rows used to dead end with no way back;
+as a page, back is the nav bar and the bug cannot exist.
+
+**Swipe a row sideways** (`web/js/rowswipe.js`) for its second most likely action: a light row for
+"Turn off" (or "Turn on"), a room row for "All off", an automation row for "Skip tonight" and, in
+red, "Delete". Every one has a visible twin elsewhere, so the gesture is a shortcut and never the
+only way in. It cannot fight `js/slide.js` any more, because rows no longer carry sliders.
+
+Section headers in a grouped list are set in caps (12/16 500 `--text-2`, 0.06em tracking). That is
+the one deliberate departure from the Tenzing ladder, called out in `docs/ia-v5.md` 7: the owner
+asked for the iOS grouped list and Tenzing has no uppercase style of its own.
+
+### 7.3 Scenes off the tab bar
+
+Four tabs: Home, Remotes, Automations, Settings. **Running a scene stays one tap on Home**; everything
+else about scenes is on a page pushed from Home's "See all". At rest a tile has one job: run the
+scene. "Edit" beside the section header turns on the per-tile pencils and makes a tap open the tile's
+editor; "Done" turns it off. **There is one way to make a scene**: the "+" in the page's nav bar, or,
+on an empty page, one line saying what to do and one primary button. The "New scene" chip on Home,
+the "New scene" tile in the grid and the Now view's empty tip are all gone. The scene editor takes
+"Done" in its header and has lost its footer.
