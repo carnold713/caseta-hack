@@ -86,6 +86,18 @@ class Hue:
                 raise RuntimeError(f"Hue bridge said {r.status}: {(await r.text())[:200]}")
             return await r.json(content_type=None)
 
+    async def _post(self, path: str, body: dict) -> Any:
+        async with self._sess().post(self._base() + path, headers={"hue-application-key": self.key or ""}, json=body) as r:
+            if r.status >= 400:
+                raise RuntimeError(f"Hue bridge said {r.status}: {(await r.text())[:200]}")
+            return await r.json(content_type=None)
+
+    async def _delete(self, path: str) -> Any:
+        async with self._sess().delete(self._base() + path, headers={"hue-application-key": self.key or ""}) as r:
+            if r.status >= 400:
+                raise RuntimeError(f"Hue bridge said {r.status}: {(await r.text())[:200]}")
+            return await r.json(content_type=None)
+
     # ----- discovery and pairing -----
     async def discover(self) -> List[dict]:
         """Bridges on the network: mDNS first, then Philips' discovery service."""
@@ -188,10 +200,11 @@ class Hue:
         device_room: Dict[str, str] = {}
         areas: Dict[str, dict] = {}
         for room in rooms:
-            areas[hid(room["id"])] = {"name": (room.get("metadata") or {}).get("name") or "Room", "parent_id": None}
-            for child in room.get("children", []):
-                if child.get("rtype") == "device":
-                    device_room[child["rid"]] = hid(room["id"])
+            kids = [c["rid"] for c in room.get("children", []) or [] if c.get("rtype") == "device" and c.get("rid")]
+            # The children are kept: moving a lamp between rooms is a rewrite of two rooms' children lists.
+            areas[hid(room["id"])] = {"name": (room.get("metadata") or {}).get("name") or "Room", "parent_id": None, "children": kids}
+            for rid in kids:
+                device_room[rid] = hid(room["id"])
         devices: Dict[str, dict] = {}
         for lt in lights:
             owner = (lt.get("owner") or {}).get("rid")
@@ -271,6 +284,89 @@ class Hue:
             d["color_mode"] = "xy"
         if self._on_state:
             self._on_state(device_id)
+
+    # ----- rooms (CLIP v2 documents all of this, unlike the Lutron bridge) -----
+    # A room holds *devices*, not lights: a lamp's device rid is what moves between rooms. "hue_" ids in, "hue_" ids
+    # out, so the connector and the app speak about a Hue room the same way they speak about a Caseta area.
+    @staticmethod
+    def _uuid(room_id: str) -> str:
+        rid = str(room_id or "")
+        return rid[4:] if rid.startswith("hue_") else rid
+
+    def _owner_of(self, device_id: str) -> str:
+        d = self.devices.get(device_id)
+        if not d:
+            raise RuntimeError(f"unknown Hue light {device_id}")
+        owner = d.get("hue_owner")
+        if not owner:
+            raise RuntimeError(f"{d.get('name')} does not say which Hue device it belongs to")
+        return str(owner)
+
+    async def create_room(self, name: str, device_ids: Optional[List[str]] = None) -> str:
+        """POST /clip/v2/resource/room. Returns the new room's "hue_<uuid>" id."""
+        children = []
+        for did in device_ids or []:
+            rid = self._owner_of(did)
+            if rid not in children:
+                children.append(rid)
+        body = {"metadata": {"name": str(name)[:40] or "Room", "archetype": "other"},
+                "children": [{"rid": rid, "rtype": "device"} for rid in children]}
+        data = await self._post("/clip/v2/resource/room", body)
+        rid = ((data or {}).get("data") or [{}])[0].get("rid")
+        if not rid:
+            raise RuntimeError("the Hue bridge did not say which room it made")
+        await self.load()
+        LOG.info("hue: made room %s (%s)", name, rid)
+        return hid(rid)
+
+    async def rename_room(self, room_id: str, name: str) -> dict:
+        """PUT the room's metadata. The Hue app shows the new name at once."""
+        if room_id not in self.areas:
+            raise RuntimeError(f"unknown Hue room {room_id}")
+        new = str(name)[:40] or "Room"
+        await self._put(f"/clip/v2/resource/room/{self._uuid(room_id)}", {"metadata": {"name": new}})
+        self.areas[room_id]["name"] = new
+        return {"room": room_id, "name": new}
+
+    async def delete_room(self, room_id: str) -> dict:
+        """DELETE the room. Its lamps stay on the bridge; they simply have no room until one takes them."""
+        if room_id not in self.areas:
+            raise RuntimeError(f"unknown Hue room {room_id}")
+        await self._delete(f"/clip/v2/resource/room/{self._uuid(room_id)}")
+        self.areas.pop(room_id, None)
+        for d in self.devices.values():
+            if d.get("area") == room_id:
+                d["area"] = None
+        if self._on_loaded:
+            self._on_loaded()
+        return {"room": room_id, "deleted": True}
+
+    async def move_light(self, device_id: str, room_id: Optional[str]) -> dict:
+        """Put a lamp in a room by rewriting which rooms' children hold its device rid. room_id None takes it out
+        of every room. Nothing else about the lamp changes."""
+        rid = self._owner_of(device_id)
+        if room_id is not None and room_id not in self.areas:
+            raise RuntimeError(f"unknown Hue room {room_id}")
+        for aid, area in self.areas.items():
+            kids = list(area.get("children") or [])
+            if rid in kids and aid != room_id:
+                kids.remove(rid)
+                await self._put(f"/clip/v2/resource/room/{self._uuid(aid)}", {"children": [{"rid": k, "rtype": "device"} for k in kids]})
+                area["children"] = kids
+        if room_id is not None:
+            area = self.areas[room_id]
+            kids = list(area.get("children") or [])
+            if rid not in kids:
+                kids.append(rid)
+                await self._put(f"/clip/v2/resource/room/{self._uuid(room_id)}", {"children": [{"rid": k, "rtype": "device"} for k in kids]})
+                area["children"] = kids
+        # every light on that Hue device follows it, which is what the bridge itself does
+        for did, d in self.devices.items():
+            if d.get("hue_owner") == rid:
+                d["area"] = room_id
+        if self._on_loaded:
+            self._on_loaded()
+        return {"device": device_id, "room": room_id}
 
     async def recall_scene(self, scene_id: str) -> None:
         if scene_id not in self.scenes:

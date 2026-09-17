@@ -153,11 +153,56 @@ function connectWS() {
 const hiddenDevices = () => ((S.config && S.config.settings && S.config.settings.hidden_devices) || []);
 const devices = () => { const hide = hiddenDevices(); return Object.values(S.inv.devices || {}).filter(d => !hide.includes(d.device_id)); };
 const dev = id => (S.inv.devices || {})[id];
-const areaName = id => ((S.inv.areas || {})[id] || {}).name || 'Elsewhere';
-const areas = () => { const ids = [...new Set(controllable().map(d => d.area || 'none'))]; return ids.map(id => ({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) })).sort((a, b) => a.name.localeCompare(b.name)); };
+// ---------- rooms the app owns ----------
+// settings.rooms is the truth about rooms once it exists: the app's own list, seeded from the bridges the first time
+// it is needed (ensureRooms in js/rooms.js) and edited from the Rooms page. While it is empty the app reads the
+// bridges exactly as it always did, so a home that never opens Rooms sees no change at all.
+const appRooms = () => ((S.config && S.config.settings && S.config.settings.rooms) || []);
+const appRoom = id => appRooms().find(r => r.id === id) || null;
+// Which app room a device is in: the room that names it, else the room standing for its bridge room, else Elsewhere.
+// Built once per config and inventory (both are replaced wholesale, so identity is a safe cache key).
+let RIDX = { rooms: null, devs: null, byDevice: null, byArea: null };
+function roomIndex() {
+  const rooms = appRooms(); const devs = S.inv.devices || {};
+  if (RIDX.rooms === rooms && RIDX.devs === devs) return RIDX;
+  const byDevice = new Map(), byArea = new Map();
+  for (const r of rooms) for (const id of (r.device_ids || [])) if (!byDevice.has(id)) byDevice.set(id, r.id);
+  for (const r of rooms) {
+    if (r.bridge_area && !byArea.has(r.bridge_area)) byArea.set(r.bridge_area, r.id);
+    if (r.hue_room && !byArea.has(r.hue_room)) byArea.set(r.hue_room, r.id);
+  }
+  RIDX = { rooms, devs, byDevice, byArea };
+  return RIDX;
+}
+// The room id to file a device under, app room or bridge area. `d` may be a bare {} (a device that has gone).
+function devArea(d) {
+  if (!d) return 'none';
+  if (!appRooms().length) return d.area || 'none';
+  const ix = roomIndex();
+  return ix.byDevice.get(d.device_id) || ix.byArea.get(d.area) || 'none';
+}
+const devAreaName = d => areaName(devArea(d));
+// A room's name, whether the id is one of the app's rooms or a bridge area.
+function areaName(id) {
+  const r = appRoom(id);
+  if (r) return r.name;
+  return ((S.inv.areas || {})[id] || {}).name || 'Elsewhere';
+}
+// Every room, in name order. With an app list that is the list itself (an empty room still shows: the person made
+// it, and it is where the next light goes), plus Elsewhere when something has landed outside every room.
+const areas = () => {
+  const own = appRooms();
+  if (own.length) {
+    const out = own.map(r => ({ id: r.id, name: r.name }));
+    if (controllable().some(d => devArea(d) === 'none')) out.push({ id: 'none', name: 'Elsewhere' });
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const ids = [...new Set(controllable().map(d => d.area || 'none'))];
+  return ids.map(id => ({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) })).sort((a, b) => a.name.localeCompare(b.name));
+};
 const controllable = () => devices().filter(d => ['light', 'switch', 'fan', 'cover'].includes(d.domain)).sort(byName);
 const remotes = () => devices().filter(d => d.domain === 'pico').sort(byName);
-function byName(a, b) { return (areaName(a.area) + a.name).localeCompare(areaName(b.area) + b.name); }
+function byName(a, b) { return (devAreaName(a) + a.name).localeCompare(devAreaName(b) + b.name); }
 const level = id => { const s = S.states[id]; return s && s.level != null ? s.level : null; };
 // A scene's entry for a light is a number, a fan speed, or {level, kelvin?, hex?} for a Hue lamp with its colour.
 function levelOf(v) { if (v && typeof v === 'object') return Number(v.level) || 0; if (typeof v === 'number') return v; return v && v !== 'Off' ? 100 : 0; }
@@ -176,7 +221,7 @@ function targetDevices(t) {
   if (!t) return [];
   const [k, id] = [t.slice(0, 1), t.slice(2)];
   if (k === 'd') return dev(id) ? [id] : [];
-  if (k === 'a') return controllable().filter(d => (d.area || 'none') === id && d.domain !== 'cover').map(d => d.device_id);
+  if (k === 'a') return controllable().filter(d => devArea(d) === id && d.domain !== 'cover').map(d => d.device_id);
   if (k === 'g') { const g = groups().find(x => x.id === id); return g ? g.device_ids.filter(dev) : []; }
   if (t === 'h:all') return controllable().filter(d => d.domain === 'light' || d.domain === 'switch').map(d => d.device_id);
   if (t === 'h:shades') return controllable().filter(d => d.domain === 'cover').map(d => d.device_id);
@@ -214,7 +259,7 @@ function targetOptions(opts = {}) {
   const out = [];
   if (!opts.noAll) out.push({ id: 'h:all', name: 'Everything', sub: 'every light in the house', kind: 'all' });
   for (const a of areas()) {
-    const ds = controllable().filter(d => (d.area || 'none') === a.id);
+    const ds = controllable().filter(d => devArea(d) === a.id);
     if (opts.fansOnly && !ds.some(d => d.domain === 'fan')) continue;
     if (!opts.fansOnly && !opts.noRooms && ds.some(d => d.domain !== 'cover')) out.push({ id: `a:${a.id}`, name: a.name, sub: `${ds.filter(d => d.domain !== 'cover').length} lights`, kind: 'room' });
     for (const d of ds) if (!opts.fansOnly || d.domain === 'fan') out.push({ id: `d:${d.device_id}`, name: d.name, sub: a.name, kind: d.domain });
@@ -359,7 +404,7 @@ function paintState() {
 }
 // Rooms for the light field: id = area id (matches the room card's data-room), the colour of its light, mean level of its lights.
 function roomMeanLevel(aid, overrides = {}) {
-  const ds = controllable().filter(d => (d.area || 'none') === aid && d.domain !== 'cover');
+  const ds = controllable().filter(d => devArea(d) === aid && d.domain !== 'cover');
   if (!ds.length) return 0;
   return ds.reduce((a, d) => a + (overrides[d.device_id] ?? level(d.device_id) ?? 0), 0) / ds.length;
 }
@@ -367,8 +412,9 @@ function roomsForLight(overrides = {}) {
   return areas().map(a => { const lv = roomMeanLevel(a.id, overrides); return { id: a.id, color: typeof lampColor === 'function' ? lampColor(Math.max(1, lv)) : '#F7A64F', level: lv }; });
 }
 function roomSummary(aid) {
-  const ds = controllable().filter(d => (d.area || 'none') === aid);
+  const ds = controllable().filter(d => devArea(d) === aid);
   const on = ds.filter(d => isOn(d.device_id)).length;
+  if (!ds.length) return 'No lights yet';   // a room the person just made, waiting for its first light
   return on ? `${on} of ${ds.length} on` : `${ds.length} ${ds.length === 1 ? 'light' : 'lights'} · all off`;
 }
 function tileSub(t) {
@@ -380,7 +426,7 @@ function statusLine() {
   if (connLost()) return `<span class="faint">Last known state</span>`;
   const on = controllable().filter(d => d.domain !== 'cover' && isOn(d.device_id));
   if (!on.length) return 'Everything is off';
-  const rooms = [...new Set(on.map(d => areaName(d.area)))].slice(0, 3);
+  const rooms = [...new Set(on.map(d => devAreaName(d)))].slice(0, 3);
   return `<b>${on.length} ${on.length === 1 ? 'light' : 'lights'} on</b> · ${esc(rooms.join(', '))}${on.length > 3 && rooms.length === 3 ? '…' : ''}`;
 }
 

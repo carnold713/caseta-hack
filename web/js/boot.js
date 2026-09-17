@@ -91,7 +91,7 @@ function sceneRooms(t) {
   const all = [...document.querySelectorAll('.room[data-room]')];
   if (!t.startsWith('p:')) return all;
   const p = presets().find(x => x.id === t.slice(2)); if (!p) return all;
-  const areasHit = new Set(Object.keys(p.levels).map(id => (dev(id) || {}).area || 'none'));
+  const areasHit = new Set(Object.keys(p.levels).map(id => devArea(dev(id))));
   return all.filter(el => areasHit.has(el.dataset.room));
 }
 

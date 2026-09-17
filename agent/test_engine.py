@@ -71,7 +71,59 @@ async def runner_cases():
     bridge.calls.clear(); r.last_on = {}
     await r.run_one({"type": "restore", "target": ["d:5", "d:6"], "fade": 0})
     check("restore with nothing remembered is plain on", sorted(bridge.calls) == [("value", "5", 100), ("value", "6", 100)], bridge.calls)
+    await room_cases(check)    # check() counts into `bad` itself
     return bad
+
+
+async def room_cases(check):
+    """a:<room> against the rooms the app owns (settings.rooms), Lutron and Hue lamps in the same room."""
+    bridge = FakeBridge()
+    # a bridge with two Lutron areas and a Hue room, the way the connector sees them
+    bridge.devices["5"]["area"] = "20"
+    bridge.devices["hue_a"]["area"] = "hue_r1"
+    bridge.devices["hue_b"]["area"] = "hue_r1"
+    bridge.devices["6"] = {"device_id": "6", "type": "WallDimmer", "zone": "3", "current_state": 0, "area": "20"}
+    bridge.devices["7"] = {"device_id": "7", "type": "WallSwitch", "zone": "4", "current_state": 0, "area": "21"}
+    bridge.devices["9"] = {"device_id": "9", "type": "Pico3ButtonRaiseLower", "zone": None, "area": "20"}
+    bridge.devices["8"] = {"device_id": "8", "type": "SerenaHoneycombShade", "zone": "5", "current_state": 0, "area": "20"}
+    cfg = {"settings": {}, "groups": []}
+    r = ActionRunner(lambda: bridge, lambda: cfg)
+    # no list: the bridge's own areas, exactly as before
+    check("a:<area> without an app list", sorted(r._resolve("a:20")) == ["5", "6"], r._resolve("a:20"))
+    # seeded rooms keep the bridge's ids, so nothing a person already set up changes meaning
+    cfg["settings"]["rooms"] = [
+        {"id": "20", "name": "Kitchen", "device_ids": [], "bridge_area": "20", "hue_room": None},
+        {"id": "21", "name": "Outside", "device_ids": [], "bridge_area": "21", "hue_room": None},
+        {"id": "hue_r1", "name": "Office", "device_ids": [], "bridge_area": None, "hue_room": "hue_r1"},
+    ]
+    check("a seeded room resolves as the area did", sorted(r._resolve("a:20")) == ["5", "6"], r._resolve("a:20"))
+    check("a room of Hue lamps resolves to them", sorted(r._resolve("a:hue_r1")) == ["hue_a", "hue_b"], r._resolve("a:hue_r1"))
+    check("a room leaves out shades and remotes", "8" not in r._resolve("a:20") and "9" not in r._resolve("a:20"), r._resolve("a:20"))
+    # a room the app made: no bridge area at all, just the devices filed in it, Lutron and Hue together
+    cfg["settings"]["rooms"].append({"id": "r7x2", "name": "Studio", "device_ids": ["6", "hue_a"], "bridge_area": None, "hue_room": None})
+    check("an app room holds what is filed in it", sorted(r._resolve("a:r7x2")) == ["6", "hue_a"], r._resolve("a:r7x2"))
+    check("a moved light leaves its old room", sorted(r._resolve("a:20")) == ["5"], r._resolve("a:20"))
+    check("a moved lamp leaves its old room", sorted(r._resolve("a:hue_r1")) == ["hue_b"], r._resolve("a:hue_r1"))
+    # a device may be in one room only: the first room that names it wins
+    # (the hub strips the duplicate on the way in, and the connector reads it the same way: the first room wins)
+    cfg["settings"]["rooms"][1]["device_ids"] = ["6"]
+    check("one room per device, the first wins", sorted(r._resolve("a:21")) == ["6", "7"] and r._resolve("a:r7x2") == ["hue_a"], (r._resolve("a:21"), r._resolve("a:r7x2")))
+    cfg["settings"]["rooms"][1]["device_ids"] = []
+    # a room that names a device the bridges no longer report simply has one thing less in it
+    cfg["settings"]["rooms"][-1]["device_ids"] = ["6", "hue_a", "gone"]
+    check("a device that is gone is skipped", sorted(r._resolve("a:r7x2")) == ["6", "hue_a"], r._resolve("a:r7x2"))
+    # a room the app does not own falls back to the bridge area
+    check("an unknown room falls back to the bridge", r._resolve("a:99") == [], r._resolve("a:99"))
+    bridge.devices["10"] = {"device_id": "10", "type": "WallDimmer", "zone": "6", "current_state": 0, "area": "99"}
+    check("a bridge area the app never took still works", r._resolve("a:99") == ["10"], r._resolve("a:99"))
+    # a level on a room reaches both bridges
+    hue2 = []
+    async def hue_set(device_id, level, fade_s):
+        hue2.append((device_id, level))
+    r.hue_set = hue_set
+    bridge.calls.clear()
+    await r.run_one({"type": "level", "target": "a:r7x2", "level": 50, "fade": 0})
+    check("a level on a mixed room drives both", bridge.calls == [("value", "6", 50)] and hue2 == [("hue_a", 50)], (bridge.calls, hue2))
 
 
 async def scenario(has_double, script):

@@ -12,6 +12,16 @@ devices with pylutron-caseta (tannercollin, 2021) and from lutron-leap-js's Devi
     CreateRequest  /device          {"Device": {"Name", "SerialNumber", "AssociatedArea": {"href": "/area/N"}}}
     UpdateRequest  /system/status   {"SystemStatus": {"InAssociationMode": false}}
 
+Rooms are here for the same reason, and are guessed the same way. The app owns its rooms
+(config.settings.rooms) and only asks the bridge to keep up:
+
+    CreateRequest  /area            {"Area": {"Name", "Parent": {"href": "/area/N"}}}   create_area
+    UpdateRequest  /area/{id}       {"Area": {"Name"}}                                  rename_area
+    UpdateRequest  /device/{id}     {"Device": {"AssociatedArea": {"href": "/area/N"}}} move_device
+
+A bridge that refuses any of those changes nothing about the app's rooms: it only changes what
+the app says about where the room also lives.
+
 Every exchange is logged and sent to the app, where "Show technical details" reveals it, so a
 bridge that answers differently can be understood from the phone. The feature is experimental.
 """
@@ -37,6 +47,15 @@ def _resp(resp: Any) -> dict:
         "url": getattr(h, "Url", None),
         "body": getattr(resp, "Body", None),
     }
+
+
+def _href_id(obj: Any) -> Optional[str]:
+    """"/area/12" -> "12", from whatever the bridge echoes back."""
+    href = (obj or {}).get("href") if isinstance(obj, dict) else None
+    if isinstance(href, str) and "/" in href:
+        tail = href.rstrip("/").rsplit("/", 1)[-1]
+        return tail or None
+    return None
 
 
 class AddSession:
@@ -239,6 +258,103 @@ class AddSession:
         self.heard = [h for h in self.heard if h["serial"] != serial_s]
         await self.stop("created")
         return {"created": created, "name": name_s, "area": area_s}
+
+    # ----- rooms on the Lutron bridge (undocumented, like everything else here) -----
+    # Lutron's app makes rooms, so the bridge must take a CreateRequest on /area, but no shape for it is published.
+    # These are the shapes worth trying, in the order most likely to work, every exchange in the same log the add
+    # sheet shows. A refusal is an answer, not a failure: the app keeps the room and says the bridge would not.
+    def _root_area(self) -> Optional[str]:
+        """The bridge's top area: the one nothing else names as its parent. A new room hangs off it."""
+        try:
+            bridge = self._need_bridge()
+            areas = {str(k): v for k, v in getattr(bridge, "areas", {}).items() if not str(k).startswith("hue_")}
+            if not areas:
+                return None
+            parents = {str(a.get("parent_id")) for a in areas.values() if a.get("parent_id")}
+            for aid in areas:
+                if aid in parents:
+                    return aid           # something calls it parent: that is the root or close enough
+            roots = [aid for aid, a in areas.items() if not a.get("parent_id")]
+            return roots[0] if roots else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    async def create_area(self, name: Any) -> dict:
+        name_s = str(name or "").strip()[:40]
+        if not name_s:
+            raise ValueError("a room name is required")
+        root = self._root_area()
+        variants: List[tuple] = []
+        if root:
+            variants.append(("with a parent", {"Name": name_s, "Parent": {"href": f"/area/{root}"}}))
+        variants.append(("plain", {"Name": name_s}))
+        variants.append(("with a category", {"Name": name_s, "Category": {"Type": "Room"}, **({"Parent": {"href": f"/area/{root}"}} if root else {})}))
+        last_exc: Optional[Exception] = None
+        for label, body in variants:
+            try:
+                resp = await self._request("CreateRequest", "/area", {"Area": body})
+                made = _resp(resp)
+                area_id = _href_id((made.get("body") or {}).get("Area") or {}) or await self._area_named(name_s)
+                self._note("area made", "/area", request={"variant": label}, response={"area_id": area_id, "name": name_s})
+                return {"area_id": area_id, "name": name_s, "created": made}
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                self._note("area variant failed", "/area", request={"variant": label}, error=str(exc))
+                found = await self._area_named(name_s)
+                if found:
+                    self._note("area appeared", "/area", response={"area_id": found, "note": "the bridge made it despite the error"})
+                    return {"area_id": found, "name": name_s, "created": {"status": "appeared after error"}}
+        try:
+            await self._request("ReadRequest", "/area")   # what this bridge thinks an area looks like, for the log
+        except Exception:  # noqa: BLE001
+            pass
+        assert last_exc is not None
+        raise last_exc
+
+    async def _area_named(self, name_s: str) -> Optional[str]:
+        """Did an area by this name turn up? Re-reads the bridge's areas."""
+        try:
+            bridge = self._need_bridge()
+            loader = getattr(bridge, "_load_areas", None)
+            if loader:
+                await loader()  # noqa: SLF001
+            for aid, a in getattr(bridge, "areas", {}).items():
+                if str(a.get("name") or "") == name_s and not str(aid).startswith("hue_"):
+                    return str(aid)
+        except Exception as exc:  # noqa: BLE001
+            self._note("error", "/area", error=f"could not re-read areas: {exc}")
+        return None
+
+    async def rename_area(self, area_id: Any, name: Any) -> dict:
+        area_s = str(area_id or "").strip()
+        name_s = str(name or "").strip()[:40]
+        if not area_s or not name_s:
+            raise ValueError("a room and a name are required")
+        resp = await self._request("UpdateRequest", f"/area/{area_s}", {"Area": {"Name": name_s}})
+        return {"area_id": area_s, "name": name_s, "updated": _resp(resp)}
+
+    async def move_device(self, device_id: Any, area_id: Any) -> dict:
+        """Put a device in another of the bridge's areas: UpdateRequest /device/{id} with AssociatedArea."""
+        did = str(device_id or "").strip()
+        area_s = str(area_id or "").strip()
+        if not did or not area_s:
+            raise ValueError("a device and a room are required")
+        if area_s.startswith("hue_"):
+            raise ValueError("that room is a Philips Hue room, so the Lutron bridge cannot file a device in it")
+        variants = [
+            ("AssociatedArea", {"Device": {"AssociatedArea": {"href": f"/area/{area_s}"}}}),
+            ("AssociatedArea with the id", {"Device": {"href": f"/device/{did}", "AssociatedArea": {"href": f"/area/{area_s}"}}}),
+        ]
+        last_exc: Optional[Exception] = None
+        for label, body in variants:
+            try:
+                resp = await self._request("UpdateRequest", f"/device/{did}", body)
+                return {"id": did, "area": area_s, "updated": _resp(resp)}
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                self._note("move variant failed", f"/device/{did}", request={"variant": label}, error=str(exc))
+        assert last_exc is not None
+        raise last_exc
 
     async def remove(self, device_id: Any) -> dict:
         """Take a device out of the bridge: DeleteRequest /device/{id}. Undocumented like the rest; logged."""

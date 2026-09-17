@@ -46,13 +46,13 @@ const KIND_ROLE = KIND_DEF.ROLES;
 const ROLE_LABEL = { ambient: 'Main', task: 'Task', accent: 'Lamps', decor: 'Decor' };
 const ROLE_CAP = { ambient: 'Main · fills the room', task: 'Task · light for your hands', accent: 'Lamps · for atmosphere', decor: 'Decor · lit to be looked at' };
 // "Kitchen · Ceiling pendant · Task": the one caption for a light, used by its page and its More sheet.
-function lightCaption(id) { const d = dev(id); if (!d) return ''; const k = lightKind(id), r = lightRole(id); return [areaName(d.area), k ? kindLabel(k) : null, r ? ROLE_LABEL[r] : null].filter(Boolean).map(esc).join(' · '); }
+function lightCaption(id) { const d = dev(id); if (!d) return ''; const k = lightKind(id), r = lightRole(id); return [devAreaName(d), k ? kindLabel(k) : null, r ? ROLE_LABEL[r] : null].filter(Boolean).map(esc).join(' · '); }
 function kindLabel(k) { const x = KIND_DEF.KINDS[KIND_DEF.normalize(k)]; return x ? x.label : null; }
 // The stored id, read as the id in the table: the nine old one-word ids ("pendant") still resolve ("ceiling-pendant").
 function lightKind(id) { return KIND_DEF.normalize(((S.config && S.config.settings.light_kinds) || {})[id]); }
 function lightRole(id) { const r = ((S.config && S.config.settings.roles) || {})[id]; if (r) return r; const k = lightKind(id); return k ? KIND_ROLE[k] : null; }
 function lightIcon(d) { const k = lightKind(d.device_id); return k ? KIND_DEF.KINDS[k].icon : domainIcon(d.domain); }
-const roomLights = aid => controllable().filter(d => (d.area || 'none') === aid && (d.domain === 'light' || d.domain === 'switch'));
+const roomLights = aid => controllable().filter(d => devArea(d) === aid && (d.domain === 'light' || d.domain === 'switch'));
 const roomDimmers = aid => roomLights(aid).filter(d => d.domain === 'light');
 function meanLevel(ids) { const xs = ids.map(id => level(id) || 0); return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0; }
 const roomMean = aid => meanLevel(roomLights(aid).map(d => d.device_id));
@@ -73,7 +73,7 @@ function kindRender() {
   const { id } = KP; const d = dev(id); if (!d) return;
   const w = SORT && SORT.list.includes(id) ? SORT : null;
   const place = KP.place ? KIND_DEF.placeOf(KP.place) : null;
-  const who = `${esc(d.name)} · ${esc(areaName(d.area))}`;
+  const who = `${esc(d.name)} · ${esc(devAreaName(d))}`;
   const onBack = place ? () => { KP.place = null; kindRender(); } : KP.back;
   showSheet(w ? 'sort' : 'kind', place ? 'What is it?' : 'Where is this light?', (place ? kindFixturesHTML(id, place) : kindPlacesHTML(id)) + kindFootHTML(id, !!place),
     { detent: 'medium', sub: place ? `${who} · ${esc(place.name)}` : `${who}. Moods use it to know what to dim.`, back: !!onBack, onBack, cap: w ? `Light ${w.list.indexOf(id) + 1} of ${w.list.length}` : '', top: true });
@@ -262,7 +262,7 @@ function lightNowHeadline(rooms, short = false) {
 function rowLights() {
   const order = new Map(areas().map((a, i) => [a.id, i])); const f = S.config.favorites;
   return controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && f.includes('d:' + d.device_id))
-    .sort((a, b) => ((order.get(a.area || 'none') ?? 999) - (order.get(b.area || 'none') ?? 999)) || a.name.localeCompare(b.name));
+    .sort((a, b) => ((order.get(devArea(a)) ?? 999) - (order.get(devArea(b)) ?? 999)) || a.name.localeCompare(b.name));
 }
 // Is a sleep timer running over this light?
 function timerOn(id) { return Object.entries(S.timers || {}).some(([t, v]) => v && v.ends_at && targetDevices(tsplit(t)).includes(id)); }
@@ -451,7 +451,7 @@ function openLightSheet(id, opts = {}) {
       <button class="rbtn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}"><span class="c">${ICON('star')}</span><span>Favourite</span></button>
       <button class="rbtn" data-act="ld-more" data-id="${id}"><span class="c">${ICON('dots')}</span><span>More</span></button>
     </div>
-    ${moodCaptionHTML(d.area || 'none')}
+    ${moodCaptionHTML(devArea(d))}
   </div>`;
   sheet.open(esc(d.name), body, { detent: 'medium', sub: lightCaption(id) });
   wireLightSheet();

@@ -69,7 +69,7 @@ function roomOrder(ds) { const f = S.config.favorites; return ds.slice().sort((a
 // Nothing expands any more, so Home holds five rows where it used to hold five open cards.
 function roomRow(a) {
   const t = `a:${a.id}`;
-  const ds = controllable().filter(d => (d.area || 'none') === a.id);
+  const ds = controllable().filter(d => devArea(d) === a.id);
   const hasToggle = ds.some(d => d.domain !== 'cover');
   const on = targetOn(t);
   return `<div class="item room ${on ? 'on' : ''}" data-tgt="${t}" data-room="${a.id}">

@@ -6,7 +6,9 @@ Timing lives in config.settings (double_ms, hold_ms).
 
 Actions are the same JSON shape the hub validates (see hub/validate.js):
     level, step, raise, lower, stop, fan, scene, preset, delay, cycle, color
-Targets are "d:<device_id>" or "g:<group_id>".
+Targets are "d:<device_id>", "g:<group_id>", "a:<room>" or "h:all" / "h:shades" / "h:fans".
+"a:<room>" names one of the app's own rooms when the config carries them (settings.rooms), and the
+bridge's own area when it does not.
 color: {target, kelvin | hex, level?, fade?} reaches only the Hue lights in the target that can do it.
 A preset level may be {level, kelvin?, hex?} for such a lamp; anything else is a number or a fan speed.
 """
@@ -157,6 +159,34 @@ class ActionRunner:
         return out
 
     # ----- helpers -----
+    # The rooms the app owns (config.settings.rooms). While the list is empty the connector reads the bridges'
+    # own areas, exactly as it always has. Once there is a list, `a:<id>` names one of these rooms: the devices
+    # filed in it by hand, plus whatever still sits in the bridge room it stands for and no other room has taken.
+    # Hue lamps are "hue_" ids in the same device dictionary, so a room of Hue lamps resolves like any other.
+    def _app_rooms(self) -> List[dict]:
+        rooms = (self._config().get("settings") or {}).get("rooms") or []
+        return [r for r in rooms if isinstance(r, dict) and r.get("id")]
+
+    def _room_devices(self, room: dict, rooms: List[dict]) -> List[str]:
+        bridge = self._bridge()
+        if not bridge:
+            return []
+        claimed = {}
+        for r in rooms:
+            for did in r.get("device_ids") or []:
+                claimed.setdefault(str(did), str(r.get("id")))
+        rid = str(room.get("id"))
+        areas = {str(a) for a in (room.get("bridge_area"), room.get("hue_room")) if a}
+        out: List[str] = []
+        for did, d in bridge.devices.items():
+            did = str(did)
+            if not d.get("zone") or d.get("type") in _COVER_TYPES:
+                continue
+            owner = claimed.get(did)
+            if owner == rid or (owner is None and str(d.get("area")) in areas):
+                out.append(did)
+        return out
+
     def _resolve(self, target) -> List[str]:
         if isinstance(target, list):
             seen: List[str] = []
@@ -176,6 +206,12 @@ class ActionRunner:
             LOG.warning("unknown group %s", ident)
             return []
         if kind == "a" and bridge:   # every controllable device in a room
+            rooms = self._app_rooms()
+            if rooms:
+                room = next((r for r in rooms if str(r.get("id")) == ident), None)
+                if room is not None:
+                    return self._room_devices(room, rooms)
+            # no app list, or a room the app does not own: the bridge's own area, exactly as before
             return [d["device_id"] for d in bridge.devices.values()
                     if d.get("zone") and d.get("area") == ident and d.get("type") not in _COVER_TYPES]
         if kind == "h" and ident == "all" and bridge:   # every light and switch in the house

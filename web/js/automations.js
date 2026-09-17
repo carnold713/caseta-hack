@@ -52,7 +52,7 @@ function splitT(list) { const L = [], Sh = []; for (const t of list) (isShadeT(t
 function fansIn(L) { if (L.includes('h:fans')) return ['h:fans']; return targetDevices(L).filter(id => (dev(id) || {}).domain === 'fan').map(id => `d:${id}`); }
 const hasShades = () => controllable().some(d => d.domain === 'cover');
 const hasFans = () => controllable().some(d => d.domain === 'fan');
-const lightRooms = () => areas().filter(a => controllable().some(d => (d.area || 'none') === a.id && d.domain !== 'cover'));
+const lightRooms = () => areas().filter(a => controllable().some(d => devArea(d) === a.id && d.domain !== 'cover'));
 const dimmers = () => controllable().filter(d => d.domain === 'light');
 
 function daysText(days) {
@@ -595,7 +595,7 @@ let GS = null;
 const OUTSIDE_RE = /outside|outdoor|porch|patio|garden|entry|hall|exterior|yard|deck|front|drive|garage/i;
 const BEDROOM_RE = /bed|nursery|guest/i;
 const HALL_RE = /hall|entry|foyer|landing|stairs|mud/i;
-function roomMatches(t, re) { const aid = t.startsWith('a:') ? t.slice(2) : t.startsWith('d:') ? ((dev(t.slice(2)) || {}).area || 'none') : null; return !!aid && re.test(areaName(aid)); }
+function roomMatches(t, re) { const aid = t.startsWith('a:') ? t.slice(2) : t.startsWith('d:') ? devArea(dev(t.slice(2))) : null; return !!aid && re.test(areaName(aid)); }
 // Each setup is a walk (docs/ux-progressive.md 2.16): one question per step, the plan at the end, saved by the plan's primary (`gs-save`).
 function openWelcomeSetup() {
   const pre = lightRooms().filter(a => OUTSIDE_RE.test(a.name)).map(a => `a:${a.id}`);
@@ -617,15 +617,15 @@ function openWelcomeSetup() {
       + walkValueRow(w, 'offset', 'Comes on', GS.offset ? `${GS.offset} minutes before sunset` : 'At sunset', `<div class="chips">${[0, 10, 20, 30, 45].map(v => chip('gs-offset', v ? `${v} min before` : 'At sunset', GS.offset === v, `data-v="${v}"`)).join('')}</div>`)) },
   ] });
 }
-function wakeShade(g) { const lampD = g.lamp ? dev(g.lamp) : null; return lampD ? controllable().find(d => d.domain === 'cover' && (d.area || 'none') === (lampD.area || 'none')) : null; }
+function wakeShade(g) { const lampD = g.lamp ? dev(g.lamp) : null; return lampD ? controllable().find(d => d.domain === 'cover' && devArea(d) === devArea(lampD)) : null; }
 function openWakeupSetup() {
-  const beds = dimmers().filter(d => BEDROOM_RE.test(areaName(d.area)));
+  const beds = dimmers().filter(d => BEDROOM_RE.test(devAreaName(d)));
   const lamp = beds.find(d => /lamp/i.test(d.name)) || beds[0] || dimmers()[0];
   GS = { kind: 'wakeup', lamp: lamp ? lamp.device_id : null, alarm: '06:30', days: [1, 2, 3, 4, 5], shade: false, minutes: 25, end: 50, dayWarn: false };
   walk({ key: 'setup', title: 'Wake-up light', sub: 'One lamp rises slowly from dark to soft, ending at the time you pick.', state: GS, primary: 'Turn it on', doneAct: 'gs-save', onClose: () => { GS = null; }, steps: [
     { id: 'lamp', kind: 'pick', title: 'Which lamp should wake you?', skip: () => dimmers().length === 1, body: () => {
       const lampD = GS.lamp ? dev(GS.lamp) : null; const shown = [...beds]; if (lampD && !shown.includes(lampD)) shown.unshift(lampD);
-      return `<div class="card pad0 list">${shown.map(d => pickRow(d.device_id, esc(d.name), esc(areaName(d.area)), GS.lamp === d.device_id, lampHTML(level(d.device_id) || 0, 28, ''))).join('')}<button class="item" data-act="gs-lamp-more">${ICON('dots')}<div class="grow"><div class="t">Another light…</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+      return `<div class="card pad0 list">${shown.map(d => pickRow(d.device_id, esc(d.name), esc(devAreaName(d)), GS.lamp === d.device_id, lampHTML(level(d.device_id) || 0, 28, ''))).join('')}<button class="item" data-act="gs-lamp-more">${ICON('dots')}<div class="grow"><div class="t">Another light…</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
     }, onPick: (w, v) => { GS.lamp = v; } },
     { id: 'alarm', kind: 'time', title: 'What time do you wake up?', sub: () => `It starts ${GS.minutes} minutes before, so it's soft by then.`, valid: () => GS.days.length > 0, body: () => `<div class="when-time" style="margin-top:8px"><input type="time" class="time-big" id="gs-alarm" value="${GS.alarm}" aria-label="Wake up at"></div><div class="h2">Which days?</div>${daysHTML(GS.days, 'gs', GS.dayWarn)}` },
     { id: 'shade', kind: 'pick', title: 'Open the shade too?', sub: () => { const sh = wakeShade(GS); return sh ? esc(sh.name) : ''; }, skip: () => !wakeShade(GS), body: () => `<div class="card pad0 list">${pickRow('yes', 'Yes, at the time I wake', '', GS.shade)}${pickRow('no', 'No', '', !GS.shade)}</div>`, onPick: (w, v) => { GS.shade = v === 'yes'; } },
@@ -638,18 +638,18 @@ function openWakeupSetup() {
 }
 function openButtonsSetup() {
   const rs = remotes(); if (!rs.length) return;
-  const bedRemote = rs.find(d => BEDROOM_RE.test(areaName(d.area))) || rs[0];
-  const hallRemote = rs.find(d => HALL_RE.test(areaName(d.area))) || rs.find(d => d.device_id !== bedRemote.device_id) || rs[0];
+  const bedRemote = rs.find(d => BEDROOM_RE.test(devAreaName(d))) || rs[0];
+  const hallRemote = rs.find(d => HALL_RE.test(devAreaName(d))) || rs.find(d => d.device_id !== bedRemote.device_id) || rs[0];
   const path = groups().find(g => /night path/i.test(g.name));
   const hallRooms = lightRooms().filter(a => HALL_RE.test(a.name));
-  const hallLights = controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && HALL_RE.test(areaName(d.area)));
+  const hallLights = controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && HALL_RE.test(devAreaName(d)));
   const door = hallLights[0] || controllable().find(d => d.domain === 'light' || d.domain === 'switch');
   const pathT = path ? [`g:${path.id}`] : hallRooms.length ? [`a:${hallRooms[0].id}`] : (lightRooms()[0] ? [`a:${lightRooms()[0].id}`] : []);
   const same = hallRemote.device_id === bedRemote.device_id;
   GS = { kind: 'buttons', gn: { on: true, remote: bedRemote.device_id, button: defaultHoldButton(bedRemote), path: pathT }, lv: { on: true, remote: hallRemote.device_id, button: defaultHoldButton(hallRemote, same ? defaultHoldButton(bedRemote) : null), door: door ? `d:${door.device_id}` : null } };
-  const remoteRows = (key, skipLabel) => { const cur = GS[key]; const sorted = [...rs].sort((a, b) => (a.device_id === (key === 'gn' ? bedRemote : hallRemote).device_id ? -1 : b.device_id === (key === 'gn' ? bedRemote : hallRemote).device_id ? 1 : 0)); return `<div class="card pad0 list">${sorted.map(d => pickRow(d.device_id, esc(d.name), esc(areaName(d.area)), cur.on && cur.remote === d.device_id, `<div class="remote-thumb">${picoArt(d, { width: 40 })}</div>`)).join('')}${pickRow('skip', skipLabel, '', !cur.on, ICON('x'))}</div>`; };
+  const remoteRows = (key, skipLabel) => { const cur = GS[key]; const sorted = [...rs].sort((a, b) => (a.device_id === (key === 'gn' ? bedRemote : hallRemote).device_id ? -1 : b.device_id === (key === 'gn' ? bedRemote : hallRemote).device_id ? 1 : 0)); return `<div class="card pad0 list">${sorted.map(d => pickRow(d.device_id, esc(d.name), esc(devAreaName(d)), cur.on && cur.remote === d.device_id, `<div class="remote-thumb">${picoArt(d, { width: 40 })}</div>`)).join('')}${pickRow('skip', skipLabel, '', !cur.on, ICON('x'))}</div>`; };
   const pickRemote = (key, v) => { if (v === 'skip') { GS[key].on = false; return; } GS[key].on = true; GS[key].remote = v; GS[key].button = defaultHoldButton(dev(v), key === 'lv' && GS.gn.on && GS.gn.remote === v ? GS.gn.button : null); };
-  const doorLights = () => controllable().filter(d => d.domain === 'light' || d.domain === 'switch').sort((a, b) => (HALL_RE.test(areaName(b.area)) ? 1 : 0) - (HALL_RE.test(areaName(a.area)) ? 1 : 0));
+  const doorLights = () => controllable().filter(d => d.domain === 'light' || d.domain === 'switch').sort((a, b) => (HALL_RE.test(devAreaName(b)) ? 1 : 0) - (HALL_RE.test(devAreaName(a)) ? 1 : 0));
   // the chosen button first, so "Hold Off" is in view on a five-button remote
   const buttonChips = (act, pid, cur) => { const d = dev(pid); if (!d) return ''; const ns = picoSlots(d).filter(s => s.real).map(s => s.n).sort((a, b) => (a === cur ? -1 : b === cur ? 1 : a - b)); return `<div class="chips scroll">${ns.map(n => chip(act, `Hold ${esc(buttonLabel(pid, n))}`, cur === n, `data-n="${n}"`)).join('')}</div>`; };
   const replaces = (pid, n) => { const acts = gestureActions(pid, n, 'hold'); return acts.length ? `<p class="d" style="margin:8px 0 0">This replaces: ${esc(describe(acts))}</p>` : ''; };
@@ -658,7 +658,7 @@ function openButtonsSetup() {
     { id: 'gnRemote', kind: 'pick', title: 'Which remote is by your bed?', sub: 'Holding a button on it will be Goodnight.', skip: () => rs.length === 1, body: () => remoteRows('gn', 'Skip Goodnight'), onPick: (w, v) => pickRemote('gn', v) },
     { id: 'gnPath', kind: 'multi', title: 'Which lights light the way to bed?', sub: 'They stay dim for two minutes after everything else goes off.', skip: () => !GS.gn.on, body: () => { const gnLights = [...GS.gn.path, ...groups().filter(x => /night path/i.test(x.name)).map(x => `g:${x.id}`), ...lightRooms().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v)); return `<div class="chips scroll">${gnLights.map(t => chip('gs-gn-path', esc(cap(targetName(t))), GS.gn.path.includes(t), `data-t="${esc(t)}"`)).join('')}</div><p class="d" style="margin:8px 0 0">${GS.gn.path.length ? esc(cap(targetName(packTarget(GS.gn.path)))) : 'None: everything goes off at once'}</p>`; } },
     { id: 'lvRemote', kind: 'pick', title: 'Which remote is by the door you leave from?', sub: 'Holding a button on it will be Leaving.', skip: () => rs.length === 1, body: () => remoteRows('lv', 'Skip Leaving'), onPick: (w, v) => pickRemote('lv', v) },
-    { id: 'lvDoor', kind: 'pick', title: 'Which light is by that door?', sub: 'It stays on for two minutes after everything else goes off.', skip: () => !GS.lv.on, body: () => `<div class="card pad0 list">${doorLights().map(d => pickRow(`d:${d.device_id}`, esc(d.name), esc(areaName(d.area)), GS.lv.door === `d:${d.device_id}`, lampHTML(level(d.device_id) || 0, 28, ''))).join('')}</div>`, onPick: (w, v) => { GS.lv.door = v; } },
+    { id: 'lvDoor', kind: 'pick', title: 'Which light is by that door?', sub: 'It stays on for two minutes after everything else goes off.', skip: () => !GS.lv.on, body: () => `<div class="card pad0 list">${doorLights().map(d => pickRow(`d:${d.device_id}`, esc(d.name), esc(devAreaName(d)), GS.lv.door === `d:${d.device_id}`, lampHTML(level(d.device_id) || 0, 28, ''))).join('')}</div>`, onPick: (w, v) => { GS.lv.door = v; } },
     { id: 'plan', kind: 'plan', valid: () => (GS.gn.on && GS.gn.remote) || (GS.lv.on && GS.lv.remote), body: w => planHTML(esc(buttonsPreview(GS)),
       (GS.gn.on ? walkValueRow(w, 'gn', 'Goodnight button', holdName('gn'), buttonChips('gs-gn-button', GS.gn.remote, GS.gn.button) + replaces(GS.gn.remote, GS.gn.button)) : valueRow('Goodnight button', 'Skipped', 'walk-goto', 'data-id="gnRemote"'))
       + (GS.lv.on ? walkValueRow(w, 'lv', 'Leaving button', holdName('lv'), buttonChips('gs-lv-button', GS.lv.remote, GS.lv.button) + replaces(GS.lv.remote, GS.lv.button)) : valueRow('Leaving button', 'Skipped', 'walk-goto', 'data-id="lvRemote"'))) },
@@ -701,15 +701,15 @@ function wakeupPreview(g) {
 }
 // "Another light…": every dimmer in the house, as a sub-step of the wake-up walk; picking one answers the step.
 function openLampPicker() {
-  const rows = lightRooms().map(a => { const ds = dimmers().filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="gs-lamp-pick" data-id="${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${GS.lamp === d.device_id ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
+  const rows = lightRooms().map(a => { const ds = dimmers().filter(d => devArea(d) === a.id); if (!ds.length) return ''; return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="gs-lamp-pick" data-id="${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${GS.lamp === d.device_id ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
   showSheet('lamp', 'Which light?', rows || `<div class="tip"><div class="grow"><span class="cap">Lights</span><div class="t">No dimmable lights found</div></div></div>`, { detent: 'medium', sub: 'A dimmer, so it can rise slowly.', back: true, onBack: renderSetup });
 }
 function saveWakeup(g) {
   if (!g.lamp) return;
-  const lampD = dev(g.lamp); const room = lampD ? areaName(lampD.area) : 'Bedroom';
+  const lampD = dev(g.lamp); const room = lampD ? devAreaName(lampD) : 'Bedroom';
   const base = { enabled: true, days: [...g.days], skip_until: null, kind: 'wakeup' };
   const list = [{ ...base, id: uid(), name: 'Wake-up light', at: { type: 'time', time: hmAdd(g.alarm, -g.minutes), offset_min: 0 }, actions: [{ type: 'level', target: `d:${g.lamp}`, level: g.end, fade: g.minutes * 60 }], only_if: 'all_off' }];
-  const shade = lampD && g.shade ? controllable().find(d => d.domain === 'cover' && (d.area || 'none') === (lampD.area || 'none')) : null;
+  const shade = lampD && g.shade ? controllable().find(d => d.domain === 'cover' && devArea(d) === devArea(lampD)) : null;
   if (shade) list.push({ ...base, id: uid(), name: `${room} shade`, at: { type: 'time', time: g.alarm, offset_min: 0 }, actions: [{ type: 'raise', target: `d:${shade.device_id}` }], only_if: null });
   S.config.schedules.push(...list);
   closeSheet(); GS = null;

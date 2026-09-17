@@ -31,6 +31,11 @@ def make_app(state):
     async def resource(request):
         kind = request.match_info["kind"]
         assert request.headers.get("hue-application-key") == "KEY123"
+        if kind == "room":
+            return web.json_response({"data": [
+                {"id": rid, "type": "room", "metadata": {"name": r["name"]},
+                 "children": [{"rid": c, "rtype": "device"} for c in r["children"]]}
+                for rid, r in state["rooms"].items()]})
         if kind == "light":
             return web.json_response({"data": [
                 {"id": LIGHT, "type": "light", "owner": {"rid": DEV1, "rtype": "device"}, "metadata": {"name": "Desk lamp"}, "on": {"on": True}, "dimming": {"brightness": 42.5}, "color": {}},
@@ -39,8 +44,6 @@ def make_app(state):
                  "color_temperature": {"mirek": 370, "mirek_valid": True, "mirek_schema": {"mirek_minimum": 153, "mirek_maximum": 500}},
                  "color": {"xy": {"x": 0.4573, "y": 0.41}, "gamut": GAMUT, "gamut_type": "C"}},
             ]})
-        if kind == "room":
-            return web.json_response({"data": [{"id": ROOM, "type": "room", "metadata": {"name": "Office"}, "children": [{"rid": DEV1, "rtype": "device"}, {"rid": DEV2, "rtype": "device"}, {"rid": DEV3, "rtype": "device"}]}]})
         if kind == "scene":
             return web.json_response({"data": [{"id": SCENE, "type": "scene", "metadata": {"name": "Focus"}, "group": {"rid": ROOM, "rtype": "room"}}]})
         return web.json_response({"data": []})
@@ -48,6 +51,43 @@ def make_app(state):
     async def put_light(request):
         state["puts"].append((request.match_info["id"], await request.json()))
         return web.json_response({"data": [{"rid": request.match_info["id"], "rtype": "light"}]})
+
+    def claim(kids, mine):
+        """A real bridge keeps a device in one room only: naming it here takes it out of wherever it was."""
+        for rid, room in state["rooms"].items():
+            if rid != mine:
+                room["children"] = [c for c in room["children"] if c not in kids]
+
+    async def post_room(request):
+        body = await request.json()
+        state["posts"].append(body)
+        rid = f"room-{len(state['rooms']) + 1}"
+        kids = [c["rid"] for c in body.get("children") or []]
+        state["rooms"][rid] = {"name": (body.get("metadata") or {}).get("name") or "Room", "children": kids}
+        claim(kids, rid)
+        return web.json_response({"data": [{"rid": rid, "rtype": "room"}]})
+
+    async def put_room(request):
+        rid = request.match_info["id"]
+        body = await request.json()
+        state["room_puts"].append((rid, body))
+        room = state["rooms"].get(rid)
+        if room is None:
+            return web.json_response({"errors": [{"description": "no such room"}]}, status=404)
+        if "metadata" in body:
+            room["name"] = body["metadata"].get("name", room["name"])
+        if "children" in body:
+            room["children"] = [c["rid"] for c in body["children"]]
+            claim(room["children"], rid)
+        return web.json_response({"data": [{"rid": rid, "rtype": "room"}]})
+
+    async def delete_room(request):
+        rid = request.match_info["id"]
+        if rid not in state["rooms"]:
+            return web.json_response({"errors": [{"description": "no such room"}]}, status=404)
+        del state["rooms"][rid]
+        state["deleted"].append(rid)
+        return web.json_response({"data": [{"rid": rid, "rtype": "room"}]})
 
     async def put_scene(request):
         state["scenes"].append((request.match_info["id"], await request.json()))
@@ -73,13 +113,17 @@ def make_app(state):
     app.router.add_post("/api", api)
     app.router.add_get("/clip/v2/resource/{kind}", resource)
     app.router.add_put("/clip/v2/resource/light/{id}", put_light)
+    app.router.add_post("/clip/v2/resource/room", post_room)
+    app.router.add_put("/clip/v2/resource/room/{id}", put_room)
+    app.router.add_delete("/clip/v2/resource/room/{id}", delete_room)
     app.router.add_put("/clip/v2/resource/scene/{id}", put_scene)
     app.router.add_get("/eventstream/clip/v2", events)
     return app
 
 
 async def main():
-    state = {"pair_calls": 0, "puts": [], "scenes": []}
+    state = {"pair_calls": 0, "puts": [], "scenes": [], "posts": [], "room_puts": [], "deleted": [],
+             "rooms": {ROOM: {"name": "Office", "children": [DEV1, DEV2, DEV3]}}}
     runner = web.AppRunner(make_app(state))
     await runner.setup()
     site = web.TCPSite(runner, "127.0.0.1", 0)
@@ -152,6 +196,40 @@ async def main():
         c = hue.devices[hid(COLOR)]
         assert c["color"]["xy"] == [0.1532, 0.0475] and c["ct"]["mirek"] == 250 and c["color_mode"] == "ct", c
         assert color_state(c)["kelvin"] == 4000 and changed.count(hid(COLOR)) >= 6, changed
+        # ----- rooms: make one, move a lamp into it, rename it, empty it, delete it -----
+        made = await hue.create_room("Studio", [hid(LIGHT)])
+        assert made == hid("room-2") and state["posts"][0]["metadata"] == {"name": "Studio", "archetype": "other"}, state["posts"]
+        assert state["posts"][0]["children"] == [{"rid": DEV1, "rtype": "device"}], state["posts"]
+        assert hue.areas[made]["name"] == "Studio" and hue.areas[made]["children"] == [DEV1], hue.areas
+        assert hue.devices[hid(LIGHT)]["area"] == made, hue.devices[hid(LIGHT)]["area"]
+        # moving a lamp is a rewrite of the two rooms' children: out of one, into the other
+        state["room_puts"].clear()
+        await hue.move_light(hid(COLOR), made)
+        assert state["room_puts"] == [
+            (ROOM, {"children": [{"rid": DEV2, "rtype": "device"}]}),
+            ("room-2", {"children": [{"rid": DEV1, "rtype": "device"}, {"rid": DEV3, "rtype": "device"}]}),
+        ], state["room_puts"]
+        assert hue.devices[hid(COLOR)]["area"] == made and hue.areas[hid(ROOM)]["children"] == [DEV2], hue.areas
+        # moving it where it already is asks the bridge for nothing
+        state["room_puts"].clear()
+        await hue.move_light(hid(COLOR), made)
+        assert state["room_puts"] == [], state["room_puts"]
+        # renaming says so on the bridge and here
+        await hue.rename_room(made, "Studio upstairs")
+        assert state["rooms"]["room-2"]["name"] == "Studio upstairs" and hue.areas[made]["name"] == "Studio upstairs"
+        # a lamp can be taken out of every room
+        await hue.move_light(hid(LIGHT), None)
+        assert hue.devices[hid(LIGHT)]["area"] is None and hue.areas[made]["children"] == [DEV3], hue.areas
+        # deleting a room leaves its lamps on the bridge, in no room
+        await hue.delete_room(made)
+        assert made not in hue.areas and "room-2" in state["deleted"], (hue.areas, state["deleted"])
+        assert hue.devices[hid(COLOR)]["area"] is None and hid(COLOR) in hue.devices, hue.devices[hid(COLOR)]
+        # an unknown room is refused rather than guessed at
+        for bad_call in (hue.rename_room(made, "x"), hue.delete_room(made), hue.move_light(hid(COLOR), made)):
+            try:
+                await bad_call; raise AssertionError("expected an error")
+            except RuntimeError:
+                pass
         # forgetting clears everything
         await hue.forget()
         assert not hue.paired and not hue.devices and not (Path(tmp) / "hue.json").exists()

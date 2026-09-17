@@ -157,6 +157,36 @@ function validateConfig(cfg) {
       : [];
     if (model || finish || seen.length) out.settings.remote_looks[k] = { model, finish, ...(seen.length ? { seen } : {}) };
   }
+  // The rooms the app owns. Empty means "use the rooms the bridges report", which is how every home starts and
+  // how a home that never touches this one goes on working. Once there is a list, it is the truth: every room the
+  // app shows comes from here, and `a:<id>` may name one of these ids as well as a bridge area.
+  //   id          the app's own id
+  //   name        what the person called it, up to 40 characters
+  //   device_ids  the devices filed here by hand; a device may be in one room only, so the first room wins
+  //   bridge_area the Lutron area this room stands for, when it has one (a device filed here is moved there too)
+  //   hue_room    the Philips Hue room this room stands for, when it has one
+  // A room with neither is fine: the app still holds it, and the copy says so instead of pretending.
+  out.settings.rooms = [];
+  {
+    const roomIds = new Set(); const claimed = new Set();
+    for (const r of arr(s.rooms, 'settings.rooms').slice(0, 64)) {
+      if (!r || typeof r !== 'object') fail('settings.rooms: each room must be an object');
+      if (!isId(r.id) || !/^[A-Za-z0-9_-]{1,64}$/.test(r.id)) fail('settings.rooms: each room needs an id');
+      if (roomIds.has(r.id)) fail(`settings.rooms: duplicate room id ${r.id}`);
+      roomIds.add(r.id);
+      const name = typeof r.name === 'string' ? r.name.trim().slice(0, 40) : '';
+      if (!name) fail(`settings.rooms: room ${r.id} needs a name`);
+      const ids = [];
+      for (const id of Array.isArray(r.device_ids) ? r.device_ids : []) {
+        if (!isId(id) || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) fail(`settings.rooms: room ${r.id} has a bad device id`);
+        if (claimed.has(id) || ids.includes(id)) continue;   // one room per device, quietly
+        claimed.add(id); ids.push(id);
+      }
+      const area = typeof r.bridge_area === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(r.bridge_area) && !r.bridge_area.startsWith('hue_') ? r.bridge_area : null;
+      const hue = typeof r.hue_room === 'string' && /^hue_[A-Za-z0-9_-]{1,60}$/.test(r.hue_room) ? r.hue_room : null;
+      out.settings.rooms.push({ id: r.id, name, device_ids: ids.slice(0, 200), bridge_area: area, hue_room: hue });
+    }
+  }
 
   const groupIds = new Set();
   for (const g of arr(cfg.groups, 'groups')) {

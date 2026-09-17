@@ -10,19 +10,19 @@ const nxSess = { get: k => { try { return sessionStorage.getItem(k); } catch (_)
 
 // The home's shape, as the suggestions read it.
 const outsideRooms = () => lightRooms().filter(a => OUTSIDE_RE.test(a.name));
-const bedroomLamp = () => { const beds = dimmers().filter(d => BEDROOM_RE.test(areaName(d.area))); return beds.find(d => /lamp/i.test(d.name)) || beds[0] || null; };
+const bedroomLamp = () => { const beds = dimmers().filter(d => BEDROOM_RE.test(devAreaName(d))); return beds.find(d => /lamp/i.test(d.name)) || beds[0] || null; };
 const usualRemotes = () => remotes().filter(d => usualLayoutTargets(d));
 const freshRemote = () => usualRemotes().find(d => !remoteHasSettings(d)) || null;
 const roomsWithoutMoods = () => moodsWalkRooms().filter(aid => !roomHasMoods(aid));
 const hasGoodnight = () => bindings().some(b => userGestureOf(b) === 'hold' && recipeOf(b.actions) === 'goodnight');
-const bedRemote = () => remotes().find(x => BEDROOM_RE.test(areaName(x.area))) || remotes()[0] || null;
+const bedRemote = () => remotes().find(x => BEDROOM_RE.test(devAreaName(x))) || remotes()[0] || null;
 const standalone = () => !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 
 // The table (3.2): `can` says whether it could ever apply in this home, `when` whether it applies now.
 const NEXT = [
   { id: 'remote', can: () => usualRemotes().length > 0, when: () => !!freshRemote(),
-    title: () => `Set up the ${esc(areaName((freshRemote() || usualRemotes()[0]).area))} remote?`,
-    reason: () => `Top turns ${esc(areaName((freshRemote() || usualRemotes()[0]).area))} on, bottom off, hold to dim. Ten seconds.`,
+    title: () => `Set up the ${esc(devAreaName(freshRemote() || usualRemotes()[0]))} remote?`,
+    reason: () => `Top turns ${esc(devAreaName(freshRemote() || usualRemotes()[0]))} on, bottom off, hold to dim. Ten seconds.`,
     go: () => { const d = freshRemote(); if (!d) return; S.view = 'remotes'; S.remote = d.device_id; location.hash = 'remotes'; render(); window.scrollTo(0, 0); } },
   { id: 'sort', can: () => dimmers().length > 0, when: () => untaggedLights().length > 0,
     title: () => 'Want your lights sorted?', reason: () => 'Say what kind of lamp each one is, and Relax, Dinner and Movie know what to dim.',
@@ -90,7 +90,7 @@ function openGreeting() {
   const nd = controllable().length, np = remotes().length, nr = lightRooms().length;
   const row = (act, id, icon, t, d) => `<button class="item" data-act="${act}" ${id ? `data-id="${esc(id)}"` : ''}>${ICON(icon)}<div class="grow"><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   const rows = [];
-  const r = freshRemote(); if (r) rows.push(row('greet-remote', r.device_id, 'remote', `Set up the ${esc(areaName(r.area))} remote`, 'Top on, bottom off, hold to dim'));
+  const r = freshRemote(); if (r) rows.push(row('greet-remote', r.device_id, 'remote', `Set up the ${esc(devAreaName(r))} remote`, 'Top on, bottom off, hold to dim'));
   if (roomsWithoutMoods().length) rows.push(row('greet-moods', '', 'sofa', 'Give a room moods', 'Bright, Relax, Dinner, Movie and Night'));
   if (outsideRooms().length && !schedules().some(sc => sc.kind === 'welcome')) rows.push(row('greet-welcome', '', 'moon', 'Lights on before you get home', 'On before sunset, off at bedtime'));
   rows.push(row('sheet-close', '', 'house', 'Just look around', ''));

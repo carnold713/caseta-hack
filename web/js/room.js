@@ -27,7 +27,7 @@ VIEWS.room = {
     const aid = S.room; if (!aid) return '';
     if (S.roomPage === 'setup') return nestedTop('room-setup-back', `${esc(areaName(aid))} setup`);
     const t = `a:${aid}`;
-    const hasToggle = controllable().some(d => (d.area || 'none') === aid && d.domain !== 'cover');
+    const hasToggle = controllable().some(d => devArea(d) === aid && d.domain !== 'cover');
     return nestedTop('room-back', esc(areaName(aid)), esc(roomSummary(aid)))
       + `<div class="tools">${hasToggle ? `<button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(areaName(aid))} on or off"></button>` : ''}</div>`;
   },
@@ -39,7 +39,7 @@ VIEWS.room = {
 };
 
 function roomPageHTML(aid) {
-  const ds = roomOrder(controllable().filter(d => (d.area || 'none') === aid));
+  const ds = roomOrder(controllable().filter(d => devArea(d) === aid));
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
   let h = '';
   // the moods, or one row that offers to make them
@@ -69,6 +69,8 @@ function roomSetupHTML(aid) {
     h += `<button class="item" data-act="roles-open" data-area="${aid}"><div class="grow"><div class="t">${ps.length ? 'Make them again from what they are' : 'Make the moods'}</div><div class="d">From what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   }
   if (kinds) h += `<div class="gh">Kind of light</div><div class="card pad0 list">${kinds}</div>`;
+  // The room itself: its name, what is in it, and whether it should exist at all. One page for every room.
+  h += `<div class="gh">This room</div><div class="card pad0 list"><button class="item" data-act="rooms-open" data-id="${esc(aid)}"><div class="grow"><div class="t">Name and what is in it</div><div class="d">Rename it, move lights and remotes in or out, delete it</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   return h;
 }
 

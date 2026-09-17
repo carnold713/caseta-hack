@@ -39,7 +39,7 @@ from adddevice import AddSession
 from hue import Hue, color_state
 from sun import sun_times
 
-VERSION = "0.8.4"
+VERSION = "0.9.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -573,6 +573,8 @@ class Agent:
                     detail["buttons"] = buttons
                     detail["devices"] = len(self.bridge.devices) if self.bridge else 0
                     self.adder._note("buttons", f"/button for {made}", response={"buttons": buttons})
+                elif kind and kind.startswith("room_"):
+                    detail = await self._room_command(kind[5:], action)
                 elif kind == "hue_discover":
                     detail = {"bridges": await self.hue.discover()}
                 elif kind == "hue_pair":
@@ -600,6 +602,38 @@ class Agent:
             except Exception as exc:  # noqa: BLE001
                 LOG.error("command %s failed: %s", action, exc)
                 self.send({"type": "result", "id": cid, "ok": False, "error": str(exc)})
+
+    # ---------- rooms on the bridges ----------
+    # The app owns its rooms; these keep each bridge in step where it lets us. Hue documents rooms and obeys.
+    # Lutron documents nothing here, so create_area and move_device try a couple of shapes and log every
+    # exchange through the same AddSession log the add sheet already shows. A refusal comes back as an error and
+    # the app keeps the room regardless: nothing the person did is lost.
+    async def _room_command(self, op: str, action: dict) -> dict:
+        if op == "area_create":
+            return await self.adder.create_area(action.get("name"))
+        if op == "area_rename":
+            return await self.adder.rename_area(action.get("area"), action.get("name"))
+        if op == "device_move":
+            out = await self.adder.move_device(action.get("id"), action.get("area"))
+            await self._refresh()
+            return out
+        if op == "hue_create":
+            room = await self.hue.create_room(action.get("name"))
+            self._merge_hue()
+            return {"room": room, "name": action.get("name")}
+        if op == "hue_rename":
+            out = await self.hue.rename_room(str(action.get("room")), str(action.get("name")))
+            self._merge_hue()
+            return out
+        if op == "hue_delete":
+            out = await self.hue.delete_room(str(action.get("room")))
+            self._merge_hue()
+            return out
+        if op == "hue_move":
+            out = await self.hue.move_light(str(action.get("device")), str(action.get("room")))
+            self._merge_hue()
+            return out
+        raise ValueError(f"unknown room command {op}")
 
     def _queue_level(self, cid, action: dict) -> None:
         """Latest wins per target and kind: a level (or colour) waiting behind a bridge round-trip is superseded, not sent."""

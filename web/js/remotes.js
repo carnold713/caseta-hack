@@ -4,7 +4,7 @@
 VIEWS.remotes = {
   nested() { return !!(S.remote && dev(S.remote)); },
   top() {
-    if (S.remote && dev(S.remote)) { const d = dev(S.remote); return nestedTop('remote-back', esc(d.name), `${esc(areaName(d.area))} · ${esc(modelName(d))}`); }
+    if (S.remote && dev(S.remote)) { const d = dev(S.remote); return nestedTop('remote-back', esc(d.name), `${esc(devAreaName(d))} · ${esc(modelName(d))}`); }
     return `<div class="t1">Remotes</div>${statusCircle()}`;
   },
   body() {
@@ -21,7 +21,7 @@ function remoteCard(d) {
   const n = new Set(bs.map(b => b.button_number)).size;
   const broken = bs.some(b => bindingBroken(b));
   const sub = n ? `${n} ${n === 1 ? 'button' : 'buttons'} set up` : 'Not set up yet';
-  return `<button class="item remote-card" data-act="remote-open" data-id="${d.device_id}"><div class="remote-thumb">${picoArt(d, { width: 56 })}</div><div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(areaName(d.area))} · ${esc(sub)}</div></div>${broken ? `<span class="tag red">Needs attention</span>` : ''}<span class="chev">${ICON('chev', 'sm')}</span></button>`;
+  return `<button class="item remote-card" data-act="remote-open" data-id="${d.device_id}"><div class="remote-thumb">${picoArt(d, { width: 56 })}</div><div class="grow"><div class="n">${esc(d.name)}</div><div class="s">${esc(devAreaName(d))} · ${esc(sub)}</div></div>${broken ? `<span class="tag red">Needs attention</span>` : ''}<span class="chev">${ICON('chev', 'sm')}</span></button>`;
 }
 function bindingBroken(b) {
   const acts = [...(b.actions || []), ...((b.night && b.night.actions) || [])];
@@ -62,13 +62,13 @@ function remoteDetail(d) {
 // Offered above the Buttons on a fresh remote with a room; "Start over" lives under More once it has settings.
 function usualLayoutTargets(d) {
   const real = picoSlots(d).filter(s => s.real).map(s => s.n); const l = LAYOUTS[d.type] || {};
-  if (!d.area || !real.includes(0) || !real.includes(2) || l[0] !== 'On') return null;
+  if (devArea(d) === 'none' || !real.includes(0) || !real.includes(2) || l[0] !== 'On') return null;
   return { top: 0, bottom: 2, round: real.includes(1) && l[1] === 'Round' ? 1 : null };
 }
 function usualHidden(pid) { try { return !!localStorage.getItem(`usualHidden:${pid}`); } catch (_) { return false; } }
 function usualLayoutHTML(d) {
   const u = usualLayoutTargets(d); if (!u || remoteHasSettings(d) || usualHidden(d.device_id)) return '';
-  const room = areaName(d.area); const moods = typeof roomHasMoods === 'function' && roomHasMoods(d.area);
+  const room = devAreaName(d); const moods = typeof roomHasMoods === 'function' && roomHasMoods(devArea(d));
   const middle = u.round == null ? '' : ` The middle button is ${moods ? 'Relax' : 'Half brightness'}.`;
   return `<div class="tip top" id="usualtip" style="margin-bottom:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Want the usual layout?</div><div class="d">Top turns ${esc(room)} on, bottom turns it off, hold either to brighten or dim.${esc(middle)} Or tap a button on the picture to pick yourself.</div><button class="btn ghost" data-act="usual-hide" data-id="${d.device_id}">I'll pick myself</button></div><button class="go" data-act="usual-layout" title="Set it up the usual way" aria-label="Set it up the usual way">${ICON('chev')}</button></div>`;
 }
@@ -76,7 +76,7 @@ function usualLayoutHTML(d) {
 function applyUsualLayout(pid, opts = {}) {
   const d = dev(pid); const u = d && usualLayoutTargets(d); if (!u) return;
   if (sheet.isOpen()) sheet.close();
-  const T = `a:${d.area}`; const room = areaName(d.area);
+  const T = `a:${devArea(d)}`; const room = devAreaName(d);
   const mk = (n, gesture, actions) => ({ id: uid(), device_id: pid, button_number: n, gesture, actions, night: null });
   const list = [
     mk(u.top, 'single', [{ type: 'level', target: T, level: 'on' }]), mk(u.top, 'double', [{ type: 'level', target: T, level: 100 }]),
@@ -85,7 +85,7 @@ function applyUsualLayout(pid, opts = {}) {
     mk(u.bottom, 'hold_start', [{ type: 'lower', target: T, floor: 1 }]), mk(u.bottom, 'hold_end', [{ type: 'stop', target: T }]),
   ];
   if (u.round != null) {
-    const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(d.area) : [];
+    const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(devArea(d)) : [];
     const relax = mp.find(p => p.mood === 'relax');
     if (relax) { list.push(mk(u.round, 'single', [{ type: 'preset', preset_id: relax.id }])); if (mp.length >= 2) list.push(mk(u.round, 'double', [{ type: 'cycle_presets', preset_ids: mp.map(p => p.id) }])); }
     else list.push(mk(u.round, 'single', [{ type: 'level', target: T, level: 50 }]), mk(u.round, 'double', [{ type: 'level', target: T, level: 10, fade: 1 }]));
@@ -100,13 +100,13 @@ function remoteMoreSheet() {
   const has = remoteHasSettings(d);
   const body = `<div class="card pad0 list">
     <button class="item" data-act="remote-look">${ICON('edit')}<div class="grow"><div class="t">Not your remote? Change the picture</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
-    ${has && usualLayoutTargets(d) ? `<button class="item" data-act="usual-layout">${ICON('refresh')}<div class="grow"><div class="t">Start over with the usual layout</div><div class="d">Top turns ${esc(areaName(d.area))} on, bottom turns it off, hold either to brighten or dim.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : ''}
+    ${has && usualLayoutTargets(d) ? `<button class="item" data-act="usual-layout">${ICON('refresh')}<div class="grow"><div class="t">Start over with the usual layout</div><div class="d">Top turns ${esc(devAreaName(d))} on, bottom turns it off, hold either to brighten or dim.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : ''}
     <button class="item ${S.remoteLutron ? 'open' : ''}" data-act="remote-lutron">${ICON('remote')}<div class="grow"><div class="t">It may still do what the Lutron app set up</div><div class="d">Both things happen. Tap to read how to make it fully yours.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
     ${S.remoteLutron ? `<div class="vrow-body"><p class="d">To make a remote fully yours, open the Lutron app, tap this remote, and remove the lights it controls (keep it paired). From then on only your settings run. Leave it as is if you only want to add a double press or a hold on top of what it already does.</p></div>` : ''}
     <button class="item" data-act="dev-remove" data-id="${d.device_id}">${ICON('trash')}<div class="grow"><div class="t">Remove this remote from my home</div><div class="d">It leaves the bridge and stops working until it is added again.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
   </div>
   <p class="d" style="margin:12px 4px 0">What your bridge says about this remote: ${esc(d.type || 'no type')}${d.serial ? `, serial ${esc(d.serial)}` : ''}, ${(() => { const r = buttonsOf(d.device_id).map(b => b.button_number).sort((a, b) => a - b); const seen = picoSeen(d); return r.length ? `buttons ${r.join(', ')}` : seen.length ? `no buttons listed, presses seen from ${seen.join(', ')}` : 'no buttons listed yet'; })()}.</p>`;
-  showSheet('remote-more', esc(d.name), body, { detent: 'medium', sub: `${esc(areaName(d.area))} · ${esc(modelName(d))}` });
+  showSheet('remote-more', esc(d.name), body, { detent: 'medium', sub: `${esc(devAreaName(d))} · ${esc(modelName(d))}` });
 }
 function openLookSheet() {
   const d = dev(S.remote); if (!d) return;
@@ -192,8 +192,8 @@ function recipeOf(actions) {
   return 'custom';
 }
 // The room a remote sits in, and that room's mood scenes, for the mood recipes.
-function recipeCtx(pid) { const d = dev(pid); const aid = d && d.area ? d.area : 'none'; const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []; return { aid, room: areaName(aid), moodIds: mp.map(p => p.id), moods: mp.length, dimmers: typeof roomDimmers === 'function' ? roomDimmers(aid).length : 0 }; }
-function defaultTarget(pid) { const d = dev(pid); return d && d.area && targetDevices(`a:${d.area}`).length ? `a:${d.area}` : (controllable()[0] ? `a:${controllable()[0].area || 'none'}` : 'h:all'); }
+function recipeCtx(pid) { const d = dev(pid); const aid = devArea(d); const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []; return { aid, room: areaName(aid), moodIds: mp.map(p => p.id), moods: mp.length, dimmers: typeof roomDimmers === 'function' ? roomDimmers(aid).length : 0 }; }
+function defaultTarget(pid) { const d = dev(pid); const aid = devArea(d); return aid !== 'none' && targetDevices(`a:${aid}`).length ? `a:${aid}` : (controllable()[0] ? `a:${devArea(controllable()[0])}` : 'h:all'); }
 // The chooser holds a list; one entry is stored as a plain string, several as a list.
 const packTarget = list => (list.length === 1 ? list[0] : list.slice());
 
@@ -273,8 +273,8 @@ function normalizeTargets(list, added) {
   if (shade(added)) return [...out, ...(added === 'h:shades' ? ['h:shades'] : shades.filter(t => t !== 'h:shades'))];
   if (added === 'h:all') return ['h:all', ...shades];
   out = out.filter(t => t !== 'h:all');
-  if (added.startsWith('a:')) out = out.filter(t => !(t.startsWith('d:') && (dev(t.slice(2)) || {}).area === added.slice(2) && t !== added));
-  if (added.startsWith('d:')) { const area = (dev(added.slice(2)) || {}).area; out = out.filter(t => t !== `a:${area || 'none'}`); }
+  if (added.startsWith('a:')) out = out.filter(t => !(t.startsWith('d:') && devArea(dev(t.slice(2))) === added.slice(2) && t !== added));
+  if (added.startsWith('d:')) { const area = devArea(dev(added.slice(2))); out = out.filter(t => t !== `a:${area}`); }
   return [...out, ...shades];
 }
 function toggleTargetChip(t) {
@@ -345,8 +345,8 @@ function openDoorPicker() {
   const pid = S.remote, n = S.button, g = S.gesture;
   const cur = (gestureActions(pid, n, g).find(a => a.type === 'level' && a.target !== 'h:all') || {}).target;
   const lights = controllable().filter(d => d.domain === 'light' || d.domain === 'switch');
-  const pre = cur || `d:${(lights.find(d => /hall|entry|foyer|mud/i.test(areaName(d.area))) || lights[0] || {}).device_id}`;
-  const rows = areas().map(a => { const ds = lights.filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="leaving-door" data-t="d:${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${pre === `d:${d.device_id}` ? `<span class="chk">${ICON('check', 'sm')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
+  const pre = cur || `d:${(lights.find(d => /hall|entry|foyer|mud/i.test(devAreaName(d))) || lights[0] || {}).device_id}`;
+  const rows = areas().map(a => { const ds = lights.filter(d => devArea(d) === a.id); if (!ds.length) return ''; return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="leaving-door" data-t="d:${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${pre === `d:${d.device_id}` ? `<span class="chk">${ICON('check', 'sm')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
   showSheet('door', 'Which light is by the door?', rows, { detent: 'compact', back: true, onBack: renderRecipeSheet, sub: 'It stays on for two minutes after everything else goes off.' });
 }
 function saveLeaving(door) {
@@ -382,11 +382,11 @@ function openTargetPicker(selected, onDone, onBack, opts = {}) {
 }
 function renderTargetPicker() {
   const p = S.targetPick; const { selected, onBack } = p;
-  p.open = p.open || new Set(areas().filter(a => selected.some(t => t.startsWith('d:') && (dev(t.slice(2)) || {}).area === a.id)).map(a => a.id));
+  p.open = p.open || new Set(areas().filter(a => selected.some(t => t.startsWith('d:') && devArea(dev(t.slice(2))) === a.id)).map(a => a.id));
   const cb = t => `<input type="checkbox" class="cb" data-act="picker-toggle" data-t="${esc(t)}" ${selected.includes(t) ? 'checked' : ''}>`;
   const lightRow = d => `<label class="item">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(cap(d.domain))}</div></div>${cb('d:' + d.device_id)}</label>`;
   const rooms = areas().map(a => {
-    const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return '';
+    const ds = controllable().filter(d => devArea(d) === a.id && d.domain !== 'cover'); if (!ds.length) return '';
     const open = p.open.has(a.id); const on = targetOn(`a:${a.id}`);
     return `<div class="card pad0 roomcard"><div class="roomrow ${open ? 'open' : ''}">${lampHTML(on ? roomMean(a.id) : 0, 40, ICON(roomIcon(a.name), 'sm'))}<label class="grow row" style="min-height:40px"><div class="grow"><div class="n">${esc(a.name)}</div><div class="s">${plural(ds.length, 'light')}, the whole room</div></div></label><button class="chev" data-act="picker-expand" data-id="${a.id}">${ICON('chev', 'sm')}</button><label style="display:flex">${cb('a:' + a.id)}</label></div><div class="roomlights ${open ? 'open' : ''}" data-roomlights="${a.id}">${ds.map(lightRow).join('')}</div></div>`;
   }).join('');
@@ -394,7 +394,7 @@ function renderTargetPicker() {
   const sets = groups().length ? `<div class="h3" style="margin-top:24px">Your sets</div>${groups().map(g => `<label class="card pad0 roomcard"><div class="roomrow">${lampHTML(targetOn('g:' + g.id) ? meanLevel(g.device_ids) : 0, 40, ICON('bulb', 'sm'))}<div class="grow"><div class="n">${esc(g.name)}</div><div class="s">${g.device_ids.length} lights</div></div>${cb('g:' + g.id)}</div></label>`).join('')}` : '';
   // shades join the chooser only when the caller's action can move them (the automation editor)
   const covers = p.shades ? controllable().filter(d => d.domain === 'cover') : [];
-  const shades = covers.length ? `<div class="h3" style="margin-top:24px">Shades</div><div class="card pad0 roomcard"><label class="roomrow">${lampHTML(0, 40, ICON('shade', 'sm'))}<div class="grow"><div class="n">All shades</div><div class="s">${plural(covers.length, 'shade')}</div></div>${cb('h:shades')}</label><div class="roomlights open">${covers.map(d => `<label class="item">${lampHTML(0, 28, ICON('shade', 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(areaName(d.area))}</div></div>${cb('d:' + d.device_id)}</label>`).join('')}</div></div>` : '';
+  const shades = covers.length ? `<div class="h3" style="margin-top:24px">Shades</div><div class="card pad0 roomcard"><label class="roomrow">${lampHTML(0, 40, ICON('shade', 'sm'))}<div class="grow"><div class="n">All shades</div><div class="s">${plural(covers.length, 'shade')}</div></div>${cb('h:shades')}</label><div class="roomlights open">${covers.map(d => `<label class="item">${lampHTML(0, 28, ICON('shade', 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(devAreaName(d))}</div></div>${cb('d:' + d.device_id)}</label>`).join('')}</div></div>` : '';
   const summary = selected.length ? `${cap(targetName(packTarget(selected)))} · ${targetDevices(selected).length} lights` : 'Nothing picked yet';
   showSheet('picker', 'Which lights should this control?', `${all}<div class="stack" style="margin-top:8px">${rooms}</div>${sets}${shades}<div class="sfoot"><div class="small muted" style="margin-bottom:8px" id="picker-summary">${esc(summary)}</div><button class="btn primary lg block" data-act="picker-done" ${selected.length ? '' : 'disabled'}>Done</button></div>`, { detent: 'large', back: !!onBack, onBack, sub: 'Tick a whole room, single lights, or both.' });
 }

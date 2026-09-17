@@ -137,6 +137,32 @@ app.post('/api/hue', requireAuth, async (req, res) => {
   try { res.json(await sendCommand(action, b.op === 'pair' ? 70000 : 25000)); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
+// Rooms on the bridges. The app owns its own rooms (config.settings.rooms); these are the best-effort attempts to
+// keep each bridge in step with them. Hue documents all of this; Lutron documents none of it and may say no, which
+// is not an error the app has to hide: the room still exists in the app either way.
+const ROOM_OPS = {
+  area_create: ['name'],            // CreateRequest /area, undocumented, may be refused
+  area_rename: ['area', 'name'],    // UpdateRequest /area/{id}
+  device_move: ['id', 'area'],      // UpdateRequest /device/{id} with AssociatedArea
+  hue_create: ['name'],             // POST /clip/v2/resource/room
+  hue_rename: ['room', 'name'],     // PUT  /clip/v2/resource/room/{id}
+  hue_delete: ['room'],             // DELETE
+  hue_move: ['device', 'room'],     // the room's children carry the lamp's device rid
+};
+app.post('/api/rooms', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const need = ROOM_OPS[b.op];
+  if (!need) return res.status(400).json({ error: `op must be one of ${Object.keys(ROOM_OPS).join(', ')}` });
+  const action = { type: `room_${b.op}` };
+  for (const k of need) {
+    const v = String(b[k] == null ? '' : b[k]).trim();
+    if (k === 'name') { if (!v) return res.status(400).json({ error: 'a name is required' }); action.name = v.slice(0, 40); continue; }
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(v)) return res.status(400).json({ error: `${k} is required` });
+    action[k] = v;
+  }
+  try { res.json(await sendCommand(action, 30000)); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
 // Remove a device from the bridge (experimental, like adding).
 app.post('/api/removedevice', requireAuth, async (req, res) => {
   const id = String((req.body || {}).id || '').trim();

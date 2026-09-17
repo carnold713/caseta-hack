@@ -97,7 +97,7 @@ function openSceneEditor(id, fresh = false, opts = {}) {
   const all = controllable().filter(d => d.domain !== 'cover');
   const inc = all.filter(d => d.device_id in p.levels);
   const rows = areas().map(a => {
-    const ds = inc.filter(d => (d.area || 'none') === a.id);
+    const ds = inc.filter(d => devArea(d) === a.id);
     if (!ds.length) return '';
     return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => sceneLightRow(p, d)).join('')}</div>`;
   }).join('');
@@ -119,7 +119,7 @@ function openSceneEditor(id, fresh = false, opts = {}) {
 function openSceneLightsSheet() {
   const p = presets().find(x => x.id === S.sceneEdit); if (!p) return;
   const rows = areas().map(a => {
-    const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover');
+    const ds = controllable().filter(d => devArea(d) === a.id && d.domain !== 'cover');
     if (!ds.length) return '';
     return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${d.device_id in p.levels ? 'checked' : ''} data-act="scene-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.device_id in p.levels ? (d.domain === 'fan' ? cap(fanName(p.levels[d.device_id])) : levelOf(p.levels[d.device_id]) > 0 ? levelOf(p.levels[d.device_id]) + '%' : 'Off') : 'Left alone'}</div></div></label>`).join('')}</div>`;
   }).join('');
