@@ -1,22 +1,35 @@
 /* Scenes: named looks. Yours are editable; Lutron's run as-is. */
 'use strict';
 
+// Scenes is a page pushed from Home, not a tab (docs/ia-v5.md 3, stage 3). Running a scene is one tap on Home;
+// everything else about a scene is here, two taps away. There is one way to make one: the "+" in the nav bar, or the
+// empty state's primary button when there are none.
 VIEWS.scenes = {
-  top() { return `<div class="t1">Scenes</div><div class="tools"><button class="iconbtn plain" data-act="scene-new" title="New scene" aria-label="New scene" style="color:var(--blue)">${ICON('plus')}</button>${statusCircle()}</div>`; },
+  tab: 'home',
+  nested() { return true; },
+  top() {
+    return nestedTop('scenes-back', 'Scenes')
+      + `<div class="tools"><button class="iconbtn plain" data-act="scene-new" title="New scene" aria-label="New scene" style="color:var(--blue)">${ICON('plus')}</button></div>`;
+  },
   body() {
     const mine = presets().filter(p => !(p.mood && p.area)); const theirs = lutronScenes();
     const moods = typeof roomMoodsSectionHTML === 'function' ? roomMoodsSectionHTML() : '';
-    if (!mine.length && !theirs.length && !moods) return `<button class="tip" data-act="scene-new" style="margin-top:8px"><div class="grow"><span class="cap">Scenes</span><div class="t">What look would you like to keep?</div><div class="d">Set the lights the way you like them, then save that look. A remote button can run it later.</div></div><span class="go">${ICON('plus')}</span></button>`;
-    // The tiles are the scenes (a scene is a picture): the face runs it, the corner button opens it. What a tile cannot
-    // show keeps a list of its own below: the room moods.
+    if (!mine.length && !theirs.length && !moods) return `<div class="empty-state"><p class="body">Set your lights the way you like them, then save that look. A remote button can run it later.</p><button class="btn primary lg block" data-act="scene-new">New scene</button></div>`;
+    // The tiles are the scenes (a scene is a picture). At rest a tile has one job: run the scene. Edit turns on the
+    // pencils; a tap on a tile then opens its editor, and Done turns it off again.
+    const edit = !!S.scenesEdit;
     const tiles = [...mine.map(p => ({ id: 'p:' + p.id, name: p.name, sub: sceneSub(p), edit: p.id })), ...theirs.map(s => ({ id: 's:' + s.scene_id, name: s.name, sub: 'From the Lutron app', lutron: s.scene_id }))];
     const corner = s => s.edit
       ? `<button class="iconbtn sm tile-edit" data-act="scene-edit" data-id="${s.edit}" aria-label="Edit ${esc(s.name)}">${ICON('edit', 'sm')}</button>`
       : `<button class="iconbtn sm tile-edit" data-act="scene-lutron" data-id="${s.lutron}" aria-label="About ${esc(s.name)}">${ICON('dots', 'sm')}</button>`;
-    let h = `<div class="tiles grid" style="margin-top:8px"><button class="tile new" data-act="scene-new"><div class="face">${ICON('plus')}</div><div class="label"><div class="n">New scene</div><div class="s"></div></div></button>${tiles.map(s => `<div class="tile" role="button" tabindex="0" data-act="run-scene" data-t="${s.id}"><div class="face">${tileFaceHTML(tileItems(s.id))}${corner(s)}</div><div class="label"><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></div>`).join('')}</div>`;
+    const tile = s => edit
+      ? `<div class="tile editing" role="button" tabindex="0" data-act="${s.edit ? 'scene-edit' : 'scene-lutron'}" data-id="${s.edit || s.lutron}"><div class="face">${tileFaceHTML(tileItems(s.id))}${corner(s)}</div><div class="label"><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></div>`
+      : `<div class="tile" role="button" tabindex="0" data-act="run-scene" data-t="${s.id}"><div class="face">${tileFaceHTML(tileItems(s.id))}</div><div class="label"><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></div>`;
+    let h = `<div class="gh">Scenes${tiles.length ? `<button class="link" data-act="scenes-edit">${edit ? 'Done' : 'Edit'}</button>` : ''}</div>`;
+    h += `<div class="tiles grid">${tiles.map(tile).join('')}</div>`;
     h += moods;
     // a home with no room moods yet: the one thing the tiles cannot show, offered rather than left blank
-    if (!moods && typeof moodsWalkRooms === 'function' && moodsWalkRooms().length) h += `<button class="tip" data-act="moods-walk" style="margin-top:24px"><div class="grow"><span class="cap">Room moods</span><div class="t">Five looks for one room</div><div class="d">Bright, Relax, Dinner, Movie and Night, from what each light is for.</div></div><span class="go">${ICON('chev')}</span></button>`;
+    if (!moods && typeof moodsWalkRooms === 'function' && moodsWalkRooms().length) h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="moods-walk"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Give a room five moods</div><div class="d">Bright, Relax, Dinner, Movie and Night, from what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
     return h;
   },
 };
@@ -94,12 +107,12 @@ function openSceneEditor(id, fresh = false, opts = {}) {
     <div class="h2">In this look</div>${rows || `<p class="d">No lights yet. Add some below.</p>`}
     <div class="card pad0 list" style="margin-top:16px">${valueRow('Add or remove lights', `${inc.length} of ${all.length}`, 'scene-lights')}</div>
     <div class="btnpair" style="margin-top:16px"><button class="btn" data-act="scene-capture">${ICON('copy', 'sm')} Use current levels</button><button class="btn" data-act="run-scene" data-t="p:${p.id}">${ICON('play', 'sm')} Try it</button></div>
-    <div style="margin-top:16px">${moreRow('Fade, delete', 'scene-more')}</div>
-    <div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`;
+    <div style="margin-top:16px">${moreRow('Fade, delete', 'scene-more')}</div>`;
   const title = fresh ? 'What should we call this look?' : esc(p.name);
   const sub = fresh ? `Saved from the lights as they are: ${esc(sceneLevelsText(p))}.` : esc(sceneSub(p));
   SCENE_BACK = opts.back || null;
-  showSheet('scene', title, body, { sub, back: !!SCENE_BACK, onBack: SCENE_BACK });
+  // "Done" in the top right, no footer: it is an editor, and every change has already autosaved (docs/ia-v5.md 5)
+  showSheet('scene', title, body, { detent: 'large', done: true, sub, back: !!SCENE_BACK, onBack: SCENE_BACK });
   if (fresh) { const i = $('#scene-name'); if (i) setTimeout(() => { i.focus(); i.select(); }, 350); }
 }
 // "Which lights are in this look?": every light in the house with a checkbox, back to the editor.
@@ -110,7 +123,7 @@ function openSceneLightsSheet() {
     if (!ds.length) return '';
     return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${d.device_id in p.levels ? 'checked' : ''} data-act="scene-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.device_id in p.levels ? (d.domain === 'fan' ? cap(fanName(p.levels[d.device_id])) : levelOf(p.levels[d.device_id]) > 0 ? levelOf(p.levels[d.device_id]) + '%' : 'Off') : 'Left alone'}</div></div></label>`).join('')}</div>`;
   }).join('');
-  showSheet('scene-lights', 'Which lights are in this look?', rows, { sub: 'A light you tick joins at the level it is at now.', back: true, onBack: () => openSceneEditor(p.id, false, { back: SCENE_BACK }) });
+  showSheet('scene-lights', 'Which lights are in this look?', rows, { detent: 'large', sub: 'A light you tick joins at the level it is at now.', back: true, onBack: () => openSceneEditor(p.id, false, { back: SCENE_BACK }) });
 }
 // The scene editor's More: the fade, and deleting the scene.
 function sceneMoreSheet() {
@@ -119,7 +132,7 @@ function sceneMoreSheet() {
   const body = `<div class="card pad0 list"><div class="item"><div class="grow"><div class="t">Show it first on Home</div><div class="d">A starred scene leads the row on Home</div></div><button class="iconbtn plain fav ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="fav" data-t="${t}" aria-label="Show it first on Home">${ICON('star', 'sm')}</button></div></div>
     <label class="field" style="margin-top:16px"><span>Change gradually over</span><select class="input" id="scene-fade">${[['', 'Default'], [0, 'Instantly'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [30, '30 seconds'], [300, '5 minutes'], [900, '15 minutes'], [1800, '30 minutes']].map(([v, l]) => `<option value="${v}" ${String(p.fade == null ? '' : p.fade) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <div class="spacer"></div><button class="btn danger block" data-act="scene-delete" data-id="${p.id}">Delete this scene</button>`;
-  showSheet('scene-more', 'More', body, { sub: esc(p.name), back: true, onBack: () => openSceneEditor(p.id, false, { back: SCENE_BACK }) });
+  showSheet('scene-more', 'More', body, { detent: 'medium', sub: esc(p.name), back: true, onBack: () => openSceneEditor(p.id, false, { back: SCENE_BACK }) });
 }
 // A Lutron scene cannot be edited here; its sheet says so and carries the star the list row used to.
 function sceneLutronSheet(sid) {
@@ -128,7 +141,7 @@ function sceneLutronSheet(sid) {
   const body = `<div class="card pad0 list"><div class="item"><div class="grow"><div class="t">Show it first on Home</div><div class="d">A starred scene leads the row on Home</div></div><button class="iconbtn plain fav ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="fav" data-t="${t}" aria-label="Show it first on Home">${ICON('star', 'sm')}</button></div></div>
     <p class="d" style="margin-top:16px">This look was made in the Lutron app. Change it there and it changes here too.</p>
     <div class="spacer"></div><button class="btn block" data-act="run-scene" data-t="${t}">${ICON('play', 'sm')} Try it</button>`;
-  showSheet('scene-lutron', esc(sc.name), body, { sub: 'From the Lutron app' });
+  showSheet('scene-lutron', esc(sc.name), body, { detent: 'compact', sub: 'From the Lutron app' });
 }
 // Any change to a room mood marks it as the person's own.
 function markEdited(p) { if (p && p.mood && p.area && !p.edited) { p.edited = true; const t = $('#sheet-root .tip .t'); if (t && /suggested mood/i.test(t.textContent)) reopenEditor(p.id); } }

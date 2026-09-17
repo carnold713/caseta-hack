@@ -193,7 +193,10 @@ VIEWS.automations = {
 };
 function autoRowHTML(sc) {
   const off = pairOf(sc); const glyph = sc.at.type === 'sunrise' ? 'sun' : sc.at.type === 'sunset' ? 'moon' : 'clock';
-  return `<div class="item auto ${sc.enabled === false ? 'paused' : ''}"><button class="auto-main" data-act="au-open" data-id="${esc(sc.id)}"><div class="ic">${ICON(glyph, 'sm')}</div><div class="grow"><div class="t">${esc(sc.name || 'Automation')}</div><div class="d">${esc(ruleLine(sc, off))}</div><div class="d" data-next="${esc(sc.id)}">${nextLineHTML(sc)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button><button class="sw ${sc.enabled === false ? '' : 'on'}" data-act="au-toggle" data-id="${esc(sc.id)}" aria-label="${esc(sc.name || 'Automation')} on or off"></button></div>`;
+  // what a swipe on this row offers (js/rowswipe.js): skip the next run, or delete. Both have a twin in the editor.
+  const n = nextRunOf(sc); const sk = skipping(sc);
+  const sw = `data-auswipe="${esc(sc.id)}" data-auswipe-date="${n ? esc(n.date) : ''}" data-auswipe-skipping="${sk ? 1 : 0}"`;
+  return `<div class="item auto ${sc.enabled === false ? 'paused' : ''}" ${sw}><button class="auto-main" data-act="au-open" data-id="${esc(sc.id)}"><div class="ic">${ICON(glyph, 'sm')}</div><div class="grow"><div class="t">${esc(sc.name || 'Automation')}</div><div class="d">${esc(ruleLine(sc, off))}</div><div class="d" data-next="${esc(sc.id)}">${nextLineHTML(sc)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button><button class="sw ${sc.enabled === false ? '' : 'on'}" data-act="au-toggle" data-id="${esc(sc.id)}" aria-label="${esc(sc.name || 'Automation')} on or off"></button></div>`;
 }
 function guidedRowsHTML(cap) {
   const rows = [
@@ -261,7 +264,7 @@ function comingUpHTML() {
 
 // ---------- New automation ---------- (showSheet and SHEET_KEY live in core.js)
 function openNewAutomation() {
-  showSheet('new', 'What would you like to set up?', `${guidedRowsHTML()}<p class="d" style="margin:16px 0 0">Have timers in the Lutron app? Keep them in one place, here or there, so they don't fight.</p>`, { sub: 'Three ready-made ones, or start from scratch.' });
+  showSheet('new', 'What would you like to set up?', `${guidedRowsHTML()}<p class="d" style="margin:16px 0 0">Have timers in the Lutron app? Keep them in one place, here or there, so they don't fight.</p>`, { detent: 'medium', sub: 'Three ready-made ones, or start from scratch.' });
 }
 
 // ---------- the editor (4.1) ----------
@@ -317,7 +320,7 @@ function openAutoScenePicker() {
   const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.mood ? 'Room mood' : 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
   AE.scenePick = items;
   const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="ae-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
-  showSheet('ae-scene', 'Which scene?', body, { back: true, onBack: renderEditor });
+  showSheet('ae-scene', 'Which scene?', body, { detent: 'medium', back: true, onBack: renderEditor });
 }
 function daysHTML(days, act, warn) {
   const quick = [['all', 'Every day', ALL_DAYS], ['weekdays', 'Weekdays', [1, 2, 3, 4, 5]], ['weekends', 'Weekends', [0, 6]]];
@@ -358,14 +361,14 @@ function renderEditor() {
   const actions = `<div class="stack" style="margin-top:24px"><button class="btn block" data-act="ae-try">${ICON('play', 'sm')} Try it now</button>${inCfg ? `<button class="btn block" data-act="ae-skip">${esc(skipLabel(sc))}</button>` : ''}</div>
     <div style="margin-top:16px">${moreRow('Name, skip it when, fade, fine-tune, delete', 'ae-more')}</div>`;
   const foot = `<div class="sfoot"><button class="btn primary lg block" data-act="ae-done" ${sc.at ? '' : 'disabled'}>Done</button></div>`;
-  showSheet('editor', title, `${when}${body}${actions}${foot}`, { sub });
+  showSheet('editor', title, `${when}${body}${actions}${foot}`, { detent: 'large', sub });
 }
 // "What happens": the recipe list on its own sheet, back to the editor.
 function openWhatSheet() {
   const sc = aeSc(); if (!sc) return;
   const rid = autoRecipeOf(sc, AE.L, AE.Sh);
   const custom = rid === 'custom' ? `<div class="tip" style="margin-top:12px"><div class="grow"><span class="cap">Custom</span><div class="t">${esc(describe(sc.actions))}</div></div></div>` : '';
-  showSheet('ae-what', 'What should happen?', `<div class="card pad0 list">${recipeRowsHTML(AE.L, AE.Sh, rid, 'ae-recipe')}</div>${custom}`, { sub: esc(cap(targetName(packTarget([...AE.L, ...AE.Sh])))), back: true, onBack: renderEditor });
+  showSheet('ae-what', 'What should happen?', `<div class="card pad0 list">${recipeRowsHTML(AE.L, AE.Sh, rid, 'ae-recipe')}</div>${custom}`, { detent: 'large', sub: esc(cap(targetName(packTarget([...AE.L, ...AE.Sh])))), back: true, onBack: renderEditor });
 }
 
 // ---------- "Something else": the walk for a new automation (2.14) ----------
@@ -419,7 +422,7 @@ function openNwScenePicker() {
   const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.mood ? 'Room mood' : 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
   NW.scenePick = items;
   const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="nw-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
-  showSheet('nw-scene', 'Which scene?', body, { back: true, onBack: renderSetup });
+  showSheet('nw-scene', 'Which scene?', body, { detent: 'medium', back: true, onBack: renderSetup });
 }
 // "Pick a time…" for the off pair: the When body on its own sheet, back to the walk.
 function openNwOffTime() {
@@ -431,7 +434,7 @@ function openNwOffTime() {
 function renderNwOffTime() {
   const canUse = WH.type === 'time' || !!S.config.settings.location;
   const back = () => { WH = NW.atWH; renderSetup(); };
-  showSheet('nw-off', nwShades() ? 'Open again when?' : 'Turn off again when?', `${whenBodyHTML(WH)}<div class="sfoot"><button class="btn primary lg block" data-act="nw-off-use" ${canUse ? '' : 'disabled'}>Use this time</button></div>`, { sub: 'Pick a clock time, or follow the sun.', back: true, onBack: back });
+  showSheet('nw-off', nwShades() ? 'Open again when?' : 'Turn off again when?', `${whenBodyHTML(WH)}<div class="sfoot"><button class="btn primary lg block" data-act="nw-off-use" ${canUse ? '' : 'disabled'}>Use this time</button></div>`, { detent: 'medium', sub: 'Pick a clock time, or follow the sun.', back: true, onBack: back });
 }
 function nwOffUse() { NW.offAt = whAt(); NW.off = 'time'; WH = NW.atWH; walkAdvance(WALK.cur); }
 function nwSave() {
@@ -471,7 +474,7 @@ function renderWhenSheet() {
   const loc = S.config.settings.location;
   const canUse = w.type === 'time' || !!loc;
   const body = whenBodyHTML(w) + `<div class="sfoot"><button class="btn primary lg block" data-act="wh-use" ${canUse ? '' : 'disabled'}>Use this time</button>${w.mode === 'off' && aeOff() ? `<button class="btn ghost block" data-act="wh-leave">Leave them on</button>` : ''}</div>`;
-  showSheet('when', w.mode === 'off' ? 'Turn off again when?' : 'When?', body, { sub: 'Pick a clock time, or follow the sun.', back: true, onBack: renderEditor });
+  showSheet('when', w.mode === 'off' ? 'Turn off again when?' : 'When?', body, { detent: 'medium', sub: 'Pick a clock time, or follow the sun.', back: true, onBack: renderEditor });
 }
 function whUse() {
   const sc = aeSc(); if (!sc || !WH) return;
@@ -523,7 +526,7 @@ function setLocation(lat, lng, name, tz) {
   return save({ msg: nm ? `Near ${nm}` : 'Location saved', render: !sheet.isOpen() }).then(locRepaint);
 }
 function openCityPicker() {
-  showSheet('city', 'Which city is nearest?', `<label class="field"><span>City</span><input class="input" id="city-q" placeholder="Type a city" autocomplete="off"></label><div id="city-list">${cityListHTML('')}</div>`, { sub: 'Sunset a hundred kilometres off is still within minutes.', back: true, onBack: locBack });
+  showSheet('city', 'Which city is nearest?', `<label class="field"><span>City</span><input class="input" id="city-q" placeholder="Type a city" autocomplete="off"></label><div id="city-list">${cityListHTML('')}</div>`, { detent: 'medium', sub: 'Sunset a hundred kilometres off is still within minutes.', back: true, onBack: locBack });
   const q = $('#city-q'); if (q) setTimeout(() => q.focus(), 350);
 }
 function cityListHTML(q) {
@@ -548,7 +551,7 @@ function openMoreSheet() {
     <label class="field"><span>Change gradually over</span><select class="input" id="ae-fade">${FADE_OPTS.map(([v, l]) => `<option value="${v}" ${String(fade) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <button class="btn block" data-act="ae-finetune" style="margin-top:8px">Fine-tune: several steps, timers…</button>
     <div class="spacer"></div><div class="spacer"></div><button class="btn danger block" data-act="ae-delete">Delete this automation</button>`;
-  showSheet('more', 'More options', body, { sub: esc(sc.name), back: true, onBack: renderEditor });
+  showSheet('more', 'More options', body, { detent: 'medium', sub: esc(sc.name), back: true, onBack: renderEditor });
 }
 function aeFineTune() {
   const sc = aeSc(); if (!sc) return;
@@ -564,6 +567,18 @@ function aeFineTune() {
 }
 // After a fine-tune, the chips follow whatever the steps now point at.
 function aeFromActions() { const sc = aeSc(); if (!sc) return; const { L, Sh } = splitT(targetsOf(sc)); if (L.length || Sh.length) { AE.L = L; AE.Sh = Sh; } }
+// Deleting from the row's swipe: one confirm, then the same removal the editor does. Undo is in the toast.
+function confirmDeleteAutomation(sc) {
+  const body = `<div class="tip"><div class="grow"><span class="cap">${esc(ruleLine(sc, pairOf(sc)))}</span><div class="t">It stops running</div><div class="d">Your lights keep whatever they are doing now.</div></div></div><div class="spacer"></div><button class="btn danger block" data-act="au-delete-yes" data-id="${esc(sc.id)}">Delete this automation</button>`;
+  showSheet('au-del', `Delete ${esc(sc.name || 'this automation')}?`, body, { detent: 'compact' });
+}
+function deleteAutomation(id) {
+  const prev = JSON.stringify(S.config);
+  S.config.schedules = schedules().filter(x => x.id !== id && x.id !== id + '-off');
+  closeSheet();
+  save({ msg: 'Automation deleted', undo: true });
+  toast('Automation deleted', { undo: async () => { S.config = JSON.parse(prev); await save({ msg: 'Undone' }); } });
+}
 function aeDelete() {
   const sc = aeSc(); if (!sc) return;
   if (aeInConfig()) { S.config.schedules = schedules().filter(x => x.id !== sc.id && x.id !== sc.id + '-off'); closeSheet(); save({ msg: 'Automation deleted' }); }
@@ -687,7 +702,7 @@ function wakeupPreview(g) {
 // "Another light…": every dimmer in the house, as a sub-step of the wake-up walk; picking one answers the step.
 function openLampPicker() {
   const rows = lightRooms().map(a => { const ds = dimmers().filter(d => (d.area || 'none') === a.id); if (!ds.length) return ''; return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="gs-lamp-pick" data-id="${d.device_id}">${lampHTML(level(d.device_id) || 0, 28, '')}<div class="grow"><div class="t">${esc(d.name)}</div></div>${GS.lamp === d.device_id ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`).join('')}</div>`; }).join('');
-  showSheet('lamp', 'Which light?', rows || `<div class="tip"><div class="grow"><span class="cap">Lights</span><div class="t">No dimmable lights found</div></div></div>`, { sub: 'A dimmer, so it can rise slowly.', back: true, onBack: renderSetup });
+  showSheet('lamp', 'Which light?', rows || `<div class="tip"><div class="grow"><span class="cap">Lights</span><div class="t">No dimmable lights found</div></div></div>`, { detent: 'medium', sub: 'A dimmer, so it can rise slowly.', back: true, onBack: renderSetup });
 }
 function saveWakeup(g) {
   if (!g.lamp) return;
@@ -780,7 +795,7 @@ function openWindDownSheet() {
     ${on ? `<div class="card pad0 list wd" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">When does the house go quiet?</div></div><input type="time" class="wd-time" value="${s.night_start}" data-wd="night_start" aria-label="When does the house go quiet?"></div></div>
     <p class="d" id="wd-cap" style="margin:8px 0 0">${windDownCaption()}</p>
     <div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="wd-advanced"><div class="grow"><div class="t">Advanced: change the levels</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>` : ''}`;
-  showSheet('wd', 'Evening wind-down', body, { top: true, grow: true });
+  showSheet('wd', 'Evening wind-down', body, { detent: 'medium', top: true, grow: true });
 }
 // The Home caption while the curve is below full.
 function windDownCaptionHTML() {
@@ -814,7 +829,7 @@ function openWindDownAdvanced() {
   <div class="card pad0 list" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">Also gently lower lights nobody has touched for 20 minutes</div><div class="d">Over a minute, only lights above the curve. Turn it off if it ever fights you.</div></div><button class="sw ${wd.nudge ? 'on' : ''}" data-act="wd-nudge" aria-label="Gently lower untouched lights"></button></div>
     <button class="item" data-act="wd-curve"><div class="grow"><div class="t">Curve by the hour</div><div class="d">Set the level for each time of day yourself</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>
   <p class="d" style="margin:16px 0 0">Task lights (counters, desks, mirrors) are never dimmed. Pressing a top button twice is always full brightness.</p>`;
-  showSheet('wd-adv', 'Evening wind-down', body, { sub: 'The numbers behind the curve.', back: true, onBack: openWindDownSheet });
+  showSheet('wd-adv', 'Evening wind-down', body, { detent: 'medium', sub: 'The numbers behind the curve.', back: true, onBack: openWindDownSheet });
 }
 function wdSet(k, v) {
   const s = S.config.settings; const { wd } = wdSettings(); v = Number(v);
@@ -830,7 +845,7 @@ function openCurveSheet() {
   const body = `<div class="chips">${[['winddown', 'Follow the sun'], ['points', 'By the hour']].map(([v, l]) => `<button class="chip ${ad.mode === v ? 'sel' : ''}" data-act="wd-mode" data-v="${v}">${l}</button>`).join('')}</div>
     <p class="d" style="margin:12px 0 0">${ad.mode === 'points' ? 'What "on" means at each time of day; between two times it slides from one to the next, and after the last one it holds until the first.' : 'Following the sun uses the levels on the previous sheet. Switch to "By the hour" to draw the curve yourself.'}</p>
     <div class="card pad0 list" style="margin-top:12px">${rows}<button class="item" data-act="wd-pt-add"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a time</div></div></button></div>`;
-  showSheet('wd-curve', 'Curve by the hour', body, { sub: 'The level for "on", hour by hour.', back: true, onBack: openWindDownAdvanced });
+  showSheet('wd-curve', 'Curve by the hour', body, { detent: 'large', sub: 'The level for "on", hour by hour.', back: true, onBack: openWindDownAdvanced });
 }
 
 // ---------- roles and moods (7) ----------
@@ -875,7 +890,7 @@ function renderRolesSheet() {
     <div class="card pad0 list" style="margin-top:12px">${rows}</div>
     <div class="sfoot"><button class="btn primary lg block" data-act="rl-make">${has ? 'Update moods' : 'Make moods'}</button>${walk ? `<button class="btn ghost block" data-act="rl-skip">${nextAid ? `Next: ${esc(areaName(nextAid))}` : 'Skip this room'}</button>` : ''}</div>`;
   void ds;
-  showSheet('roles', `What kind of light is each one in the ${esc(areaName(aid))}?`, body, { sub: 'We guessed from the names. Fix any that are wrong.', back: !!RS.back, onBack: RS.back, cap: walk ? `Room ${walk.indexOf(aid) + 1} of ${walk.length}` : '', top: true });
+  showSheet('roles', `What kind of light is each one in the ${esc(areaName(aid))}?`, body, { detent: 'medium', sub: 'We guessed from the names. Fix any that are wrong.', back: !!RS.back, onBack: RS.back, cap: walk ? `Room ${walk.indexOf(aid) + 1} of ${walk.length}` : '', top: true });
 }
 function rolesMake() {
   const { aid, roles, walk } = RS; const s = S.config.settings; s.roles = s.roles || {};
@@ -898,16 +913,17 @@ function moodsWalkRooms() { return lightRooms().filter(a => roomLights(a.id).len
 // The Scenes tab's "Room moods" section: one row per room that has them.
 function roomMoodsSectionHTML() {
   const rooms = lightRooms().filter(a => roomHasMoods(a.id)); if (!rooms.length) return '';
-  return `<div class="h2">Room moods</div><div class="card pad0 list">${rooms.map(a => { const ps = roomMoodPresets(a.id); const ch = ps.filter(p => p.edited).length; return `<button class="item" data-act="rm-open" data-area="${a.id}">${lampHTML(targetOn(`a:${a.id}`) ? roomMean(a.id) : 0, 40, ICON(roomIcon(a.name), 'sm'))}<div class="grow"><div class="t">${esc(a.name)}</div><div class="d">${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('')}</div>`;
+  return `<div class="gh">Room moods</div><div class="card pad0 list">${rooms.map(a => { const ps = roomMoodPresets(a.id); const ch = ps.filter(p => p.edited).length; return `<button class="item" data-act="rm-open" data-area="${a.id}">${lampHTML(targetOn(`a:${a.id}`) ? roomMean(a.id) : 0, 40, ICON(roomIcon(a.name), 'sm'))}<div class="grow"><div class="t">${esc(a.name)}</div><div class="d">${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('')}</div>`;
 }
-// `back` is a route name ('room-more'), so every sheet opened from the room's More row can walk back to it.
-function backTo(name, aid) { return name === 'room-more' ? () => roomMoreSheet(aid) : name === 'roommoods' ? () => openRoomMoodsSheet(aid, { back: 'room-more' }) : null; }
+// `back` is a route name, so a sheet opened from the room setup page can walk back to the one that opened it.
+// 'room-more' is the old name of the room setup page, which is a page now: there is nothing to go back to in a sheet.
+function backTo(name, aid) { return name === 'roommoods' ? () => openRoomMoodsSheet(aid) : null; }
 function openRoomMoodsSheet(aid, opts = {}) {
   const ps = roomMoodPresets(aid); const ch = ps.filter(p => p.edited).length;
   const rows = ps.map(p => { const m = moodById(p.mood); return `<div class="item"><button class="ic" data-act="run-scene" data-t="p:${p.id}" title="Run">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${p.edited ? 'Changed by you' : 'Suggested'} · ${plural(Object.keys(p.levels).length, 'light')}</div></div><button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}" data-back="roommoods" data-area="${aid}" title="Edit">${ICON('edit', 'sm')}</button></div>`; }).join('');
   const body = `<div class="card pad0 list">${rows}</div><div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="rl-open" data-area="${aid}" data-back="roommoods">${ICON('dots')}<div class="grow"><div class="t">Change what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   const back = backTo(opts.back, aid);
-  showSheet('roommoods', `${esc(areaName(aid))} moods`, body, { sub: `${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}`, back: !!back, onBack: back });
+  showSheet('roommoods', `${esc(areaName(aid))} moods`, body, { detent: 'medium', sub: `${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}`, back: !!back, onBack: back });
 }
 
 // ---------- events ----------
@@ -921,6 +937,9 @@ document.addEventListener('click', e => {
     case 'au-toggle': { const sc = scById(d.id); if (sc) setEnabled(sc, sc.enabled === false); break; }
     case 'au-skip': { const sc = scById(d.id); if (sc) doSkip(sc, d.date); break; }
     case 'au-unskip': { const sc = scById(d.id); if (sc) unSkip(sc); break; }
+    // the swipe's delete: the same confirm the editor's Delete row uses
+    case 'au-swipe-delete': { const sc = scById(d.id); if (sc) confirmDeleteAutomation(sc); break; }
+    case 'au-delete-yes': deleteAutomation(d.id); break;
     case 'tz-keep': try { localStorage.setItem('tzKeep', `${S.config.settings.timezone}|${phoneTZ()}`); } catch (_) { /* ignore */ } render(); break;
     case 'tz-phone': S.config.settings.timezone = phoneTZ(); save({ msg: `Following this phone's clock` }); break;
     // the editor

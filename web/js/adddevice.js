@@ -141,7 +141,7 @@ function openRemoveDevice(id) {
   const uses = bindings().filter(b => isPico ? b.device_id === id : [...b.actions, ...((b.night && b.night.actions) || [])].some(a => tlist(a.target).includes('d:' + id))).length;
   sheet.open(`Remove ${esc(d.name)}?`, `<div class="tip"><div class="grow"><span class="cap">${esc(areaName(d.area))}</span><div class="t">It leaves your Lutron bridge</div><div class="d">It stops working until it is added again${isPico ? ', and its button settings here are cleared' : uses ? `, and the ${plural(uses, 'button')} that used it forget it` : ''}. The Lutron app will not list it any more either.</div></div></div>
     ${AD.showLog ? `<p class="d" style="margin:12px 0 0">This part of the bridge is not documented either; if it keeps saying no, the Lutron app can still remove it.</p>${adLogHTML()}` : ''}
-    <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="sheet-close">Keep it</button></div>`, { sub: `${esc(areaName(d.area))} · ${isPico ? 'remote' : d.domain}` });
+    <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="sheet-close">Keep it</button></div>`, { detent: 'compact', sub: `${esc(areaName(d.area))} · ${isPico ? 'remote' : d.domain}` });
 }
 function forgetDevice(id) {
   const t = 'd:' + id; const cfg = S.config;

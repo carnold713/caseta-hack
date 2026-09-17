@@ -150,7 +150,12 @@ function validateConfig(cfg) {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(k) || !v || typeof v !== 'object') continue;
     const model = typeof v.model === 'string' && /^[A-Za-z0-9-]+$/.test(v.model) ? v.model : null;
     const finish = ['white', 'black', 'ivory', 'gray'].includes(v.finish) ? v.finish : null;
-    if (model || finish) out.settings.remote_looks[k] = { model, finish };
+    // Button numbers this remote has actually sent. A remote the bridge lists without its buttons is drawn
+    // from these instead, so the picture and the rows match what the real keys send.
+    const seen = Array.isArray(v.seen)
+      ? [...new Set(v.seen.filter(n => Number.isInteger(n) && n >= 0 && n <= 32))].sort((a, b) => a - b).slice(0, 12)
+      : [];
+    if (model || finish || seen.length) out.settings.remote_looks[k] = { model, finish, ...(seen.length ? { seen } : {}) };
   }
 
   const groupIds = new Set();

@@ -16,7 +16,7 @@
      expand(roomEl, open)          a room card opened or closed
      pulse(el)                     a gesture was detected on a remote
      textSwap(el, html)            a headline changed: fade out, swap, fade in
-     barIn(el)                     the Light now bar's first appearance: a 16px rise, 120ms after the page
+     barIn(el)                     the bottom pill's first appearance: a 16px rise, 120ms after the page
      reduced() -> boolean
    } */
 (function () {
@@ -247,7 +247,7 @@
     } });
   }
 
-  // ---------- the Light now bar appears: a 16px rise over 300ms, 120ms after the page ----------
+  // ---------- the bottom pill appears: a 16px rise over 300ms, 120ms after the page ----------
   function barIn(target) {
     const e = el(target); const g = G(); if (!g || !e) return;
     g.killTweensOf(e);

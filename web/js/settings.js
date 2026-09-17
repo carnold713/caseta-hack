@@ -97,7 +97,7 @@ function setSetting(k, v) {
 // The name saves as you type (the value row, the page title and the bar follow).
 document.addEventListener('input', e => { if (e.target.dataset && e.target.dataset.setting === 'home_name') setSetting('home_name', e.target.value); });
 function openActivity() {
-  sheet.open('Recent activity', `<div id="activity">${activityHTML()}</div>`);
+  sheet.open('Recent activity', `<div id="activity">${activityHTML()}</div>`, { detent: 'large' });
 }
 function activityHTML() {
   if (!S.activity.length) return `<div class="tip"><div class="grow"><span class="cap">Activity</span><div class="t">Nothing yet</div><div class="d">Press a remote button and it shows up here.</div></div></div>`;
@@ -116,7 +116,7 @@ function paintActivity() { const el = $('#activity'); if (el) el.innerHTML = act
 // The home's name: a small sheet with one field, saved as you type.
 function openHomeName() {
   const s = S.config.settings;
-  sheet.open('Home name', `<label class="field" style="margin-top:0"><span>Name</span><input class="input" value="${esc(s.home_name || '')}" placeholder="Home" data-setting="home_name" maxlength="40" autocomplete="off"></label><p class="d">It shows at the top of Home and on the Light now bar.</p><div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`);
+  sheet.open('Home name', `<label class="field" style="margin-top:0"><span>Name</span><input class="input" value="${esc(s.home_name || '')}" placeholder="Home" data-setting="home_name" maxlength="40" autocomplete="off"></label><p class="d">It shows at the top of Home.</p><div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`, { detent: 'compact' });
   setTimeout(() => { const i = $('#sheet-root [data-setting="home_name"]'); if (i) { i.focus(); i.select(); } }, 350);
 }
 // Preferences (docs/ux-progressive.md 2.17): the power button with the house dark, the night hours, the night look, in one sheet.
@@ -132,7 +132,7 @@ function openPrefs() {
       <div class="item"><div class="grow"><div class="t">Night ends</div></div><input type="time" value="${s.night_end}" data-setting="night_end" aria-label="Night ends"></div>
       ${nightLookRowHTML()}
     </div>`;
-  showSheet('prefs', 'Preferences', body, { sub: 'The power button, night hours, night look.' });
+  showSheet('prefs', 'Preferences', body, { detent: 'medium', sub: 'The power button, night hours, night look.' });
   sheet.onClose = () => { const r = document.querySelector('[data-act="prefs"] .d'); if (r) r.textContent = prefsSub(); };
 }
 function openInstallHelp() {
@@ -146,7 +146,7 @@ function openGroupEditor(id) {
   if (!g) { g = { id: uid(), name: 'New set', device_ids: [], on_level: null }; S.config.groups.push(g); }
   S.groupEdit = g.id;
   const rows = areas().map(a => { const ds = controllable().filter(d => (d.area || 'none') === a.id && d.domain !== 'cover'); if (!ds.length) return ''; return `<div class="h2">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<label class="item"><input type="checkbox" class="cb" ${g.device_ids.includes(d.device_id) ? 'checked' : ''} data-act="group-inc" data-id="${d.device_id}"><div class="grow"><div class="t">${esc(d.name)}</div></div></label>`).join('')}</div>`; }).join('');
-  sheet.open('Light set', `<label class="field"><span>Name</span><input class="input" id="group-name" value="${esc(g.name)}"></label>${rows}<div class="spacer"></div><button class="btn danger block" data-act="group-delete" data-id="${g.id}">Delete this set</button><div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`);
+  sheet.open('Light set', `<label class="field"><span>Name</span><input class="input" id="group-name" value="${esc(g.name)}"></label>${rows}<div class="spacer"></div><button class="btn danger block" data-act="group-delete" data-id="${g.id}">Delete this set</button>`, { detent: 'large', done: true });
 }
 
 // The power button with the house dark: bring back what was on, or turn everything on.

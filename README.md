@@ -38,35 +38,59 @@ Pico bindings from its cached config.
   a thing a button can control. Hand-picked sets exist under Advanced.
 - **Scenes:** a look for the whole house, saved from the lights as they
   are right now, with a fade. Lutron's own scenes sit in the same grid.
-  The Scenes tab is the tiles: the face runs the scene, a small button in
-  its corner opens it (the editor for yours, a short "from the Lutron app"
-  sheet for Lutron's, where the star that pins it to the front on Home
-  lives). Under the tiles, only what a tile cannot show: Room moods.
-- **Home:** one headline ("Kitchen and Bedroom are on"), a line for
-  anything due within the hour with a Skip, then every light in a row:
-  lit in its own colour at 56px, grey and smaller when off; tap one to
-  toggle it, hold a lit one for a sleep timer. A lamp that can show
-  colour wears a rainbow ring with a small rainbow button on it that
-  opens its Colour section. Then the rooms, first, which open to mood
-  chips and lamp rows with sliders, toggles, fan speeds and shade
-  controls; the whole row opens the light's page (a chevron says so) and
-  a Hue lamp's row carries a rainbow button that lands on its Colour
-  section. Scenes follow as one chip row (a tap runs one, the tile grid
-  lives on the Scenes tab), and the one row of advice (Next) comes last.
-  Starring a light pins it to the front of the lamp row and the top of
-  its room. The light page: drag the disc to dim, then Warmth and Colour,
-  the sleep timer, the star, More. The **Light now** bar sits above the tabs on every page: what
-  is on, a dimmer for everything that is on, and the power button: All
-  off while anything is lit (hold it to close shades and stop fans too),
-  and with the house dark it brings back the lights that were on before,
-  at the same levels (the connector remembers them), or turns everything
-  on, as you choose in Settings. Tap the bar for the full Now view (each of its panels is
-  as tall as its own contents).
+  Running one is one tap on Home; everything else is on the **Scenes page**,
+  pushed from Home's "See all" (it is not a tab). At rest a tile has one
+  job: run the scene. "Edit" beside the section header turns on the
+  per-tile pencils, and a tap on a tile then opens it (the editor for
+  yours, a short "from the Lutron app" sheet for Lutron's, where the star
+  that pins it to the front on Home lives). Making one has a single door:
+  the "+" in the page's nav bar, or the empty state's one button. Under
+  the tiles, only what a tile cannot show: Room moods.
+- **Home is a list of rooms** (docs/ia-v5.md). A large title that collapses
+  to a 44px bar on scroll, then the **house card**: the headline ("Kitchen
+  and Bedroom are on"), the count and the mean level, a dimmer for
+  everything that is on, and the power button. All off while anything is
+  lit (hold it to close the shades and stop the fans too), and with the
+  house dark it brings back the lights that were on before, at the same
+  levels (the connector remembers them), or turns everything on, as you
+  choose in Settings. The card's "···" holds the three rarer house-wide
+  things: Night in every lit room, a sleep timer over everything that is
+  on, and "Everything off, and close the shades" in words.
+  Under the card, a line for anything due within the hour with a Skip,
+  then the **starred lights** as one lamp row (only the ones you starred,
+  and no row at all when none are): lit in their own colour at 56px, grey
+  and smaller when off; tap one to toggle it, hold a lit one for a sleep
+  timer. Then the scenes as one chip row (a tap runs one, "See all" opens
+  the Scenes page), then the **rooms as one grouped inset list**: a disc,
+  the name, what the room is doing, a chevron and a switch. One row of
+  advice (Next) comes last.
+- **A room is a page.** Its chevron pushes it: the room's mood chips, its
+  lights as one list, and one "Room setup" row. A light's row carries its
+  name, its value ("62%", "Off", "Medium", or a colour dot and the colour's
+  name), a chevron into the light's page and a switch. No inline slider, no
+  sun button, no star, no rainbow button: the light's own page is one tap
+  away and is a better dimmer than a 40px well in a list. Fan speeds and
+  the open/stop/close of a shade stay on the row. **Room setup** is a page
+  under it: what each light is for, the room's moods, and the kind of each
+  light. The light page: drag the disc to dim, then Warmth and Colour, the
+  sleep timer, the star ("Favourite"), More.
+- **The bottom of the screen.** Home has nothing floating: its house card
+  is where the house controls live. On Remotes, Automations and Settings a
+  44px **pill** appears when something is lit, 8px above the tab bar: a disc
+  at the house's mean level, what is on, and the power button (hold it for
+  the shades and fans). It slides away on a downward scroll and comes back
+  on the way up, it is hidden outright while a sheet is open, and tapping
+  it goes to Home. Four tabs: Home, Remotes, Automations, Settings.
+- **Sheets have three stops** and are never between them: compact (their own
+  content, 180px to 40dvh), medium (56dvh) and large (92dvh). A sheet you are
+  editing puts "Done" in its top right and has no footer; a sheet with a real
+  primary action keeps a 74px footer. Swipe one down to close it, or from
+  large down to medium.
 - **Room moods:** say which lights are the main light, task light, lamps
   or decor, and each room gets Bright, Relax, Dinner, Movie and Night as
   scenes a chip or a remote button can run. Making and changing them,
-  and the kind of each light, live under the room's "More" row at the
-  foot of its open card; every sheet under it has a back arrow to it.
+  and the kind of each light, live on the room's **Room setup** page; back
+  is the nav bar, so no row on it can dead end.
 - **Kinds of light:** each light can say where it is and what it is,
   two questions in one sheet: Ceiling, Wall, Window, Desk, Table, Floor,
   Under a cabinet, Shelf or cove, Bed or Outside, then the fixture for
@@ -213,7 +237,7 @@ light went off, in `last_on.json`, and brings it back at the same levels.
 1. **Remotes** tab: press any button on a Pico and its remote opens. Tap a
    button, tap Press / Press twice / Hold, pick what should happen. It
    saves as you go.
-2. **Scenes** tab: set the lights how you like them (Home tab or the real
+2. **Scenes** page (Home › See all): set the lights how you like them (Home or the real
    switches), tap +, name it. A remote button can run it.
 3. **Automations** tab: pick one of the three guided setups or "Something
    else", answer the questions, done. Each row has a toggle and a next-run

@@ -36,30 +36,51 @@ function picoModelFor(d) {
   return 'PJ2-3BRL';
 }
 function picoFinishFor(d) { const look = (S.config && S.config.settings.remote_looks || {})[d.device_id] || {}; return look.finish || 'white'; }
+// Numbers this remote's keys carry: what the bridge lists, or, for a remote it has listed without its
+// buttons, the numbers the keys themselves have sent. A remote added through this app can take a while
+// before the bridge lists its buttons, and can number them from 1 where the older ones start at 0.
+function picoSeen(d) { const look = (S.config && S.config.settings.remote_looks || {})[d.device_id] || {}; return Array.isArray(look.seen) ? look.seen : []; }
+function picoKnownNumbers(d) { const r = buttonsOf(d.device_id).map(b => b.button_number); return r.length ? r : picoSeen(d); }
+// A press the app has seen from a remote the bridge lists no buttons for: remembered, so the picture and
+// the rows can line up with the real keys.
+function rememberPress(id, n) {
+  const d = dev(id); if (!d || d.domain !== 'pico' || !S.config) return false;
+  if (buttonsOf(id).length) return false;
+  const s = S.config.settings; s.remote_looks = s.remote_looks || {};
+  const look = s.remote_looks[id] || (s.remote_looks[id] = { model: null, finish: null });
+  const seen = look.seen || (look.seen = []);
+  if (seen.includes(n)) return false;
+  const before = picoSlots(d).map(x => x.n);
+  seen.push(n); seen.sort((a, b) => a - b);
+  // The keys just moved to their real numbers: anything already set on this remote moves with them, so a
+  // person who set it up while the bridge was quiet does not lose the settings.
+  const after = picoSlots(d).map(x => x.n);
+  const moved = {};
+  before.forEach((b, i) => { if (after[i] !== b) moved[b] = after[i]; });
+  if (Object.keys(moved).length) {
+    for (const b of bindings()) if (b.device_id === id && moved[b.button_number] != null) b.button_number = moved[b.button_number];
+  }
+  saveSoon();
+  return true;
+}
 // Buttons the bridge actually reports for this remote, mapped onto the model's slots.
-// A remote paired through this app can come back numbered from 1 where the older ones start at 0, so when
-// none of the model's numbers are reported the whole set is shifted to line up. Without this the keys are
-// all drawn as ghosts and the remote cannot be set up at all.
 function picoSlots(d, modelKey) {
   const model = PICO_MODELS[modelKey || picoModelFor(d)];
-  const reported = buttonsOf(d.device_id).map(b => b.button_number);
+  const known = picoKnownNumbers(d);
   let slots = model.slots;
-  // A remote the bridge has not listed buttons for yet (it can take a moment after pairing) is still set up
-  // through its usual keys rather than showing a page with nothing on it.
-  if (!reported.length) return slots.map(([kind, n, glyph]) => ({ kind, n, glyph, real: true }));
-  if (reported.length) {
-    const nums = slots.map(s => s[1]);
-    if (!nums.every(n => reported.includes(n))) {
-      const shift = Math.min(...reported) - Math.min(...nums);
-      if (shift && nums.every(n => reported.includes(n + shift))) slots = slots.map(([k, n, g]) => [k, n + shift, g]);
-    }
+  // Nothing known yet: the usual keys, so the page is still worth opening while the bridge catches up.
+  if (!known.length) return slots.map(([kind, n, glyph]) => ({ kind, n, glyph, real: true }));
+  const nums = slots.map(s => s[1]);
+  if (!nums.every(n => known.includes(n))) {
+    const shift = Math.min(...known) - Math.min(...nums);
+    if (shift && nums.every(n => known.includes(n + shift))) slots = slots.map(([k, n, g]) => [k, n + shift, g]);
   }
-  return slots.map(([kind, n, glyph]) => ({ kind, n, glyph, real: reported.includes(n) }));
+  return slots.map(([kind, n, glyph]) => ({ kind, n, glyph, real: known.includes(n) }));
 }
-// Buttons the bridge reports that the picture has no key for: they still get a row, so every remote is editable.
+// Numbers the picture has no key for: they still get a row, so every remote is editable.
 function picoExtraButtons(d) {
   const known = new Set(picoSlots(d).map(s => s.n));
-  return buttonsOf(d.device_id).map(b => b.button_number).filter(n => !known.has(n)).sort((a, b) => a - b);
+  return picoKnownNumbers(d).filter(n => !known.has(n)).sort((a, b) => a - b);
 }
 
 // Geometry in a 100 x 212 box (the real Pico is 1.25 x 2.62 in). Drawn to read like the product photo: a

@@ -1,4 +1,4 @@
-/* Swipe a sheet down to close it, with weight.
+/* Swipe a sheet down to close it, or from large down to medium, with weight.
    A finger pulling down on a sheet drags it: the sheet follows the finger one for one (with a
    rubber band when pushed above its rest), the scrim thins as it goes. On release the sheet either
    flies off the bottom, at the speed the finger gave it, or eases back with no overshoot.
@@ -11,6 +11,11 @@
   const FLICK = 0.55;          // px per ms: faster than this and the sheet leaves whatever the distance
   const FAR = 0.3;             // or further than this share of the sheet's height
   const NO = 'input.slider, .sliderwrap, .vslider, .ld-disc, .td-ring, .chips.scroll, .tiles, select, textarea';
+  // The detents (docs/ia-v5.md 5). A sheet has two stops at most, never three: compact only closes, medium can be
+  // dragged up to large and back, large drops to medium when it has both.
+  const detentOf = el => (el.className.match(/dt-(compact|medium|large)/) || [, ''])[1];
+  const canGrow = el => /dt-medium/.test(el.className) && !!el.dataset.grow;
+  const setDetent = (el, d) => { el.style.height = ''; el.classList.remove('dt-compact', 'dt-medium', 'dt-large'); el.classList.add('dt-' + d); if (window.sheet && sheet.detentChanged) sheet.detentChanged(d); };
   let g = null;
 
   const root = () => document.getElementById('sheet-root');
@@ -21,14 +26,14 @@
     const sheet = e.target.closest('#sheet-root .sheet'); if (!sheet) return;
     if (e.target.closest(NO)) return;
     const t = e.touches[0];
-    g = { sheet, scrim: r.querySelector('.scrim'), sb: sheet.querySelector('.sb'), inBody: !!e.target.closest('.sb'), x0: t.clientX, y0: t.clientY, y: t.clientY, state: 'pending', h: sheet.getBoundingClientRect().height || 1, samples: [[performance.now(), t.clientY]], disp: 0 };
+    g = { sheet, scrim: r.querySelector('.scrim'), sb: sheet.querySelector('.sb'), inBody: !!e.target.closest('.sb'), x0: t.clientX, y0: t.clientY, y: t.clientY, state: 'pending', h: sheet.getBoundingClientRect().height || 1, samples: [[performance.now(), t.clientY]], disp: 0, detent: detentOf(sheet), up: canGrow(sheet) };
   }
   function move(e) {
     if (!g) return;
     const t = e.touches[0]; const dx = t.clientX - g.x0, dy = t.clientY - g.y0;
     if (g.state === 'pending') {
       if (Math.abs(dx) >= SLOP && Math.abs(dx) > Math.abs(dy)) { g = null; return; }
-      if (dy <= -SLOP) { g = null; return; }
+      if (dy <= -SLOP) { const s2 = g.sheet; const grow = g.up; g = null; if (grow) setDetent(s2, 'large'); return; }
       if (dy < SLOP) return;
       if (g.inBody && g.sb && g.sb.scrollTop > 0) { g = null; return; }
       g.state = 'active'; g.y0 = t.clientY - SLOP;
@@ -59,8 +64,10 @@
         if (s.scrim) gs.to(s.scrim, { opacity: 0, duration: dur, ease: 'power1.out' });
       } else { s.sheet.style.transition = `transform ${dur}s ease-out`; s.sheet.style.transform = `translateY(${s.h}px)`; setTimeout(() => { s.sheet.style.transition = ''; done(); }, dur * 1000); }
     } else {
-      // spring back: a critically damped return, no overshoot (the design spec says no bounce on layout)
-      const done = () => { s.sheet.style.transform = ''; if (s.scrim) s.scrim.style.opacity = ''; finish(); };
+      // spring back: a critically damped return, no overshoot (the design spec says no bounce on layout).
+      // From large, a downward flick that does not close snaps to medium when the sheet has both stops.
+      const drop = s.detent === 'large' && !!s.sheet.dataset.grow;
+      const done = () => { s.sheet.style.transform = ''; if (s.scrim) s.scrim.style.opacity = ''; finish(); if (drop) setDetent(s.sheet, 'medium'); };
       if (gs) {
         gs.to(s.sheet, { y: 0, duration: 0.35, ease: 'expo.out', onComplete: done });
         if (s.scrim) gs.to(s.scrim, { opacity: 1, duration: 0.25, ease: 'power1.out' });

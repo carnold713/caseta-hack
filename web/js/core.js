@@ -9,7 +9,7 @@ const S = {
   agent: { online: false, info: null },
   view: (location.hash || '#home').slice(1).split('/')[0] || 'home',
   ready: false, ws: null,
-  remote: null, openRooms: new Set(JSON.parse(localStorage.getItem('openRooms') || '[]')),
+  remote: null, room: null, roomPage: null,
   live: {}, lastSaved: null,
   sun: null, nextRuns: {}, // today's sun and the next run of each automation, from the connector (automations.js reads them)
 };
@@ -95,7 +95,8 @@ function connectWS() {
         render(); break;
       case 'inventory': S.inv = m.inventory; render(); break;
       case 'state': Object.assign(S.states, m.states); paintState(); break;
-      case 'timers': S.timers = m.timers || {}; if (S.view === 'home' && !sheet.isOpen()) render(); if (typeof paintNow === 'function') paintNow(); break;
+      // a timer's block belongs on Home; when the news arrives while a sheet is still sliding shut, render once it has
+      case 'timers': S.timers = m.timers || {}; if (S.view === 'home') { if (sheet.isOpen()) setTimeout(() => { if (S.view === 'home' && !sheet.isOpen()) render(); }, 420); else render(); } else paintNowBar(); break;
       case 'config': if (JSON.stringify(m.config) !== S.lastSaved) { S.config = m.config; S.lastSaved = JSON.stringify(m.config); render(); } break;
       case 'agent': S.agent = { online: m.online, info: m.info || null }; render(); if (window.Hue) Hue.onAgent(); break;
       case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
@@ -273,6 +274,9 @@ function onLive(m) {
   if (m.type === 'button') { cur.event = m.event; cur.at = Date.now(); }
   else { cur.gesture = m.gesture; cur.at = Date.now(); cur.bound = m.bound; }
   S.live[key] = cur;
+  // A remote the bridge lists without its buttons learns its own numbering from the keys themselves.
+  const learned = typeof rememberPress === 'function' && rememberPress(m.device_id, m.button_number);
+  if (learned && S.view === 'remotes' && S.remote === m.device_id) render();
   if (S.view === 'remotes') {
     if (!S.remote && m.type === 'gesture') { S.remote = m.device_id; render(); toast(`That's the ${dev(m.device_id) ? dev(m.device_id).name : 'remote'}. Tap a button to change it.`); return; }
     if (m.type === 'gesture' && S.remote === m.device_id) pulseGesture(m.button_number, m.gesture);
@@ -352,8 +356,11 @@ const sheet = {
   open(title, body, opts = {}) {
     const root = $('#sheet-root'); const el = root.querySelector('.sheet'); const sb = root.querySelector('.sb');
     const walking = !!WALK.cur || /\bwalk\b/.test(opts.cls || '');
-    const cls = 'sheet' + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '') + (walking && !/\bwalk\b/.test(opts.cls || '') ? ' walk' : '');
-    const swap = () => { el.className = cls; sheet.header(title, opts); sb.innerHTML = body; sb.scrollTop = 0; sheet.scrolled(); };
+    // Three detents and nothing between them (docs/ia-v5.md 5). A walk step is medium at every step, so the card
+    // never changes height inside one flow.
+    const detent = sheet.detentOf(opts, walking);
+    const cls = 'sheet' + (detent ? ' dt-' + detent : '') + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '') + (walking && !/\bwalk\b/.test(opts.cls || '') ? ' walk' : '');
+    const swap = () => { el.className = cls; if (detent === 'medium') el.dataset.grow = '1'; else delete el.dataset.grow; sheet.header(title, opts); sb.innerHTML = body; sb.scrollTop = 0; sheet.scrolled(); };
     if (root.classList.contains('in')) sheet.morph(swap);
     else {
       el.style.height = ''; el.style.transition = '';
@@ -365,9 +372,31 @@ const sheet = {
     sheet.onBack = opts.onBack || null;
     sheet.stackTitle = title;
     document.body.style.overflow = 'hidden';
+    // nothing sits under the scrim pretending to be tappable (docs/ia-v5.md 4)
+    { const nb = $('#nowbar'); if (nb) nb.classList.add('quiet'); }
     sheet.focusIn();
     placeToast(); requestAnimationFrame(placeToast); setTimeout(placeToast, 300);
   },
+  // compact | medium | large, or '' for a sheet that has not been given one yet (it sizes to its content, as every
+  // sheet used to). A walk step is always medium.
+  detentOf(opts = {}, walking = false) {
+    if (opts.full) return '';
+    if (opts.detent) return opts.detent;
+    return walking ? 'medium' : '';
+  },
+  // The detent an open sheet is at.
+  detent() { const el = $('#sheet-root .sheet'); if (!el) return ''; return (el.className.match(/dt-(compact|medium|large)/) || [, ''])[1]; },
+  // Move an open sheet between detents. The height eases over 260ms (the CSS transition on .dt-medium/.dt-large).
+  setDetent(d) {
+    const el = $('#sheet-root .sheet'); if (!el || sheet.detent() === d) return;
+    el.style.height = ''; el.style.transition = '';
+    el.classList.remove('dt-compact', 'dt-medium', 'dt-large');
+    if (d) el.classList.add('dt-' + d);
+    if (d === 'medium') el.dataset.grow = '1'; else if (d !== 'large') delete el.dataset.grow;
+    sheet.detentChanged(d);
+  },
+  // Called after a detent change, including one the finger made (js/swipe.js).
+  detentChanged() { placeToast(); requestAnimationFrame(placeToast); setTimeout(placeToast, 300); },
   // Change what an open sheet shows. `swap` rewrites the header and body; the old content fades out over a ghost and the
   // new fades in with no travel. keep: the card holds its height (a step inside one flow); otherwise it eases to the
   // new content's natural height, capped by the sheet's max-height, and sizes itself again afterwards.
@@ -375,6 +404,9 @@ const sheet = {
     const root = $('#sheet-root'); const el = root.querySelector('.sheet'); const sh = el.querySelector('.sh'), sb = el.querySelector('.sb');
     const h0 = Math.round(el.getBoundingClientRect().height);
     const run = () => { const had = root.contains(document.activeElement); if (window.Motion) Motion.swap(el, swap, { nodes: [sh, sb], top: sh.offsetTop }); else swap(); if (had && !root.contains(document.activeElement)) { el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); } placeToast(); requestAnimationFrame(placeToast); setTimeout(placeToast, 300); };
+    // A step swap inside a sheet at a fixed detent never moves the height: the detent class owns it, and the content
+    // crossfades in place behind the ghost (docs/ia-v5.md 5, Motion).
+    if (/dt-(medium|large)/.test(el.className)) { clearTimeout(el._ht); el.style.height = ''; el.style.transition = ''; run(); return; }
     if (o.keep) { if (!el.style.height && h0 > 120) el.style.height = `${h0}px`; run(); return; }
     clearTimeout(el._ht); el.style.transition = 'none'; el.style.height = '';
     run();
@@ -385,26 +417,32 @@ const sheet = {
     el._ht = setTimeout(() => { el.style.transition = ''; el.style.height = ''; }, 280);
   },
   // The header alone: the close circle, the back arrow inline on the title line when there is somewhere to go back to, the caption, the title, the sub line.
+  // The header alone. `done: true` puts "Done" where the X is: anything you are editing closes with a word, not a
+  // cross (docs/ia-v5.md 5). It closes the sheet, it does not save: every change has already autosaved.
   header(title, opts = {}) {
     const sh = $('#sheet-root .sh');
-    sh.className = 'sh' + (opts.back ? ' hasback' : '') + (title ? '' : ' notitle') + (sh.classList.contains('scrolled') ? ' scrolled' : '');
-    sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back" aria-label="Back">${ICON('back')}</button>` : ''}<button class="iconbtn sm" data-act="sheet-close" aria-label="Close">${ICON('x')}</button><div class="grow">${opts.cap ? `<div class="stepcap">${opts.cap}</div>` : ''}<h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
+    sh.className = 'sh' + (opts.back ? ' hasback' : '') + (opts.done ? ' hasdone' : '') + (title ? '' : ' notitle') + (sh.classList.contains('scrolled') ? ' scrolled' : '');
+    const closer = opts.done
+      ? `<button class="donebtn" data-act="sheet-close">Done</button>`
+      : `<button class="iconbtn sm" data-act="sheet-close" aria-label="Close">${ICON('x')}</button>`;
+    sh.innerHTML = `${opts.back ? `<button class="iconbtn sm" data-act="sheet-back" aria-label="Back">${ICON('back')}</button>` : ''}${closer}<div class="grow">${opts.cap ? `<div class="stepcap">${opts.cap}</div>` : ''}<h2>${title}</h2>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>`;
   },
   // A hairline under the header while the body is scrolled.
   scrolled() { const sh = $('#sheet-root .sh'), sb = $('#sheet-root .sb'); if (sh && sb) sh.classList.toggle('scrolled', sb.scrollTop > 0); },
   close() {
     const root = $('#sheet-root'); root.classList.remove('in');
     SHEET_KEY = null;
+    { const nb = $('#nowbar'); if (nb) nb.classList.remove('quiet'); }
     sheet.focusOut();
     placeToast();
-    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; const el = root.querySelector('.sheet'); el.style.height = ''; el.style.transition = ''; root.querySelectorAll('.m-ghost').forEach(g => g.remove()); };
+    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; const el = root.querySelector('.sheet'); el.style.height = ''; el.style.transition = ''; el.classList.remove('dt-compact', 'dt-medium', 'dt-large'); delete el.dataset.grow; root.querySelectorAll('.m-ghost').forEach(g => g.remove()); };
     if (window.Motion) Promise.resolve(Motion.sheetOut(root)).then(done); else setTimeout(done, 320);
     document.body.style.overflow = '';
     if (sheet.onClose) { const f = sheet.onClose; sheet.onClose = null; f(); }
   },
   // Once a sheet is open its height stays put while the content inside changes: the content scrolls or
   // leaves room, the card never jumps. Cleared on close.
-  lockHeight() { const root = $('#sheet-root'); const el = root.querySelector('.sheet'); if (!root.classList.contains('in') || el.style.height) return; const h = el.getBoundingClientRect().height; if (h > 120) el.style.height = `${Math.round(h)}px`; },
+  lockHeight() { const root = $('#sheet-root'); const el = root.querySelector('.sheet'); if (!root.classList.contains('in') || el.style.height) return; if (/dt-(medium|large)/.test(el.className)) return; const h = el.getBoundingClientRect().height; if (h > 120) el.style.height = `${Math.round(h)}px`; },
   update(body) { sheet.lockHeight(); const sb = $('#sheet-root .sb'); if (sb) sb.innerHTML = body; },
   isOpen() { return $('#sheet-root').classList.contains('open'); },
   // Keyboard: a sheet opened with Enter takes focus, Tab stays inside it while the page behind is inert, and the
@@ -440,6 +478,7 @@ function showSheet(key, title, body, opts = {}) {
   const root = $('#sheet-root');
   if (SHEET_KEY === key && root.classList.contains('open') && root.classList.contains('in')) {
     const sb = root.querySelector('.sb'); const top = sb.scrollTop;
+    const want = sheet.detentOf(opts, !!WALK.cur); if (want) sheet.setDetent(want);
     // a step swap keeps the sheet's height, as a re-open does; `grow` lets a sheet that gains rows ease to them
     sheet.morph(() => { sb.innerHTML = body; sheet.header(title, opts); sb.scrollTop = opts.top ? 0 : top; sheet.scrolled(); }, { keep: !opts.grow });
     sheet.onBack = opts.onBack || null; return;
@@ -558,9 +597,10 @@ window.addEventListener('resize', () => placeToast());
 // ---------- render dispatcher ----------
 const VIEWS = {};
 function render() {
-  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.view === S.view));
+  const activeTab = (VIEWS[S.view] && VIEWS[S.view].tab) || S.view;
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.view === activeTab));
   const v = $('#view'); const top = $('#top'); const app = $('#app'); const nb = $('#nowbar');
-  const plain = () => { top.innerHTML = ''; v.className = 'plain'; app.classList.remove('nested', 'hasbar', 'baroff'); nb.classList.remove('show'); $('#nav').style.display = 'none'; };
+  const plain = () => { top.innerHTML = ''; v.className = 'plain'; app.classList.remove('nested', 'hasbar', 'haspill'); nb.classList.remove('show'); $('#nav').style.display = 'none'; };
   if (!S.token) { plain(); v.innerHTML = loginHTML(); return; }
   if (!S.ready || !S.config || S._holdLoading) { plain(); v.innerHTML = loadingHTML(!!S._holdLoading); S._loadingShown = true; return; }
   $('#nav').style.display = '';
@@ -570,19 +610,18 @@ function render() {
   v.className = nested ? 'nested' : '';
   top.innerHTML = view.top ? view.top() : '';
   v.innerHTML = view.body();
-  // the Light now bar: present on every page once the snapshot is here; never rebuilt while its slider is held
-  const held = nb.querySelector('[data-house]') && nb.querySelector('[data-house]').dataset.drag;
-  // a home that has never been connected has nothing to show: no "Last known state" over "Let's connect your home"
-  const haveHouse = controllable().length > 0;
-  if (!held) nb.innerHTML = haveHouse ? nowBarHTML() : '';
-  nb.classList.toggle('show', haveHouse); app.classList.toggle('hasbar', haveHouse);
+  // the pill: only where Home is not, and only when something is lit (docs/ia-v5.md 4)
+  const showPill = S.view !== 'home' && controllable().length > 0 && litLights().length > 0;
+  nb.innerHTML = showPill ? pillHTML() : '';
+  nb.classList.toggle('show', showPill); nb.classList.remove('hide');
+  app.classList.toggle('haspill', showPill);
   paintState(); paintLive();
   if (S.view === 'home' && window.LightField) { const lf = document.getElementById('lightfield'); if (lf) LightField.init(lf, roomsForLight); }
-  const pageKey = S.view + (nested ? '/' + (S.remote || 'more') : '');
+  const pageKey = S.view + (nested ? '/' + (S.remote || S.room || 'more') + (S.roomPage || '') : '');
   if (window.Motion) {
     if (!S._launched) { S._launched = true; Motion.pageIn(v, { launch: true }); }
     else if (S._lastPage !== pageKey) Motion.pageIn(v);
-    if (!S._barShown) { S._barShown = true; Motion.barIn(nb); }
+    if (showPill && !S._barShown) { S._barShown = true; Motion.barIn(nb); }
   }
   if (S._prevOnline !== undefined && S._prevOnline !== S.agent.online) { const dot = top.querySelector('.status .dot'); if (dot) dot.classList.add(S.agent.online ? 'm-dot-hello' : 'm-dot-lost'); }
   S._prevOnline = S.agent.online;
@@ -607,27 +646,42 @@ function loadingHTML(connected) {
   return `<div class="loading"><div class="card dialog">${connected ? `<div class="ok">${ICON('check', 'tick')}<div class="t">Connected to your home</div></div>` : `<div class="t">Getting your home ready...</div><div class="dots"><i></i><i></i><i></i><i></i></div>`}</div></div>`;
 }
 
-// ---------- the Light now bar (docs/design-spec-v4.md section 7) ----------
+// ---------- the bottom pill (docs/ia-v5.md 4) ----------
+// What is on, and the power button. 44px tall, 8px above the tab bar, and only where Home is not: on Home the
+// house card at the top of the page carries the same two controls, so nothing floats there.
 function nowBarHTML() {
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
-  const name = (S.config && S.config.settings.home_name) || 'Home';
-  return `<div class="nb-row"><button class="nb-main" data-act="now-open" aria-label="Open the Now view"><div class="nb-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb')}</div><div class="nb-text"><span class="cap" id="nb-cap">${barCaption(name, on.length)}</span><div class="t"><span id="nb-head">${lightNowHeadline(rooms, true)}</span>${ICON('chev', 'sm')}</div></div></button><button class="nb-off m-hold ${on.length ? '' : 'dark'}" data-act="alloff" title="${powerTitle()}" aria-label="${powerLabel()}">${ICON('power', 'sm')}</button></div>
-  <div class="nb-level">${ICON('sun-low', 'sm')}<input class="slider" type="range" min="1" max="100" value="${on.length ? lv : 1}" style="--p:${on.length ? lv : 0}%" data-house="1" aria-label="House brightness"><span class="nb-num">${on.length ? lv + '%' : 'Off'}</span></div>`;
+  const tm = typeof nowTimer === 'function' ? nowTimer() : null;
+  return `<div class="pill"><button class="pill-main" data-act="now-open" aria-label="Go to Home"><span class="pill-thumb" data-k="${on.length ? lv : 'off'}">${on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb')}${tm ? `<span class="badge">${ICON('clock')}</span>` : ''}</span><span class="pill-text" id="nb-head">${lightNowHeadline(rooms, true)}</span></button><button class="pill-off ${on.length ? '' : 'dark'}" data-act="alloff" title="${powerTitle()}" aria-label="${powerLabel()}">${ICON('power', 'sm')}</button></div>`;
 }
-// With the house dark the bar says what its two controls do; otherwise it carries the home's name.
-function barCaption(name, lit) { return lit ? esc(name) : (S.agent.online ? `Slide to turn on · ${ICON('power', 'sm')} ${(S.config.settings.power_on || 'restore') === 'all' ? 'turns everything on' : 'brings back what was on'}` : esc(name)); }
+const pillHTML = nowBarHTML;
+// The house is dark on a tab that is not Home: the pill says what its one button does.
+function barCaption(name, lit) { void name; return lit ? '' : powerLabel(); }
 function paintNowBar() {
   const nb = $('#nowbar'); if (!nb || !nb.classList.contains('show') || !nb.firstChild) return;
-  const sl = nb.querySelector('[data-house]'); if (sl && sl.dataset.drag) return;
   const rooms = roomsLit(); const on = litLights(); const lv = houseLevel();
   const head = nb.querySelector('#nb-head'); const h = lightNowHeadline(rooms, true);
   if (head && head.innerHTML !== h) { if (window.Motion) Motion.textSwap(head, h); else head.innerHTML = h; }
-  const capEl = nb.querySelector('#nb-cap'); const c = barCaption((S.config && S.config.settings.home_name) || 'Home', on.length); if (capEl && capEl.innerHTML !== c) capEl.innerHTML = c;
-  const thumb = nb.querySelector('.nb-thumb'); const k = on.length ? String(lv) : 'off';
-  if (thumb && thumb.dataset.k !== k) { thumb.dataset.k = k; thumb.innerHTML = on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb'); }
-  // the dimmer stays: with nothing on, sliding it is how the house comes on
-  $('#app').classList.remove('baroff');
-  if (sl) { sl.value = on.length ? lv : 1; sl.style.setProperty('--p', `${on.length ? lv : 0}%`); }
-  const num = nb.querySelector('.nb-num'); if (num) num.textContent = on.length ? `${lv}%` : 'Off';
-  const pw = nb.querySelector('.nb-off'); if (pw) { pw.classList.toggle('dark', !on.length); pw.title = powerTitle(); pw.setAttribute('aria-label', powerLabel()); }
+  const thumb = nb.querySelector('.pill-thumb'); const k = on.length ? String(lv) : 'off';
+  const tm = typeof nowTimer === 'function' ? nowTimer() : null;
+  if (thumb && (thumb.dataset.k !== k || !!thumb.querySelector('.badge') !== !!tm)) {
+    thumb.dataset.k = k;
+    thumb.innerHTML = (on.length ? lampHTML(lv, 28, '', '', false) : ICON('bulb')) + (tm ? `<span class="badge">${ICON('clock')}</span>` : '');
+  }
+  const pw = nb.querySelector('.pill-off'); if (pw) { pw.classList.toggle('dark', !on.length); pw.title = powerTitle(); pw.setAttribute('aria-label', powerLabel()); }
 }
+// The iOS toolbar rule: the pill goes away on a downward scroll of more than 24px and comes back on the way up
+// or when the scroll stops. The tab bar never moves. The large title collapses to a 44px bar at the same moment.
+(function () {
+  let last = window.scrollY, acc = 0, idle = null;
+  const nb = () => document.getElementById('nowbar');
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    document.getElementById('app').classList.toggle('collapsed', y > 8);
+    const el = nb(); if (!el || !el.classList.contains('show')) { last = y; return; }
+    const dy = y - last; last = y;
+    if (dy > 0) { acc = Math.max(0, acc) + dy; if (acc > 24) el.classList.add('hide'); }
+    else if (dy < 0) { acc = 0; el.classList.remove('hide'); }
+    clearTimeout(idle); idle = setTimeout(() => { acc = 0; el.classList.remove('hide'); }, 220);
+  }, { passive: true });
+})();

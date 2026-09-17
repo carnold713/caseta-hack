@@ -22,7 +22,7 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 
 /* ---------- Light now: the strip on Home. 88px cells, 8px apart; a lit disc is 56px in a 2px blue ring, an off one 44 ---------- */
 .lightnow { margin: 0 0 8px; }
-.lightnow .ln-line { margin: 0 0 8px; }
+.lightnow.norow:not(:has(.ln-due, .wd-home)) { margin: 0; }
 .ln-row { display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 6px 16px 6px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
 .ln-row::-webkit-scrollbar { display: none; }
 .ln-row.empty { display: none; }
@@ -76,15 +76,17 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 
 /* ---------- light detail sheet (white, elevated): the Tenzing dimmer dialog for one light. The disc and the well are one centred composition of fixed width ---------- */
 .ld-hero { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 4px; }
-.ld-stage { flex: none; width: 184px; height: 328px; display: grid; place-items: center; }
-.ld-disc { width: 160px; height: 160px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; outline: none; transition: box-shadow .15s var(--ease); }
+/* the composition is sized for the medium detent (473px at 844): the disc, the well, the two steps, the
+   readout and the round buttons all sit inside one sheet, with nothing under the fold (docs/ia-v5.md 5). */
+.ld-stage { flex: none; width: 160px; height: 192px; display: grid; place-items: center; }
+.ld-disc { width: 132px; height: 132px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; outline: none; transition: box-shadow .15s var(--ease); }
 .ld-disc:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
 .ld-name { text-align: center; margin-top: 8px; }
 .ld-cap { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
 /* the readout under the stage: the status text button */
-.ld-level { display: flex; align-items: center; justify-content: center; width: 136px; height: 48px; margin: 12px auto 16px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line-2); background: var(--surface); font-size: 16px; line-height: 20px; font-weight: 400; color: var(--text); }
-.ld-swcol { width: 112px; height: 280px; display: grid; place-items: center; flex: none; }
-.ld-actions { display: flex; justify-content: center; gap: 24px; margin-top: 16px; }
+.ld-level { display: flex; align-items: center; justify-content: center; width: 136px; height: 44px; margin: 8px auto 12px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line-2); background: var(--surface); font-size: 16px; line-height: 20px; font-weight: 400; color: var(--text); }
+.ld-swcol { width: 96px; height: 172px; display: grid; place-items: center; flex: none; }
+.ld-actions { display: flex; justify-content: center; gap: 24px; margin-top: 12px; }
 .ld-remove { margin: 16px auto 0; display: flex; }
 /* the round action with a label under it: an Extra Large Secondary action icon */
 .rbtn { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 72px; color: var(--text); font-size: 12px; line-height: 16px; text-align: center; }
@@ -102,7 +104,7 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 
 /* the vertical well: white, a hairline, radius 12, filling with blue from the bottom; a grip in the fill */
 .vcol { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
-.vslider { position: relative; width: 112px; height: 280px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
+.vslider { position: relative; width: 96px; height: 172px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
 .vslider::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--p, 0%); background: var(--vfill, var(--blue)); border-radius: 0 0 var(--r-md) var(--r-md); transition: background .255s var(--ease); }
 .vslider::after { content: ""; position: absolute; left: 50%; width: 40px; height: 4px; margin-left: -20px; bottom: calc(var(--p, 0%) - 12px); border-radius: 2px; background: rgba(255,255,255,.4); }
 .vslider:focus-visible { box-shadow: inset 0 0 0 1px var(--line-2), 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
@@ -113,31 +115,7 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 
 /* ---------- the Now view: a white flyout card that stops short of the top, one height for all its panels ---------- */
 /* the Now view stops short of the top; its panels size to their own content between that floor and the cap */
-.sheet.now { min-height: 40dvh; max-height: 86dvh; }
 /* a 192px square inside the face: a 3 x 2 grid of 56px cells with 12px gaps, the discs sized by level */
-.now-art { width: 240px; height: 240px; border-radius: var(--r-s); background: var(--surface-2); box-shadow: var(--shadow-1); margin: 4px auto 20px; display: grid; grid-template-columns: repeat(3, 56px); grid-auto-rows: 56px; gap: 12px; justify-content: center; align-content: center; place-items: center; padding: 24px; }
-.now-art.c1 { grid-template-columns: 96px; grid-auto-rows: 96px; }
-.now-art.c2 { grid-template-columns: repeat(2, 56px); }
-.now-art .lamp { transition: none; }
-.now-head { text-align: center; }
-.now-sub { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
-.now-big { text-align: center; margin: 0 0 8px; }
-.now-level { display: flex; align-items: center; gap: 12px; color: var(--text-2); margin: 0 0 16px; }
-.now-level .slider { flex: 1; min-width: 0; --well-h: 48px; --grip-h: 20px; }
-.now-level .nb-num { color: var(--text-2); }
-.now-actions { display: flex; justify-content: center; gap: 12px; margin: 8px 0 4px; }
-.now-actions .rbtn { width: 72px; }
-.now-cap { text-align: center; color: var(--text-2); font-size: 12px; line-height: 16px; margin: 8px 0 0; }
-.now-rooms .item .n { font-size: 16px; line-height: 20px; font-weight: 500; color: var(--text); }
-.now-rooms .item .lv { font-size: 14px; line-height: 16px; color: var(--text-2); margin-top: 2px; }
-.now-rooms .item .lamp { width: 32px; height: 32px; margin: 4px; }
-.now-rooms .item .grow { text-align: left; color: inherit; display: flex; align-items: center; gap: 8px; margin: -12px 0; padding: 12px 0; border-radius: var(--r-s); transition: background .15s var(--ease); }
-.now-rooms .item .grow > div:first-child { flex: 1; min-width: 0; }
-.now-rooms .item .grow .chev { color: var(--text-2); flex: none; display: grid; place-items: center; }
-.now-rooms .item .grow:active { background: var(--fill-2); }
-.now-rooms .item .lring::before { inset: -1px; }
-.now-rooms .item .lring .lamp { margin: 4px; }
-.now-rooms .item .lring .ringed { outline-color: transparent; }
 
 /* ---------- lamp kinds: "What kind of light is this?" (Visual Picker faces) ---------- */
 .kind-cap { font-size: 12px; line-height: 16px; color: var(--text-2); margin: 16px 0 8px; }
@@ -184,11 +162,7 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .rbtn.m-hold .c { background-image: linear-gradient(90deg, rgba(255,255,255,.3), rgba(255,255,255,.3)); background-size: 0% 100%; background-repeat: no-repeat; background-position: 0 0; }
 .rbtn.m-hold.holding .c { animation: m-hold 1s linear forwards; }
 
-/* ---------- the Now view's panels and the timer ring ---------- */
-.sheet.now .sh { padding-bottom: 0; }
-/* the Now view's own body, not the sheet: `.now` is also the sheet's class, and a `position: relative` there
-   un-anchored the card from the bottom of the screen (it sat at the top with the scrim showing under it). */
-#nowview { position: relative; }
+/* ---------- the timer ring on a round button, and the big dial ---------- */
 .rbtn .c { position: relative; }
 .rbtn .rring { position: absolute; inset: -4px; width: 64px; height: 64px; }
 .rbtn .rring .track { stroke: var(--line-2); stroke-width: 3; }
@@ -198,7 +172,6 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .td-ring.big .track { stroke: var(--fill-2); }
 .td-ring.big .prog { stroke: var(--blue); }
 .td-ring.big .td-cap { color: var(--text-2); }
-.now .td .btn.primary { margin-top: 12px; }
 
 /* ---------- colour and warmth (Hue lamps; js/color.js): a warmth slider on a warm-to-cool track, swatches, and a hue strip behind "More colours…" ---------- */
 .ccol { margin: 0 0 8px; }

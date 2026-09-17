@@ -16,7 +16,7 @@ function huShow(full) {
   const titles = { find: 'Connect a Hue bridge', press: 'Press the button', connected: 'Hue bridge' };
   const subs = { find: 'Its lights and rooms join this app, and a remote button can control them.', press: 'The bridge hands out a key only while its button was just pressed.', connected: '' };
   const body = HU.step === 'connected' ? huConnectedHTML() : HU.step === 'press' ? huPressHTML() : huFindHTML();
-  if (full || !sheet.isOpen() || !HU.open) { sheet.open(titles[HU.step], body, { sub: subs[HU.step], back: HU.step === 'press', onBack: () => { HU.step = 'find'; HU.error = null; huShow(true); } }); HU.open = true; sheet.onClose = () => { HU.open = false; }; }
+  if (full || !sheet.isOpen() || !HU.open) { sheet.open(titles[HU.step], body, { detent: 'medium', sub: subs[HU.step], back: HU.step === 'press', onBack: () => { HU.step = 'find'; HU.error = null; huShow(true); } }); HU.open = true; sheet.onClose = () => { HU.open = false; }; }
   else sheet.update(body);
 }
 function huFindHTML() {

@@ -94,7 +94,7 @@ function openGreeting() {
   if (roomsWithoutMoods().length) rows.push(row('greet-moods', '', 'sofa', 'Give a room moods', 'Bright, Relax, Dinner, Movie and Night'));
   if (outsideRooms().length && !schedules().some(sc => sc.kind === 'welcome')) rows.push(row('greet-welcome', '', 'moon', 'Lights on before you get home', 'On before sunset, off at bedtime'));
   rows.push(row('sheet-close', '', 'house', 'Just look around', ''));
-  sheet.open('Your home is connected', `<div class="card pad0 list">${rows.join('')}</div>`, { sub: `${plural(nd, 'light')} in ${plural(nr, 'room')}${np ? `, and ${plural(np, 'remote')}` : ''}. Where would you like to start?` });
+  sheet.open('Your home is connected', `<div class="card pad0 list">${rows.join('')}</div>`, { detent: 'compact', sub: `${plural(nd, 'light')} in ${plural(nr, 'room')}${np ? `, and ${plural(np, 'remote')}` : ''}. Where would you like to start?` });
   sheet.onClose = () => greetDone(true);
 }
 // The flag is set when the sheet closes, whichever row was tapped; an action that saves on its own carries it.
@@ -108,7 +108,7 @@ function greetDone(saveNow) {
 // ---------- Ideas for your home (3.4): every suggestion, done ones ticked ----------
 function openIdeas() {
   const rows = NEXT.filter(s => s.can()).map(s => { const done = !s.when(); return `<button class="item ${done ? 'done' : ''}" ${done ? '' : `data-act="next-go" data-id="${s.id}"`}><div class="grow"><div class="t">${s.title()}</div><div class="d">${s.reason()}</div></div>${done ? ICON('check', 'tick') : `<span class="chev">${ICON('chev', 'sm')}</span>`}</button>`; });
-  sheet.open('Ideas for your home', `<div class="card pad0 list">${rows.join('')}</div>`, { sub: 'The things the Next card can suggest. Done ones stay here too.' });
+  sheet.open('Ideas for your home', `<div class="card pad0 list">${rows.join('')}</div>`, { detent: 'large', sub: 'The things the Next card can suggest. Done ones stay here too.' });
 }
 
 document.addEventListener('click', e => {

@@ -527,20 +527,26 @@ class Agent:
                     detail = await self.adder.create(action.get("serial"), action.get("name"), action.get("area"))
                     # the bridge lists a new device a few seconds after creating it: re-read until it shows up
                     serial = str(action.get("serial") or "")
-                    made = None
-                    for attempt in range(6):
+                    made, buttons = None, 0
+                    # The bridge lists the device a few seconds after creating it, and its buttons later still.
+                    # Without the buttons nothing can be bound and no press ever reaches the app, so wait for
+                    # them too, up to about a minute, re-reading a little less often as time goes on.
+                    for attempt in range(12):
                         if attempt:
-                            await asyncio.sleep(2)
+                            await asyncio.sleep(2 if attempt < 6 else 6)
                         await self._refresh()
                         made = next((did for did, d in (self.bridge.devices if self.bridge else {}).items()
                                      if str(d.get("serial") or "") == serial), None)
-                        if made:
+                        buttons = len([b for b in (self.bridge.buttons if self.bridge else {}).values()
+                                       if b.get("parent_device") == made]) if made else 0
+                        if made and buttons:
                             break
-                    # The app needs the id to bring a device back that it had hidden after an earlier removal.
+                    # The app needs the id to bring a device back that it had hidden after an earlier removal,
+                    # and the button count to say honestly whether the remote can be set up yet.
                     detail["device_id"] = made
-                    detail["buttons"] = len([b for b in (self.bridge.buttons if self.bridge else {}).values()
-                                             if b.get("parent_device") == made]) if made else 0
+                    detail["buttons"] = buttons
                     detail["devices"] = len(self.bridge.devices) if self.bridge else 0
+                    self.adder._note("buttons", f"/button for {made}", response={"buttons": buttons})
                 elif kind == "hue_discover":
                     detail = {"bridges": await self.hue.discover()}
                 elif kind == "hue_pair":

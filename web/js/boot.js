@@ -5,7 +5,7 @@ document.addEventListener('click', async e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const act = el.dataset.act; const d = el.dataset;
   switch (act) {
-    case 'nav': e.preventDefault(); S.view = d.view; location.hash = S.view; if (sheet.isOpen()) sheet.close(); render(); window.scrollTo(0, 0); break;
+    case 'nav': e.preventDefault(); S.view = d.view; S.room = null; S.roomPage = null; location.hash = S.view; if (sheet.isOpen()) sheet.close(); render(); window.scrollTo(0, 0); break;
     case 'conn': S.view = 'settings'; S.settingsMore = false; location.hash = 'settings'; render(); break;
     case 'settings-more': S.settingsMore = true; render(); window.scrollTo(0, 0); break;
     // the disclosure eases open in place, so the cards under it are not thrown 288px down in one frame
@@ -17,10 +17,9 @@ document.addEventListener('click', async e => {
     case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el.classList.contains('item') ? el.querySelector('.ic') || el : el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
     case 'cmd': command(JSON.parse(d.cmd)); break;
     case 'fan': setFan(d.id, d.s); break;
-    case 'room-open': toggleRoom(d.id); break;
     case 'alloff': if (!el._held) powerButton(); el._held = false; break;
-    case 'cancel-timer': { const stay = d.stay && el.closest('#nowview'); await command({ type: 'cancel_timer', target: tsplit(d.t) }); if (stay && typeof nowShow === 'function') { delete S.timers[d.t]; nowShow('main'); } break; }
-    case 'timer': { const stay = d.stay && el.closest('#nowview'); if (!stay) sheet.close(); const tgt = tsplit(d.t); const n = targetDevices(tgt).length; const ok = await command({ type: 'timer', target: tgt, minutes: Number(d.m), fade: 5 }); if (ok) toast(n > 1 ? `${plural(n, 'light')} turn off in ${d.m} min` : `${cap(targetName(tgt))} turns off in ${d.m} min`); if (stay && typeof nowShow === 'function') { if (ok && !S.timers[d.t]) S.timers[d.t] = { ends_at: Date.now() / 1000 + Number(d.m) * 60, level: 0 }; nowShow('main'); } break; }
+    case 'cancel-timer': await command({ type: 'cancel_timer', target: tsplit(d.t) }); break;
+    case 'timer': { sheet.close(); const tgt = tsplit(d.t); const n = targetDevices(tgt).length; const ok = await command({ type: 'timer', target: tgt, minutes: Number(d.m), fade: 5 }); if (ok) toast(n > 1 ? `${plural(n, 'light')} turn off in ${d.m} min` : `${cap(targetName(tgt))} turns off in ${d.m} min`); break; }
     case 'update-connector': el.disabled = true; el.textContent = 'Updating…'; toast('Updating the connector. The dot goes red, then green again in about a minute.'); try { const r = await api('/api/update-connector', { method: 'POST' }); toast(r.detail && r.detail.to ? `Updated to ${r.detail.to}. Restarting…` : 'Updated. Restarting…'); } catch (err) { toast(err.message, { err: true }); render(); } break;
     case 'auto-update': S.config.settings.auto_update = !S.config.settings.auto_update; el.classList.toggle('on', S.config.settings.auto_update); save({ quiet: true, render: false }); break;
     case 'refresh': el.classList.add('dim'); try { await api('/api/refresh', { method: 'POST' }); toast('Looked again'); } catch (err) { toast(err.message, { err: true }); } el.classList.remove('dim'); break;
@@ -61,6 +60,9 @@ document.addEventListener('click', async e => {
     case 'sheet-back': if (sheet.onBack) sheet.onBack(); else sheet.close(); break;
     case 'toast-undo': { const t = $('#toast'); t.className = ''; if (t._undo) t._undo(); break; }
     case 'toast-action': { const t = $('#toast'); t.className = ''; if (t._action) t._action(); break; }
+    case 'scenes-open': S.view = 'scenes'; S.room = null; S.roomPage = null; S.scenesEdit = false; location.hash = 'scenes'; if (sheet.isOpen()) sheet.close(); render(); window.scrollTo(0, 0); break;
+    case 'scenes-back': S.view = 'home'; S.scenesEdit = false; location.hash = 'home'; render(); window.scrollTo(0, 0); break;
+    case 'scenes-edit': S.scenesEdit = !S.scenesEdit; render(); break;
     case 'scene-new': newScene(); break;
     case 'scene-edit': openSceneEditor(d.id, false, { back: typeof backTo === 'function' ? backTo(d.back, d.area) : null }); break;
     case 'scene-lutron': sceneLutronSheet(d.id); break;
@@ -131,10 +133,9 @@ document.addEventListener('input', e => {
     sendLevel(t, v);
   }
   if (el.dataset.house) {
-    // the house dimmer on the Light now bar and the Now view: the number follows the finger, one command per 120ms
+    // the house dimmer on Home's house card: the number follows the finger, one command in flight
     el.dataset.drag = '1';
-    const v = Number(el.value); const num = el.parentElement.querySelector('.nb-num'); if (num) num.textContent = v;
-    const big = document.getElementById('now-big'); if (big && el.closest('#nowview')) big.textContent = `${v}%`;
+    const v = Number(el.value); const num = el.parentElement.querySelector('.hc-num'); if (num) num.textContent = `${v}%`;
     setHouseLevel(v);
   }
   if (el.dataset.setting === 'double_ms') $('#dv').textContent = `${el.value} ms`;
@@ -145,12 +146,9 @@ document.addEventListener('input', e => {
 document.addEventListener('pointerdown', e => {
   const el = e.target.closest('[data-act="alloff"]'); if (!el) return;
   el.classList.add('holding');
-  el._t = setTimeout(async () => {
+  el._t = setTimeout(() => {
     el._held = true; el.classList.remove('holding'); if (navigator.vibrate) navigator.vibrate(30);
-    if (window.Motion) Motion.allOff();
-    await command({ type: 'level', target: 'h:all', level: 'off' });
-    for (const d of controllable()) { if (d.domain === 'cover') command({ type: 'lower', target: `d:${d.device_id}` }); if (d.domain === 'fan') command({ type: 'fan', target: `d:${d.device_id}`, speed: 'Off' }); }
-    toast('Everything off, shades closing');
+    houseAllOffShades();
   }, 1000);
 });
 document.addEventListener('pointerup', e => { const el = e.target.closest('[data-act="alloff"]'); if (el) { clearTimeout(el._t); el.classList.remove('holding'); } });
@@ -188,8 +186,14 @@ document.addEventListener('submit', async e => {
 // The splash: the brand blue with the wordmark, then a 255ms fade into whatever the first page is.
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 300); } }, 255);
 $('#sheet-root .scrim').addEventListener('click', () => sheet.close());
-document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; if (S.view !== 'remotes') S.remote = null; S.settingsMore = false; location.hash = S.view; render(); window.scrollTo(0, 0); }));
-window.addEventListener('hashchange', () => { const v = location.hash.slice(1).split('/')[0]; if (v && VIEWS[v] && v !== S.view) { S.view = v; render(); } });
+document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; S.remote = null; S.room = null; S.roomPage = null; S.settingsMore = false; location.hash = S.view; render(); window.scrollTo(0, 0); }));
+// The hash is the route: #home, #remotes, #room/<area>, #room/<area>/setup, #scenes, #automations, #settings.
+window.addEventListener('hashchange', () => {
+  const parts = location.hash.slice(1).split('/'); const v = parts[0];
+  if (!v || !VIEWS[v]) return;
+  if (v === 'room') { if (typeof roomFromHash === 'function' && roomFromHash(parts)) { S.view = 'room'; render(); } return; }
+  if (v !== S.view || S.room) { S.view = v; S.room = null; S.roomPage = null; render(); }
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet.isOpen()) sheet.close(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 if (S.token) connectWS();
