@@ -34,8 +34,13 @@ Pico bindings from its cached config.
   one, without making a named set first.
 - **Night-time versions:** any button can do something else between the
   hours you set, like turning on dim instead of bright.
-- **Rooms come from the bridge.** No groups to build; "Kitchen" is already
-  a thing a button can control. Hand-picked sets exist under Advanced.
+- **Rooms belong to this app.** Settings › Rooms: make a room, rename it,
+  delete it, and move any light, shade or remote between rooms, Lutron and
+  Philips Hue together. The list starts as whatever your bridges already
+  report, one room per Lutron area and per Hue room, so nothing changes
+  until you change it; from then on the app's list is the truth and every
+  room the app shows comes from it. A room is still one thing a button can
+  control ("Kitchen"); hand-picked sets exist under Advanced.
 - **Scenes:** a look for the whole house, saved from the lights as they
   are right now, with a fade. Lutron's own scenes sit in the same grid.
   Running one is one tap on Home; everything else is on the **Scenes page**,
@@ -121,8 +126,10 @@ Pico bindings from its cached config.
   exchange behind "Show technical details" so a bridge that answers
   differently can be understood from the phone. Removing works the same
   way: "Remove from my home" on a light's page or a remote's page sends
-  the bridge a delete and clears everything here that used the device. New
-  rooms still come from the Lutron app for now.
+  the bridge a delete and clears everything here that used the device. The
+  room you pick is one of yours, Hue rooms included: when your Lutron bridge
+  has no room to match it, the device is created in one the bridge does
+  have, the sheet says which, and the app files it where you asked.
 - **Philips Hue too (first pass).** Settings › Connect a Hue bridge: the
   connector finds the bridge on the network, you press its round button,
   and its lights and rooms join the app beside the Caséta ones (its own
@@ -156,10 +163,19 @@ to the bridge). It then reports presses and does nothing else, and your
 bindings are the only thing that runs. A Pico can stay half-Lutron too:
 leave its native "On" and "Off", and bind only the double click.
 
-Rooms are still created and renamed in the Lutron app; the app reads them
-from the bridge. Adding a device from the app is experimental (above): the
-bridge's association mode and "device heard" channel are not documented by
-Lutron, so the first try on a bridge is also the test.
+Rooms are this app's own (Settings › Rooms). It still asks your Lutron
+bridge to keep up: a new room is offered to it as a `CreateRequest /area`,
+a rename as an `UpdateRequest /area/{id}`, and a light moved between rooms
+as an `UpdateRequest /device/{id}` carrying `AssociatedArea`. None of that
+is documented by Lutron and a bridge may simply answer 400 BadRequest. It
+costs nothing when it does: the room is the app's, everything in the app
+keeps working, the room's page says the bridge has no room of its own for
+it, and every exchange is in the same log "Show technical details" shows.
+The Philips Hue bridge documents rooms and does as it is told, so a room
+renamed here is renamed in the Hue app too. Adding a device from the app is
+experimental (above): the bridge's association mode and "device heard"
+channel are not documented by Lutron either, so the first try on a bridge is
+also the test.
 
 ## Setup
 
@@ -236,7 +252,10 @@ Connector 0.8.0 is the first that understands the `color` action and the
 object form of scene levels; older connectors ignore colour and apply the
 brightness alone. 0.8.1 adds `restore` (the power button with the house
 dark): the connector keeps what was lit in the two minutes before the last
-light went off, in `last_on.json`, and brings it back at the same levels.
+light went off, in `last_on.json`, and brings it back at the same levels. 0.9.0 is the first that understands
+rooms the app owns: `a:<room>` may name one of `settings.rooms` (it falls back to the bridge's own area, so an
+older connector simply goes on reading the bridge), and it takes the `room_*` commands that ask each bridge to
+keep up.
 
 ## Configure
 
@@ -248,7 +267,8 @@ light went off, in `last_on.json`, and brings it back at the same levels.
 3. **Automations** tab: pick one of the three guided setups or "Something
    else", answer the questions, done. Each row has a toggle and a next-run
    time; the Home tab shows what is coming up with a Skip.
-4. **Settings**: connection, the home's name, adding devices, and one
+4. **Settings**: connection, the home's name, **Rooms** (make, rename,
+   delete, move anything between them), adding devices, and one
    Preferences row (the power button with the house dark, night hours,
    the night look). The connector update, the double-press speed and hold
    length with a live tester live under More settings.
@@ -301,11 +321,13 @@ page never changes a light, and the viewport does not zoom.
 hub/server.js     Express + ws: static PWA, /api/*, /ws/app (phones), /ws/agent (home), /install.sh
 hub/validate.js   config schema, shared truth for bindings and actions
 hub/store.js      JSON files in DATA_DIR
-web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,remotes,scenes,settings,automations,cities,boot,slide,motion,lightfield}.js, sw.js, icons/
+web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,room,rooms,remotes,scenes,settings,automations,cities,boot,slide,motion,lightfield}.js, sw.js, icons/
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
-agent/adddevice.py  add a device from the app: association mode, device heard, create (experimental)
-agent/hue.py      Philips Hue bridge: pairing, lights and rooms as hue_ devices, levels, colour and warmth, event stream
+agent/adddevice.py  add a device from the app: association mode, device heard, create, and the
+                  undocumented room requests (create an area, rename one, move a device)
+agent/hue.py      Philips Hue bridge: pairing, lights and rooms as hue_ devices, levels, colour and warmth,
+                  room create/rename/delete and moving a lamp between rooms, event stream
 agent/color.py    CIE xy <-> hex with gamut clamping, kelvin <-> mirek, a black-body tint (no dependencies)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js

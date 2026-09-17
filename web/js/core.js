@@ -174,12 +174,14 @@ function roomIndex() {
   RIDX = { rooms, devs, byDevice, byArea };
   return RIDX;
 }
-// The room id to file a device under, app room or bridge area. `d` may be a bare {} (a device that has gone).
+// The room id to file a device under: the app room that names it, the app room standing for its bridge room, or
+// the bridge room itself when the app has not taken that one over (a Hue bridge paired after the list was made,
+// a room added in the Lutron app since). `d` may be a bare {} (a device that has gone).
 function devArea(d) {
   if (!d) return 'none';
   if (!appRooms().length) return d.area || 'none';
   const ix = roomIndex();
-  return ix.byDevice.get(d.device_id) || ix.byArea.get(d.area) || 'none';
+  return ix.byDevice.get(d.device_id) || ix.byArea.get(d.area) || d.area || 'none';
 }
 const devAreaName = d => areaName(devArea(d));
 // A room's name, whether the id is one of the app's rooms or a bridge area.
@@ -188,17 +190,18 @@ function areaName(id) {
   if (r) return r.name;
   return ((S.inv.areas || {})[id] || {}).name || 'Elsewhere';
 }
-// Every room, in name order. With an app list that is the list itself (an empty room still shows: the person made
-// it, and it is where the next light goes), plus Elsewhere when something has landed outside every room.
+// Every room, in name order: the app's own list (an empty room still shows, because the person made it and it is
+// where the next light goes), then any room the app has not taken over that something is actually in, then
+// Elsewhere for anything in no room at all. With no app list this is exactly what it always was.
 const areas = () => {
-  const own = appRooms();
-  if (own.length) {
-    const out = own.map(r => ({ id: r.id, name: r.name }));
-    if (controllable().some(d => devArea(d) === 'none')) out.push({ id: 'none', name: 'Elsewhere' });
-    return out.sort((a, b) => a.name.localeCompare(b.name));
+  const out = appRooms().map(r => ({ id: r.id, name: r.name }));
+  const have = new Set(out.map(o => o.id));
+  for (const id of new Set(controllable().map(devArea))) {
+    if (have.has(id)) continue;
+    have.add(id);
+    out.push({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) });
   }
-  const ids = [...new Set(controllable().map(d => d.area || 'none'))];
-  return ids.map(id => ({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) })).sort((a, b) => a.name.localeCompare(b.name));
+  return out.sort((a, b) => a.name.localeCompare(b.name));
 };
 const controllable = () => devices().filter(d => ['light', 'switch', 'fan', 'cover'].includes(d.domain)).sort(byName);
 const remotes = () => devices().filter(d => d.domain === 'pico').sort(byName);

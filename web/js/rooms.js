@@ -37,7 +37,12 @@ VIEWS.rooms = {
     if (r) return nestedTop('rooms-one-back', esc(r.name), esc(roomSummary(r.id)));
     return nestedTop('rooms-back', 'Rooms', `${plural(appRooms().length, 'room')}`);
   },
-  body() { const r = roomById(S.roomsEdit); return r ? roomEditHTML(r) : roomsListHTML(); },
+  body() {
+    // a cold load straight onto #rooms: seed after this paint, never during it
+    if (!appRooms().length && Object.keys(S.inv.areas || {}).length) setTimeout(() => { if (ensureRooms()) render(); }, 0);
+    const r = roomById(S.roomsEdit);
+    return r ? roomEditHTML(r) : roomsListHTML();
+  },
 };
 
 const roomById = id => (id ? appRooms().find(r => r.id === id) || null : null);
@@ -49,15 +54,18 @@ const fileable = () => [...controllable(), ...remotes()];
 // are still the Kitchen's, and a home that has never opened this page is not migrated at all.
 function ensureRooms() {
   const s = S.config && S.config.settings; if (!s) return false;
-  let changed = false;
-  if (!(s.rooms || []).length) {
-    const seeded = Object.values(S.inv.areas || {})
-      .filter(a => a && a.id && a.name)
-      .sort((a, b) => String(a.name).localeCompare(String(b.name)))
-      .map(a => ({ id: String(a.id), name: String(a.name).slice(0, 40), device_ids: [], bridge_area: String(a.id).startsWith('hue_') ? null : String(a.id), hue_room: String(a.id).startsWith('hue_') ? String(a.id) : null }));
-    if (!seeded.length) return false;
-    s.rooms = seeded; changed = true;
-  }
+  const first = !(s.rooms || []).length;
+  const taken = new Set();
+  for (const r of s.rooms || []) { if (r.bridge_area) taken.add(r.bridge_area); if (r.hue_room) taken.add(r.hue_room); }
+  // Every bridge room the app has not taken over becomes one of the app's, keeping its id. That is the first
+  // seeding, and it is also how a Hue bridge paired later, or a room added in the Lutron app since, joins the list.
+  const fresh = Object.values(S.inv.areas || {})
+    .filter(a => a && a.id && a.name && !taken.has(String(a.id)) && !(s.rooms || []).some(r => r.id === String(a.id)))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map(a => ({ id: String(a.id), name: String(a.name).slice(0, 40), device_ids: [], bridge_area: String(a.id).startsWith('hue_') ? null : String(a.id), hue_room: String(a.id).startsWith('hue_') ? String(a.id) : null }));
+  if (first && !fresh.length) return false;    // nothing to seed from yet: the app goes on reading the bridges
+  let changed = fresh.length > 0;
+  if (changed) s.rooms = [...(s.rooms || []), ...fresh];
   if (pruneRooms()) changed = true;
   if (changed) save({ quiet: true, render: false });
   return changed;
@@ -79,17 +87,18 @@ function pruneRooms() {
 // ----- the list -----
 function roomsListHTML() {
   const rooms = [...appRooms()].sort((a, b) => a.name.localeCompare(b.name));
-  const hueOn = !!((S.agent.info || {}).hue || {}).paired;
   const rows = rooms.map(r => {
-    const n = fileable().filter(d => devArea(d) === r.id).length;
-    return `<button class="item" data-act="rooms-one" data-id="${esc(r.id)}">${lampHTML(targetOn(`a:${r.id}`) ? roomMean(r.id) : 0, 40, ICON(roomIcon(r.name), 'sm'))}<div class="grow"><div class="t">${esc(r.name)}</div><div class="d">${n ? plural(n, 'light') : 'Nothing in it yet'}${roomWhereShort(r)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+    const mine = fileable().filter(d => devArea(d) === r.id);
+    const nl = mine.filter(d => d.domain !== 'pico').length, nr = mine.length - nl;
+    const what = [nl ? plural(nl, 'light') : '', nr ? plural(nr, 'remote') : ''].filter(Boolean).join(' · ') || 'Nothing in it yet';
+    return `<button class="item" data-act="rooms-one" data-id="${esc(r.id)}">${lampHTML(targetOn(`a:${r.id}`) ? roomMean(r.id) : 0, 40, ICON(roomIcon(r.name), 'sm'))}<div class="grow"><div class="t">${esc(r.name)}</div><div class="d">${what}${roomWhereShort(r)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
   const orphans = fileable().filter(d => devArea(d) === 'none');
   return `<p class="d" style="margin:0 0 16px">Your rooms live here, not in the Lutron app. Make one, rename it, and move any light or remote into it, Lutron and Philips Hue together.</p>
     <div class="gh">Rooms</div><div class="card pad0 list">${rows || `<div class="item"><div class="grow"><div class="d">No rooms yet.</div></div></div>`}</div>
     <div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="rooms-new"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">New room</div><div class="d">It appears everywhere at once: Home, your remotes, your scenes</div></div></button></div>
     ${orphans.length ? `<div class="gh">Elsewhere</div><div class="card pad0 list">${orphans.map(d => roomDeviceRow(d, 'none')).join('')}</div><p class="d" style="margin:8px 0 0">These are in no room yet. Tap one to file it.</p>` : ''}
-    <p class="small faint" style="margin:24px 0 0">Renaming a room renames it on your Philips Hue bridge when it came from there, and asks your Lutron bridge to do the same when it came from there. The Lutron bridge does not document rooms, so it may say no; the room still works here either way.${hueOn ? '' : ''}</p>`;
+    <p class="small faint" style="margin:24px 0 0">Renaming a room renames it on your Philips Hue bridge when it came from there, and asks your Lutron bridge to do the same when it came from there. The Lutron bridge does not document rooms, so it may say no; the room still works here either way.</p>`;
 }
 // One short phrase for the list: where else this room exists.
 function roomWhereShort(r) {
@@ -111,7 +120,7 @@ function roomEditHTML(r) {
     ${pics.length ? `<div class="gh">Remotes</div><div class="card pad0 list">${pics.map(d => roomDeviceRow(d, r.id)).join('')}</div>` : ''}
     <div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="rooms-add" data-id="${esc(r.id)}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Move something in here</div><div class="d">From any other room${hue.paired ? ', Lutron and Hue alike' : ''}</div></div></button></div>
     <div class="spacer"></div>
-    <div class="card pad0 list"><button class="item" data-act="rooms-delete" data-id="${esc(r.id)}"><div class="grow"><div class="t" style="color:var(--danger)">Delete this room</div><div class="d">Nothing is removed from your home: everything in it goes back to the room its bridge puts it in.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+    <div class="card pad0 list"><button class="item" data-act="rooms-delete" data-id="${esc(r.id)}"><div class="grow"><div class="t" style="color:var(--red-text)">Delete this room</div><div class="d">Nothing is removed from your home: everything in it goes back to the room its bridge puts it in.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
 }
 // What the bridges know about this room, in plain words. Never a promise the bridge did not keep.
 function roomWhereHTML(r, mine) {
@@ -120,6 +129,7 @@ function roomWhereHTML(r, mine) {
   const lines = [];
   if (r.bridge_area) lines.push('Your Lutron bridge has a room of its own for this, so a new Lutron device can be filed straight into it.');
   else if (hasLutron) lines.push('Your Lutron bridge has no room of its own for this one. Everything here works anyway: its lights stay in whatever Lutron room they were in, and this app is what decides where they live.');
+  else if (ROOM_NOBRIDGE[r.id]) lines.push('Your Lutron bridge would not make a room to match this one, so it lives here only. Nothing is lost by that: a Lutron device added to it is created in a room the bridge does have, and filed here.');
   else lines.push('This room is the app\'s own. If you add a Lutron device to it, the bridge will be asked for a room to match, and told where to put it.');
   if (r.hue_room) lines.push('It is also a room on your Philips Hue bridge, so renaming it here renames it there.');
   else if (hasHue) lines.push('Its Hue lamps keep their own Hue room until you move one from here.');
@@ -192,7 +202,9 @@ async function roomsMoveTo(deviceId, roomId) {
 function roomsAddSheet(roomId) {
   const r = roomById(roomId); if (!r) return;
   const others = fileable().filter(d => devArea(d) !== roomId);
-  const groupsByRoom = [...appRooms().map(x => ({ id: x.id, name: x.name })), { id: 'none', name: 'Elsewhere' }]
+  const groupsByRoom = [...new Set(others.map(devArea))]
+    .map(id => ({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
     .map(a => { const ds = others.filter(d => devArea(d) === a.id); return ds.length ? `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => `<button class="item" data-act="rooms-move-to" data-id="${esc(d.device_id)}" data-room="${esc(roomId)}">${lampHTML(d.domain === 'pico' ? 0 : (level(d.device_id) || 0), 28, ICON(d.domain === 'pico' ? 'remote' : (typeof lightIcon === 'function' ? lightIcon(d) : 'bulb'), 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${esc(d.domain === 'pico' ? 'Remote' : cap(d.domain === 'cover' ? 'shade' : d.domain))}${String(d.device_id).startsWith('hue_') ? ' · Hue' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}</div>` : ''; })
     .join('');
   sheet.open(`Move something into ${esc(r.name)}`, groupsByRoom || `<div class="tip"><div class="grow"><div class="t">Everything is already in this room</div></div></div>`, { detent: 'large', sub: 'Tap anything to move it here.' });
@@ -202,6 +214,9 @@ function roomsAddSheet(roomId) {
 // Every one of these is best effort and runs after the app has already saved. A bridge that says no changes
 // nothing about the room the person just made: it only changes what the copy on the room's page says.
 async function roomsApi(body) { return api('/api/rooms', { method: 'POST', body: JSON.stringify(body) }); }
+// Rooms the Lutron bridge would not make, for this run of the app: the room's page says so instead of promising
+// a bridge room that is not there. It is not stored, because it is about the bridge's answer, not about the room.
+const ROOM_NOBRIDGE = {};
 async function bridgeMakeRoom(id) {
   const r = roomById(id); if (!r || r.bridge_area) return;
   if (!connOk()) return;
@@ -209,9 +224,10 @@ async function bridgeMakeRoom(id) {
     const res = await roomsApi({ op: 'area_create', name: r.name });
     const made = ((res && res.detail) || {}).area_id;
     const room = roomById(id);
-    if (made && room) { room.bridge_area = String(made); await save({ quiet: true, render: false }); if (S.view === 'rooms') render(); }
+    if (made && room) { delete ROOM_NOBRIDGE[id]; room.bridge_area = String(made); await save({ quiet: true, render: false }); if (S.view === 'rooms') render(); }
   } catch (e) {
     // The owner's bridge answers 400 BadRequest here. That is fine and it is said out loud, once.
+    ROOM_NOBRIDGE[id] = true;
     if (S.view === 'rooms' && S.roomsEdit === id) { render(); toast(`Your Lutron bridge would not make a room: ${friendlyError(e.message)}. ${r.name} still works here.`); }
   }
 }

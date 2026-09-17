@@ -651,3 +651,78 @@ home comes back, and books the single repaint that turns the dot red when the wi
 
 Measured by `$SC/reconnect_test.js`: eleven checks over a dropped socket, an empty snapshot from a restarting hub, the
 ten-second boundary and a real reconnect.
+
+### 7.5 Rooms the app owns
+
+The owner's words: "I would rather not have to create rooms in the lutron app i would rather
+everything take place in my own app. Across the board for hue and lutron." What set it off: a Pico
+being added to "Office", which is a Philips Hue room, and the Lutron bridge answering 400 BadRequest
+because it has no such area.
+
+**`settings.rooms` is the truth about rooms.** One entry per room:
+
+```
+{ id, name, device_ids: [], bridge_area: null | "<lutron area id>", hue_room: null | "hue_<uuid>" }
+```
+
+Names are trimmed to 40 characters; a device may be in one room only (the hub keeps the first room
+that names it and drops the rest). **While the list is empty nothing changes at all**: the app reads
+the bridges' own rooms exactly as it always did, so a home that never opens this page is never
+migrated.
+
+**Seeded, not imposed.** The first time the list is needed (`ensureRooms()` in `web/js/rooms.js`) it
+is built from what the bridges already report, one entry per Lutron area and per Hue room, **keeping
+each bridge room's own id**. That is what makes the change free: `a:20` still means the Kitchen, the
+Kitchen's moods are still the Kitchen's, and every remote button, scene and automation that already
+names a room goes on working untouched. A room made here gets an id in the app's usual style.
+
+**One seam, every consumer.** `web/js/core.js` holds it: `appRooms()`, `devArea(d)` (which room a
+device is in: the room that names it, else the room standing for its bridge room, else Elsewhere),
+`devAreaName(d)`, `areaName(id)` (which now answers for an app room id as well as a bridge area) and
+`areas()`. Everything that shows a room reads those, so Home's room list, the room page, room setup,
+the pickers in remotes, automations and scenes, the lights picker, the light field and "which room"
+when adding a device all follow from the one list. An empty room shows too: the person made it, and
+it is where the next light goes.
+
+**The screens.** Settings › Rooms is a pushed page (`#rooms`, `VIEWS.rooms`): every room as a row
+with what is in it and where else it lives, "New room", and an Elsewhere group for anything in no
+room. A row pushes the room itself: its name (a field that saves as you type), what is in it as one
+list per kind with the room each thing is in, "Move something in here", a plain-words card saying
+what the bridges know about this room, and "Delete this room" in red. Tapping anything in the list
+opens "Which room is this in?". Room setup carries the same row, so the way in is under the room as
+well as under Settings. No Save buttons anywhere: every change saves at once and the destructive ones
+(delete, move) offer Undo in the toast.
+
+**The bridges are kept in step, honestly.** Philips Hue documents rooms, so the connector does as it
+is told (`agent/hue.py`: `create_room`, `rename_room`, `delete_room`, `move_light`, which rewrites
+which room's children hold the lamp's device rid). Lutron documents none of it, so
+`agent/adddevice.py` guesses it the way it already guesses device creation: `create_area` tries a
+`CreateRequest /area` with a parent, then plain, then with a category; `rename_area` sends an
+`UpdateRequest /area/{id}`; `move_device` sends an `UpdateRequest /device/{id}` carrying
+`AssociatedArea`. Every exchange goes through the same AddSession log the add sheet shows, so a
+refusal is readable from the phone. **A refusal never loses the person's work**: the room exists in
+the app either way, everything in the app keeps working, and the room's page says "Your Lutron bridge
+has no room of its own for this one" instead of pretending.
+
+**Adding a device** offers every app room, Hue rooms included. When the chosen room has no Lutron area
+the bridge is given one it does have (the area this room's other Lutron devices already use, else one
+whose name matches, else the first it lists), the device is filed in the app room the person chose,
+and one line says so: "Your Lutron bridge has no room called Office, so the device is created in its
+Hall and filed in Office here."
+
+**Targets.** `a:<room>` may now name an app room. The connector resolves it from the config
+(`engine.py` `_resolve` and `_room_devices`) when the config carries that room, and falls back to the
+bridge area when it does not, so an older connector and a home with no list of its own behave exactly
+as before. A room that holds Hue lamps resolves to them: they are `hue_` ids in the same device
+dictionary.
+
+**Safety.** A device may be in one room only. Deleting a room never deletes a device: everything in it
+goes back to the room its bridge puts it in. A device the bridges stop reporting leaves its room
+quietly, and never while the home is not answering (an empty inventory is a connector still coming
+back, not a house with no lights).
+
+Measured by `$SC/rooms_test.js`: 42 checks over seeding, making, renaming, moving a Lutron light,
+moving a Hue lamp, the pickers, adding a device into a room with no Lutron area, deleting with Undo,
+a device that stops being reported, and a Lutron bridge that refuses `CreateRequest /area` the way the
+owner's does. `agent/test_engine.py` covers `a:<room>` on the connector, `agent/test_hue.py` the Hue
+room calls against the fake bridge, `agent/test_adddevice.py` the three Lutron shapes and the refusal.
