@@ -68,6 +68,9 @@ function roomSetupHTML(aid) {
       : '';
     h += `<button class="item" data-act="roles-open" data-area="${aid}"><div class="grow"><div class="t">${ps.length ? 'Make them again from what they are' : 'Make the moods'}</div><div class="d">From what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   }
+  // Follow the day, for the lamps in this room that can change their warmth (js/daylight.js). A room of Caseta
+  // dimmers has no row at all: there is nothing here it could apply to.
+  if (typeof followRoomRowHTML === 'function') h += followRoomRowHTML(aid);
   if (kinds) h += `<div class="gh">Kind of light</div><div class="card pad0 list">${kinds}</div>`;
   // The room itself: its name, what is in it, and whether it should exist at all. One page for every room.
   h += `<div class="gh">This room</div><div class="card pad0 list"><button class="item" data-act="rooms-open" data-id="${esc(aid)}"><div class="grow"><div class="t">Name and what is in it</div><div class="d">Rename it, move lights and remotes in or out, delete it</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;

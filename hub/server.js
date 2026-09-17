@@ -41,6 +41,9 @@ let states = {}; // device_id -> {level, fan_speed}
 let timers = {}; // target -> {ends_at, level}
 let sun = null;  // {sunrise, sunset, now} from the connector, in the home's zone
 let nextRuns = {}; // schedule id -> next ISO time
+// Follow the day, as the connector sees it: which lamps are following, which were set by hand (so they have
+// stopped until they are next switched on), and the white each is showing. The app reads it, never writes it.
+let follow = null;
 let addSession = { active: false, until: 0, heard: [], log: [] }; // the app's "Add a device" session, mirrored from the connector
 let activity = store.read('activity', () => []); // newest first, capped
 let agent = null;   // the single connected agent socket
@@ -272,7 +275,7 @@ wssAgent.on('connection', (ws, req) => {
   });
   ws.on('close', () => {
     if (agent === ws) {
-      agent = null; agentInfo = null; timers = {}; addSession = { ...addSession, active: false };
+      agent = null; agentInfo = null; timers = {}; follow = null; addSession = { ...addSession, active: false };
       broadcast({ type: 'agent', online: false });
       broadcast({ type: 'timers', timers });
       record({ kind: 'agent', online: false });
@@ -296,7 +299,9 @@ function handleAgentMessage(ws, msg) {
       if (msg.states) mergeStates(msg.states);
       timers = msg.timers || {};
       sun = msg.sun || null; nextRuns = msg.next_runs || {};
+      follow = msg.follow || null;
       broadcast({ type: 'sun', sun, next_runs: nextRuns });
+      if (follow) broadcast({ type: 'follow', follow });
       broadcast({ type: 'agent', online: true, info: agentInfo });
       broadcast({ type: 'state', states });
       broadcast({ type: 'timers', timers });
@@ -308,6 +313,10 @@ function handleAgentMessage(ws, msg) {
     case 'sun':
       sun = msg.sun || null; nextRuns = msg.next_runs || {};
       broadcast({ type: 'sun', sun, next_runs: nextRuns });
+      break;
+    case 'follow':
+      follow = msg.follow || null;
+      broadcast({ type: 'follow', follow });
       break;
     case 'timer':
       if (msg.ends_at) timers[msg.target] = { ends_at: msg.ends_at, level: msg.level || 0 };
@@ -389,7 +398,7 @@ function mergeStates(s) {
   for (const [k, v] of Object.entries(s || {})) states[k] = { ...(states[k] || {}), ...v };
 }
 function snapshot() {
-  return { inventory, states, config, timers, sun, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo }, add: addSession };
+  return { inventory, states, config, timers, sun, follow, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo }, add: addSession };
 }
 let activityDirty = false;
 function record(entry) {

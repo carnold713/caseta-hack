@@ -12,6 +12,9 @@ const S = {
   remote: null, room: null, roomPage: null, settingsPage: null,
   live: {}, lastSaved: null,
   sun: null, nextRuns: {}, // today's sun and the next run of each automation, from the connector (automations.js reads them)
+  // "Follow the day" as the connector sees it (which lamps, which were set by hand, the white each shows), and how
+  // far this phone's clock is from the home's, so js/daylight.js reads the curve at the home's own time.
+  follow: null, sunSkew: 0,
   // A drop is quiet until it has lasted: `troubleSince` is when the socket or the connector last went away.
   // Nothing turns red until RECONNECT_GRACE has passed, and the app never blanks what it already knows.
   troubleSince: 0, wsOpen: false,
@@ -99,6 +102,14 @@ async function save(opts = {}) {
 }
 function saveSoon(ms = 600) { clearTimeout(saveTimer); saveTimer = setTimeout(() => save({ quiet: true }), ms); }
 
+// The home's clock, as an offset from this phone's: the connector sends the time in the home's own zone with every
+// sun message, and "Follow the day" reads the curve at that time rather than at whatever the phone thinks it is.
+function noteSunClock() {
+  const iso = S.sun && S.sun.now; if (!iso) return;
+  const t = new Date(iso); if (isNaN(t.getTime())) return;
+  S.sunSkew = Date.now() - t.getTime();
+}
+
 function connectWS() {
   if (S.ws) { try { S.ws.onclose = null; S.ws.close(); } catch (_) { /* ignore */ } }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -116,7 +127,8 @@ function connectWS() {
         const known = Object.keys(S.inv.devices || {}).length;
         if (fresh || !known) { S.inv = m.inventory; S.states = m.states; S.timers = m.timers || {}; }
         S.agent = m.agent; S.activity = m.activity || [];
-        S.sun = m.sun || null; S.nextRuns = m.next_runs || {};
+        S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; noteSunClock();
+        S.follow = m.follow || null;
         S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
         S.wsOpen = true; connChanged(!!(m.agent && m.agent.online));
         // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
@@ -132,7 +144,9 @@ function connectWS() {
       case 'agent': S.agent = { online: m.online, info: m.info || null }; connChanged(!!m.online); render(); if (window.Hue) Hue.onAgent(); break;
       case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
       // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
-      case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; if (typeof paintSun === 'function') paintSun(); break;
+      case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; noteSunClock(); if (typeof paintSun === 'function') paintSun(); if (typeof paintFollow === 'function') paintFollow(); break;
+      // which lamps are following the day, and the white each one is showing: painted in place, never a full render
+      case 'follow': S.follow = m.follow || null; if (typeof paintFollow === 'function') paintFollow(); if (sheet.isOpen() && (SHEET_KEY === 'follow' || SHEET_KEY === 'follow-room')) { const el = $('#sheet-root [data-act="follow-toggle"]'); if (el && SHEET_KEY === 'follow') openFollowSheet(el.dataset.id); } break;
       case 'add_state': case 'add_heard': case 'add_log': if (window.AddDevice) AddDevice.onMessage(m); break;
       case 'button': case 'gesture': onLive(m); break;
       case 'toast': toast(m.msg, { err: m.level === 'error' }); break;
@@ -209,7 +223,7 @@ function byName(a, b) { return (devAreaName(a) + a.name).localeCompare(devAreaNa
 const level = id => { const s = S.states[id]; return s && s.level != null ? s.level : null; };
 // A scene's entry for a light is a number, a fan speed, or {level, kelvin?, hex?} for a Hue lamp with its colour.
 function levelOf(v) { if (v && typeof v === 'object') return Number(v.level) || 0; if (typeof v === 'number') return v; return v && v !== 'Off' ? 100 : 0; }
-function colorOf(v) { if (!v || typeof v !== 'object') return null; if (v.kelvin != null) return { mode: 'ct', kelvin: v.kelvin }; if (v.hex) return { mode: 'xy', hex: v.hex }; return null; }
+function colorOf(v) { if (!v || typeof v !== 'object') return null; if (v.follow === true) return { follow: true }; if (v.kelvin != null) return { mode: 'ct', kelvin: v.kelvin }; if (v.hex) return { mode: 'xy', hex: v.hex }; return null; }
 const isOn = id => (level(id) || 0) > 0 || !!((S.states[id] || {}).fan_speed && S.states[id].fan_speed !== 'Off');
 const buttonsOf = pid => Object.values(S.inv.buttons || {}).filter(b => b.device_id === pid).sort((a, b) => a.button_number - b.button_number);
 const groups = () => (S.config && S.config.groups) || [];

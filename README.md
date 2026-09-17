@@ -162,6 +162,20 @@ Pico bindings from its cached config.
   lamp. The connector reads what each lamp can do from the bridge (its
   gamut and mirek range) and clamps every request to it, so nothing is
   ever sent that the lamp cannot show.
+- **Follow the day.** A lamp can keep its white matched to the time of day by
+  itself, for as long as it is on: cool and bright around midday, warm in the
+  evening, like daylight. The curve is anchored to your own sunrise, solar noon
+  and sunset (2000K deep at night, 2700K at sunrise, 5200K at midday, 2900K at
+  sunset, 2400K an hour after it) and is clamped to what each lamp can show.
+  Switch it on in three places, all the same setting: the row under **Colour**
+  on a light's page, "Follow the day" in **Room setup** for the lamps in a room
+  that can do warmth, or a **scene** entry that says "follow the day" instead of
+  a fixed colour. The light's page shows what the lamp is set to right now and
+  the day's shape. Set a colour or a warmth by hand and that lamp stops
+  following until you next turn it on. Brightness is an option, off by default:
+  switched on, a following lamp dims towards the evening on the evening
+  wind-down's own curve, so the two never disagree. A Caseta dimmer has no
+  colour, so it is never offered it.
 - **Autosave with Undo.** Nothing to remember to save.
 - **Recent activity:** what was pressed and what happened, for "who left
   the lights on" and for tuning the double-press timing.
@@ -269,7 +283,8 @@ dark): the connector keeps what was lit in the two minutes before the last
 light went off, in `last_on.json`, and brings it back at the same levels. 0.9.0 is the first that understands
 rooms the app owns: `a:<room>` may name one of `settings.rooms` (it falls back to the bridge's own area, so an
 older connector simply goes on reading the bridge), and it takes the `room_*` commands that ask each bridge to
-keep up.
+keep up. 0.10.0 is the first that understands "Follow the day": it holds `settings.follow_day`, keeps every
+following lamp that is on at the white the day asks for, and reports what it is doing back to the app.
 
 ## Configure
 
@@ -317,6 +332,15 @@ The connector reports a lamp's abilities in the inventory (`color: true`,
 `ct: true`, `ct_range: [kelvin_min, kelvin_max]`) and its state carries
 `color: {mode: "ct" | "xy" | null, kelvin, xy, hex}`.
 
+**Follow the day** is one setting, `settings.follow_day = {device_ids: [], brightness: false}`, and
+one extra shape for a scene's `levels[id]`: `{level, follow: true}` in place of a colour, for a Hue
+lamp that can change its white. The connector owns the rest: it keeps every following lamp that is on
+at the white `agent/daylight.py` asks for (a 30 second fade, a look every five minutes and at once
+when a lamp comes on), pauses a lamp somebody sets by hand until it is next switched off and on, and
+sends `{type: "follow", follow: {ids, paused, kelvin, brightness, ready}}` up so the app can say what
+each lamp is doing. The `sun` message carries `noon` now, which is what the app's copy of the curve
+hangs on.
+
 Single click on a button that also has a double click binding waits the
 double window (default 350 ms) before firing. A button with no double
 binding fires instantly.
@@ -340,7 +364,7 @@ page never changes a light, and the viewport does not zoom.
 hub/server.js     Express + ws: static PWA, /api/*, /ws/app (phones), /ws/agent (home), /install.sh
 hub/validate.js   config schema, shared truth for bindings and actions
 hub/store.js      JSON files in DATA_DIR
-web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,room,rooms,remotes,scenes,settings,automations,cities,boot,slide,motion,lightfield}.js, sw.js, icons/
+web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,room,rooms,remotes,scenes,settings,automations,cities,color,daylight,boot,slide,motion,lightfield}.js, sw.js, icons/
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
 agent/adddevice.py  add a device from the app: association mode, device heard, create, and the
@@ -348,6 +372,8 @@ agent/adddevice.py  add a device from the app: association mode, device heard, c
 agent/hue.py      Philips Hue bridge: pairing, lights and rooms as hue_ devices, levels, colour and warmth,
                   room create/rename/delete and moving a lamp between rooms, event stream
 agent/color.py    CIE xy <-> hex with gamut clamping, kelvin <-> mirek, a black-body tint (no dependencies)
+agent/daylight.py Follow the day: the anchor table, the sun-anchored curve, mireds, and each lamp's own limits
+agent/sun.py      sunrise, sunset and solar noon for a date and a place (NOAA, no network)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js
 ```
@@ -361,6 +387,7 @@ cd agent && python test_engine.py             # gesture timing tests
 cd agent && python test_adddevice.py          # add-device session against a stub bridge
 cd agent && python test_hue.py                # Hue client against a fake bridge (needs aiohttp)
 cd agent && python test_color.py              # colour maths: round trips, gamut clamping, kelvin
+cd agent && python test_daylight.py           # Follow the day: the anchors, mireds, a lamp's limits, a northern summer
 ```
 
 Without a bridge, a fake agent that speaks the same protocol is all the

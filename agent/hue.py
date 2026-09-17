@@ -285,6 +285,31 @@ class Hue:
         if self._on_state:
             self._on_state(device_id)
 
+    async def set_warmth(self, device_id: str, kelvin: float, fade_s: Optional[float] = None, level: Optional[int] = None) -> bool:
+        """The white alone, and only on a lamp that is already on: the way "Follow the day" talks to a lamp.
+        It never sends "on", so it can never turn a lamp on, and it leaves brightness alone unless `level` is given.
+        Returns False when the lamp is off or cannot do white temperature, so the caller knows nothing was sent."""
+        d = self.devices.get(device_id)
+        ct = (d or {}).get("ct")
+        if not d or not ct:
+            return False
+        if int(d.get("current_state") or 0) <= 0:
+            return False
+        mirek = max(int(ct["min"]), min(int(ct["max"]), kelvin_to_mirek(kelvin)))
+        body: Dict[str, Any] = {"color_temperature": {"mirek": mirek}}
+        if level is not None and d.get("type") == "HueLight":
+            body["dimming"] = {"brightness": max(1, min(100, int(level)))}
+        if fade_s:
+            body["dynamics"] = {"duration": int(float(fade_s) * 1000)}
+        await self._put(f"/clip/v2/resource/light/{d['zone']}", body)
+        ct["mirek"] = mirek
+        d["color_mode"] = "ct"
+        if level is not None:
+            d["current_state"] = int(level)
+        if self._on_state:
+            self._on_state(device_id)
+        return True
+
     # ----- rooms (CLIP v2 documents all of this, unlike the Lutron bridge) -----
     # A room holds *devices*, not lights: a lamp's device rid is what moves between rooms. "hue_" ids in, "hue_" ids
     # out, so the connector and the app speak about a Hue room the same way they speak about a Caseta area.

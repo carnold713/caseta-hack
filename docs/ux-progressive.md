@@ -811,3 +811,92 @@ Measured at 390x844: Settings was 12 rows over 1.56 screens **plus** an eleven-r
 page of 1.39 screens, 23 controls in two places. It is now 14 rows over 1.53 screens in one place,
 with five short pages (five, five, two, three and three controls) behind the rare things, each well
 inside one screen.
+
+---
+
+## 8. Follow the day
+
+> "I have some lights that I set to on even during the day. It would be nice to have the option to
+> have a scene where they follow the circadian rhythm of the day, similar to how Lutron uses 'new
+> light optimization' for the time of the day to determine the optimal color temperature."
+
+A lamp set to follow the day keeps its white matched to the time of day, by itself, for as long as it
+is on. **Called "Follow the day" everywhere.** One sentence explains it: *Cool and bright around
+midday, warm in the evening, like daylight.* The word "circadian" never appears, and "Kelvin" is
+never a title (the number is a value: *Neutral, 4413 K*).
+
+### 8.1 The curve
+
+Anchored to the home's own sun, not to the clock, so it moves with the seasons and works at any
+latitude. The table lives at the top of `agent/daylight.py`, mirrored in `web/js/daylight.js` (which
+draws it) and in the rig's fake connector: **change one, change all three.**
+
+| moment | white |
+|---|---|
+| solar midnight | 2000 K |
+| 60 minutes before sunrise | 2200 K |
+| sunrise | 2700 K |
+| sunrise plus 90 minutes | 4000 K |
+| solar noon | 5200 K |
+| sunset minus 120 minutes | 4000 K |
+| sunset | 2900 K |
+| sunset plus 60 minutes | 2400 K |
+
+Between two anchors the value is interpolated **in mireds** (a million over kelvin), not in kelvin: a
+step in mireds looks like an even step, a step in kelvin does not. The anchors of yesterday, today and
+tomorrow are laid end to end, so 3am and the hour after dusk fall between two anchors like any other
+moment, and every value is clamped into the lamp's own mirek range before it is sent (`ct_range`).
+`agent/sun.py` gained `solar_noon()`, which exists even where the sun never rises.
+
+### 8.2 Where it runs
+
+The connector. `follow_loop()` in `agent/agent.py` looks every five minutes, and a lamp that is
+switched on is set at once (the state change is the trigger). The fade is 30 seconds, so a change is
+never a jump. Three rules hold everywhere in that code: **it never turns a lamp on, it never touches a
+lamp that is off, and it never changes brightness** unless the owner asked for that. The only way it
+talks to a lamp is `hue.set_warmth()`, which does not send `on` at all.
+
+### 8.3 Manual changes win
+
+A colour or a warmth set by hand on a following lamp pauses it until that lamp is next turned off and
+on again. The connector spots it in `ActionRunner._set_color`, which every by-hand path goes through
+and the follow loop does not. The light's page then reads **Paused**, and its pane says "You set this
+one by hand. Following again when you next turn it on."
+
+### 8.4 Three places, one setting
+
+`settings.follow_day = { device_ids: [], brightness: false }` (`hub/validate.js`).
+
+- **The light's page.** Under Colour, a row "Follow the day". Its pane carries the switch, the one
+  sentence, what the lamp is set to right now ("Neutral, 4413 K, because it is mid-afternoon") and the
+  day's shape as an inline SVG sparkline with a dot at now, drawn in the lamp ramp's own tints mixed
+  towards the ink so the cool middle of the day is visible on a white card. The Colour row's value
+  gains a small "Following the day" tag.
+- **A room.** Room setup, under a WARMTH header: one row with a switch that applies to every lamp in
+  the room that can do warmth, its second line naming them ("Ceiling and Desk lamp") and counting them
+  when only some are following. What is left out is named in the pane, where there is room for the
+  sentence: "Plug cannot change warmth, so it is left out." A room of Caseta dimmers has no row at all.
+- **A scene.** A lamp's Colour row in the scene editor gains a "Follow the day" chip beside the
+  swatches; the entry becomes `{level, follow: true}`. Running the scene switches following on for
+  those lamps and sets them to the white for the moment it runs. The Warmth slider then rests at what
+  the day asks for now, so the row says something true rather than nothing.
+
+Autosave with an Undo toast in all three, as everywhere else. No Save buttons.
+
+**The light page still fits the medium detent with nothing under the fold.** The new row costs 56px,
+so the composition above it gives them back: the disc's ramp is 100 to 128px (was 108 to 144), the
+stage 148x140 (was 160x156), the well 96x94 (was 96x116), the readout 36px (was 40), the three round
+buttons 48px circles (was 56), and the Colour row keeps its value on one line, tag and all, rather
+than wrapping. Measured at 390x844: 434px of content in a 391px body before, 391px after.
+
+### 8.5 Brightness is an option, off by default
+
+The same pane's second row, "Dim towards the evening too". It reuses the **evening wind-down** curve
+rather than inventing a second one, and it only ever comes down: a lamp already dimmer than the curve
+is left alone. The wind-down owns brightness, the follow loop owns warmth, so the two cannot disagree.
+With the wind-down off there is no number to use and nothing happens.
+
+### 8.6 Lamps that cannot do warmth
+
+A Caseta dimmer has no colour at all, so it is never offered the row, the chip, or a place in the
+room's list. Where a room holds both kinds the room control says which lamps it will apply to.

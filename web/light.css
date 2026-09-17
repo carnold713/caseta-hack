@@ -69,25 +69,31 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .ld-hero { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 0; }
 /* the composition is sized for the medium detent (473px at 844): the disc, the well, the two steps, the
    readout and the round buttons all sit inside one sheet, with nothing under the fold (docs/ia-v5.md 5). */
-.ld-stage { flex: none; width: 160px; height: 156px; display: grid; place-items: center; }
-.ld-disc { width: 132px; height: 132px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; outline: none; transition: box-shadow .15s var(--ease); }
+.ld-stage { flex: none; width: 148px; height: 140px; display: grid; place-items: center; }
+.ld-disc { width: 124px; height: 124px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; outline: none; transition: box-shadow .15s var(--ease); }
 .ld-disc:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
 .ld-name { text-align: center; margin-top: 8px; }
 .ld-cap { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
 /* the readout under the stage: the status text button */
-.ld-level { display: flex; align-items: center; justify-content: center; width: 136px; height: 40px; margin: 4px auto 4px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line-2); background: var(--surface); font-size: 16px; line-height: 20px; font-weight: 400; color: var(--text); }
-.ld-swcol { width: 96px; height: 156px; display: grid; place-items: center; flex: none; }
-.ld-actions { display: flex; justify-content: center; gap: 24px; margin-top: 8px; }
+.ld-level { display: flex; align-items: center; justify-content: center; width: 136px; height: 36px; margin: 2px auto 2px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line-2); background: var(--surface); font-size: 16px; line-height: 20px; font-weight: 400; color: var(--text); }
+.ld-swcol { width: 96px; height: 140px; display: grid; place-items: center; flex: none; }
+.ld-actions { display: flex; justify-content: center; gap: 24px; margin-top: 4px; }
 /* Colour: one value row on the light's page, its value the colour the lamp is showing */
 .ld-colour { margin: 0; }
 .ld-colour .item.vrow .val { display: inline-flex; align-items: center; gap: 8px; }
+/* The Colour row keeps its value on the title's line even with the "Following the day" tag on it: the light
+   page has to fit the medium detent with nothing under the fold, and a wrapped value costs it a row. */
+.ld-colour .item.vrow { flex-wrap: nowrap; }
+.ld-colour .item.vrow .grow { min-width: 0; }
+.ld-colour .item.vrow .grow .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ld-colour .item.vrow .val { -webkit-line-clamp: 1; white-space: nowrap; flex: 0 1 auto; overflow: visible; }
 /* the colour controls on their own pane: they start at the top of the body, nothing above them */
 .ld-ccol .ccol { margin: 0; }
 .ld-remove { margin: 16px auto 0; display: flex; }
 /* the round action with a label under it: an Extra Large Secondary action icon */
-.rbtn { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 72px; color: var(--text); font-size: 12px; line-height: 16px; text-align: center; }
-.rbtn .c { width: 56px; height: 56px; border-radius: 50%; background: var(--fill-2); color: var(--text); display: grid; place-items: center; position: relative; transition: background .15s var(--ease), box-shadow .15s var(--ease); }
-.rbtn .c svg.i { width: 28px; height: 28px; }
+.rbtn { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 72px; color: var(--text); font-size: 12px; line-height: 16px; text-align: center; }
+.rbtn .c { width: 48px; height: 48px; border-radius: 50%; background: var(--fill-2); color: var(--text); display: grid; place-items: center; position: relative; transition: background .15s var(--ease), box-shadow .15s var(--ease); }
+.rbtn .c svg.i { width: 24px; height: 24px; }
 .rbtn:active .c { background-color: var(--fill-3); box-shadow: var(--shadow-pressed); }
 .rbtn.on .c { background: var(--blue); color: var(--on-blue); }
 /* background-color, not the shorthand: the shorthand resets background-image and would wipe .m-hold's sweep. */
@@ -99,8 +105,8 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .rbtn span { white-space: nowrap; }
 
 /* the vertical well: white, a hairline, radius 12, filling with blue from the bottom; a grip in the fill */
-.vcol { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
-.vslider { position: relative; width: 96px; height: 116px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
+.vcol { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
+.vslider { position: relative; width: 96px; height: 94px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
 .vslider::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--p, 0%); background: var(--vfill, var(--blue)); border-radius: 0 0 var(--r-md) var(--r-md); transition: background .255s var(--ease); }
 .vslider::after { content: ""; position: absolute; left: 50%; width: 40px; height: 4px; margin-left: -20px; bottom: calc(var(--p, 0%) - 12px); border-radius: 2px; background: rgba(255,255,255,.4); }
 .vslider:focus-visible { box-shadow: inset 0 0 0 1px var(--line-2), 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
@@ -200,3 +206,18 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 /* the dot beside a colour's name */
 .cdot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px; margin-right: 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
 .cdot.none { box-shadow: inset 0 0 0 1px var(--line-2); }
+
+/* ---------- Follow the day (js/daylight.js): the tag on the Colour row, and the day's shape ---------- */
+/* The tag says what the lamp is doing without taking a control's room: 12/16 grey on the page's own fill. */
+.daytag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: var(--r-xs); background: var(--fill-2); color: var(--text-2); font-size: 11px; line-height: 16px; font-weight: 400; white-space: nowrap; }
+/* The sparkline: one day from solar midnight to solar midnight, the line tinted with the white it stands for,
+   a hairline and a dot at now. Drawn as inline SVG in js/daylight.js, no libraries. */
+.dayspark-wrap { margin-top: 16px; padding: 12px 12px 4px; background: var(--surface); border-radius: var(--r-md); box-shadow: var(--shadow-1); }
+.dayline { font-size: 16px; line-height: 20px; color: var(--text); margin: 0 0 8px; }
+.dayline:empty { display: none; }
+.dayspark { display: block; }
+.dayspark .dsc { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.dayspark .dsa { opacity: .28; }
+.dayspark .dsn { stroke: var(--line-2); stroke-width: 1; }
+.dayspark .dsd { stroke: var(--text); stroke-width: 1.5; }
+.dayspark .dsl { fill: var(--text-2); font-size: 11px; font-family: inherit; }

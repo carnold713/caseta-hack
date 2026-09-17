@@ -144,6 +144,11 @@ class ActionRunner:
         self.hue_set: Optional[Callable[[str, int, Optional[float]], Awaitable[None]]] = None
         self.hue_color: Optional[Callable[..., Awaitable[None]]] = None  # (device_id, kelvin=, hex=, fade_s=, level=)
         self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None
+        # Follow the day (daylight.py). `color_watch` is told the device id whenever a colour or a warmth is set
+        # from anywhere but the follow loop itself, which is how a lamp set by hand stops following. `follow_start`
+        # is awaited for a scene entry that says "follow the day": it turns following on and sets the white for now.
+        self.color_watch: Optional[Callable[[str], None]] = None
+        self.follow_start: Optional[Callable[[str], Awaitable[None]]] = None
         # What the house looked like just before it went dark: every light lit within the two minutes
         # before the last one went off, at its level then. The power button brings it back.
         self._last_lit: Dict[str, tuple] = {}   # device_id -> (level, when)
@@ -284,7 +289,18 @@ class ActionRunner:
         if self.hue_color is None:
             raise RuntimeError("Hue bridge not connected")
         fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
+        # Every colour that comes through here was asked for by a person, a button or a scene, never by the follow
+        # loop (which talks to the Hue client itself), so it is what pauses a lamp that was following the day.
+        if self.color_watch:
+            self.color_watch(device_id)
         await self.hue_color(device_id, kelvin=kelvin, hex=hex_str, fade_s=float(fs) if fs is not None else None, level=level)
+
+    async def _follow_entry(self, device_id: str, level: int, fade: Optional[float]) -> None:
+        """A scene entry that says "follow the day": the brightness the scene asks for, then the white for right now."""
+        if level is not None:
+            await self._set_level(device_id, int(level), fade)
+        if self.follow_start:
+            await self.follow_start(device_id)
 
     def _is_fan(self, device_id: str) -> bool:
         bridge = self._bridge()
@@ -464,8 +480,15 @@ class ActionRunner:
                     coros.append(bridge.set_fan(device_id, level))
                 elif isinstance(level, dict):
                     # {level, kelvin?, hex?}: a Hue lamp's colour and brightness in one request; a lamp that cannot
-                    # do the colour asked for (or a colour on a lamp that lost it) just takes the level
+                    # do the colour asked for (or a colour on a lamp that lost it) just takes the level.
+                    # {level, follow: true}: the lamp follows the day from now on, starting at today's white.
                     lv = int(level.get("level", 0) or 0)
+                    if level.get("follow"):
+                        if self._hue_can(device_id, "ct"):
+                            coros.append(self._follow_entry(device_id, lv, fade))
+                        else:
+                            coros.append(self._set_level(device_id, lv, fade))
+                        continue
                     kelvin = level.get("kelvin") if self._hue_can(device_id, "ct") else None
                     hex_str = level.get("hex") if kelvin is None and self._hue_can(device_id, "color") else None
                     if kelvin is not None or hex_str is not None:

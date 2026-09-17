@@ -134,6 +134,14 @@ function validateConfig(cfg) {
     points: points.length >= 2 ? points : [{ time: '07:00', level: 100 }, { time: '18:00', level: 80 }, { time: '21:00', level: 40 }, { time: '23:00', level: 15 }],
     winddown: { sunset_offset_min: clampInt(wd.sunset_offset_min, -120, 180, 30), earliest: isClock(wd.earliest) ? wd.earliest : '18:00', latest: isClock(wd.latest) ? wd.latest : '20:00', from_level: clampInt(wd.from_level, 1, 100, 100), to_level: clampInt(wd.to_level, 1, 100, 50), morning_level: clampInt(wd.morning_level, 1, 100, 60), morning_until: isClock(wd.morning_until) ? wd.morning_until : '07:30', nudge: wd.nudge === true },
   };
+  // Follow the day: the lamps whose white follows the sun by itself (agent/daylight.py), and whether they dim
+  // towards the evening too. Brightness is off by default; when it is on the number comes from the evening
+  // wind-down, so the two never disagree. Only ids here: what each lamp can do is read from the bridge.
+  {
+    const fd = s.follow_day || {};
+    const ids = Array.isArray(fd.device_ids) ? [...new Set(fd.device_ids.filter(isId))].slice(0, 200) : [];
+    out.settings.follow_day = { device_ids: ids, brightness: fd.brightness === true };
+  }
   // What each light is for. Optional; the app uses it to build room moods.
   out.settings.roles = {};
   for (const [k, v] of Object.entries(s.roles || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && ['ambient', 'task', 'accent', 'decor'].includes(v)) out.settings.roles[k] = v;
@@ -210,12 +218,16 @@ function validateConfig(cfg) {
       if (typeof v === 'string' && FAN_SPEEDS.has(v)) levels[k] = v;
       else if (isLevel(v)) levels[k] = v;
       else if (v && typeof v === 'object' && !Array.isArray(v)) {
-        // a Hue lamp's brightness with its colour: {level, kelvin} or {level, hex}
+        // a Hue lamp's brightness with its colour: {level, kelvin} or {level, hex}, or {level, follow: true} for a
+        // lamp the scene sets to follow the day instead of to a colour of its own
         if (!isLevel(v.level)) fail(`preset ${p.id}: level for ${k} must be 0-100`);
-        checkColorPair(v, `preset ${p.id}, ${k}`);
-        levels[k] = v.kelvin != null ? { level: v.level, kelvin: v.kelvin } : { level: v.level, hex: v.hex };
+        if (v.follow === true) { if (v.kelvin != null || v.hex != null) fail(`preset ${p.id}, ${k}: follow the day or a colour, one of them`); levels[k] = { level: v.level, follow: true }; }
+        else {
+          checkColorPair(v, `preset ${p.id}, ${k}`);
+          levels[k] = v.kelvin != null ? { level: v.level, kelvin: v.kelvin } : { level: v.level, hex: v.hex };
+        }
       }
-      else fail(`preset ${p.id}: level for ${k} must be 0-100, a fan speed, or a level with a colour`);
+      else fail(`preset ${p.id}: level for ${k} must be 0-100, a fan speed, a level with a colour, or a level that follows the day`);
     }
     out.presets.push({ id: p.id, name: p.name.trim().slice(0, 60), levels, fade: typeof p.fade === 'number' && p.fade >= 0 && p.fade <= 60 ? p.fade : null,
       area: typeof p.area === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(p.area) ? p.area : null,

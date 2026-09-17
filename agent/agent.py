@@ -34,12 +34,13 @@ from pylutron_caseta.smartbridge import Smartbridge
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import daylight
 from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
 from hue import Hue, color_state
-from sun import sun_times
+from sun import solar_noon, sun_times
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -120,6 +121,20 @@ class Agent:
         self._lanes: Dict[str, dict] = {}
         self.runner.local_time = self.local_time
         self.runner.sunset_hm = self.sunset_hm
+        # Follow the day (daylight.py): the lamps whose white follows the sun, and what has happened to them.
+        #   _follow_paused   set by hand since it was last switched on, so it has stopped following until it is
+        #                    turned off and on again
+        #   _follow_scene    switched on by a scene that said "follow the day", which cannot write the config
+        #   _follow_cfg      what the config listed last time, so a lamp taken off the list stops following
+        #   _follow_sent     device id -> the mireds last sent, so an invisible change is never sent
+        #   _follow_lit      device id -> was it on when we last looked (an off to on is what applies it at once)
+        self.runner.color_watch = self._color_by_hand
+        self.runner.follow_start = self._follow_start
+        self._follow_paused: set = set()
+        self._follow_scene: set = set()
+        self._follow_cfg: set = set()
+        self._follow_sent: Dict[str, float] = {}
+        self._follow_lit: Dict[str, bool] = {}
         self._fired: Dict[str, str] = self._load_fired()  # schedule id -> local date it last fired
         # What the connector has seen, reported to the app so a dead button can be told apart from a dead link
         self._last_press_at: Optional[float] = None
@@ -148,6 +163,7 @@ class Agent:
         self._index_bindings()
         s = cfg.get("settings", {})
         self.gestures.configure(int(s.get("double_ms", 350)), int(s.get("hold_ms", 500)))
+        self._follow_config_changed()
         LOG.info("config applied: %d bindings, %d groups, %d presets",
                  len(cfg.get("bindings", [])), len(cfg.get("groups", [])), len(cfg.get("presets", [])))
 
@@ -226,6 +242,7 @@ class Agent:
             return
         st = _state_of(d)
         self._dirty_states[device_id] = st
+        self._follow_zone(device_id, st.get("level"))
         settle = self.runner.zone_changed(device_id, st.get("level"))
         if settle is not None:
             asyncio.create_task(settle)
@@ -339,6 +356,7 @@ class Agent:
         assert self.bridge
         st = _state_of(self.bridge.devices[device_id])
         self._dirty_states[device_id] = st
+        self._follow_zone(device_id, st.get("level"))
         settle = self.runner.zone_changed(device_id, st.get("level"))
         if settle is not None:
             asyncio.create_task(settle)
@@ -468,16 +486,154 @@ class Agent:
         """Today's sun, the clock in the home's zone, and what "on" means right now under the wind-down curve."""
         loc = self.config.get("settings", {}).get("location")
         now = self.local_time()
-        out: dict = {"now": now.isoformat(), "sunrise": None, "sunset": None, "curve_level": None}
+        out: dict = {"now": now.isoformat(), "sunrise": None, "sunset": None, "noon": None, "curve_level": None}
         if loc:
             rise, sset = sun_times(now.date(), float(loc["lat"]), float(loc["lng"]), now.tzinfo)
             out["sunrise"] = rise.isoformat() if rise else None
             out["sunset"] = sset.isoformat() if sset else None
+            # solar noon exists even where the sun does not rise, and "Follow the day" hangs its curve on it
+            out["noon"] = solar_noon(now.date(), float(loc["lng"]), now.tzinfo).isoformat()
         try:
             out["curve_level"] = self.runner.curve_level()
         except Exception:  # noqa: BLE001
             pass
         return out
+
+    # ---------- follow the day ----------
+    # A lamp set to follow the day keeps its white matched to the time of day, on its own, for as long as it is on.
+    # The curve is agent/daylight.py, anchored to this home's sun. Three rules hold everywhere in here:
+    #   it never turns a lamp on, it never touches a lamp that is off, and it never changes brightness unless the
+    #   owner asked for that (and then only downwards, so it can never fight the evening wind-down).
+    # Talking to the lamp goes through hue.set_warmth, which is the only path that does not send "on".
+    def _follow_settings(self) -> Dict[str, Any]:
+        fd = (self.config.get("settings") or {}).get("follow_day") or {}
+        return {"ids": [str(i) for i in (fd.get("device_ids") or [])], "brightness": bool(fd.get("brightness"))}
+
+    def following(self) -> List[str]:
+        """Every lamp following the day right now: the ones the app lists, plus any a scene switched on, less the
+        ones somebody has since set by hand."""
+        s = self._follow_settings()
+        ids = list(dict.fromkeys(list(s["ids"]) + sorted(self._follow_scene)))
+        return [d for d in ids if d not in self._follow_paused]
+
+    def _follow_config_changed(self) -> None:
+        cfg = set(self._follow_settings()["ids"])
+        for did in self._follow_cfg - cfg:      # taken off the list in the app: it stops following, scene or not
+            self._follow_scene.discard(did)
+            self._follow_paused.discard(did)
+            self._follow_sent.pop(did, None)
+        for did in cfg - self._follow_cfg:      # switched on in the app: a lamp paused earlier starts again
+            self._follow_paused.discard(did)
+        self._follow_cfg = cfg
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        asyncio.create_task(self._follow_apply())
+        self._send_follow()
+
+    def _day_of(self):
+        """This home's sun as a date -> Day, or None when the app has not been told where the home is."""
+        loc = (self.config.get("settings") or {}).get("location")
+        if not loc:
+            return None
+        return daylight.day_of_home(float(loc["lat"]), float(loc["lng"]), self.local_time().tzinfo)
+
+    def follow_state(self) -> Dict[str, Any]:
+        """For the app: who is following, who was set by hand, and the white each one is showing."""
+        return {
+            "ids": self.following(),
+            "paused": sorted(self._follow_paused),
+            "kelvin": {d: daylight.mirek_to_kelvin(m) for d, m in self._follow_sent.items()},
+            "brightness": self._follow_settings()["brightness"],
+            "ready": self._day_of() is not None,
+        }
+
+    def _send_follow(self) -> None:
+        self.send({"type": "follow", "follow": self.follow_state()})
+
+    def _color_by_hand(self, device_id: str) -> None:
+        """A colour or a warmth set by a person, a button or a scene: that lamp stops following until it is next
+        turned off and on again. The follow loop itself never comes through here."""
+        if device_id not in self.following():
+            return
+        LOG.info("%s was set by hand, so it stops following the day until it is next switched on", device_id)
+        self._follow_paused.add(device_id)
+        self._follow_sent.pop(device_id, None)
+        self._send_follow()
+
+    async def _follow_start(self, device_id: str) -> None:
+        """A scene entry that says "follow the day": from now on it follows, starting at the white for right now."""
+        self._follow_scene.add(device_id)
+        self._follow_paused.discard(device_id)
+        self._follow_sent.pop(device_id, None)
+        await self._follow_apply([device_id], fade=2.0)
+        self._send_follow()
+
+    def _follow_zone(self, device_id: str, level: Optional[int]) -> None:
+        """Every state change passes here: an off-to-on sets the white at once, and going off lets a lamp that was
+        set by hand start following again the next time it comes on."""
+        lit = bool(level and level > 0)
+        was = self._follow_lit.get(device_id)
+        self._follow_lit[device_id] = lit
+        if was == lit:
+            return
+        if not lit:
+            self._follow_sent.pop(device_id, None)
+            if device_id in self._follow_paused:
+                self._follow_paused.discard(device_id)
+                self._send_follow()
+            return
+        if device_id in self.following():
+            asyncio.create_task(self._follow_apply([device_id]))
+
+    async def _follow_apply(self, only: Optional[List[str]] = None, fade: float = daylight.FADE_SECONDS) -> int:
+        day_of = self._day_of()
+        if day_of is None or not self.bridge:
+            return 0
+        want = set(self.following())
+        ids = [d for d in (only if only is not None else sorted(want)) if d in want]
+        if not ids:
+            return 0
+        now = self.local_time()
+        settings = self._follow_settings()
+        curve = self.runner.curve_level() if settings["brightness"] else None
+        sent = 0
+        for did in ids:
+            dev = self.bridge.devices.get(did)
+            ct = (dev or {}).get("ct")
+            if not dev or not ct:
+                continue
+            here = self.runner._level_of(did)
+            if here <= 0:            # off: leave it alone, and never turn it on
+                continue
+            mirek = daylight.lamp_mirek(now, day_of, ct.get("min"), ct.get("max"))
+            shown = ct.get("mirek")
+            if not daylight.worth_sending(self._follow_sent.get(did), mirek) and (shown is None or abs(float(shown) - mirek) < daylight.MIN_STEP_MIREK):
+                continue
+            # brightness is the owner's choice and the evening wind-down's number, never a second curve of our own,
+            # and it only ever comes down: a lamp already dimmer than the curve is left where it is
+            level = int(curve) if curve is not None and here > curve else None
+            try:
+                ok = await self.hue.set_warmth(did, daylight.mirek_to_kelvin(mirek), fade_s=fade, level=level)
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("follow the day: %s did not take it (%s)", did, exc)
+                continue
+            if ok:
+                self._follow_sent[did] = mirek
+                sent += 1
+        if sent:
+            self._send_follow()
+        return sent
+
+    async def follow_loop(self) -> None:
+        """Every five minutes, the white every following lamp that is on should be showing."""
+        while True:
+            try:
+                await self._follow_apply()
+            except Exception as exc:  # noqa: BLE001
+                LOG.exception("follow the day: %s", exc)
+            await asyncio.sleep(daylight.EVERY_SECONDS)
 
     # ---------- hub link ----------
     def send(self, msg: dict) -> None:
@@ -503,6 +659,7 @@ class Agent:
                         "type": "hello", "version": VERSION, "commit": current_commit(), "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
                         "timers": self.runner.timers, "sun": self.sun_today(), "next_runs": self.next_fire_times(), "hue": self.hue.info(),
+                        "follow": self.follow_state(),
                         "health": self.health(),
                     }))
                     LOG.info("hub connected")
@@ -531,6 +688,7 @@ class Agent:
             self.apply_config(msg["config"])
             self.send({"type": "sun", "sun": self.sun_today(), "next_runs": self.next_fire_times()})
             self.send({"type": "health", "health": self.health()})
+            self._send_follow()
         elif t == "command":
             cid = msg.get("id")
             action = msg.get("action") or {}
@@ -781,10 +939,12 @@ async def main() -> None:
     hub = asyncio.create_task(agent.hub_loop())
     sched = asyncio.create_task(agent.schedule_loop())
     watch = asyncio.create_task(agent.button_watch())
+    follow = asyncio.create_task(agent.follow_loop())
     await stop.wait()
     hub.cancel()
     sched.cancel()
     watch.cancel()
+    follow.cancel()
     await agent.hue.stop()
     if agent.bridge:
         await agent.bridge.close()

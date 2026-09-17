@@ -35,6 +35,13 @@ function hexHsv(hex) {
 const sameHex = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 // A lamp's disc in its own colour: pale at a low level, the full colour at 100 (the lamp ramp's idea, in any hue).
 function lampFill(hex, lv) { const v = clamp(Number(lv) || 0, 0, 100); if (v <= 0) return lampOff(); return mixHex('#FFFFFF', String(hex).toUpperCase(), 0.3 + 0.7 * v / 100); }
+// The hex a scene entry paints as: the white it would be showing right now when it follows the day, the tint for
+// a fixed white temperature, the colour itself otherwise.
+function entryHex(c) {
+  if (!c) return null;
+  if (c.follow) { const k = typeof followKelvin === 'function' ? followKelvin() : null; return k ? kelvinHex(k) : null; }
+  return c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex || null;
+}
 // The hex a colour state paints as: the tint for a white temperature, the colour itself otherwise.
 function stateHex(c) { if (!c) return null; if (c.mode === 'ct' && c.kelvin) return kelvinHex(c.kelvin); return c.hex || null; }
 // The fill for a light's disc: its real colour when its state carries one and it is on, else the lamp ramp.
@@ -50,8 +57,9 @@ const SWATCH_ROW = SWATCH_COLOURS.filter(([n]) => n !== 'Indigo' && n !== 'Pink'
 function hexDist(a, b) { const p = h => h.slice(1).match(/../g).map(x => parseInt(x, 16)); const [r, g, bl] = p(a), [r2, g2, b2] = p(b); return Math.abs(r - r2) + Math.abs(g - g2) + Math.abs(bl - b2); }
 // The swatch the lamp is nearest to, so a colour that came from a scene or a command still marks one; null when it is its own colour.
 function nearestSwatch(hex, list) { if (!hex) return null; const hexes = list || SWATCH_ROW.map(([, hx]) => hx); let best = null, bd = 1e9; for (const hx of hexes) { const d = hexDist(hex, hx); if (d < bd) { bd = d; best = hx; } } return bd <= 48 ? best : null; }
-// "Warm · 2700 K", "Red", "Custom" or "As it is": what a colour value reads as.
+// "Warm · 2700 K", "Red", "Custom", "Follow the day" or "As it is": what a colour value reads as.
 function colourLabel(cur) {
+  if (cur && cur.follow) return 'Follow the day';
   if (!cur || !cur.mode) return 'As it is';
   if (cur.mode === 'ct' && cur.kelvin) return `${warmthName(cur.kelvin)} · ${Math.round(cur.kelvin)} K`;
   if (!cur.hex) return 'As it is';
@@ -61,7 +69,12 @@ function colourLabel(cur) {
   return bd <= 48 ? best : 'Custom';
 }
 // The dot beside a label: the colour itself, the white tone for a warmth, nothing when the lamp is left as it is.
-function colourDot(cur) { const c = !cur || !cur.mode ? null : cur.mode === 'ct' ? kelvinHex(cur.kelvin) : cur.hex; return `<span class="cdot ${c ? '' : 'none'}" data-cdot style="background:${c || 'transparent'}"></span>`; }
+function colourDot(cur) {
+  // a value that follows the day has no fixed colour: the dot shows the white it would be showing right now
+  const followK = cur && cur.follow && typeof followKelvin === 'function' ? followKelvin() : null;
+  const c = followK ? kelvinHex(followK) : !cur || !cur.mode ? null : cur.mode === 'ct' ? kelvinHex(cur.kelvin) : cur.hex;
+  return `<span class="cdot ${c ? '' : 'none'}" data-cdot style="background:${c || 'transparent'}"></span>`;
+}
 const warmthGrad = (kmin, kmax) => `linear-gradient(to right, ${kelvinHex(kmin)}, ${kelvinHex((kmin + kmax) / 2)}, ${kelvinHex(kmax)})`;
 const HUE_GRAD = 'linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)';
 const satGrad = h => `linear-gradient(to right, #ffffff, ${hsvHex(h, 100, 100)})`;
@@ -70,16 +83,28 @@ const nearestWhite = (k, whites) => whites.reduce((a, w) => (Math.abs(w - k) < M
 
 // ---------- the component ----------
 // d: the device (color, ct, ct_range); cur: {mode: 'ct' | 'xy' | null, kelvin?, hex?}; opts: none (offer "As it is"),
-// more (hue strip open), bare (the sheet's own title already says "Warmth", so the row does not repeat it).
+// more (hue strip open), bare (the sheet's own title already says "Warmth", so the row does not repeat it),
+// nested (it sits under a row that already names it and shows its value, so the matching label is not repeated).
 function colorCtlHTML(ns, id, d, cur, opts = {}) {
   if (!d || (!d.ct && !d.color)) return '';
   cur = cur || {};
   const [kmin, kmax] = d.ct && d.ct_range ? d.ct_range : [2000, 6500];
   const isCt = cur.mode === 'ct' && cur.kelvin != null, isXy = cur.mode === 'xy' && !!cur.hex;
-  const k = clamp(Math.round(cur.kelvin || 2700), kmin, kmax), kp = kelvinPct(k, kmin, kmax);
+  // `follow`: this host lets the lamp follow the day instead of taking a colour of its own (the scene editor).
+  // Only a lamp that can change its white is ever offered it.
+  const followChip = opts.follow && d.ct ? `<button class="chip ${cur.follow ? 'sel' : ''}" data-act="c-follow">Follow the day</button>` : '';
+  const noneChip = opts.none ? `<button class="chip ${cur.mode || cur.follow ? '' : 'sel'}" data-act="c-none">As it is</button>` : '';
+  // a value that follows the day has no fixed warmth: the slider rests where the day is now, so the row says what
+  // the lamp would be showing rather than nothing at all
+  const followK = cur.follow && d.ct && typeof followKelvinFor === 'function' ? followKelvinFor(id) : null;
+  const k = clamp(Math.round(followK || cur.kelvin || 2700), kmin, kmax), kp = kelvinPct(k, kmin, kmax);
+  const showK = isCt || followK != null;
+  // the row above a nested component is named after what the lamp can do: "Colour" when it has colour, "Warmth"
+  // when white is all it has. Whichever of the two it is, the component does not say it a second time.
+  const hideWarmth = opts.bare || (opts.nested && !d.color), hideColour = opts.nested && !!d.color;
   let h = `<div class="ccol" data-cns="${ns}" data-cid="${id}" data-kmin="${kmin}" data-kmax="${kmax}">`;
   if (d.ct) {
-    h += `<div class="crow"><div class="clab">${opts.bare ? '' : '<span class="t">Warmth</span>'}<span class="d"><span data-cname>${isCt ? warmthName(k) : 'As it is'}</span><span class="k" data-ck>${isCt ? ` · ${k} K` : ''}</span></span></div>
+    h += `<div class="crow"><div class="clab">${hideWarmth ? '' : '<span class="t">Warmth</span>'}<span class="d"><span data-cname>${showK ? warmthName(k) : 'As it is'}</span><span class="k" data-ck>${showK ? ` · ${k} K` : ''}</span></span></div>
       <input class="slider grad" type="range" min="0" max="100" value="${kp}" style="--p:${kp}%;--track-grad:${warmthGrad(kmin, kmax)}" data-cwarm="${id}" aria-label="Warmth"></div>`;
   }
   if (d.color) {
@@ -88,13 +113,13 @@ function colorCtlHTML(ns, id, d, cur, opts = {}) {
     const whites = d.ct ? [] : SWATCH_WHITES.filter(w => w >= kmin && w <= kmax);
     const selWhite = isCt && whites.length ? nearestWhite(k, whites) : null;
     const COLOURS = opts.full ? SWATCH_COLOURS : SWATCH_ROW;
-    h += `<div class="crow"><div class="clab"><span class="t">Colour</span><span class="d" data-ccur>${esc(colourLabel(cur))}</span></div>
-      <div class="chips ${opts.full ? 'swatches wrap' : 'scroll swatches'}">${opts.none ? `<button class="chip ${cur.mode ? '' : 'sel'}" data-act="c-none">As it is</button>` : ''}${whites.map(w => `<button class="swatch ${selWhite === w && Math.abs(k - w) <= 250 ? 'sel' : ''}" data-act="c-swatch" data-k="${w}" style="background:${kelvinHex(w)}" aria-label="${warmthName(w)}, ${w} K" title="${warmthName(w)}"></button>`).join('')}${(() => { const near = isXy ? nearestSwatch(cur.hex, COLOURS.map(([, hx]) => hx)) : null; return COLOURS.map(([n, hx]) => `<button class="swatch ${isXy && (sameHex(cur.hex, hx) || (near && sameHex(near, hx))) ? 'sel' : ''}" data-act="c-swatch" data-hex="${hx}" style="background:${hx}" aria-label="${n}" title="${n}"></button>`).join(''); })()}</div></div>`;
+    h += `<div class="crow">${hideColour ? '' : `<div class="clab"><span class="t">Colour</span><span class="d" data-ccur>${esc(colourLabel(cur))}</span></div>`}
+      <div class="chips ${opts.full ? 'swatches wrap' : 'scroll swatches'}">${noneChip}${followChip}${whites.map(w => `<button class="swatch ${selWhite === w && Math.abs(k - w) <= 250 ? 'sel' : ''}" data-act="c-swatch" data-k="${w}" style="background:${kelvinHex(w)}" aria-label="${warmthName(w)}, ${w} K" title="${warmthName(w)}"></button>`).join('')}${(() => { const near = isXy ? nearestSwatch(cur.hex, COLOURS.map(([, hx]) => hx)) : null; return COLOURS.map(([n, hx]) => `<button class="swatch ${isXy && (sameHex(cur.hex, hx) || (near && sameHex(near, hx))) ? 'sel' : ''}" data-act="c-swatch" data-hex="${hx}" style="background:${hx}" aria-label="${n}" title="${n}"></button>`).join(''); })()}</div></div>`;
     // on the colour's own screen the strip is already open, so the row names what it is rather than promising more
     h += valueRow(opts.full ? 'Any colour' : 'More colours…', colourDot(isXy ? cur : null), 'c-more', `data-cid="${id}"`, { open: !!opts.more });
     if (opts.more) h += `<div class="vrow-body cmore">${colorMoreHTML(id, cur)}</div>`;
-  } else if (opts.none) {
-    h += `<div class="chips" style="margin-top:4px"><button class="chip ${cur.mode ? '' : 'sel'}" data-act="c-none">As it is</button></div>`;
+  } else if (opts.none || followChip) {
+    h += `<div class="chips" style="margin-top:4px">${noneChip}${followChip}</div>`;
   }
   return h + '</div>';
 }
@@ -111,16 +136,19 @@ function colorPaint(root, cur) {
   cur = cur || {};
   const kmin = Number(root.dataset.kmin), kmax = Number(root.dataset.kmax);
   const isCt = cur.mode === 'ct' && cur.kelvin != null, isXy = cur.mode === 'xy' && !!cur.hex;
-  const k = clamp(Math.round(cur.kelvin || 2700), kmin, kmax);
+  const followK = cur.follow && typeof followKelvin === 'function' ? followKelvin() : null;
+  const showK = isCt || followK != null;
+  const k = clamp(Math.round(followK || cur.kelvin || 2700), kmin, kmax);
   const warm = root.querySelector('[data-cwarm]');
   if (warm && !warm.dataset.drag) { const p = kelvinPct(k, kmin, kmax); warm.value = p; warm.style.setProperty('--p', `${p}%`); }
-  const nm = root.querySelector('[data-cname]'); if (nm) nm.textContent = isCt ? warmthName(k) : 'As it is';
-  const ck = root.querySelector('[data-ck]'); if (ck) ck.textContent = isCt ? ` · ${k} K` : '';
+  const nm = root.querySelector('[data-cname]'); if (nm) nm.textContent = showK ? warmthName(k) : 'As it is';
+  const ck = root.querySelector('[data-ck]'); if (ck) ck.textContent = showK ? ` · ${k} K` : '';
   const whites = [...root.querySelectorAll('.swatch[data-k]')].map(b => Number(b.dataset.k));
   const selWhite = isCt && whites.length ? nearestWhite(k, whites) : null;
   const near = isXy ? nearestSwatch(cur.hex, [...root.querySelectorAll('.swatch[data-hex]')].map(b => b.dataset.hex)) : null;
   root.querySelectorAll('.swatch').forEach(b => b.classList.toggle('sel', b.dataset.k ? (selWhite === Number(b.dataset.k) && Math.abs(k - selWhite) <= 250) : (isXy && (sameHex(cur.hex, b.dataset.hex) || (near && sameHex(near, b.dataset.hex))))));
-  const none = root.querySelector('[data-act="c-none"]'); if (none) none.classList.toggle('sel', !cur.mode);
+  const none = root.querySelector('[data-act="c-none"]'); if (none) none.classList.toggle('sel', !cur.mode && !cur.follow);
+  const fol = root.querySelector('[data-act="c-follow"]'); if (fol) fol.classList.toggle('sel', !!cur.follow);
   const lab = root.querySelector('[data-ccur]'); if (lab) lab.textContent = colourLabel(cur);
   const dot = root.querySelector('[data-cdot]'); if (dot) { dot.style.background = isXy ? cur.hex : 'transparent'; dot.classList.toggle('none', !isXy); }
   const hs = root.querySelector('[data-chue]'), ss = root.querySelector('[data-csat]');
@@ -176,6 +204,7 @@ document.addEventListener('click', e => {
   const { root, host, id } = c;
   if (act === 'c-swatch') { host.set(id, el.dataset.k ? { kelvin: Number(el.dataset.k) } : { hex: el.dataset.hex }); colorPaint(root, host.cur(id)); }
   else if (act === 'c-none') { host.set(id, null); colorPaint(root, host.cur(id)); }
+  else if (act === 'c-follow') { if (host.follow) host.follow(id, !(host.cur(id) || {}).follow); colorPaint(root, host.cur(id)); }
   else if (act === 'c-more') {
     const body = root.querySelector('.cmore');
     if (body) { body.remove(); el.classList.remove('open'); }

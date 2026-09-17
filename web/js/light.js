@@ -27,7 +27,7 @@ function lampColor(lv, dark) { // eslint-disable-line no-unused-vars
 const lvText = v => (v > 0 ? `${v}%` : 'Off');
 const lvLabel = (v, dim) => (dim ? lvText(v) : v > 0 ? 'On' : 'Off'); // a switch is on or off, never a percentage
 const discSize = lv => Math.round(24 + 32 * clamp(lv, 0, 100) / 100);
-const heroSize = lv => Math.round(108 + 36 * clamp(lv, 0, 100) / 100);
+const heroSize = lv => Math.round(100 + 28 * clamp(lv, 0, 100) / 100);
 // `fill` overrides the ramp: a Hue lamp's disc is painted in its own colour (js/color.js lampFill).
 function lampHTML(lv, size, inner, cls = '', dark = false, fill = null) { return `<span class="lamp ${lv > 0 ? '' : 'off'} ${cls}" style="width:${size}px;height:${size}px;background:${fill || lampColor(lv, dark)}">${inner || ''}</span>`; }
 // One tween, only when something actually changed. Without GSAP (or under reduced motion) the value is set outright.
@@ -134,7 +134,7 @@ function pickKind(id, k) {
 
 // ---------- tiles: a little picture of the light each one controls ----------
 function tileItems(t) {
-  if (t.startsWith('p:')) { const p = presets().find(x => x.id === t.slice(2)); if (!p) return []; return Object.entries(p.levels).filter(([id]) => dev(id)).map(([id, v]) => { const lv = levelOf(v), c = colorOf(v); return { lv, icon: lightIcon(dev(id)), fill: c && lv > 0 ? lampFill(c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex, lv) : null }; }); }
+  if (t.startsWith('p:')) { const p = presets().find(x => x.id === t.slice(2)); if (!p) return []; return Object.entries(p.levels).filter(([id]) => dev(id)).map(([id, v]) => { const lv = levelOf(v), c = colorOf(v); const h = entryHex(c); return { lv, icon: lightIcon(dev(id)), fill: h && lv > 0 ? lampFill(h, lv) : null }; }); }
   if (t.startsWith('s:')) return [{ lv: 0, icon: 'scene' }];
   return targetDevices(t).map(id => { const d = dev(id); const lv = isOn(id) ? (level(id) || 100) : 0; return { lv, icon: d.domain === 'light' || d.domain === 'switch' ? lightIcon(d) : domainIcon(d.domain), fill: colorState(id) && lv > 0 ? lightFill(id, lv) : null }; });
 }
@@ -455,10 +455,16 @@ function openLightSheet(id, opts = {}) {
 const colourTitle = d => (d.color ? 'Colour' : 'Warmth');
 // The name alone on the row ("Warm", "Red"), never the kelvin: the row has one line, and the number belongs to the
 // pane behind it, where the warmth slider prints it.
-function colourValueHTML(cur) { return `${colourDot(cur)}${esc(String(colourLabel(cur)).split(' · ')[0])}`; }
+function colourValueHTML(cur, id) {
+  const tag = id && typeof followTagHTML === 'function' ? followTagHTML(id) : '';
+  return `${colourDot(cur)}${esc(String(colourLabel(cur)).split(' · ')[0])}${tag}`;
+}
 function colourRowHTML(id, d, cur) {
   if (!d.ct && !d.color) return '';
-  return `<div class="card pad0 list ld-colour">${valueRow(colourTitle(d), `<span data-ldcolour>${colourValueHTML(cur)}</span>`, 'light-colour', `data-id="${id}"`)}</div>`;
+  // a lamp that is following the day says so beside the white it is showing, and the row under it is where that
+  // is switched on and off (docs/ux-progressive.md 2.24)
+  const follow = typeof followRowHTML === 'function' ? followRowHTML(id) : '';
+  return `<div class="card pad0 list ld-colour">${valueRow(colourTitle(d), `<span data-ldcolour>${colourValueHTML(cur, id)}</span>`, 'light-colour', `data-id="${id}"`)}${follow}</div>`;
 }
 // The colour controls: their own pane, pushed from the row, with a back arrow to the light's page. The sheet goes
 // large because the warmth slider, the swatches and the hue strip need the room (docs/ia-v5.md 3, 5).
@@ -499,7 +505,7 @@ function wireLightSheet() {
   LD.paintColor = () => {
     tintWell(); apply(LD.lv);
     colorPaint($('#sheet-root .ccol'), LD.color);
-    const v = $('#sheet-root [data-ldcolour]'); if (v) v.innerHTML = colourValueHTML(LD.color);
+    const v = $('#sheet-root [data-ldcolour]'); if (v) v.innerHTML = colourValueHTML(LD.color, LD.id);
   };
   // the disc follows the finger with an 80ms lag, so it breathes rather than snaps
   const quick = window.gsap && MOTION.d > 0 ? gsap.quickTo(st, 'lv', { duration: .08, ease: 'power3.out', onUpdate: () => apply(st.lv) }) : v => { st.lv = v; apply(v); };
@@ -695,6 +701,7 @@ function paintLight() {
   paintMoodRows();
   paintRings();
   paintLightDetail();
+  if (typeof paintFollow === 'function') paintFollow();
   paintHouseCard();
 }
 

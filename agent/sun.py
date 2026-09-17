@@ -1,6 +1,7 @@
-"""Sunrise and sunset for a date and location, NOAA's algorithm. No network, no dependencies.
+"""Sunrise, sunset and solar noon for a date and location, NOAA's algorithm. No network, no dependencies.
 
     sunrise, sunset = sun_times(date, lat, lng, tz)   # timezone-aware datetimes, or (None, None) in polar cases
+    noon = solar_noon(date, lng, tz)                  # always a time: the sun is highest even when it never rises
 """
 from __future__ import annotations
 
@@ -19,7 +20,8 @@ def _julian_day(d: date) -> float:
     return int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + day + b - 1524.5
 
 
-def _sun_event_utc_minutes(d: date, lat: float, lng: float, rising: bool) -> Optional[float]:
+def _solar_params(d: date) -> Tuple[float, float]:
+    """Declination (degrees) and the equation of time (minutes) for the given date."""
     jd = _julian_day(d)
     t = (jd - 2451545.0) / 36525.0
     # geometric mean longitude and anomaly of the sun (degrees)
@@ -37,6 +39,11 @@ def _sun_event_utc_minutes(d: date, lat: float, lng: float, rising: bool) -> Opt
     y = math.tan(math.radians(eps / 2)) ** 2
     l0r, mr = math.radians(l0), math.radians(m)
     eq_time = 4 * math.degrees(y * math.sin(2 * l0r) - 2 * e * math.sin(mr) + 4 * e * y * math.sin(mr) * math.cos(2 * l0r) - 0.5 * y * y * math.sin(4 * l0r) - 1.25 * e * e * math.sin(2 * mr))
+    return decl, eq_time
+
+
+def _sun_event_utc_minutes(d: date, lat: float, lng: float, rising: bool) -> Optional[float]:
+    decl, eq_time = _solar_params(d)
     latr, declr = math.radians(lat), math.radians(decl)
     cos_ha = (math.cos(math.radians(90.833)) / (math.cos(latr) * math.cos(declr))) - math.tan(latr) * math.tan(declr)
     if cos_ha < -1 or cos_ha > 1:
@@ -57,3 +64,11 @@ def sun_times(d: date, lat: float, lng: float, tz: tzinfo) -> Tuple[Optional[dat
         utc = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) + timedelta(minutes=mins)
         out.append(utc.astimezone(tz))
     return out[0], out[1]
+
+
+def solar_noon(d: date, lng: float, tz: tzinfo) -> datetime:
+    """When the sun is highest on that date, in the given zone. Defined everywhere, polar day and night included."""
+    _, eq_time = _solar_params(d)
+    mins = 720 - 4 * lng - eq_time  # minutes after UTC midnight
+    utc = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) + timedelta(minutes=mins)
+    return utc.astimezone(tz)

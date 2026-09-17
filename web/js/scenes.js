@@ -70,26 +70,44 @@ const sceneLightRow = (p, d) => {
   else if (d.domain === 'switch') ctl = `<button class="sw ${lv > 0 ? 'on' : ''}" data-act="scene-sw" data-id="${d.device_id}"></button>`;
   else ctl = `<div class="sliderwrap" style="width:140px"><input class="slider" type="range" min="0" max="100" value="${lv}" style="--p:${lv}%" data-scene-lvl="${d.device_id}" aria-label="${esc(d.name)} in this look"></div>`;
   // a Hue lamp's disc shows the colour the scene gives it; under its row, a value row opens the colour controls
-  const fill = c && lv > 0 ? lampFill(c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex, lv) : null;
+  const h = entryHex(c); const fill = h && lv > 0 ? lampFill(h, lv) : null;
   let row = `<div class="item">${lampHTML(lv, 28, '', '', false, fill)}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${d.domain === 'fan' ? cap(fanName(v)) : lv > 0 ? lv + '%' : 'Off'}</div></div>${ctl}</div>`;
   if (d.ct || d.color) row += valueRow(d.color ? 'Colour' : 'Warmth', `${colourDot(c)}<span data-scol="${d.device_id}">${esc(colourLabel(c))}</span>`, 'c-expand', `data-cns="scene" data-cid="${d.device_id}"`);
   return row;
 };
-// The scene editor's colour controls (js/color.js): the entry becomes {level, kelvin | hex}, or a plain level again.
+// The scene editor's colour controls (js/color.js): the entry becomes {level, kelvin | hex}, {level, follow: true}
+// for a lamp the scene sets to follow the day, or a plain level again.
+function paintSceneEntry(id) {
+  const p = presets().find(x => x.id === S.sceneEdit); if (!p) return;
+  const c = colorOf(p.levels[id]), lv = levelOf(p.levels[id]);
+  const lab = document.querySelector(`[data-scol="${id}"]`); if (lab) { lab.textContent = colourLabel(c); const dot = lab.previousElementSibling; if (dot) dot.outerHTML = colourDot(c); }
+  const row = lab && lab.closest('.item') && lab.closest('.item').previousElementSibling; const lamp = row && row.querySelector('.lamp');
+  const h = entryHex(c);
+  if (lamp) lamp.style.background = h && lv > 0 ? lampFill(h, lv) : lampColor(lv);
+}
 colorHost('scene', {
   cur: id => { const p = presets().find(x => x.id === S.sceneEdit); return p ? colorOf(p.levels[id]) : null; },
-  opts: () => ({ none: true }),
+  opts: id => ({ none: true, nested: true, follow: typeof canFollow === 'function' && canFollow(dev(id)) }),
   set(id, v) {
     const p = presets().find(x => x.id === S.sceneEdit); if (!p || !(id in p.levels)) return;
     const lv = levelOf(p.levels[id]);
     p.levels[id] = v ? { level: lv, ...v } : lv;
     markEdited(p); saveSoon();
-    const c = colorOf(p.levels[id]);
-    const lab = document.querySelector(`[data-scol="${id}"]`); if (lab) { lab.textContent = colourLabel(c); const dot = lab.previousElementSibling; if (dot) dot.outerHTML = colourDot(c); }
-    const row = lab && lab.closest('.item') && lab.closest('.item').previousElementSibling; const lamp = row && row.querySelector('.lamp');
-    if (lamp) lamp.style.background = c && lv > 0 ? lampFill(c.mode === 'ct' ? kelvinHex(c.kelvin) : c.hex, lv) : lampColor(lv);
+    paintSceneEntry(id);
+  },
+  // "Follow the day" in place of a fixed colour: running the scene switches following on for that lamp and sets it
+  // to the white for the moment it runs (the connector does both, agent/daylight.py).
+  follow(id, on) {
+    const p = presets().find(x => x.id === S.sceneEdit); if (!p || !(id in p.levels)) return;
+    const lv = levelOf(p.levels[id]);
+    p.levels[id] = on ? { level: lv, follow: true } : lv;
+    markEdited(p); saveSoon();
+    paintSceneEntry(id);
   },
 });
+// Lamps a scene sets to follow the day. Running it switches following on for them, so the app and the connector
+// agree about what is following and it survives a restart.
+function sceneFollowIds(p) { return Object.entries((p && p.levels) || {}).filter(([, v]) => v && typeof v === 'object' && v.follow === true).map(([id]) => id); }
 // The scene editor (docs/ux-progressive.md 2.10): the name, only the lights in the look, "Add or remove lights", the pair, More, Done.
 function openSceneEditor(id, fresh = false, opts = {}) {
   const p = presets().find(x => x.id === id); if (!p) return;

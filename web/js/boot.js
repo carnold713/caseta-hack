@@ -15,7 +15,10 @@ document.addEventListener('click', async e => {
     case 'toggle': toggleTarget(d.t); break;
     case 'power-on': setPowerOn(d.v); break;
     case 'fav': toggleFav(d.t); break;
-    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el.classList.contains('item') ? el.querySelector('.ic') || el : el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) }); break; }
+    case 'run-scene': { const t = d.t; el.classList.add('running'); setTimeout(() => el.classList.remove('running'), 1000); if (window.Motion) { Motion.press(el.classList.contains('item') ? el.querySelector('.ic') || el : el); Motion.sceneRun([el.querySelector('.face'), ...sceneRooms(t)].filter(Boolean)); } await command(t.startsWith('p:') ? { type: 'preset', preset_id: t.slice(2) } : { type: 'scene', scene_id: t.slice(2) });
+      // a scene may say "follow the day" for a lamp: the connector sets the white for right now, and this keeps it following
+      if (t.startsWith('p:') && typeof sceneFollowIds === 'function') { const p = presets().find(x => x.id === t.slice(2)); const ids = sceneFollowIds(p).filter(id => !followIds().includes(id)); if (ids.length) setFollow(ids, true, { render: false, msg: 'Following the day' }); }
+      break; }
     case 'cmd': command(JSON.parse(d.cmd)); break;
     case 'fan': setFan(d.id, d.s); break;
     case 'alloff': if (!el._held) powerButton(); el._held = false; break;
