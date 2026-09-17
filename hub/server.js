@@ -322,7 +322,8 @@ function handleAgentMessage(ws, msg) {
     // it saw. The app shows it in Settings so a dead button can be told apart from a dead link.
     case 'health': {
       const h = msg.health || {};
-      log(`connector holds ${h.bindings} button settings, bridge ${h.bridge_ok ? 'answering' : 'not answering'} with ${h.buttons} buttons, ${h.presses} presses seen`);
+      log(`connector holds ${h.bindings} button settings, bridge ${h.bridge_ok ? 'answering' : 'not answering'} with ${h.buttons} buttons, ${h.presses} presses seen`
+        + ((h.quiet_remotes || []).length ? `, no buttons listed for ${h.quiet_remotes.join(', ')}` : ''));
       if (agentInfo) { agentInfo.health = msg.health || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     }

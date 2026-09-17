@@ -39,7 +39,7 @@ from adddevice import AddSession
 from hue import Hue, color_state
 from sun import sun_times
 
-VERSION = "0.8.3"
+VERSION = "0.8.4"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -294,6 +294,9 @@ class Agent:
             "last_press_at": self._last_press_at,
             "last_press": self._last_press,
             "presses": self._press_count,
+            "quiet_remotes": [did for did, d in (self.bridge.devices if self.bridge else {}).items()
+                              if _domain(d.get("type")) == "pico"
+                              and not any(b.get("parent_device") == did for b in self.bridge.buttons.values())],
         }
 
     def _on_button(self, button_id: str, event: str) -> None:
@@ -654,6 +657,31 @@ class Agent:
         # Replace this process with a fresh one on the new code. Works with or without systemd/launchd.
         os.execv(sys.executable, [sys.executable, *sys.argv])
 
+    async def button_watch(self) -> None:
+        """A remote the bridge lists without its buttons can never be pressed: nothing is subscribed to it.
+        The bridge does list them eventually, so look again every few minutes until it does, and say so."""
+        while True:
+            await asyncio.sleep(300)
+            try:
+                if not self.bridge:
+                    continue
+                quiet = [did for did, d in self.bridge.devices.items()
+                         if _domain(d.get("type")) == "pico"
+                         and not any(b.get("parent_device") == did for b in self.bridge.buttons.values())]
+                if not quiet:
+                    continue
+                LOG.info("no buttons listed for %s, asking the bridge again", ", ".join(quiet))
+                await self._refresh()
+                still = [did for did in quiet
+                         if not any(b.get("parent_device") == did for b in self.bridge.buttons.values())]
+                if len(still) < len(quiet):
+                    LOG.info("the bridge listed the buttons for %s", ", ".join(d for d in quiet if d not in still))
+                self.send({"type": "health", "health": self.health()})
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("button watch: %s", exc)
+
     async def _refresh(self) -> None:
         # Reconnect to re-read /device, /button, /virtualbutton after changes in the Lutron app.
         assert self.bridge
@@ -718,9 +746,11 @@ async def main() -> None:
             pass
     hub = asyncio.create_task(agent.hub_loop())
     sched = asyncio.create_task(agent.schedule_loop())
+    watch = asyncio.create_task(agent.button_watch())
     await stop.wait()
     hub.cancel()
     sched.cancel()
+    watch.cancel()
     await agent.hue.stop()
     if agent.bridge:
         await agent.bridge.close()
