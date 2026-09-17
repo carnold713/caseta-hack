@@ -259,7 +259,7 @@ wssAgent.on('connection', (ws, req) => {
 function handleAgentMessage(ws, msg) {
   switch (msg.type) {
     case 'hello':
-      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, since: new Date().toISOString() };
+      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, health: msg.health || null, since: new Date().toISOString() };
       if (agentInfo.update_available && config.settings.auto_update !== false && !updating) {
         console.log(`[hub] connector ${msg.version} is behind ${LATEST_AGENT_VERSION}, updating it`);
         setTimeout(() => sendCommand({ type: 'update' }, 15 * 60 * 1000).then(r => { updating = false; console.log('[hub] connector updated', JSON.stringify(r.detail)); }).catch(e => { updating = false; console.warn('[hub] connector update failed:', e.message); broadcast({ type: 'toast', level: 'error', msg: `Connector update failed: ${e.message}` }); }), 3000);
@@ -313,6 +313,11 @@ function handleAgentMessage(ws, msg) {
     }
     case 'hue':
       if (agentInfo) { agentInfo.hue = msg.hue || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
+      break;
+    // What the connector has: the bridge, its buttons, how many button settings it holds and the last press
+    // it saw. The app shows it in Settings so a dead button can be told apart from a dead link.
+    case 'health':
+      if (agentInfo) { agentInfo.health = msg.health || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     case 'add_heard':
       if (Array.isArray(msg.heard)) addSession.heard = msg.heard;

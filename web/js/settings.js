@@ -10,10 +10,31 @@ VIEWS.settings = {
   body() { return S.settingsMore ? settingsMore() : settingsGlance(); },
 };
 
+// "just now", "4 minutes ago", "2 hours ago": how long since something happened, in plain words.
+function ago(ms) {
+  const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (secs < 45) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${plural(mins, 'minute')} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${plural(hours, 'hour')} ago`;
+  return `${plural(Math.round(hours / 24), 'day')} ago`;
+}
 function connectionTipHTML() {
   const nd = controllable().length, np = remotes().length;
   const everConnected = devices().length > 0;
-  if (S.agent.online) return `<div class="tip"><div class="grow"><span class="cap">Connection</span><div class="t">Connected to your home</div><div class="d">${plural(nd, 'light')} · ${plural(np, 'remote')}</div></div><span class="tag green">Connected</span></div>`;
+  if (S.agent.online) {
+    const h = (S.agent.info || {}).health || null;
+    // What the connector itself holds. A remote that does nothing is usually one of these three: the bridge
+    // is not listing its buttons, the connector has no button settings, or no press ever arrives.
+    const facts = h ? [
+      h.bridge_ok ? `${plural(h.buttons || 0, 'button')} on the bridge` : 'the bridge is not answering',
+      `${plural(h.bindings || 0, 'button setting')}`,
+      h.last_press_at ? `last press ${ago(h.last_press_at * 1000)}` : 'no press seen yet',
+    ].join(' · ') : '';
+    const warn = h && (!h.bridge_ok || !h.buttons || !h.bindings);
+    return `<div class="tip"><div class="grow"><span class="cap">Connection</span><div class="t">Connected to your home</div><div class="d">${plural(nd, 'light')} · ${plural(np, 'remote')}</div>${facts ? `<div class="d">${esc(facts)}</div>` : ''}</div><span class="tag ${warn ? 'red' : 'green'}">${warn ? 'Check this' : 'Connected'}</span></div>`;
+  }
   return `<div class="tip top"><div class="grow"><span class="cap">Connection</span><div class="t">${everConnected ? 'Not connected right now' : 'Not connected yet'}</div><div class="d">${everConnected ? `Last seen with ${plural(nd, 'light')} and ${plural(np, 'remote')}.` : 'A small helper program on a computer in your house links this app to your Lutron bridge.'}</div>${everConnected ? `<div class="d">Is the computer running the connector on and awake?<br>Is it on the same Wi-Fi as your Lutron bridge?<br>Is the internet working there?</div><div class="d">Your remotes keep working from their last saved settings while disconnected.</div>` : ''}</div><span class="tag red">Not connected</span></div>`;
 }
 // The glance (docs/ux-progressive.md 2.17): the connection, the home, night-time, this app, More settings, sign out.

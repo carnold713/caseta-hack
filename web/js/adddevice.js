@@ -172,6 +172,9 @@ async function removeDevice(id, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }
   try {
     const r = await api('/api/removedevice', { method: 'POST', body: JSON.stringify({ id }) });
+    // Everything this device was part of, kept so Undo can put it back and so adding the same one again
+    // brings its buttons back with it. Removing a remote used to throw its settings away for good.
+    const before = JSON.stringify(S.config);
     forgetDevice(id);
     delete S.inv.devices[id];
     if (S.remote === id) S.remote = null;
@@ -179,7 +182,7 @@ async function removeDevice(id, btn) {
     const stillThere = !!(r && r.detail && r.detail.still_listed);
     if (stillThere) hideDevice(id);
     await save({ msg: `${d.name} removed`, quiet: true, render: true });
-    toast(`${d.name} removed from your home`);
+    toast(`${d.name} removed from your home`, { undo: async () => { S.config = JSON.parse(before); unhideDevice(id); await save({ msg: 'Put back' }); render(); } });
     // Older connectors do not say whether the bridge let go of it: watch for it coming back.
     if (!stillThere) setTimeout(() => { if (dev(id)) { hideDevice(id); save({ quiet: true, render: true }); } }, 4000);
   } catch (e) {

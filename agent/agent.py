@@ -39,7 +39,7 @@ from adddevice import AddSession
 from hue import Hue, color_state
 from sun import sun_times
 
-VERSION = "0.8.2"
+VERSION = "0.8.3"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -121,6 +121,10 @@ class Agent:
         self.runner.local_time = self.local_time
         self.runner.sunset_hm = self.sunset_hm
         self._fired: Dict[str, str] = self._load_fired()  # schedule id -> local date it last fired
+        # What the connector has seen, reported to the app so a dead button can be told apart from a dead link
+        self._last_press_at: Optional[float] = None
+        self._last_press: Optional[str] = None
+        self._press_count = 0
 
     # ---------- config ----------
     def _load_cached_config(self) -> Dict[str, Any]:
@@ -281,9 +285,26 @@ class Agent:
         return out
 
     # ---------- events ----------
+    def health(self) -> Dict[str, Any]:
+        """What the connector has right now, so the app can say why a button might not be doing anything."""
+        return {
+            "bridge_ok": bool(self.bridge and self.bridge.devices),
+            "buttons": len(self.bridge.buttons) if self.bridge else 0,
+            "bindings": len(self.config.get("bindings", [])),
+            "last_press_at": self._last_press_at,
+            "last_press": self._last_press,
+            "presses": self._press_count,
+        }
+
     def _on_button(self, button_id: str, event: str) -> None:
         key = self._button_keys.get(button_id)
+        if event == "Press":
+            self._last_press_at = time.time()
+            self._last_press = key or f"unknown button {button_id}"
+            self._press_count += 1
+            self.send({"type": "health", "health": self.health()})
         if key is None:
+            LOG.warning("press from button %s, which is not on any device we know", button_id)
             return
         device_id, _, num = key.partition("/")
         self.send({"type": "button", "device_id": device_id, "button_number": int(num), "event": event})
@@ -479,6 +500,7 @@ class Agent:
                         "type": "hello", "version": VERSION, "commit": current_commit(), "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
                         "timers": self.runner.timers, "sun": self.sun_today(), "next_runs": self.next_fire_times(), "hue": self.hue.info(),
+                        "health": self.health(),
                     }))
                     LOG.info("hub connected")
                     sender = asyncio.create_task(self._pump(ws))
@@ -505,6 +527,7 @@ class Agent:
         if t == "config":
             self.apply_config(msg["config"])
             self.send({"type": "sun", "sun": self.sun_today(), "next_runs": self.next_fire_times()})
+            self.send({"type": "health", "health": self.health()})
         elif t == "command":
             cid = msg.get("id")
             action = msg.get("action") or {}
