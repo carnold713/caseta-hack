@@ -207,13 +207,6 @@ function moodRowHTML(aid) {
   const cur = moodMatch(aid);
   return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 32, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}</div></div>`;
 }
-// The light page's foot: the room's moods as a quiet caption row of small chips (no setup chips here).
-function moodCaptionHTML(aid) {
-  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
-  if (!ps.length) return '';
-  const cur = moodMatch(aid);
-  return `<div class="ld-moods" data-moods="${aid}"><div class="h3">${esc(areaName(aid))} moods</div><div class="chips scroll">${ps.map(p => { const m = moodById(p.mood); return `<button class="chip sm ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${m.name}</button>`; }).join('')}</div></div>`;
-}
 async function applyMood(aid, mid) {
   const m = moodById(mid); if (!m) return;
   const p = (typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []).find(x => x.mood === mid);
@@ -270,9 +263,9 @@ function lampItemHTML(d) {
   const lv = isOn(d.device_id) ? (level(d.device_id) || 100) : 0;
   const ring = typeof ringClass === 'function' ? ringClass(d) : '';
   const size = lv > 0 ? 56 : 44;
-  // the ring says the lamp can show colour; the small rainbow button beside it is the way in, the same one the room row carries
-  const rainbow = ring ? `<button class="iconbtn sm rainbow ln-rainbow ${ring}" data-act="light-colour" data-id="${d.device_id}" title="${d.color ? 'Colour' : 'Warmth'}" aria-label="${esc(d.name)}: ${d.color ? 'colour' : 'warmth'}">${ICON('sun', 'sm')}</button>` : '';
-  return `<div class="ln-lamp ${lv > 0 ? 'on' : ''}" role="button" tabindex="0" data-act="lamp-toggle" data-id="${d.device_id}" ${lv > 0 ? 'data-long="open-light"' : ''} data-t="d:${d.device_id}" data-level="${lv}" data-timer="${timerOn(d.device_id) ? 1 : ''}" title="${esc(d.name)}" aria-label="${esc(d.name)}, ${lv > 0 ? 'on' : 'off'}"><span class="lring ${ring}">${lampHTML(lv, size, ICON(lightIcon(d), 'sm'), '', false, lightFill(d.device_id, lv))}${timerOn(d.device_id) ? `<span class="badge">${ICON('clock')}</span>` : ''}${rainbow}</span><span class="ln-name">${esc(d.name)}</span></div>`;
+  // the rainbow ring is the whole sign that this lamp has colour (docs/ia-v5.md 2): no button sits on the disc any
+  // more. A hold opens the lamp's page, where Colour is one row under the dimmer.
+  return `<div class="ln-lamp ${lv > 0 ? 'on' : ''}" role="button" tabindex="0" data-act="lamp-toggle" data-id="${d.device_id}" ${lv > 0 ? 'data-long="open-light"' : ''} data-t="d:${d.device_id}" data-level="${lv}" data-timer="${timerOn(d.device_id) ? 1 : ''}" title="${esc(d.name)}" aria-label="${esc(d.name)}, ${lv > 0 ? 'on' : 'off'}"><span class="lring ${ring}">${lampHTML(lv, size, ICON(lightIcon(d), 'sm'), '', false, lightFill(d.device_id, lv))}${timerOn(d.device_id) ? `<span class="badge">${ICON('clock')}</span>` : ''}</span><span class="ln-name">${esc(d.name)}</span></div>`;
 }
 // The hint under the row, the first three times Home is seen.
 function lampHintHTML() {
@@ -440,24 +433,46 @@ function openLightSheet(id, opts = {}) {
   LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null, color: colour ? { ...colour } : null, more: false };
   const well = `<div class="vcol"><div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"></div>
       <div class="vsteps"><button class="iconbtn down" data-act="ld-step" data-d="-10" aria-label="Dimmer">${ICON('chev')}</button><button class="iconbtn up" data-act="ld-step" data-d="10" aria-label="Brighter">${ICON('chev')}</button></div></div>`;
-  // one composition: the disc and the well side by side, centred; one readout under them; colour next; the three actions; the room's moods last
+  // one composition: the disc and the well side by side, centred; one readout under them; Colour as one value row; the
+  // three actions. The warmth slider and the swatches live behind the Colour row, which pushes its own pane.
   const body = `<div class="ld" id="ld" data-id="${id}">
     <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lightFill(id, lv)}" role="button" tabindex="0" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
       ${dim ? well : `<div class="ld-swcol"><button class="sw ${lv > 0 ? 'on' : ''}" data-act="ld-toggle" aria-label="On or off"></button></div>`}</div>
     <div class="ld-level">${lvLabel(lv, dim)}</div>
-    ${d.ct || d.color ? colorCtlHTML('ld', id, d, colour, {}) : ''}
+    ${colourRowHTML(id, d, colour)}
     <div class="ld-actions">
       <button class="rbtn" data-act="ld-timer" data-t="${t}" ${lv > 0 ? '' : 'disabled'}><span class="c">${ICON('clock')}</span><span>Sleep timer</span></button>
-      <button class="rbtn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}"><span class="c">${ICON('star')}</span><span>Favourite</span></button>
+      <button class="rbtn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}"><span class="c">${ICON('star')}</span><span>Show first</span></button>
       <button class="rbtn" data-act="ld-more" data-id="${id}"><span class="c">${ICON('dots')}</span><span>More</span></button>
     </div>
-    ${moodCaptionHTML(devArea(d))}
   </div>`;
   sheet.open(esc(d.name), body, { detent: 'medium', sub: lightCaption(id) });
   wireLightSheet();
-  // From the rainbow button on a row: reveal the Colour section, and no further. Scrolling to its top would clamp at
-  // the sheet's small overflow and cut the disc and the well under the header without ever reaching Colour.
-  if (opts.scrollTo === 'colour') { const sb = $('#sheet-root .sb'); const c = sb && sb.querySelector('.ccol'); if (c) { const go = () => { const need = c.offsetTop + c.offsetHeight - sb.clientHeight + 16; if (need > sb.scrollTop) sb.scrollTop = Math.max(0, need); sheet.scrolled(); }; go(); setTimeout(go, 60); setTimeout(() => { c.classList.remove('m-land'); void c.offsetWidth; c.classList.add('m-land'); setTimeout(() => c.classList.remove('m-land'), 700); }, 120); } }
+  if (opts.colour) openColourSheet(id);
+}
+// Colour on the light page: one value row whose value is the colour the lamp is showing, a dot and its name.
+// That row is both the sign that this lamp has colour and the way in (docs/ia-v5.md 2).
+const colourTitle = d => (d.color ? 'Colour' : 'Warmth');
+// The name alone on the row ("Warm", "Red"), never the kelvin: the row has one line, and the number belongs to the
+// pane behind it, where the warmth slider prints it.
+function colourValueHTML(cur) { return `${colourDot(cur)}${esc(String(colourLabel(cur)).split(' · ')[0])}`; }
+function colourRowHTML(id, d, cur) {
+  if (!d.ct && !d.color) return '';
+  return `<div class="card pad0 list ld-colour">${valueRow(colourTitle(d), `<span data-ldcolour>${colourValueHTML(cur)}</span>`, 'light-colour', `data-id="${id}"`)}</div>`;
+}
+// The colour controls: their own pane, pushed from the row, with a back arrow to the light's page. The sheet goes
+// large because the warmth slider, the swatches and the hue strip need the room (docs/ia-v5.md 3, 5).
+function openColourSheet(id) {
+  const d = dev(id); if (!d || (!d.ct && !d.color)) return;
+  if (!LD || LD.id !== id) { openLightSheet(id); return; }
+  // a lamp with colour needs the room for the swatches and the hue strip, so the sheet goes large; a lamp that only
+  // has a white temperature is one slider, and a compact sheet is the whole of it
+  const bare = !d.color;
+  // on its own screen the hue strip is open from the start and every colour is shown at once: this is the screen the
+  // owner could not find, so nothing on it is hidden behind a second tap
+  if (LD.more == null || LD.more === false) LD.more = !!d.color;
+  const body = `<div class="ld-ccol">${colorCtlHTML('ld', id, d, LD.color, { more: !!LD.more, bare, full: true })}</div>`;
+  showSheet('light-colour', colourTitle(d), body, { detent: d.color ? 'large' : 'compact', sub: `${esc(d.name)} · ${esc(devAreaName(d))}`, back: true, onBack: () => openLightSheet(id) });
 }
 // The light page's More (2.2): what kind of light it is, and removing it from the home.
 function lightMoreSheet(id) {
@@ -479,7 +494,13 @@ function wireLightSheet() {
   const tintWell = () => { if (sl) { const h = stateHex(LD.color); if (h) sl.style.setProperty('--vfill', lampFill(h, 100)); else sl.style.removeProperty('--vfill'); } };
   const apply = v => { const s = heroSize(v); disc.style.width = disc.style.height = `${s}px`; disc.style.background = fill(v); disc.classList.toggle('off', v <= 0); };
   tintWell();
-  LD.paintColor = () => { tintWell(); apply(LD.lv); colorPaint(root.querySelector('.ccol'), LD.color); };
+  // the well's tint and the disc always; the colour pane's controls when that is what is showing, and the row's
+  // dot and name when the light's page is (the sheet holds one or the other, never both)
+  LD.paintColor = () => {
+    tintWell(); apply(LD.lv);
+    colorPaint($('#sheet-root .ccol'), LD.color);
+    const v = $('#sheet-root [data-ldcolour]'); if (v) v.innerHTML = colourValueHTML(LD.color);
+  };
   // the disc follows the finger with an 80ms lag, so it breathes rather than snaps
   const quick = window.gsap && MOTION.d > 0 ? gsap.quickTo(st, 'lv', { duration: .08, ease: 'power3.out', onUpdate: () => apply(st.lv) }) : v => { st.lv = v; apply(v); };
   LD.show = (v, animate) => {
@@ -531,7 +552,8 @@ colorHost('ld', {
 });
 // A real state change while the sheet is open moves the disc once (never while the thumb is on it).
 function paintLightDetail() {
-  const root = $('#ld'); if (!root || !LD || !LD.show || LD.dragging || Date.now() - LD.lastSend < 800 || levelQuiet(`d:${LD.id}`)) return;
+  const root = $('#ld') || $('#sheet-root .ccol');
+  if (!root || !LD || !LD.show || LD.dragging || Date.now() - LD.lastSend < 800 || levelQuiet(`d:${LD.id}`)) return;
   const v = level(LD.id) || 0;
   if (v !== LD.lv) LD.show(v, true);
   // the lamp's colour changed elsewhere (the Hue app, a scene): the disc and the controls follow
@@ -694,7 +716,7 @@ document.addEventListener('click', e => {
     case 'lamp-toggle': { const now = Date.now(); if (el._tap && now - el._tap < 300) break; el._tap = now; toggleTarget(`d:${d.id}`); break; }  // a double tap is one toggle, not two
     case 'lamp-room': openRoomCard(d.id); break;
     case 'light-open': openLightSheet(d.id); break;
-    case 'light-colour': openLightSheet(d.id, { scrollTo: 'colour' }); break;
+    case 'light-colour': { const id = d.id; if (LD && LD.id === id && sheet.isOpen()) openColourSheet(id); else openLightSheet(id, { colour: true }); break; }
     case 'kind-open': openKindSheet(d.id); break;
     case 'room-more': if (typeof goRoom === 'function') goRoom(d.area, 'setup'); break;
     case 'room-kind': { const id = d.id; openKindSheet(id); break; }

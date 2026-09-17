@@ -6,11 +6,12 @@ document.addEventListener('click', async e => {
   const act = el.dataset.act; const d = el.dataset;
   switch (act) {
     case 'nav': e.preventDefault(); S.view = d.view; S.room = null; S.roomPage = null; location.hash = S.view; if (sheet.isOpen()) sheet.close(); render(); window.scrollTo(0, 0); break;
-    case 'conn': S.view = 'settings'; S.settingsMore = false; location.hash = 'settings'; render(); break;
-    case 'settings-more': S.settingsMore = true; render(); window.scrollTo(0, 0); break;
+    case 'conn': S.view = 'settings'; S.settingsPage = null; location.hash = 'settings'; render(); break;
+    // Settings is one screen; a rare thing lives on a short page behind one row (docs/ia-v5.md 3)
+    case 'settings-page': S.settingsPage = d.p; render(); window.scrollTo(0, 0); break;
     // the disclosure eases open in place, so the cards under it are not thrown 288px down in one frame
     case 'settings-how': { S.settingsHow = !S.settingsHow; const w = el.parentElement.querySelector('.dwrap'); if (w) w.classList.toggle('open', S.settingsHow); el.setAttribute('aria-expanded', S.settingsHow ? 'true' : 'false'); break; }
-    case 'settings-back': S.settingsMore = false; render(); window.scrollTo(0, 0); break;
+    case 'settings-back': S.settingsPage = null; render(); window.scrollTo(0, 0); break;
     case 'toggle': toggleTarget(d.t); break;
     case 'power-on': setPowerOn(d.v); break;
     case 'fav': toggleFav(d.t); break;
@@ -32,8 +33,7 @@ document.addEventListener('click', async e => {
     case 'recipe-more': recipeMoreSheet(); break;
     case 'recipe-night': S.night = true; renderRecipeSheet(); break;
     case 'recipe-clear': applyRecipe('nothing'); break;
-    case 'recipe-all': S.recipeAll = true; renderRecipeSheet(); break;
-    case 'recipe-fewer': S.recipeAll = false; renderRecipeSheet(); break;
+    case 'recipe-all': openAllWaysSheet(); break;
     case 'pick-open': S.pickOpen = !S.pickOpen; renderRecipeSheet(); break;
     case 'scene-lights': openSceneLightsSheet(); break;
     case 'scene-more': sceneMoreSheet(); break;
@@ -82,7 +82,10 @@ document.addEventListener('click', async e => {
     case 'pw-help': sheet.open("Your home's password", `<p class="body">It's the password whoever set up your hub chose. It's in the hub's settings under APP_PASSWORD.</p><div class="spacer"></div><button class="btn primary lg block" data-act="sheet-close">Got it</button>`); break;
     case 'setup-open': openSetupSheet(); break;
     case 'home-name': openHomeName(); break;
-    case 'prefs': openPrefs(); break;
+    case 'night-open': openNightSheet(); break;
+    case 'power-open': openPowerSheet(); break;
+    case 'onlevel-open': openOnLevelSheet(); break;
+    case 'where-open': openWhereSheet(); break;
   }
 });
 
@@ -186,7 +189,7 @@ document.addEventListener('submit', async e => {
 // The splash: the brand blue with the wordmark, then a 255ms fade into whatever the first page is.
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 300); } }, 255);
 $('#sheet-root .scrim').addEventListener('click', () => sheet.close());
-document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; S.remote = null; S.room = null; S.roomPage = null; S.settingsMore = false; location.hash = S.view; render(); window.scrollTo(0, 0); }));
+document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; S.remote = null; S.room = null; S.roomPage = null; S.settingsPage = null; location.hash = S.view; render(); window.scrollTo(0, 0); }));
 // The hash is the route: #home, #remotes, #room/<area>, #room/<area>/setup, #scenes, #automations, #settings.
 window.addEventListener('hashchange', () => {
   const parts = location.hash.slice(1).split('/'); const v = parts[0];

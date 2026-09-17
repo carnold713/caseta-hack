@@ -1,13 +1,24 @@
-/* Settings: the glance (connection, your home, night-time, this app) and More settings (connector, timing, light sets, back up). */
+/* Settings: one screen of grouped inset lists, and a short page behind each rare thing (docs/ia-v5.md 3, stage 6).
+   There is no "More settings" any more: the connector went to "Your home", the devices to "Rooms and lights", the
+   timing sliders and the back up to Advanced, and the night hours and the power button to "The house". */
 'use strict';
 
+// The short pages behind a row. Each is a title and a body; `settings-page` opens one, `settings-back` leaves it.
+const SETTINGS_PAGES = {
+  home: { title: 'Your home', body: () => settingsHomePage() },
+  devices: { title: 'Rooms and lights', body: () => settingsDevicesPage() },
+  sets: { title: 'Light sets', body: () => settingsSetsPage() },
+  timing: { title: 'Remote timing', body: () => settingsTimingPage() },
+  backup: { title: 'Back up and restore', body: () => settingsBackupPage() },
+};
 VIEWS.settings = {
-  nested() { return !!S.settingsMore; },
+  nested() { return !!(S.settingsPage && SETTINGS_PAGES[S.settingsPage]); },
   top() {
-    if (S.settingsMore) return nestedTop('settings-back', 'More settings');
+    const p = SETTINGS_PAGES[S.settingsPage];
+    if (p) return nestedTop('settings-back', esc(p.title));
     return `<div class="t1">Settings</div>${statusCircle()}`;
   },
-  body() { return S.settingsMore ? settingsMore() : settingsGlance(); },
+  body() { const p = SETTINGS_PAGES[S.settingsPage]; return p ? p.body() : settingsGlance(); },
 };
 
 // "just now", "4 minutes ago", "2 hours ago": how long since something happened, in plain words.
@@ -41,68 +52,104 @@ function connectionTipHTML() {
   }
   return `<div class="tip top"><div class="grow"><span class="cap">Connection</span><div class="t">${everConnected ? 'Not connected right now' : 'Not connected yet'}</div><div class="d">${everConnected ? `Last seen with ${plural(nd, 'light')} and ${plural(np, 'remote')}.` : 'A small helper program on a computer in your house links this app to your Lutron bridge.'}</div>${everConnected ? `<div class="d">Is the computer running the connector on and awake?<br>Is it on the same Wi-Fi as your Lutron bridge?<br>Is the internet working there?</div><div class="d">Your remotes keep working from their last saved settings while disconnected.</div>` : ''}</div><span class="tag red">Not connected</span></div>`;
 }
-// The glance (docs/ux-progressive.md 2.17): the connection, the home, night-time, this app, More settings, sign out.
+// One word for the state of the link, for the row at the top of Settings.
+function connTag() {
+  if (connState() === 'reconnecting' && devices().length) return `<span class="tag">Reconnecting</span>`;
+  if (S.agent.online) { const h = (S.agent.info || {}).health || null; const warn = h && (!h.bridge_ok || !h.buttons || !h.bindings); return `<span class="tag ${warn ? 'red' : 'green'}">${warn ? 'Check this' : 'Connected'}</span>`; }
+  return `<span class="tag red">Not connected</span>`;
+}
+// Settings, one screen (docs/ia-v5.md 3): the connection, your home, the house, this app, advanced, sign out.
+// Section headers are the caps style the rest of the app uses for a grouped list.
 function settingsGlance() {
-  const s = S.config.settings; const info = S.agent.info || {};
+  const s = S.config.settings;
   const everConnected = devices().length > 0;
+  const loc = s.location;
+  const nSets = groups().length;
+  const nLights = controllable().length;
   return `
-    ${connectionTipHTML()}
+    <div class="card pad0 list" style="margin-top:8px">
+      ${valueRow('Your home', connTag(), 'settings-page', 'data-p="home"')}
+    </div>
     ${everConnected ? '' : `<button class="tip" data-act="setup-open" style="margin-top:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Let's connect your home</div><div class="d">About ten minutes, once.</div></div><span class="go">${ICON('chev')}</span></button>`}
-    <div class="h2">Your home</div>
+    <div class="gh">Your home</div>
     <div class="card pad0 list">
       ${valueRow('Home name', esc(s.home_name || 'Home'), 'home-name')}
-      ${valueRow('Rooms', esc(plural(areas().length, 'room')), 'rooms-open', '', { sub: 'Make one, rename it, move lights and remotes between them' })}
-      <button class="item" data-act="ad-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a device</div><div class="d">Without the Lutron app</div></div></button>
-      ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div></button>`; })()}
-      <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
+      ${valueRow('Rooms and lights', `${plural(areas().length, 'room')} · ${plural(nLights, 'light')}`, 'settings-page', 'data-p="devices"')}
+      ${valueRow('Where the home is', loc && loc.name ? esc(loc.name) : (loc ? 'Saved' : 'Not set'), 'where-open')}
+      ${valueRow('Light sets', nSets ? esc(plural(nSets, 'set')) : 'None yet', 'settings-page', 'data-p="sets"')}
     </div>
-    <div class="h2">Preferences</div>
+    <div class="gh">The house</div>
     <div class="card pad0 list">
-      ${valueRow('Power button, night hours, night look', '', 'prefs', '', { sub: prefsSub() })}
+      ${valueRow('Power button', (s.power_on || 'restore') === 'all' ? 'Everything on' : 'What was on before', 'power-open')}
+      ${valueRow('Night', `${fmtTime(s.night_start)} to ${fmtTime(s.night_end)}`, 'night-open')}
+      ${valueRow('Brightness for on', `${s.group_on_level}%`, 'onlevel-open')}
     </div>
-    <div class="h2">This app</div>
+    <div class="gh">This app</div>
     <div class="card pad0 list">
       <button class="item" data-act="install-help"><div class="grow"><div class="t">Add to your home screen</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
       <button class="item" data-act="activity"><div class="grow"><div class="t">Recent activity</div><div class="d">What was pressed, and what happened</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
       <button class="item" data-act="ideas"><div class="grow"><div class="t">Ideas for your home</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
     </div>
+    <div class="gh">Advanced</div>
+    <div class="card pad0 list">
+      ${valueRow('Remote timing', '', 'settings-page', 'data-p="timing"', { sub: 'Double press and hold' })}
+      ${valueRow('Back up and restore', '', 'settings-page', 'data-p="backup"')}
+    </div>
     <div class="spacer"></div>
-    ${moreRow('Connector, timing, default brightness, light sets, back up', 'settings-more', 'More settings')}
-    <div class="spacer"></div>
-    <div class="card pad0 list"><button class="item" data-act="logout"><div class="grow"><div class="t">Sign out</div></div><span class="chev">${ICON('x', 'sm')}</span></button></div>`;
+    <div class="card pad0 list"><button class="item danger" data-act="logout"><div class="grow"><div class="t">Sign out</div></div><span class="chev">${ICON('x', 'sm')}</span></button></div>`;
 }
-// More settings: a nested page with the connector, timing, light sets, back up and restore.
-function settingsMore() {
+// Your home: how the app reaches the lights, and the connector that does it.
+function settingsHomePage() {
   const s = S.config.settings; const info = S.agent.info || {};
-  const groupsList = groups();
+  const everConnected = devices().length > 0;
   return `
-    <div class="h2" style="margin-top:8px">Connector</div>
+    ${connectionTipHTML()}
+    ${everConnected ? '' : `<button class="tip" data-act="setup-open" style="margin-top:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Let's connect your home</div><div class="d">About ten minutes, once.</div></div><span class="go">${ICON('chev')}</span></button>`}
+    <div class="gh">The connector</div>
     <div class="card pad0 list">
       <div class="item"><div class="grow"><div class="t">Connector ${esc(info.version || '?')}${info.commit ? ` <span class="faint small">(${esc(info.commit)})</span>` : ''}</div><div class="d">${info.update_available ? `${esc(info.latest)} is available` : 'Up to date'}${(info.bridge || {}).host ? ` · bridge at ${esc(info.bridge.host)}` : ''}</div></div>${info.update_available ? `<button class="btn sm primary" data-act="update-connector">Update</button>` : ''}</div>
       <label class="item"><div class="grow"><div class="t">Update automatically</div><div class="d">Whenever a new version is out, the connector updates itself.</div></div><button class="sw ${s.auto_update ? 'on' : ''}" data-act="auto-update"></button></label>
       <div class="item disc" style="flex-wrap:wrap"><button class="dsum grow" data-act="settings-how" aria-expanded="${S.settingsHow ? 'true' : 'false'}"><div><div class="t">How your home connects</div><div class="d">The helper program, and the line that installs it</div></div>${ICON('chev', 'sm')}</button><div class="dwrap ${S.settingsHow ? 'open' : ''}"><div>${howToHTML()}</div></div></div>
+    </div>`;
+}
+// Rooms and lights: the rooms themselves, adding a device without the Lutron app, the Hue bridge, and looking again.
+function settingsDevicesPage() {
+  const info = S.agent.info || {};
+  return `
+    <div class="gh">Rooms</div>
+    <div class="card pad0 list">
+      ${valueRow('Rooms', esc(plural(areas().length, 'room')), 'rooms-open', '', { sub: 'Make one, rename it, move lights and remotes between them' })}
     </div>
-    <div class="h2">Timing</div>
-    <div class="card">
+    <div class="gh">Lights and remotes</div>
+    <div class="card pad0 list">
+      <button class="item" data-act="ad-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a device</div><div class="d">Without the Lutron app</div></div></button>
+      ${(() => { const h = info.hue; return h && h.paired ? `<button class="item" data-act="hue-open"><div class="grow"><div class="t">Hue bridge</div><div class="d">${plural(h.lights || 0, 'light')} in ${plural(h.rooms || 0, 'room')}${h.error ? ' · not reachable right now' : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>` : `<button class="item" data-act="hue-open"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Connect a Hue bridge</div><div class="d">Philips Hue lights and rooms join the app and your remotes</div></div></button>`; })()}
+      <button class="item" data-act="refresh"><div class="grow"><div class="t">Look for new lights</div></div><span class="chev">${ICON('refresh', 'sm')}</span></button>
+    </div>`;
+}
+// Light sets: a hand-picked mix of lights, for a button or an automation to point at.
+function settingsSetsPage() {
+  return `<div class="card pad0 list" style="margin-top:8px">
+      ${groups().map(g => `<button class="item" data-act="group-edit" data-id="${g.id}"><div class="grow"><div class="t">${esc(g.name)}</div><div class="d">${plural(g.device_ids.length, 'light')}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}
+      <button class="item" data-act="group-new"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">New set</div><div class="d">A hand-picked mix, like Downstairs path.</div></div></button>
+    </div>`;
+}
+// Remote timing: how fast a double press is, how long a hold is, and a live tester.
+function settingsTimingPage() {
+  const s = S.config.settings;
+  return `<div class="card" style="margin-top:8px">
       <label class="field" style="margin-top:0"><span>How fast is a double press? <span id="dv" class="faint">${s.double_ms} ms</span></span><input class="slider" type="range" min="200" max="800" step="10" value="${s.double_ms}" style="--p:${(s.double_ms - 200) / 6}%" data-setting="double_ms"><div class="slidercap"><span>Quick</span><span>Relaxed</span></div></label>
       <label class="field"><span>How long is a hold? <span id="hv" class="faint">${s.hold_ms} ms</span></span><input class="slider" type="range" min="300" max="1500" step="10" value="${s.hold_ms}" style="--p:${(s.hold_ms - 300) / 12}%" data-setting="hold_ms"><div class="slidercap"><span>Short</span><span>Long</span></div></label>
       <div class="d" id="tester" style="margin:4px 0 0">Press a button on any remote to test the timing.</div>
-    </div>
-    <div class="card pad0 list">
-      <div class="item"><div class="grow"><div class="t">Default brightness for on</div><div class="d">Percent, when a button just says "on"</div></div><input type="number" min="1" max="100" value="${s.group_on_level}" data-setting="group_on_level"></div>
-    </div>
-    <div class="h2">Light sets</div>
-    <div class="card pad0 list">
-      ${groupsList.map(g => `<button class="item" data-act="group-edit" data-id="${g.id}"><div class="grow"><div class="t">${esc(g.name)}</div><div class="d">${g.device_ids.length} lights</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`).join('')}
-      <button class="item" data-act="group-new"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">New set</div><div class="d">A hand-picked mix, like Downstairs path.</div></div></button>
-    </div>
-    <div class="spacer"></div>
-    <div class="card pad0 list">
+    </div>`;
+}
+function settingsBackupPage() {
+  return `<div class="card pad0 list" style="margin-top:8px">
       <button class="item" data-act="backup"><div class="grow"><div class="t">Back up settings</div><div class="d">Copies them to the clipboard</div></div><span class="chev">${ICON('copy', 'sm')}</span></button>
       <button class="item" data-act="restore"><div class="grow"><div class="t">Restore settings…</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
     </div>`;
 }
-// How the home connects: the numbered steps and the install line, under More settings.
+// How the home connects: the numbered steps and the install line, behind the row on the Your home page.
 function howToHTML() {
   const line = `curl -fsSL "${location.origin}/install.sh?token=${S.token}" | sh`;
   return `<div class="muted" style="margin-top:8px">
@@ -142,24 +189,55 @@ function paintActivity() { const el = $('#activity'); if (el) el.innerHTML = act
 // The home's name: a small sheet with one field, saved as you type.
 function openHomeName() {
   const s = S.config.settings;
-  sheet.open('Home name', `<label class="field" style="margin-top:0"><span>Name</span><input class="input" value="${esc(s.home_name || '')}" placeholder="Home" data-setting="home_name" maxlength="40" autocomplete="off"></label><p class="d">It shows at the top of Home.</p><div class="sfoot"><button class="btn primary lg block" data-act="sheet-close">Done</button></div>`, { detent: 'compact' });
+  sheet.open('Home name', `<label class="field" style="margin-top:0"><span>Name</span><input class="input" value="${esc(s.home_name || '')}" placeholder="Home" data-setting="home_name" maxlength="40" autocomplete="off"></label><p class="d">It shows at the top of Home. It saves as you type.</p>`, { detent: 'compact', done: true });
   setTimeout(() => { const i = $('#sheet-root [data-setting="home_name"]'); if (i) { i.focus(); i.select(); } }, 350);
 }
-// Preferences (docs/ux-progressive.md 2.17): the power button with the house dark, the night hours, the night look, in one sheet.
-function prefsSub() { const s = S.config.settings; return `${(s.power_on || 'restore') === 'all' ? 'Everything on' : 'What was on before'} · night ${fmtTime(s.night_start)} to ${fmtTime(s.night_end)}`; }
-function openPrefs() {
+// The house's night: the hours and the look, one home for both (docs/ia-v5.md 2). The evening wind-down sheet opens
+// this same sheet rather than keeping a second copy of the hours.
+function openNightSheet(opts = {}) {
   const s = S.config.settings;
   const body = `<div class="card pad0 list">
-      ${powerRowHTML()}
+      <div class="item"><div class="grow"><div class="t">The house goes quiet</div><div class="d">Buttons can do something different from here on.</div></div><input type="time" value="${s.night_start}" data-night="night_start" aria-label="The house goes quiet"></div>
+      <div class="item"><div class="grow"><div class="t">Night ends</div></div><input type="time" value="${s.night_end}" data-night="night_end" aria-label="Night ends"></div>
     </div>
-    <div class="h3" style="margin-top:24px">Night-time</div>
-    <div class="card pad0 list">
-      <div class="item"><div class="grow"><div class="t">Night starts</div><div class="d">Buttons can do something different at night.</div></div><input type="time" value="${s.night_start}" data-setting="night_start" aria-label="Night starts"></div>
-      <div class="item"><div class="grow"><div class="t">Night ends</div></div><input type="time" value="${s.night_end}" data-setting="night_end" aria-label="Night ends"></div>
-      ${nightLookRowHTML()}
-    </div>`;
-  showSheet('prefs', 'Preferences', body, { detent: 'medium', sub: 'The power button, night hours, night look.' });
-  sheet.onClose = () => { const r = document.querySelector('[data-act="prefs"] .d'); if (r) r.textContent = prefsSub(); };
+    <div class="card pad0 list" style="margin-top:16px">${nightLookRowHTML()}</div>`;
+  showSheet('night', 'Night', body, { detent: 'medium', sub: 'The hours, and how the app looks then.', back: !!opts.back, onBack: opts.back || null });
+  sheet.onClose = () => { if (S.view === 'settings' && !S.settingsPage) render(); };
+}
+// One writer for the night hours, wherever they are changed (docs/ia-v5.md 6, stage 6).
+function setNightHours(k, v) {
+  if (!/^\d\d:\d\d$/.test(v)) return;
+  S.config.settings[k] = v;
+  if (k === 'night_start' && typeof rewriteEveningPoints === 'function') rewriteEveningPoints(v);
+  save({ msg: k === 'night_start' ? `Quiet from ${fmtTime(v)}` : `Night ends at ${fmtTime(v)}`, render: false });
+  const wc = $('#wd-cap'); if (wc && typeof windDownCaption === 'function') wc.innerHTML = windDownCaption();
+  const wt = $('#wd-today'); if (wt && typeof todaySentence === 'function') wt.textContent = todaySentence();
+}
+document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.night; if (k) setNightHours(k, e.target.value); });
+// The power button with the house dark: two chips, nothing else.
+function openPowerSheet() {
+  showSheet('power-pref', 'Power button', `<div class="card pad0 list">${powerRowHTML()}</div>`, { detent: 'compact', sub: 'What it does when every light is already off.' });
+  sheet.onClose = () => { if (S.view === 'settings' && !S.settingsPage) render(); };
+}
+// Default brightness for "on": one number.
+function openOnLevelSheet() {
+  const s = S.config.settings;
+  showSheet('onlevel', 'Brightness for on', `<div class="card pad0 list">
+      <div class="item"><div class="grow"><div class="t">Percent</div><div class="d">What a light comes on at when a button or a room switch just says "on".</div></div><input type="number" min="1" max="100" value="${s.group_on_level}" data-setting="group_on_level" aria-label="Brightness for on"></div>
+    </div>`, { detent: 'compact' });
+  sheet.onClose = () => { if (S.view === 'settings' && !S.settingsPage) render(); };
+}
+// Where the home is: the app needs it for sunset, and nothing else. One home for it (docs/ia-v5.md 2).
+function openWhereSheet() {
+  const loc = S.config.settings.location;
+  LOC.host = openWhereSheet;
+  // once it is known the sentence has done its job: the card says where, and the two ways to change it follow
+  const body = loc
+    ? `<div class="card pad0 list"><div class="item"><div class="grow"><div class="t">${esc(loc.name || 'Saved')}</div><div class="d">${typeof sunAt === 'function' && sunAt('sunset', 0) ? `Sunset today ${fmtTime(sunAt('sunset', 0))}` : 'Kept on your own hub'}</div></div></div></div>
+       <div class="stack" style="margin-top:24px"><button class="btn block" data-act="loc-city">Pick a different city</button><button class="btn ghost block" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button></div>`
+    : locationBodyHTML();
+  showSheet('where', 'Where the home is', body, { detent: 'medium', sub: 'For sunset and sunrise.' });
+  sheet.onClose = () => { LOC.host = null; if (S.view === 'settings' && !S.settingsPage) render(); };
 }
 function openInstallHelp() {
   sheet.open('Add to your home screen', `<div class="stack">
@@ -175,10 +253,11 @@ function openGroupEditor(id) {
   sheet.open('Light set', `<label class="field"><span>Name</span><input class="input" id="group-name" value="${esc(g.name)}"></label>${rows}<div class="spacer"></div><button class="btn danger block" data-act="group-delete" data-id="${g.id}">Delete this set</button>`, { detent: 'large', done: true });
 }
 
-// The power button with the house dark: bring back what was on, or turn everything on.
+// The power button with the house dark: bring back what was on, or turn everything on. The sheet's own title says
+// which button this is, so the row is the sentence and the two chips.
 function powerRowHTML() {
   const cur = S.config.settings.power_on || 'restore';
-  return `<div class="item" style="flex-wrap:wrap"><div class="grow"><div class="t">Power button with the house dark</div><div class="d">${cur === 'all' ? 'Turns every light on at its usual level.' : 'Brings back the lights that were on before, at the same levels.'}</div></div>
+  return `<div class="item" style="flex-wrap:wrap"><div class="grow"><div class="d">${cur === 'all' ? 'Turns every light on at its usual level.' : 'Brings back the lights that were on before, at the same levels.'}</div></div>
     <div class="chips" style="flex-basis:100%;margin-top:4px" data-power-on>${[['restore', 'What was on before'], ['all', 'Everything']].map(([v, l]) => `<button class="chip sm ${cur === v ? 'sel' : ''}" data-act="power-on" data-v="${v}">${l}</button>`).join('')}</div></div>`;
 }
 function setPowerOn(v) {

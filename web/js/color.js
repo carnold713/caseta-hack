@@ -49,7 +49,7 @@ const SWATCH_ROW = SWATCH_COLOURS.filter(([n]) => n !== 'Indigo' && n !== 'Pink'
 // how far a colour is from a swatch, in plain channel distance (the same measure colourLabel names a colour by)
 function hexDist(a, b) { const p = h => h.slice(1).match(/../g).map(x => parseInt(x, 16)); const [r, g, bl] = p(a), [r2, g2, b2] = p(b); return Math.abs(r - r2) + Math.abs(g - g2) + Math.abs(bl - b2); }
 // The swatch the lamp is nearest to, so a colour that came from a scene or a command still marks one; null when it is its own colour.
-function nearestSwatch(hex) { if (!hex) return null; let best = null, bd = 1e9; for (const [, hx] of SWATCH_ROW) { const d = hexDist(hex, hx); if (d < bd) { bd = d; best = hx; } } return bd <= 48 ? best : null; }
+function nearestSwatch(hex, list) { if (!hex) return null; const hexes = list || SWATCH_ROW.map(([, hx]) => hx); let best = null, bd = 1e9; for (const hx of hexes) { const d = hexDist(hex, hx); if (d < bd) { bd = d; best = hx; } } return bd <= 48 ? best : null; }
 // "Warm · 2700 K", "Red", "Custom" or "As it is": what a colour value reads as.
 function colourLabel(cur) {
   if (!cur || !cur.mode) return 'As it is';
@@ -69,7 +69,8 @@ const kelvinPct = (k, kmin, kmax) => Math.round((clamp(k, kmin, kmax) - kmin) / 
 const nearestWhite = (k, whites) => whites.reduce((a, w) => (Math.abs(w - k) < Math.abs(a - k) ? w : a), whites[0]);
 
 // ---------- the component ----------
-// d: the device (color, ct, ct_range); cur: {mode: 'ct' | 'xy' | null, kelvin?, hex?}; opts: none (offer "As it is"), more (hue strip open).
+// d: the device (color, ct, ct_range); cur: {mode: 'ct' | 'xy' | null, kelvin?, hex?}; opts: none (offer "As it is"),
+// more (hue strip open), bare (the sheet's own title already says "Warmth", so the row does not repeat it).
 function colorCtlHTML(ns, id, d, cur, opts = {}) {
   if (!d || (!d.ct && !d.color)) return '';
   cur = cur || {};
@@ -78,16 +79,19 @@ function colorCtlHTML(ns, id, d, cur, opts = {}) {
   const k = clamp(Math.round(cur.kelvin || 2700), kmin, kmax), kp = kelvinPct(k, kmin, kmax);
   let h = `<div class="ccol" data-cns="${ns}" data-cid="${id}" data-kmin="${kmin}" data-kmax="${kmax}">`;
   if (d.ct) {
-    h += `<div class="crow"><div class="clab"><span class="t">Warmth</span><span class="d"><span data-cname>${isCt ? warmthName(k) : 'As it is'}</span><span class="k" data-ck>${isCt ? ` · ${k} K` : ''}</span></span></div>
+    h += `<div class="crow"><div class="clab">${opts.bare ? '' : '<span class="t">Warmth</span>'}<span class="d"><span data-cname>${isCt ? warmthName(k) : 'As it is'}</span><span class="k" data-ck>${isCt ? ` · ${k} K` : ''}</span></span></div>
       <input class="slider grad" type="range" min="0" max="100" value="${kp}" style="--p:${kp}%;--track-grad:${warmthGrad(kmin, kmax)}" data-cwarm="${id}" aria-label="Warmth"></div>`;
   }
   if (d.color) {
-    // the Warmth slider above already covers white, so the swatch row carries colour alone on a lamp that has both
+    // the Warmth slider above already covers white, so the swatch row carries colour alone on a lamp that has both.
+    // `full`: the colour's own screen has the room for every colour at once, wrapped, with nothing off the edge.
     const whites = d.ct ? [] : SWATCH_WHITES.filter(w => w >= kmin && w <= kmax);
     const selWhite = isCt && whites.length ? nearestWhite(k, whites) : null;
+    const COLOURS = opts.full ? SWATCH_COLOURS : SWATCH_ROW;
     h += `<div class="crow"><div class="clab"><span class="t">Colour</span><span class="d" data-ccur>${esc(colourLabel(cur))}</span></div>
-      <div class="chips scroll swatches">${opts.none ? `<button class="chip ${cur.mode ? '' : 'sel'}" data-act="c-none">As it is</button>` : ''}${whites.map(w => `<button class="swatch ${selWhite === w && Math.abs(k - w) <= 250 ? 'sel' : ''}" data-act="c-swatch" data-k="${w}" style="background:${kelvinHex(w)}" aria-label="${warmthName(w)}, ${w} K" title="${warmthName(w)}"></button>`).join('')}${(() => { const near = isXy ? nearestSwatch(cur.hex) : null; return SWATCH_ROW.map(([n, hx]) => `<button class="swatch ${isXy && (sameHex(cur.hex, hx) || (near && sameHex(near, hx))) ? 'sel' : ''}" data-act="c-swatch" data-hex="${hx}" style="background:${hx}" aria-label="${n}" title="${n}"></button>`).join(''); })()}</div></div>`;
-    h += valueRow('More colours…', colourDot(isXy ? cur : null), 'c-more', `data-cid="${id}"`, { open: !!opts.more });
+      <div class="chips ${opts.full ? 'swatches wrap' : 'scroll swatches'}">${opts.none ? `<button class="chip ${cur.mode ? '' : 'sel'}" data-act="c-none">As it is</button>` : ''}${whites.map(w => `<button class="swatch ${selWhite === w && Math.abs(k - w) <= 250 ? 'sel' : ''}" data-act="c-swatch" data-k="${w}" style="background:${kelvinHex(w)}" aria-label="${warmthName(w)}, ${w} K" title="${warmthName(w)}"></button>`).join('')}${(() => { const near = isXy ? nearestSwatch(cur.hex, COLOURS.map(([, hx]) => hx)) : null; return COLOURS.map(([n, hx]) => `<button class="swatch ${isXy && (sameHex(cur.hex, hx) || (near && sameHex(near, hx))) ? 'sel' : ''}" data-act="c-swatch" data-hex="${hx}" style="background:${hx}" aria-label="${n}" title="${n}"></button>`).join(''); })()}</div></div>`;
+    // on the colour's own screen the strip is already open, so the row names what it is rather than promising more
+    h += valueRow(opts.full ? 'Any colour' : 'More colours…', colourDot(isXy ? cur : null), 'c-more', `data-cid="${id}"`, { open: !!opts.more });
     if (opts.more) h += `<div class="vrow-body cmore">${colorMoreHTML(id, cur)}</div>`;
   } else if (opts.none) {
     h += `<div class="chips" style="margin-top:4px"><button class="chip ${cur.mode ? '' : 'sel'}" data-act="c-none">As it is</button></div>`;
@@ -114,7 +118,7 @@ function colorPaint(root, cur) {
   const ck = root.querySelector('[data-ck]'); if (ck) ck.textContent = isCt ? ` · ${k} K` : '';
   const whites = [...root.querySelectorAll('.swatch[data-k]')].map(b => Number(b.dataset.k));
   const selWhite = isCt && whites.length ? nearestWhite(k, whites) : null;
-  const near = isXy ? nearestSwatch(cur.hex) : null;
+  const near = isXy ? nearestSwatch(cur.hex, [...root.querySelectorAll('.swatch[data-hex]')].map(b => b.dataset.hex)) : null;
   root.querySelectorAll('.swatch').forEach(b => b.classList.toggle('sel', b.dataset.k ? (selWhite === Number(b.dataset.k) && Math.abs(k - selWhite) <= 250) : (isXy && (sameHex(cur.hex, b.dataset.hex) || (near && sameHex(near, b.dataset.hex))))));
   const none = root.querySelector('[data-act="c-none"]'); if (none) none.classList.toggle('sel', !cur.mode);
   const lab = root.querySelector('[data-ccur]'); if (lab) lab.textContent = colourLabel(cur);

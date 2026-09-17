@@ -183,10 +183,11 @@ VIEWS.automations = {
     if (connLost()) h += `<div class="tip"><div class="grow"><span class="cap">Not connected</span><div class="t">Not connected right now</div><div class="d">Your home keeps running these on its own. This list may be a little behind.</div></div></div><div class="spacer"></div>`;
     h += nextCaptionHTML();
     h += tzTipHTML();
-    h += windDownRowHTML();
     const list = topLevel();
-    if (!list.length) return h + emptyStateHTML();
-    h += `<div class="h2">Your automations</div><div class="card pad0 list" id="auto-list">${list.map(autoRowHTML).join('')}</div>`;
+    // the grouped-list caps headers the rest of the app uses (docs/ia-v5.md 3, 7)
+    if (!list.length) return h + windDownRowHTML() + emptyStateHTML();
+    h += `<div class="gh">Your automations</div><div class="card pad0 list" id="auto-list">${list.map(autoRowHTML).join('')}</div>`;
+    h += `<div class="gh">Evening</div>` + windDownRowHTML();
     h += `<div class="spacer"></div><div class="card pad0 list"><button class="item" data-act="au-new"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">New automation</div></div></button></div>`;
     return h;
   },
@@ -259,7 +260,7 @@ function comingUpHTML() {
     const when = n.rel === 'today' ? n.time : n.rel === 'tomorrow' ? `tomorrow ${n.time}` : `${DAY_SHORT[weekdayOf(n.date)]} ${n.time}`;
     return `<div class="item"><div class="grow"><div class="t">${esc(label)}</div><div class="d">${sk ? `Skipping · then ${esc(when)}` : esc(when)}</div></div><button class="btn sm" data-act="${sk ? 'au-unskip' : 'au-skip'}" data-id="${esc(parent.id)}" data-date="${n.date}">${sk ? "Don't skip" : 'Skip'}</button></div>`;
   };
-  return `<div class="h2">Coming up<a class="link" data-act="nav" data-view="automations" href="#automations">See all</a></div><div class="card pad0 list">${rows.map(row).join('')}</div>`;
+  return `<div class="gh">Coming up<a class="link" data-act="nav" data-view="automations" href="#automations">See all</a></div><div class="card pad0 list">${rows.map(row).join('')}</div>`;
 }
 
 // ---------- New automation ---------- (showSheet and SHEET_KEY live in core.js)
@@ -360,8 +361,8 @@ function renderEditor() {
   const body = `<div class="card pad0 list" style="margin-top:8px">${rows}</div>`;
   const actions = `<div class="stack" style="margin-top:24px"><button class="btn block" data-act="ae-try">${ICON('play', 'sm')} Try it now</button>${inCfg ? `<button class="btn block" data-act="ae-skip">${esc(skipLabel(sc))}</button>` : ''}</div>
     <div style="margin-top:16px">${moreRow('Name, skip it when, fade, fine-tune, delete', 'ae-more')}</div>`;
-  const foot = `<div class="sfoot"><button class="btn primary lg block" data-act="ae-done" ${sc.at ? '' : 'disabled'}>Done</button></div>`;
-  showSheet('editor', title, `${when}${body}${actions}${foot}`, { detent: 'large', sub });
+  // no footer: an editor closes with "Done" in its top right, and every change has already autosaved
+  showSheet('editor', title, `${when}${body}${actions}`, { detent: 'large', sub, done: true });
 }
 // "What happens": the recipe list on its own sheet, back to the editor.
 function openWhatSheet() {
@@ -491,7 +492,7 @@ function whLeave() {
 }
 
 // ---------- the location step (4.2): inside the When sheet, the guided setups, and the wind-down card ----------
-const LOC = { denied: false, busy: false };
+const LOC = { denied: false, busy: false, host: null };
 function locationStepHTML() {
   const loc = S.config.settings.location;
   if (loc) { const hm = sunAt('sunset', 0); return `<p class="d" style="margin:12px 0 0">Near ${esc(loc.name || 'your home')}${hm ? ` · sunset today ${fmtTime(hm)}` : ''} <a data-act="loc-city" href="#">Change</a></p>`; }
@@ -504,13 +505,14 @@ function locationBodyHTML() {
 }
 // Whatever asked for the location is drawn again once it is known.
 function locRepaint() {
+  if (LOC.host) { LOC.host(); return; }
   if (WH && SHEET_KEY === 'when') renderWhenSheet();
   else if (WALK.cur && SHEET_KEY === WALK.cur.key) walkRender(WALK.cur);
   else if (WH && WH.render && SHEET_KEY === 'nw-off') renderNwOffTime();
   else if (SHEET_KEY === 'city') { /* the picker closes itself */ }
   else if (!sheet.isOpen() || SHEET_KEY === null) render();
 }
-function locBack() { if (WALK.cur) { if (WH && WH.render === renderNwOffTime) renderNwOffTime(); else walkRender(WALK.cur); } else if (WH) renderWhenSheet(); else { closeSheet(); render(); } }
+function locBack() { if (LOC.host) { LOC.host(); return; } if (WALK.cur) { if (WH && WH.render === renderNwOffTime) renderNwOffTime(); else walkRender(WALK.cur); } else if (WH) renderWhenSheet(); else { closeSheet(); render(); } }
 function useMyLocation() {
   if (!navigator.geolocation) { LOC.denied = true; locRepaint(); return; }
   LOC.busy = true; locRepaint();
@@ -551,7 +553,7 @@ function openMoreSheet() {
     <label class="field"><span>Change gradually over</span><select class="input" id="ae-fade">${FADE_OPTS.map(([v, l]) => `<option value="${v}" ${String(fade) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <button class="btn block" data-act="ae-finetune" style="margin-top:8px">Fine-tune: several steps, timers…</button>
     <div class="spacer"></div><div class="spacer"></div><button class="btn danger block" data-act="ae-delete">Delete this automation</button>`;
-  showSheet('more', 'More options', body, { detent: 'medium', sub: esc(sc.name), back: true, onBack: renderEditor });
+  showSheet('more', 'More options', body, { detent: 'medium', sub: esc(sc.name), back: true, onBack: renderEditor, done: true });
 }
 function aeFineTune() {
   const sc = aeSc(); if (!sc) return;
@@ -792,7 +794,7 @@ function openWindDownSheet() {
   const s = S.config.settings; const { ad } = wdSettings(); const on = !!ad.enabled;
   const body = `<div class="card pad0 list wd"><div class="item"><div class="grow"><div class="t">${on ? 'On' : 'Off'}</div></div><button class="sw ${on ? 'on' : ''}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div></div>
     <p class="body" style="margin:16px 0 0">As the evening goes on, lights you turn on come on a little dimmer, so the house feels calmer late. Set a level yourself and it stays.</p>
-    ${on ? `<div class="card pad0 list wd" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">When does the house go quiet?</div></div><input type="time" class="wd-time" value="${s.night_start}" data-wd="night_start" aria-label="When does the house go quiet?"></div></div>
+    ${on ? `<div class="card pad0 list wd" style="margin-top:16px">${valueRow('When does the house go quiet?', esc(fmtTime(s.night_start)), 'wd-night')}</div>
     <p class="d" id="wd-cap" style="margin:8px 0 0">${windDownCaption()}</p>
     <div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="wd-advanced"><div class="grow"><div class="t">Advanced: change the levels</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>` : ''}`;
   showSheet('wd', 'Evening wind-down', body, { detent: 'medium', top: true, grow: true });
@@ -823,7 +825,7 @@ function openWindDownAdvanced() {
     ${row('Start dimming', '', chips('sunset_offset_min', [[0, 'At sunset'], [30, '30 min after sunset'], [60, '1 hour after sunset']], wd.sunset_offset_min))}
     ${row('Down to', 'by an hour before the house goes quiet', chips('to_level', [[60, '60%'], [50, '50%'], [40, '40%']], wd.to_level))}
     ${row('At night', 'when the house is quiet, until night ends', chips('night_level', [[35, '35%'], [25, '25%'], [15, '15%']], s.night_level))}
-    <div class="item"><div class="grow"><div class="t">Night ends</div></div><input type="time" value="${s.night_end}" data-wd="night_end" aria-label="Night ends"></div>
+    ${valueRow('Night ends', esc(fmtTime(s.night_end)), 'wd-night-adv')}
   </div>
   <div class="tip" style="margin-top:16px"><div class="grow"><span class="cap">Today</span><div class="t" id="wd-today">${esc(todaySentence())}</div></div></div>
   <div class="card pad0 list" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">Also gently lower lights nobody has touched for 20 minutes</div><div class="d">Over a minute, only lights above the curve. Turn it off if it ever fights you.</div></div><button class="sw ${wd.nudge ? 'on' : ''}" data-act="wd-nudge" aria-label="Gently lower untouched lights"></button></div>
@@ -967,7 +969,6 @@ document.addEventListener('click', e => {
     case 'ae-more': openMoreSheet(); break;
     case 'ae-finetune': aeFineTune(); break;
     case 'ae-delete': aeDelete(); break;
-    case 'ae-done': closeSheet(); break;
     // the When sheet and the location step
     case 'wh-type': WH.type = d.v; renderWhenSheet(); break;
     case 'wh-rel': WH.rel = d.v; renderWhenSheet(); break;
@@ -1000,6 +1001,9 @@ document.addEventListener('click', e => {
     case 'wd-open': openWindDownSheet(); break;
     case 'wd-toggle': { const { ad } = wdSettings(); ad.enabled = !ad.enabled; save({ msg: ad.enabled ? 'Evening wind-down is on' : 'Evening wind-down is off', render: S.view === 'automations' || S.view === 'home' }); if (sheet.isOpen() && SHEET_KEY === 'wd') openWindDownSheet(); break; }
     case 'wd-advanced': openWindDownAdvanced(); break;
+    // the hours belong to the house: both rows open Settings' own Night sheet, with a back arrow to here
+    case 'wd-night': openNightSheet({ back: openWindDownSheet }); break;
+    case 'wd-night-adv': openNightSheet({ back: openWindDownAdvanced }); break;
     case 'wd-set': wdSet(d.k, d.v); break;
     case 'wd-nudge': { const { wd } = wdSettings(); wd.nudge = !wd.nudge; el.classList.toggle('on', wd.nudge); save({ msg: wd.nudge ? 'Untouched lights will lower gently' : 'Untouched lights are left alone', render: false }); break; }
     case 'wd-curve': openCurveSheet(); break;
@@ -1025,7 +1029,6 @@ document.addEventListener('change', e => {
   if (el.id === 'ae-name' && AE) { const sc = aeSc(); const v = el.value.trim(); const auto = autoName(sc, AE.L, AE.Sh, !!aeOff()); sc.name = v || auto; AE.customName = !!v && v !== auto; syncPair(sc); if (AE.draftOff) AE.draftOff.name = sc.name; aeSaveSoon(); const h = $('#sheet-root .sh .sub'); if (h) h.textContent = sc.name; return; }
   if (el.id === 'ae-onlyif' && AE) { aeSc().only_if = el.value || null; aeSaveSoon(); return; }
   if (el.id === 'ae-fade' && AE) { const sc = aeSc(); for (const a of sc.actions) if (a.type === 'level') { if (el.value === '') delete a.fade; else a.fade = Number(el.value); } aeSaveSoon(); return; }
-  if (d.wd) { const s = S.config.settings; const v = el.value; if (!/^\d\d:\d\d$/.test(v)) return; s[d.wd] = v; if (d.wd === 'night_start') rewriteEveningPoints(v); save({ msg: d.wd === 'night_start' ? `Quiet from ${fmtTime(v)}` : `Night ends at ${fmtTime(v)}`, render: false }); const wc = $('#wd-cap'); if (wc) wc.innerHTML = windDownCaption(); const wt = $('#wd-today'); if (wt) wt.textContent = todaySentence(); return; }
   if (d.pt != null) { const { ad } = wdSettings(); const p = ad.points[Number(d.pt)]; if (!p) return; if (d.k === 'time') { if (/^\d\d:\d\d$/.test(el.value)) p.time = el.value; } else p.level = Number(el.value); ad.points.sort((a, b) => a.time.localeCompare(b.time)); saveSoon(); return; }
 });
 document.addEventListener('input', e => {

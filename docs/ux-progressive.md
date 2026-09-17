@@ -726,3 +726,88 @@ moving a Hue lamp, the pickers, adding a device into a room with no Lutron area,
 a device that stops being reported, and a Lutron bridge that refuses `CreateRequest /area` the way the
 owner's does. `agent/test_engine.py` covers `a:<room>` on the connector, `agent/test_hue.py` the Hue
 room calls against the fake bridge, `agent/test_adddevice.py` the three Lutron shapes and the refusal.
+
+### 7.6 The light page, and where colour lives
+
+The owner's words: "I had no idea how to access the color selection screen for my hue stuff... where
+would make the most sense to do that? And how do I get there? And is it obvious?"
+
+**One path, and every step of it is a labelled row.** Home › the room › the light's row › **Colour**.
+The room's light row already carries a colour dot and the colour's name as its value, so the row says
+what the lamp is showing before you open anything. The light's page repeats it as **one value row**
+whose title is "Colour" (or "Warmth" on a lamp that only does white temperature) and whose value is
+that same dot and name. Tapping it **pushes the colour controls** as a pane of their own, with a back
+arrow and their own title: never a section you have to find by scrolling.
+
+What left the light page: the warmth slider and the swatch row (behind the Colour row now), the
+room's mood chips at the foot (`moodCaptionHTML`, deleted: a room's moods belong to the room's page),
+and the `scrollTo: 'colour'` hack that used to land you on a chopped stage. The rainbow button on the
+starred lamp's disc on Home is gone too; **the rainbow ring around the disc stays**, because a ring is
+a sign and a button on a 56px disc is a second way in that fights the first.
+
+**The page fits the medium detent.** Measured at 390x844: the body has 391px and the composition is
+391px, so the disc, the well, the two steps, the readout, the Colour row and all three round buttons
+are in view with nothing to scroll (it was 227px of scroll, with five of its seventeen controls in
+view, when the colour controls were printed on the page). The stage is 156px, the well 116px, the
+readout 40px: the same composition, tightened until it fit its own detent.
+
+**The colour screen** (`openColourSheet` in `web/js/light.js`) is large on a lamp that has colour and
+**compact on a lamp that only has a white temperature**, because one slider in a 776px sheet is the
+"60% white" the plan set out to kill. On a colour lamp it shows the warmth slider, **all ten colours
+at once**, wrapped rather than scrolling, and the hue and saturation strips already open under a row
+that says "Any colour". Inside the scene editor the same component is unchanged: eight swatches in a
+scrolling row behind "More colours…", where the space is a value row inside a list.
+
+The star on the light's page reads **"Show first"**, which is what it does (it pins the lamp to Home's
+row); it used to say "Favourite", which names a feeling rather than an effect.
+
+### 7.7 Sheets that push instead of growing
+
+A sheet that leads somewhere pushes a new pane with a back arrow. It does not swell.
+
+- **"Show all ways"** (`openAllWaysSheet` in `web/js/remotes.js`) pushes a pane titled **"All ways"**,
+  grouped, with a back arrow, in place of `S.recipeAll` growing the list from ten rows to twenty-three
+  under your finger. Picking a way there ticks it there and keeps the list's scroll; Back is the way
+  to the press sheet. Measured: 23 controls and 822px of scroll inside the press sheet before, 10 at
+  rest and 20 in a pane of their own after.
+- **Anything you are editing puts "Done" in its top right and has no footer**: the scene editor (7.3),
+  the automation editor (`renderEditor`), its More options (which keeps its back arrow on the left and
+  takes Done on the right), a light set (`openGroupEditor`) and the home's name (`openHomeName`). Done
+  closes the sheet; it does not save, because every change has already autosaved and the surprising
+  ones offer Undo. A sheet with a real primary action (Next, Start, Connect, "Use this time", a picker
+  whose count matters) keeps its 74px footer.
+
+### 7.8 Settings, flattened
+
+One screen, grouped inset lists, caps section headers, red at the bottom. **The "More settings" page
+is gone**; `S.settingsMore` became `S.settingsPage`, and each rare thing is a short page behind one
+row (`SETTINGS_PAGES` in `web/js/settings.js`):
+
+| row | what is behind it |
+|---|---|
+| Your home · *Connected* | the connection card, the connector and its version, Update, update automatically, "How your home connects" and the install line |
+| Rooms and lights | Rooms (make, rename, delete, move), Add a device, the Hue bridge, Look for new lights |
+| Light sets | the sets, and New set |
+| Remote timing | the double-press and hold sliders, and the live tester |
+| Back up and restore | the two rows |
+
+The house's own values became rows with their values on them, each opening a small sheet: **Power
+button** ("What was on before" / "Everything on", compact), **Night** (the hours and the night look,
+medium) and **Brightness for on** (one number, compact). **Where the home is** joins them under Your
+home and opens the same location step the sun automations use (`LOC.host` in `web/js/automations.js`
+is what lets a plain sheet host it and be redrawn when the location lands).
+
+**Night has one home.** Three places used to write `settings.night_start`; they all go through
+`setNightHours()` now, which is also what keeps the by-the-hour curve's last evening point in step.
+The evening wind-down sheet's "When does the house go quiet?" and its Advanced "Night ends" are value
+rows that open the same Night sheet, with a back arrow to where they came from.
+
+**Caps headers everywhere a page carries a grouped list**: Settings' four, the Automations tab's "Your
+automations" and "Evening" (the wind-down row now sits under its own header, where the plan puts it),
+"Coming up", and the remote page's "Buttons". Sheets keep the 18/24 `.h2`: a sheet is a dialog, not a
+page.
+
+Measured at 390x844: Settings was 12 rows over 1.56 screens **plus** an eleven-row "More settings"
+page of 1.39 screens, 23 controls in two places. It is now 14 rows over 1.53 screens in one place,
+with five short pages (five, five, two, three and three controls) behind the rare things, each well
+inside one screen.

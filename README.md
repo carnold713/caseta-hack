@@ -23,8 +23,10 @@ Pico bindings from its cached config.
   real remote and the app jumps there), then say what a press, a double
   press and a hold do. One-sentence choices: turn the room on or off,
   nightlight, movie mode, brighten while holding, sleep timer, run a
-  scene, everything off. "More options" opens the full editor: fade
-  times, several steps in a row, waits, timers. The picture is drawn
+  scene, everything off. Five usual ways are what you see; **"Show all
+  ways" pushes a second sheet**, "All ways", grouped, with a back arrow,
+  rather than growing twenty-two rows under your finger. "More options"
+  opens the full editor: fade times, several steps in a row, waits, timers. The picture is drawn
   with the real button layout for every Pico model; a "Not your remote?"
   link switches layout and colour, and Lutron's own product photos can be
   dropped into `web/img/picos/` (see the README there) to replace the
@@ -77,8 +79,18 @@ Pico bindings from its cached config.
   away and is a better dimmer than a 40px well in a list. Fan speeds and
   the open/stop/close of a shade stay on the row. **Room setup** is a page
   under it: what each light is for, the room's moods, and the kind of each
-  light. The light page: drag the disc to dim, then Warmth and Colour, the
-  sleep timer, the star ("Favourite"), More.
+  light.
+- **The light page, and colour.** Drag the disc to dim (or the well beside
+  it, or the two chevrons), then one value row: **Colour** (or **Warmth** on
+  a lamp that only does white), whose value is the colour the lamp is
+  showing, a dot and its name. Tapping it **pushes the colour controls**
+  with a back arrow: the warmth slider, every colour at once, and the hue
+  and saturation strips. Then the three round buttons: Sleep timer, "Show
+  first" (the star that pins the lamp to Home's row), More. The page itself
+  sits at the medium detent with nothing under the fold; the colour screen
+  goes large on a colour lamp and compact on a warmth-only one. The rainbow
+  button that used to sit on the lamp's disc is gone: the ring says the
+  lamp has colour, and the row says which colour.
 - **The bottom of the screen.** Home has nothing floating: its house card
   is where the house controls live. On Remotes, Automations and Settings a
   44px **pill** appears when something is lit, 8px above the tab bar: a disc
@@ -137,11 +149,13 @@ Pico bindings from its cached config.
   with live state from the bridge's event stream. Rooms, sliders, moods,
   scenes, automations, sleep timers and Pico buttons all work on them, so
   one button can drive a Caséta dimmer and a Hue lamp together. A lamp
-  that can do white temperature gets a Warmth slider on its page (Candle
-  to Daylight, over the lamp's own range); a colour lamp gets eight swatches
-  and, behind "More colours…", a hue strip and a saturation slider (the
+  that can do white temperature gets a Warmth slider (Candle to Daylight,
+  over the lamp's own range) on its **colour screen**, one tap from the
+  Colour row on its page; a colour lamp gets all ten colours at once and,
+  under "Any colour", a hue strip and a saturation slider already open (the
   swatch nearest the lamp's colour is marked, so a colour set by a scene
-  still shows where it sits). The disc,
+  still shows where it sits). Inside the scene editor the same component
+  keeps its eight-swatch scrolling row behind "More colours…". The disc,
   the room row and the scene tiles glow in the lamp's actual colour. A
   scene saved from what is on keeps each Hue lamp's colour or warmth with
   its brightness, and the scene editor has a Colour (or Warmth) row per
@@ -267,11 +281,16 @@ keep up.
 3. **Automations** tab: pick one of the three guided setups or "Something
    else", answer the questions, done. Each row has a toggle and a next-run
    time; the Home tab shows what is coming up with a Skip.
-4. **Settings**: connection, the home's name, **Rooms** (make, rename,
-   delete, move anything between them), adding devices, and one
-   Preferences row (the power button with the house dark, night hours,
-   the night look). The connector update, the double-press speed and hold
-   length with a live tester live under More settings.
+4. **Settings** is one screen, grouped: **Your home** (the connection, and
+   behind it the connector, its version, updating it and the install line);
+   **Your home** (the home's name, Rooms and lights, where the home is,
+   light sets); **The house** (the power button with the house dark, Night,
+   the brightness "on" means); **This app** (add to the home screen, recent
+   activity, ideas); **Advanced** (remote timing with its live tester, back
+   up and restore); and Sign out. There is no "More settings" page: each
+   rare thing is a short page or a small sheet behind one row. Rooms
+   (make, rename, delete, move anything between them), adding a device and
+   the Hue bridge are all on **Settings › Rooms and lights**.
 
 A worked example, a 3-button Pico in the kitchen:
 

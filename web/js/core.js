@@ -9,7 +9,7 @@ const S = {
   agent: { online: false, info: null },
   view: (location.hash || '#home').slice(1).split('/')[0] || 'home',
   ready: false, ws: null,
-  remote: null, room: null, roomPage: null,
+  remote: null, room: null, roomPage: null, settingsPage: null,
   live: {}, lastSaved: null,
   sun: null, nextRuns: {}, // today's sun and the next run of each automation, from the connector (automations.js reads them)
   // A drop is quiet until it has lasted: `troubleSince` is when the socket or the connector last went away.

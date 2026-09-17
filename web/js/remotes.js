@@ -53,7 +53,7 @@ function remoteDetail(d) {
   const quiet = !buttonsOf(d.device_id).length ? `<div class="tip" style="margin-bottom:8px"><div class="grow"><span class="cap">Waiting for the bridge</span><div class="t">Your bridge has not listed this remote's buttons yet</div><div class="d">It can take a few minutes after a remote is added. Press a button on it once, then tap Look again. Until it does, what you set here is kept but will not run.</div></div><button class="btn sm" data-act="refresh">Look again</button></div>` : '';
   return `<div class="remote-hero"><div class="stage">${picoArt(d, { width: 136, interactive: true })}</div>${has ? `<p class="hint small">Tap a button to change it · ${ICON('circle', 'sm').replace('class="i sm"', 'class="i sm" style="width:10px;height:10px;fill:var(--blue);stroke:none;vertical-align:0"')} has settings</p>` : tip ? '' : `<p class="hint">Tap a button on the picture, or press it on the real remote.</p>`}</div>
     ${quiet}${tip}
-    <div class="h2">Buttons</div>
+    <div class="gh">Buttons</div>
     <div class="card pad0 list">${rows}</div>
     <div class="spacer"></div>
     ${moreRow('Change the picture, the Lutron app, start over, remove', 'remote-more')}`;
@@ -132,7 +132,7 @@ function gestureActions(pid, n, g, night = false) {
 
 // ----- gesture sheet -----
 function openButtonSheet(n) {
-  const pid = S.remote; S.button = n; S.pickOpen = null; S.recipeAll = false;
+  const pid = S.remote; S.button = n; S.pickOpen = null;
   const title = `What should the ${buttonTitle(pid, n)} do?`;
   const body = ['single', 'double', 'hold'].map(g => {
     const acts = gestureActions(pid, n, g); const night = gestureActions(pid, n, g, true);
@@ -202,7 +202,7 @@ const USUAL = { single: ['on', 'off', 'toggle', 'scene', 'mood'], double: ['full
 // Every way, grouped, for "Show all ways".
 const RECIPE_GROUPS = [['Brightness', ['on', 'off', 'toggle', 'full', 'half', 'night', 'movie', 'cycle', 'up', 'down', 'hold_up', 'hold_down']], ['Scenes and moods', ['scene', 'mood', 'nextmood', 'moodsfirst']], ['Timers and going out', ['sleep', 'lightway', 'goodnight', 'leaving', 'alloff']], ['Fans', ['fan_up', 'fan_down']]];
 function openRecipeSheet(g, night = false) {
-  const pid = S.remote, n = S.button; S.gesture = g; S.night = night; S.advCustom = null; S.recipeAll = false;
+  const pid = S.remote, n = S.button; S.gesture = g; S.night = night; S.advCustom = null;
   const acts = gestureActions(pid, n, g, night);
   const cur = acts.find(a => a.target && a.target !== 'h:all');
   if (!S.pickTargets || !S.pickTargets.length) S.pickTargets = cur ? tlist(cur.target).filter(targetExists) : [defaultTarget(pid)];
@@ -233,23 +233,41 @@ function renderRecipeSheet() {
   const applies = r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any) && moodsOk(r);
   const row = r => { const rd = typeof r.d === 'function' ? r.d(ctx) : r.d; return `<button class="item recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${rd ? `<div class="d">${esc(rd)}</div>` : ''}</div>${selected === r.id ? chk : ''}</button>`; };
   const byId = id => RECIPES.find(r => r.id === id);
-  let list;
-  if (S.recipeAll) {
-    list = RECIPE_GROUPS.map(([capn, ids]) => { const rs = ids.map(byId).filter(r => r && applies(r) && (capn !== 'Fans' || hasFan)); return rs.length ? `<div class="lcap">${capn}</div>${rs.map(row).join('')}` : ''; }).join('');
-  } else {
-    // the mood row stands in for whichever mood recipe fits the room: the picker, the step-through, or "make moods first"
-    const moodId = ctx.moods === 0 ? (ctx.dimmers > 0 ? 'moodsfirst' : null) : (ctx.moods >= 2 && selected !== 'mood' ? 'nextmood' : 'mood');
-    const ids = (isFan ? USUAL.fan : USUAL[g] || USUAL.single).map(id => (id === 'mood' ? moodId : id)).filter(Boolean);
-    const rs = ids.map(byId).filter(r => r && applies(r));
-    const cur = byId(selected); if (cur && applies(cur) && !rs.includes(cur)) rs.push(cur);
-    list = rs.map(row).join('') + `<button class="item recipe all" data-act="recipe-all"><div class="grow"><div class="t">Show all ways</div></div><span class="chev">${ICON('dots', 'sm')}</span></button>`;
-  }
-  if (S.recipeAll) list += `<button class="item recipe all" data-act="recipe-fewer"><div class="grow"><div class="t">Show fewer</div></div><span class="chev">${ICON('dots', 'sm')}</span></button>`;
+  // the five usual ways, and one row into the rest: the other seventeen are a pushed sheet, never twenty two rows
+  // under your finger (docs/ia-v5.md 2, stage 5).
+  // the mood row stands in for whichever mood recipe fits the room: the picker, the step-through, or "make moods first"
+  const moodId = ctx.moods === 0 ? (ctx.dimmers > 0 ? 'moodsfirst' : null) : (ctx.moods >= 2 && selected !== 'mood' ? 'nextmood' : 'mood');
+  const ids = (isFan ? USUAL.fan : USUAL[g] || USUAL.single).map(id => (id === 'mood' ? moodId : id)).filter(Boolean);
+  const rs = ids.map(byId).filter(r => r && applies(r));
+  const cur = byId(selected); if (cur && applies(cur) && !rs.includes(cur)) rs.push(cur);
+  const list = rs.map(row).join('') + `<button class="item recipe all" data-act="recipe-all"><div class="grow"><div class="t">Show all ways</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   const custom = selected === 'custom' ? `<div class="tip" style="margin-top:12px"><div class="grow"><span class="cap">Custom</span><div class="t">${esc(describe(acts))}</div></div></div>` : '';
   const test = acts.length ? `<button class="btn block" data-act="try-actions" style="margin-top:16px">${ICON('play', 'sm')} Try it now</button>` : '';
   const more = night ? '' : `<div style="margin-top:16px">${moreRow('At night, fine-tune, clear', 'recipe-more')}</div>`;
   // the same key on every redraw: a tick appears where you tapped and the list keeps its scroll
   showSheet('recipe', GESTURE_LABEL[g], `${seg}${nightNote}${twiceNote}${which}<div class="h2">What should happen?</div><div class="card pad0 list">${list}</div>${custom}${test}${more}`, { detent: 'large', back: true, sub: buttonTitleCap(pid, n), onBack: () => openButtonSheet(n) });
+}
+// "Show all ways": a pushed sheet with a back arrow, grouped, in place of twenty two rows appearing under the finger
+// (docs/ia-v5.md 2, 6 stage 5). Picking a way here ticks it here; Back is the way to the press sheet.
+function allWaysHTML() {
+  const pid = S.remote, n = S.button, g = S.gesture, night = S.night;
+  const acts = gestureActions(pid, n, g, night);
+  const selected = recipeOf(acts);
+  const T = packTarget(S.pickTargets || [defaultTarget(pid)]);
+  const tdevs = targetDevices(T).map(dev).filter(Boolean);
+  const isFan = tdevs.length > 0 && tdevs.every(x => x.domain === 'fan');
+  const hasFan = tdevs.some(x => x.domain === 'fan');
+  const ctx = recipeCtx(pid);
+  const moodsOk = r => !r.moods || (r.moods === 'none' ? (ctx.moods === 0 && ctx.dimmers > 0) : r.moods === 'two' ? ctx.moods >= 2 : ctx.moods >= 1);
+  const applies = r => (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any) && moodsOk(r);
+  const chk = `<span class="chk">${ICON('check')}</span>`;
+  const row = r => { const rd = typeof r.d === 'function' ? r.d(ctx) : r.d; return `<button class="item recipe ${selected === r.id ? 'sel' : ''}" data-act="recipe" data-r="${r.id}"><div class="grow"><div class="t">${r.t}</div>${rd ? `<div class="d">${esc(rd)}</div>` : ''}</div>${selected === r.id ? chk : ''}</button>`; };
+  const byId = id => RECIPES.find(r => r.id === id);
+  return RECIPE_GROUPS.map(([capn, ids]) => { const rs = ids.map(byId).filter(r => r && applies(r) && (capn !== 'Fans' || hasFan)); return rs.length ? `<div class="lcap">${capn}</div>${rs.map(row).join('')}` : ''; }).join('');
+}
+function openAllWaysSheet() {
+  const pid = S.remote, n = S.button, g = S.gesture;
+  showSheet('all-ways', 'All ways', `<div class="card pad0 list">${allWaysHTML()}</div>`, { detent: 'large', back: true, onBack: renderRecipeSheet, sub: `${GESTURE_LABEL[g]} on the ${esc(buttonTitle(pid, n))}` });
 }
 // The recipe sheet's More (2.7): the night version, the fine-tune editor, clearing the press.
 function recipeMoreSheet() {
@@ -330,7 +348,7 @@ function applyRecipe(rid) {
   }
   const acts = rid === 'nothing' ? [] : (r.pair ? r.pair(T).start : actions);
   save({ msg: acts.length ? describe(acts) : 'Cleared', render: true });
-  renderRecipeSheet();
+  if (SHEET_KEY === 'all-ways') openAllWaysSheet(); else renderRecipeSheet();
 }
 // "Room mood…": the room's mood scenes, saved as a scene action through pickScene.
 function openMoodPicker() {

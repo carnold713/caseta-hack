@@ -203,6 +203,8 @@ main.nested { position: relative; padding-top: 4px; margin-top: 0; }
 .btn:focus-visible { outline: 0; box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
 .btn.primary { background: var(--blue); color: var(--on-blue); font-size: 16px; font-weight: 500; }
 .btn.primary:active { background: var(--blue-pressed); box-shadow: none; }
+/* the one red row at the bottom of a page (docs/ia-v5.md 3): the word is red, the row is not */
+.item.danger .t, .item.danger .chev { color: var(--red-text); }
 .btn.danger { background: var(--red); color: #fff; }
 .btn.danger:active { background: var(--red-pressed); box-shadow: none; }
 .btn.outline { background: transparent; box-shadow: inset 0 0 0 1.75px var(--blue); color: var(--blue); }
@@ -590,7 +592,8 @@ details.more > div { margin-top: 8px; }
 .sheet .sh { position: relative; padding: 8px 20px 12px; flex: none; min-height: 32px; transition: box-shadow .15s var(--ease); }
 .sheet .sh.scrolled { box-shadow: 0 1px 0 var(--line); }
 .sheet .sh h2 { margin: 0; font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: 0; text-align: left; padding-right: 52px; }
-.sheet .sh .sub { color: var(--text-2); font-size: 14px; line-height: 16px; font-weight: 400; text-align: left; margin-top: 2px; padding-right: 52px; }
+/* one line, always: a sub that wrapped would take the room a medium sheet's content is measured against */
+.sheet .sh .sub { color: var(--text-2); font-size: 14px; line-height: 16px; font-weight: 400; text-align: left; margin-top: 2px; padding-right: 52px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sheet .sh .grow { text-align: left; }
 /* Close, Done or Back: a 40px target, 12px from the edge, centred on the title line (28px + 12px = the title's middle) */
 .sheet .sh [data-act="sheet-close"], .sheet .sh [data-act="sheet-back"] { position: absolute; top: 0; width: 40px; height: 40px; border-radius: var(--r-xl); background: transparent; color: var(--text); }
