@@ -77,13 +77,16 @@ def _serial_of(device_id: str) -> str:
 
 
 class Nanoleaf:
-    def __init__(self, data_dir: Path, on_state: Optional[Callable[[str], None]] = None, on_loaded: Optional[Callable[[], None]] = None) -> None:
+    def __init__(self, data_dir: Path, on_state: Optional[Callable[[str], None]] = None, on_loaded: Optional[Callable[[], None]] = None,
+                 send: Optional[Callable[[dict], None]] = None) -> None:
         self.file = data_dir / "nanoleaf.json"
         self.entries: List[dict] = []          # [{host, token, serial, name, model}, ...], saved to disk
         self.devices: Dict[str, dict] = {}     # nanoleaf_<serial> -> pylutron-shaped device dict
         self.errors: Dict[str, str] = {}       # serial -> the last error reaching it, so one dead panel does not hide the rest
+        self.log: List[dict] = []              # every state-changing request, for "Show technical details" (see _note)
         self._on_state = on_state
         self._on_loaded = on_loaded
+        self._send = send
         self._session: Optional[aiohttp.ClientSession] = None
         self._poll: Optional[asyncio.Task] = None
         try:
@@ -104,6 +107,7 @@ class Nanoleaf:
                          "host": e["host"], "error": self.errors.get(e["serial"])} for e in self.entries],
             "count": len(self.entries),
             "live": bool(self._poll and not self._poll.done()),
+            "log": self.log[-40:],
         }
 
     # ----- http -----
@@ -122,15 +126,38 @@ class Nanoleaf:
             return f"{base}/{path}" if path else base
         return f"{base}/{token}/{path}" if path else f"{base}/{token}/"
 
+    def _serial_for(self, host: str) -> Optional[str]:
+        e = next((x for x in self.entries if x["host"] == host), None)
+        return e["serial"] if e else None
+
+    # Every state-changing request is logged and sent to the app, where "Show technical details" reveals it
+    # (agent/adddevice.py's _note does the same thing for adding a device). A real controller's exact response,
+    # or the exact error reaching it, is what turns "it still does not work" into something fixable from here.
+    def _note(self, host: str, body: dict, ok: bool, detail: str) -> None:
+        entry: Dict[str, Any] = {"at": time.time(), "host": host, "serial": self._serial_for(host), "body": body, "ok": ok, "detail": detail}
+        self.log.append(entry)
+        del self.log[:-60]
+        LOG.info("nanoleaf put %s %s -> %s %s", host, json.dumps(body), "ok" if ok else "failed", detail)
+        if self._send:
+            self._send({"type": "nanoleaf_log", "entry": entry})
+
     async def _get_info(self, host: str, token: str) -> dict:
         async with self._sess().get(self._url(host, token)) as r:
             r.raise_for_status()
             return await r.json(content_type=None)
 
     async def _put_state(self, host: str, token: str, body: dict) -> None:
-        async with self._sess().put(self._url(host, token, "state"), json=body) as r:
-            if r.status >= 400:
-                raise RuntimeError(f"the Nanoleaf controller said {r.status}: {(await r.text())[:200]}")
+        try:
+            async with self._sess().put(self._url(host, token, "state"), json=body) as r:
+                text = None
+                if r.status >= 400:
+                    text = (await r.text())[:200]
+                    self._note(host, body, False, f"{r.status}: {text}")
+                    raise RuntimeError(f"the Nanoleaf controller said {r.status}: {text}")
+                self._note(host, body, True, f"{r.status}")
+        except aiohttp.ClientError as exc:
+            self._note(host, body, False, f"could not reach it: {exc}")
+            raise RuntimeError(f"could not reach the Nanoleaf controller: {exc}") from exc
 
     def _entry(self, device_id: str) -> dict:
         serial = _serial_of(device_id)

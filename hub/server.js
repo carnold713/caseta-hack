@@ -367,6 +367,12 @@ function handleAgentMessage(ws, msg) {
     case 'nanoleaf':
       if (agentInfo) { agentInfo.nanoleaf = msg.nanoleaf || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
+    // Every request the connector sends a Nanoleaf controller, for "Show technical details" on its own sheet
+    // (the same idea as add_log for adding a device): a real controller's exact response, or the exact error
+    // reaching it, turns "it still does not work" into something fixable from here.
+    case 'nanoleaf_log':
+      if (msg.entry) broadcast({ type: 'nanoleaf_log', entry: msg.entry });
+      break;
     // What the connector has: the bridge, its buttons, how many button settings it holds and the last press
     // it saw. The app shows it in Settings so a dead button can be told apart from a dead link.
     case 'health': {

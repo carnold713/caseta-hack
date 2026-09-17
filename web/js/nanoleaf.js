@@ -52,11 +52,25 @@ async function nlPair() {
 // Tapping a paired controller in Settings: its name, model and a Forget of its own. Forgetting is
 // reversible in spirit only (the panels would need pairing again), so it asks nothing further, the same
 // as Hue's forget: the person just came from the list, and undo would only re-open the same held-button dance.
+// "Show technical details" (the same idea as adding a device) is what turns "it still does not work" into
+// something fixable: it is every request the connector has sent this controller, and exactly what came back.
+let NL_SHEET_SERIAL = null, NL_SHOW_LOG = false;
+function nlDeviceSheetBody(serial) {
+  const d = nanoleafList().find(x => x.serial === serial); if (!d) return '';
+  return `<div class="tip"><div class="grow"><span class="cap">${esc(d.host)}</span><div class="t">${esc(d.model || 'Nanoleaf')}</div><div class="d">${d.error ? `Not reachable right now: ${esc(d.error)}` : 'Connected'}</div></div><div class="ic lg">${ICON('link')}</div></div>
+    <div class="card pad0 list" style="margin-top:20px"><button class="item" data-act="nl-forget" data-serial="${esc(serial)}"><div class="grow"><div class="t">Forget this Nanoleaf</div><div class="d">It leaves the app. Pair it again with the button on the controller.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>
+    ${nlLogHTML(serial)}`;
+}
 function nlDeviceSheet(serial) {
   const d = nanoleafList().find(x => x.serial === serial); if (!d) return;
-  const body = `<div class="tip"><div class="grow"><span class="cap">${esc(d.host)}</span><div class="t">${esc(d.model || 'Nanoleaf')}</div><div class="d">${d.error ? `Not reachable right now: ${esc(d.error)}` : 'Connected'}</div></div><div class="ic lg">${ICON('link')}</div></div>
-    <div class="card pad0 list" style="margin-top:20px"><button class="item" data-act="nl-forget" data-serial="${esc(serial)}"><div class="grow"><div class="t">Forget this Nanoleaf</div><div class="d">It leaves the app. Pair it again with the button on the controller.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
-  sheet.open(esc(d.name || 'Nanoleaf'), body, { detent: 'compact', sub: 'Its panels' });
+  NL_SHEET_SERIAL = serial; NL_SHOW_LOG = false;
+  sheet.open(esc(d.name || 'Nanoleaf'), nlDeviceSheetBody(serial), { detent: 'medium', sub: 'Its panels' });
+  sheet.onClose = () => { NL_SHEET_SERIAL = null; };
+}
+function nlLogHTML(serial) {
+  const log = ((nanoleafInfo() || {}).log || []).filter(e => e.serial === serial);
+  const lines = log.slice(-40).map(e => `${new Date(e.at * 1000).toLocaleTimeString()} ${JSON.stringify(e.body)} -> ${e.ok ? 'ok' : 'failed'} ${e.detail}`).join('\n');
+  return `<button class="btn ghost block" data-act="nl-log" style="margin-top:16px">${NL_SHOW_LOG ? 'Hide' : 'Show'} technical details</button>${NL_SHOW_LOG ? `<div class="card" style="margin-top:8px"><pre class="ad-log">${esc(lines || 'Nothing sent to it yet.')}</pre><button class="btn sm" data-act="copy" data-text="${esc(lines)}">${ICON('copy', 'sm')} Copy</button></div>` : ''}`;
 }
 async function nlForget(serial, el) {
   if (el) el.disabled = true;
@@ -66,7 +80,15 @@ async function nlForget(serial, el) {
 // While pairing sheet is open, a fresh agent info does not change what it shows (it is watching its own
 // pair() promise, not the wire); this only matters if a device sheet for one already paired is open and its
 // reachability changes underneath it, so it can just be re-shown from the live list.
-window.Nanoleaf = { onAgent() { /* no persistent sheet needs a wire-driven refresh (see comment above) */ } };
+window.Nanoleaf = {
+  onAgent() { /* no persistent sheet needs a wire-driven refresh (see comment above) */ },
+  // A request just went out, live, while a device sheet's technical details may be open watching it.
+  onMessage(m) {
+    if (m.type !== 'nanoleaf_log' || !m.entry) return;
+    const info = nanoleafInfo(); if (info) info.log = [...(info.log || []), m.entry].slice(-60);
+    if (NL_SHOW_LOG && NL_SHEET_SERIAL && m.entry.serial === NL_SHEET_SERIAL) sheet.update(nlDeviceSheetBody(NL_SHEET_SERIAL));
+  },
+};
 document.addEventListener('input', e => { if (e.target.id === 'nl-host') NL.host = e.target.value; });
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
@@ -80,5 +102,6 @@ document.addEventListener('click', async e => {
     case 'nl-manual': { const v = (document.getElementById('nl-host') || {}).value || ''; if (!v.trim()) { toast('Type the address first', { err: true }); break; } NL.host = v.trim(); NL.error = null; NL.step = 'press'; nlShow(true); break; }
     case 'nl-pair': nlPair(); break;
     case 'nl-forget': nlForget(d.serial, el); break;
+    case 'nl-log': NL_SHOW_LOG = !NL_SHOW_LOG; if (NL_SHEET_SERIAL) sheet.update(nlDeviceSheetBody(NL_SHEET_SERIAL)); break;
   }
 });

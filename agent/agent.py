@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.11.2"
+VERSION = "0.11.3"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -109,7 +109,7 @@ class Agent:
         self.runner = ActionRunner(lambda: self.bridge, lambda: self.config, on_timer=self._on_timer)
         self.adder = AddSession(lambda: self.bridge, self.send)  # "Add a device" from the app
         self.hue = Hue(DATA_DIR, on_state=self._on_hue_state, on_loaded=self._merge_hue)
-        self.nanoleaf = Nanoleaf(DATA_DIR, on_state=self._on_nanoleaf_state, on_loaded=self._merge_nanoleaf)
+        self.nanoleaf = Nanoleaf(DATA_DIR, on_state=self._on_nanoleaf_state, on_loaded=self._merge_nanoleaf, send=self.send)
         # One callback slot per kind of action on ActionRunner (unchanged from when only Hue existed); what agent.py
         # hands it is a small dispatcher that looks at the device id's prefix and calls the matching backend, keyed
         # by this table, so a third backend is one more entry here rather than a new call site in engine.py.

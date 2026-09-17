@@ -148,6 +148,7 @@ function connectWS() {
       // which lamps are following the day, and the white each one is showing: painted in place, never a full render
       case 'follow': S.follow = m.follow || null; if (typeof paintFollow === 'function') paintFollow(); if (sheet.isOpen() && (SHEET_KEY === 'follow' || SHEET_KEY === 'follow-room')) { const el = $('#sheet-root [data-act="follow-toggle"]'); if (el && SHEET_KEY === 'follow') openFollowSheet(el.dataset.id); } break;
       case 'add_state': case 'add_heard': case 'add_log': if (window.AddDevice) AddDevice.onMessage(m); break;
+      case 'nanoleaf_log': if (window.Nanoleaf) Nanoleaf.onMessage(m); break;
       case 'button': case 'gesture': onLive(m); break;
       case 'toast': toast(m.msg, { err: m.level === 'error' }); break;
     }
