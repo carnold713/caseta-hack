@@ -195,6 +195,10 @@ function validateConfig(cfg) {
       out.settings.rooms.push({ id: r.id, name, device_ids: ids.slice(0, 200), bridge_area: area, hue_room: hue });
     }
   }
+  // Set once, the first time a bridge room becomes one of the app's own (js/rooms.js ensureRooms): after that,
+  // a room here comes only from this app, never a bridge, so it has to survive every save or the app would
+  // seed again from whatever the bridges list next.
+  out.settings.rooms_seeded = !!s.rooms_seeded;
 
   const groupIds = new Set();
   for (const g of arr(cfg.groups, 'groups')) {

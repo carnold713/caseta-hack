@@ -58,21 +58,31 @@ const fileable = () => [...controllable(), ...remotes()];
 
 // ----- seeding: the bridges' rooms become the app's, ids and all -----
 // Keeping each bridge room's own id is what makes this free: `a:20` still means the Kitchen, the Kitchen's moods
-// are still the Kitchen's, and a home that has never opened this page is not migrated at all.
+// are still the Kitchen's. This runs once, ever, per home (settings.rooms_seeded marks it done): after that, a
+// room here comes only from this app. A room made since in the Lutron app or the Hue app is never imported on
+// its own; its devices are simply unfiled until you put them in one of your own rooms, which is easy from
+// wherever you would think to (a "New room" chip right in the room pickers, not only the Rooms page).
 function ensureRooms() {
   const s = S.config && S.config.settings; if (!s) return false;
-  const first = !(s.rooms || []).length;
-  const taken = new Set();
-  for (const r of s.rooms || []) { if (r.bridge_area) taken.add(r.bridge_area); if (r.hue_room) taken.add(r.hue_room); }
-  // Every bridge room the app has not taken over becomes one of the app's, keeping its id. That is the first
-  // seeding, and it is also how a Hue bridge paired later, or a room added in the Lutron app since, joins the list.
-  const fresh = Object.values(S.inv.areas || {})
-    .filter(a => a && a.id && a.name && !taken.has(String(a.id)) && !(s.rooms || []).some(r => r.id === String(a.id)))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
-    .map(a => ({ id: String(a.id), name: String(a.name).slice(0, 40), device_ids: [], bridge_area: String(a.id).startsWith('hue_') ? null : String(a.id), hue_room: String(a.id).startsWith('hue_') ? String(a.id) : null }));
-  if (first && !fresh.length) return false;    // nothing to seed from yet: the app goes on reading the bridges
-  let changed = fresh.length > 0;
-  if (changed) s.rooms = [...(s.rooms || []), ...fresh];
+  let changed = false;
+  if (!s.rooms_seeded) {
+    if ((s.rooms || []).length) {
+      // a home from before this flag existed: it has already been seeded, once, in the past. Mark it done
+      // without importing anything more, rather than treating "the flag is missing" as "seed once again",
+      // which would be one more of exactly the re-adds this flag exists to stop.
+      s.rooms_seeded = true;
+      changed = true;
+    } else {
+      const fresh = Object.values(S.inv.areas || {})
+        .filter(a => a && a.id && a.name)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+        .map(a => ({ id: String(a.id), name: String(a.name).slice(0, 40), device_ids: [], bridge_area: String(a.id).startsWith('hue_') ? null : String(a.id), hue_room: String(a.id).startsWith('hue_') ? String(a.id) : null }));
+      if (!fresh.length) return false;   // no bridge has answered with a room yet: try again once one does
+      s.rooms = fresh;
+      s.rooms_seeded = true;
+      changed = true;
+    }
+  }
   if (pruneRooms()) changed = true;
   if (changed) save({ quiet: true, render: false });
   return changed;
