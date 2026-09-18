@@ -65,24 +65,45 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .sheet .moodrow { margin: 0 -24px; }
 .sheet .moods { padding: 2px 24px 4px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
 
-/* ---------- light detail sheet (white, elevated): the Tenzing dimmer dialog for one light. The disc and the well are one centred composition of fixed width ---------- */
-.ld-hero { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 0; }
-/* the composition is sized for the medium detent (473px at 844): the disc, the well, the two steps, the
-   readout and the round buttons all sit inside one sheet, with nothing under the fold (docs/ia-v5.md 5). */
-.ld-stage { flex: none; width: 148px; height: 140px; display: grid; place-items: center; }
+/* ================= F. the light sheet (docs/design-spec-v5.md 4.9, 4.10) ================= */
+/* The device tile, grown to the size of a screen: one tinted object, one readout, one control. `data-tile` is on
+   #ld itself, so the one tintApply() paintDeviceTiles() runs writes the whole screen and the stage, the readout,
+   the well and the corner button all read the same transform. .lit therefore lands on the sheet, not the stage. */
+.ld { position: relative; }
+/* 140px keeps the whole sheet inside the medium detent (473px at 844) for a plain dimmer; a lamp with colour
+   opens large, because the swatch row costs 68px. */
+.lstage { position: relative; height: 140px; margin: 0 0 12px; border-radius: var(--r-md);
+  background: var(--t-fill); display: grid; place-items: center;
+  transition: background-color .255s var(--ease); }
+.lstage .ld-disc { position: static; }
+/* the corner power button is the tile's corner power button, at the same size in the same place: that is the
+   continuity between the two screens. Its look is the .dtile .dpow rule in styles.css, shared, not copied. */
+.lstage .dpow { position: absolute; right: 12px; bottom: 12px; }
+#ld:not(.lit) .lstage { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
 .ld-disc { width: 124px; height: 124px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; outline: none; transition: box-shadow .15s var(--ease); }
 .ld-disc:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
 .ld-name { text-align: center; margin-top: 8px; }
 .ld-cap { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
-/* the readout under the stage: the status text button */
-.ld-level { display: flex; align-items: center; justify-content: center; width: 136px; height: 36px; margin: 2px auto 2px; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line-2); background: var(--surface); font-size: 16px; line-height: 20px; font-weight: 400; color: var(--text); }
-.ld-swcol { width: 96px; height: 140px; display: grid; place-items: center; flex: none; }
+/* one readout, in the tinted ink: the third type size, spent here and nowhere else. The ink flips polarity part
+   way through the fill's cross-fade, the same delay the tinted cards use (docs/design-spec-v5.md 7.2). */
+#ld .display { text-align: center; color: var(--t-ink); margin: 0 0 16px;
+  transition: color 1ms var(--ease) var(--m-ink-swap, 60ms); }
+/* one control: the same well as the tile's, at 48px, tinted from the same three tokens */
+#ld .ld-well { margin: 0 0 16px; }
+#ld .ld-well .slider { --well-h: 48px; --grip-h: 24px;
+  --track: var(--t-well); --fill: var(--t-well-fill); --line-2: var(--t-well-line); }
+/* the swatch row bleeds to the sheet's own 20px gutter, not .chips.scroll's 24, or the last swatch and
+   "More colours" fall off the right edge */
+#ld .ld-swrow { margin: 0; }
+#ld .swatches { margin: 0 -20px 16px; padding: 4px 20px 6px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 24px), transparent); }
 .ld-actions { display: flex; justify-content: center; gap: 24px; margin-top: 4px; }
-/* Colour: one value row on the light's page, its value the colour the lamp is showing */
-.ld-colour { margin: 0; }
+/* Follow the day keeps its own card, under the swatches */
+.ld-colour { margin: 0 0 16px; }
 .ld-colour .item.vrow .val { display: inline-flex; align-items: center; gap: 8px; }
-/* The Colour row keeps its value on the title's line even with the "Following the day" tag on it: the light
-   page has to fit the medium detent with nothing under the fold, and a wrapped value costs it a row. */
+/* The row keeps its value on the title's line even with the "Following the day" tag on it: a wrapped value
+   costs the light's page a row, and the composition is measured to the pixel. */
 .ld-colour .item.vrow { flex-wrap: nowrap; }
 .ld-colour .item.vrow .grow { min-width: 0; }
 .ld-colour .item.vrow .grow .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -103,17 +124,6 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .rbtn:disabled { pointer-events: none; color: var(--text-disabled); }
 .rbtn:disabled .c { background: var(--fill-disabled); color: var(--text-disabled); }
 .rbtn span { white-space: nowrap; }
-
-/* the vertical well: white, a hairline, radius 12, filling with blue from the bottom; a grip in the fill */
-.vcol { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
-.vslider { position: relative; width: 96px; height: 94px; flex: none; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; outline: none; border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); }
-.vslider::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--p, 0%); background: var(--vfill, var(--blue)); border-radius: 0 0 var(--r-md) var(--r-md); transition: background .255s var(--ease); }
-.vslider::after { content: ""; position: absolute; left: 50%; width: 40px; height: 4px; margin-left: -20px; bottom: calc(var(--p, 0%) - 12px); border-radius: 2px; background: rgba(255,255,255,.4); }
-.vslider:focus-visible { box-shadow: inset 0 0 0 1px var(--line-2), 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
-.vsteps { display: flex; gap: 32px; }
-.vsteps .iconbtn svg.i { width: 20px; height: 20px; }
-.vsteps .down svg { transform: rotate(90deg); }
-.vsteps .up svg { transform: rotate(-90deg); }
 
 /* ---------- the Now view: a white flyout card that stops short of the top, one height for all its panels ---------- */
 /* the Now view stops short of the top; its panels size to their own content between that floor and the cap */

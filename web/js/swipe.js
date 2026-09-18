@@ -10,7 +10,7 @@
   const SLOP = 8;
   const FLICK = 0.55;          // px per ms: faster than this and the sheet leaves whatever the distance
   const FAR = 0.3;             // or further than this share of the sheet's height
-  const NO = 'input.slider, .sliderwrap, .vslider, .ld-disc, .td-ring, .chips.scroll, .tiles, select, textarea';
+  const NO = 'input.slider, .sliderwrap, .ld-disc, .td-ring, .chips.scroll, .tiles, select, textarea';
   // The detents (docs/ia-v5.md 5). A sheet has two stops at most, never three: compact only closes, medium can be
   // dragged up to large and back, large drops to medium when it has both.
   const detentOf = el => (el.className.match(/dt-(compact|medium|large)/) || [, ''])[1];

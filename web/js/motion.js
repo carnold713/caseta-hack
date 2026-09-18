@@ -114,7 +114,10 @@
 
   // ---------- content swapped in place: a sheet step, a Now panel, the kind picker ----------
   // The old nodes are cloned into an absolutely positioned ghost over the host, fn rewrites the real content, the ghost
-  // fades out over 80ms while the new content fades in over 150ms. Nothing travels, so nothing reads as a jump.
+  // fades out over 80ms while the new content fades in over 215ms after 40ms. Nothing travels, so nothing reads as a
+  // jump, and the incoming content finishes with the sheet's own 255ms height so the two land on the same frame. The
+  // outgoing ghost stays at 80ms: the old screen has to be gone well before the new one is readable, or they overlap
+  // as a double image (docs/design-spec-v5.md 7.6).
   function swap(hostEl, fn, opts) {
     opts = opts || {};
     const h = el(hostEl); const g = G();
@@ -134,7 +137,7 @@
     const fresh = (opts.nodes ? nodes : Array.from(h.children)).filter(k => k !== w && !k.classList.contains('m-ghost'));
     if (!fresh.length) return;
     g.killTweensOf(fresh);
-    g.fromTo(fresh, { opacity: 0 }, { opacity: 1, duration: 0.15, ease: 'power2.out', delay: 0.04, clearProps: 'opacity', overwrite: true });
+    g.fromTo(fresh, { opacity: 0 }, { opacity: 1, duration: 0.215, ease: 'power2.out', delay: 0.04, clearProps: 'opacity', overwrite: true });
   }
 
   // ---------- sheet choreography: scrim, then the sheet, then its content ----------

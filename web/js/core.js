@@ -517,7 +517,11 @@ const sheet = {
   morph(swap, o = {}) {
     const root = $('#sheet-root'); const el = root.querySelector('.sheet'); const sh = el.querySelector('.sh'), sb = el.querySelector('.sb');
     const h0 = Math.round(el.getBoundingClientRect().height);
-    const run = () => { const had = root.contains(document.activeElement); if (window.Motion) Motion.swap(el, swap, { nodes: [sh, sb], top: sh.offsetTop }); else swap(); if (had && !root.contains(document.activeElement)) { el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); } placeToast(); requestAnimationFrame(placeToast); setTimeout(placeToast, 300); };
+    // A tinted surface arriving in a swap arrives already tinted, never cross-faded from the colour the screen
+    // before it was wearing: without this the way back from a green desk lamp to its room turns the room's screen
+    // green for a quarter of a second. 40ms is long enough to cover the insert and the first paint, short enough
+    // that a real colour change arriving just after it still cross-fades (docs/design-spec-v5.md 7.6).
+    const run = () => { const had = root.contains(document.activeElement); root.classList.add('m-morph'); clearTimeout(root._mMorph); root._mMorph = setTimeout(() => root.classList.remove('m-morph'), 40); if (window.Motion) Motion.swap(el, swap, { nodes: [sh, sb], top: sh.offsetTop }); else swap(); if (had && !root.contains(document.activeElement)) { el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); } placeToast(); requestAnimationFrame(placeToast); setTimeout(placeToast, 300); };
     // A step swap inside a sheet at a fixed detent never moves the height: the detent class owns it, and the content
     // crossfades in place behind the ghost (docs/ia-v5.md 5, Motion).
     if (/dt-(medium|large)/.test(el.className)) { clearTimeout(el._ht); el.style.height = ''; el.style.transition = ''; run(); return; }

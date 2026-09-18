@@ -539,40 +539,59 @@ function openLightSheet(id, opts = {}) {
   const lv = level(id) || 0, t = `d:${id}`, dim = d.domain === 'light';
   const colour = colorState(id); // a Hue lamp's {mode, kelvin, hex}; null for a Caseta light
   LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null, color: colour ? { ...colour } : null, more: false, onBack };
-  const well = `<div class="vcol"><div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"></div>
-      <div class="vsteps"><button class="iconbtn down" data-act="ld-step" data-d="-10" aria-label="Dimmer">${ICON('chev')}</button><button class="iconbtn up" data-act="ld-step" data-d="10" aria-label="Brighter">${ICON('chev')}</button></div></div>`;
-  // one composition: the disc and the well side by side, centred; one readout under them; Colour as one value row; the
-  // three actions. The warmth slider and the swatches live behind the Colour row, which pushes its own pane.
-  const body = `<div class="ld" id="ld" data-id="${id}">
-    <div class="ld-hero"><div class="ld-stage"><div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${lightFill(id, lv)}" role="button" tabindex="0" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div></div>
-      ${dim ? well : `<div class="ld-swcol"><button class="sw ${lv > 0 ? 'on' : ''}" data-act="ld-toggle" aria-label="On or off"></button></div>`}</div>
-    <div class="ld-level">${lvLabel(lv, dim)}</div>
-    ${colourRowHTML(id, d, colour)}
+  // the well is the tile's well at 48px, so slide.js's gesture gate and boot.js's input handler both apply
+  // with no new code: the app has one slider idiom, at 36 in a tile, 40 on the house card and 48 here
+  const well = dim ? `<div class="sliderwrap ld-well"><input class="slider" type="range" min="0" max="100" value="${lv}" style="--p:${lv}%" data-lvl="${id}" data-slide="${t}" aria-label="${esc(d.name)} brightness"></div>` : '';
+  // The tile grown to the size of a screen: one tinted object, one readout, one control. `data-tile` sits on the
+  // sheet rather than on the stage so that one tintApply() writes the whole screen: the stage reads --t-fill, the
+  // readout --t-ink, the well its three tokens and the corner button its pair, all by inheritance. The stage alone
+  // could not hand them to its siblings, and a second tintApply beside it would be the second tint path.
+  const body = `<div class="ld light" id="ld" data-id="${id}" data-tile="${id}">
+    <div class="lstage">
+      <div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" data-ldisc="${id}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${discFill(d, lv)}" role="button" tabindex="0" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div>
+      <button class="act dpow" data-act="toggle" data-t="${t}" data-act-lvl="${id}" aria-label="${esc(d.name)} on or off" aria-pressed="${lv > 0}">${ICON('power')}</button>
+    </div>
+    <div class="display lv">${lvLabel(lv, dim)}</div>
+    ${well}
+    ${ldSwatchRowHTML(id, d, colour)}
+    ${ldFollowHTML(id)}
     <div class="ld-actions">
       <button class="rbtn" data-act="ld-timer" data-t="${t}" ${lv > 0 ? '' : 'disabled'}><span class="c">${ICON('clock')}</span><span>Sleep timer</span></button>
       <button class="rbtn ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="ld-fav" data-t="${t}"><span class="c">${ICON('star')}</span><span>Show first</span></button>
       <button class="rbtn" data-act="ld-more" data-id="${id}"><span class="c">${ICON('dots')}</span><span>More</span></button>
     </div>
   </div>`;
-  sheet.open(esc(d.name), body, { detent: 'medium', sub: lightCaption(id), back: !!onBack, onBack });
+  // the swatch row costs 68px, which is more than the medium detent's 391px of body has left, so a lamp with
+  // colour or a white temperature opens large and a lamp with neither opens medium (docs/design-spec-v5.md 4.9)
+  sheet.open(esc(d.name), body, { detent: d.color || d.ct ? 'large' : 'medium', sub: lightCaption(id), back: !!onBack, onBack });
   wireLightSheet();
   if (opts.colour) openColourSheet(id);
 }
-// Colour on the light page: one value row whose value is the colour the lamp is showing, a dot and its name.
-// That row is both the sign that this lamp has colour and the way in (docs/ia-v5.md 2).
+// The pane behind the swatch row is titled after what the lamp can do.
 const colourTitle = d => (d.color ? 'Colour' : 'Warmth');
-// The name alone on the row ("Warm", "Red"), never the kelvin: the row has one line, and the number belongs to the
-// pane behind it, where the warmth slider prints it.
-function colourValueHTML(cur, id) {
-  const tag = id && typeof followTagHTML === 'function' ? followTagHTML(id) : '';
-  return `${colourDot(cur)}${esc(String(colourLabel(cur)).split(' · ')[0])}${tag}`;
-}
-function colourRowHTML(id, d, cur) {
+// The swatch row on the light's own screen: the colours a lamp can show (or, on a lamp that only has white, its
+// whites), 40px each, with a trailing chip into the pane where the warmth slider and the hue strip still live.
+// It is a `.ccol` carrying this sheet's namespace, so color.js's own c-swatch handler and colorPaint() own it and
+// there is no second copy of that wiring. The whites are left out of a colour lamp's row for the same reason
+// colorCtlHTML leaves them out: the warmth slider one tap away is the better white control.
+function ldSwatchRowHTML(id, d, cur) {
   if (!d.ct && !d.color) return '';
-  // a lamp that is following the day says so beside the white it is showing, and the row under it is where that
-  // is switched on and off (docs/ux-progressive.md 2.24)
+  cur = cur || {};
+  const [kmin, kmax] = d.ct && d.ct_range ? d.ct_range : [2000, 6500];
+  const isCt = cur.mode === 'ct' && cur.kelvin != null, isXy = cur.mode === 'xy' && !!cur.hex;
+  const k = clamp(Math.round(cur.kelvin || 2700), kmin, kmax);
+  const whites = d.color ? [] : SWATCH_WHITES.filter(w => w >= kmin && w <= kmax);
+  const selWhite = isCt && whites.length ? nearestWhite(k, whites) : null;
+  const near = isXy ? nearestSwatch(cur.hex, SWATCH_ROW.map(([, hx]) => hx)) : null;
+  const ws = whites.map(w => `<button class="swatch ${selWhite === w && Math.abs(k - w) <= 250 ? 'sel' : ''}" data-act="c-swatch" data-k="${w}" style="background:${kelvinHex(w)}" aria-label="${warmthName(w)}, ${w} K" title="${warmthName(w)}"></button>`).join('');
+  const cs = d.color ? SWATCH_ROW.map(([n, hx]) => `<button class="swatch ${isXy && (sameHex(cur.hex, hx) || (near && sameHex(near, hx))) ? 'sel' : ''}" data-act="c-swatch" data-hex="${hx}" style="background:${hx}" aria-label="${n}" title="${n}"></button>`).join('') : '';
+  const more = `<button class="chip sm" data-act="light-colour" data-id="${id}">More ${d.color ? 'colours' : 'warmth'}</button>`;
+  return `<div class="ccol ld-swrow" data-cns="ld" data-cid="${id}" data-kmin="${kmin}" data-kmax="${kmax}"><div class="chips scroll swatches">${ws}${cs}${more}</div></div>`;
+}
+// Follow the day keeps its own row, under the swatches and unchanged (docs/ux-progressive.md 2.24).
+function ldFollowHTML(id) {
   const follow = typeof followRowHTML === 'function' ? followRowHTML(id) : '';
-  return `<div class="card pad0 list ld-colour">${valueRow(colourTitle(d), `<span data-ldcolour>${colourValueHTML(cur, id)}</span>`, 'light-colour', `data-id="${id}"`)}${follow}</div>`;
+  return follow ? `<div class="card pad0 list ld-colour">${follow}</div>` : '';
 }
 // The colour controls: their own pane, pushed from the row, with a back arrow to the light's page. The sheet goes
 // large because the warmth slider, the swatches and the hue strip need the room (docs/ia-v5.md 3, 5).
@@ -603,19 +622,19 @@ function lightMoreSheet(id) {
 }
 function wireLightSheet() {
   const root = $('#ld'); if (!root || !LD) return;
-  const disc = root.querySelector('.ld-disc'), sl = root.querySelector('.vslider');
+  const disc = root.querySelector('.ld-disc'), sl = root.querySelector('.ld-well .slider');
   const st = { lv: LD.lv };
-  // the disc glows in the lamp's own colour when it has one; the well's fill takes the same tint
+  // the disc glows in the lamp's own colour when it has one. The well no longer needs a tint of its own: it reads
+  // --t-well-fill off the sheet, which is the same transform the tile's well reads.
   const fill = v => { const h = stateHex(LD.color); return h && v > 0 ? lampFill(h, v) : lampColor(v); };
-  const tintWell = () => { if (sl) { const h = stateHex(LD.color); if (h) sl.style.setProperty('--vfill', lampFill(h, 100)); else sl.style.removeProperty('--vfill'); } };
-  const apply = v => { const s = heroSize(v); disc.style.width = disc.style.height = `${s}px`; disc.style.background = fill(v); disc.classList.toggle('off', v <= 0); };
-  tintWell();
-  // the well's tint and the disc always; the colour pane's controls when that is what is showing, and the row's
-  // dot and name when the light's page is (the sheet holds one or the other, never both)
+  // dataset.fill is written here too: paintLightDiscs reads it as "already this colour" and so leaves the disc
+  // alone instead of tweening it back over a drag that is still running
+  const apply = v => { const s = heroSize(v), c = fill(v); disc.style.width = disc.style.height = `${s}px`; disc.style.background = c; disc.dataset.fill = c; disc.classList.toggle('off', v <= 0); };
+  // the disc always; the colour controls wherever they are, which is the swatch row on this screen and the whole
+  // component on the pane behind it (the sheet holds one or the other, never both)
   LD.paintColor = () => {
-    tintWell(); apply(LD.lv);
+    apply(LD.lv);
     colorPaint($('#sheet-root .ccol'), LD.color);
-    const v = $('#sheet-root [data-ldcolour]'); if (v) v.innerHTML = colourValueHTML(LD.color, LD.id);
   };
   // the disc follows the finger with an 80ms lag, so it breathes rather than snaps
   const quick = window.gsap && MOTION.d > 0 ? gsap.quickTo(st, 'lv', { duration: .08, ease: 'power3.out', onUpdate: () => apply(st.lv) }) : v => { st.lv = v; apply(v); };
@@ -623,9 +642,9 @@ function wireLightSheet() {
     v = clamp(Math.round(v), 0, 100); LD.lv = v;
     if (animate && window.gsap && MOTION.d > 0) { if (LD.stTween) LD.stTween.kill(); LD.stTween = gsap.to(st, { lv: v, duration: MOTION.d, ease: MOTION.ease, onUpdate: () => apply(st.lv) }); }
     else quick(v);
-    root.querySelector('.ld-level').textContent = lvLabel(v, LD.dim);
-    if (sl) { sl.style.setProperty('--p', `${v}%`); sl.setAttribute('aria-valuenow', v); }
-    const sw = root.querySelector('[data-act="ld-toggle"]'); if (sw) sw.classList.toggle('on', v > 0);
+    const rd = root.querySelector('.display'); if (rd) rd.textContent = lvLabel(v, LD.dim);
+    if (sl && !sl.dataset.drag) { sl.value = v; sl.style.setProperty('--p', `${v}%`); }
+    const pw = root.querySelector('.dpow'); if (pw) pw.setAttribute('aria-pressed', v > 0 ? 'true' : 'false');
     const tb = root.querySelector('[data-act="ld-timer"]'); if (tb) tb.disabled = v <= 0;
     disc.setAttribute('aria-label', `Drag up or down to dim, tap to turn ${v > 0 ? 'off' : 'on'}`);
   };
@@ -633,15 +652,11 @@ function wireLightSheet() {
   const sendNow = v => { S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); if (window.Motion) Motion.mine(`d:${LD.id}`); sendLevel(`d:${LD.id}`, v); paintState(); };
   const queue = sendNow;
   LD.set = v => { v = clamp(Math.round(v), 0, 100); if (v === LD.lv) return; LD.show(v); queue(v); };
-  const startDrag = () => { LD.dragging = true; if (LD.stTween) LD.stTween.kill(); if (sl) sl.classList.add('drag'); };
-  const endDrag = () => { LD.dragging = false; LD.lastSend = Date.now(); if (sl) sl.classList.remove('drag'); };
-  if (sl) {
-    const fromY = y => { const r = sl.getBoundingClientRect(); return clamp(Math.round((r.bottom - y) / r.height * 100), 0, 100); };
-    sl.addEventListener('pointerdown', e => { e.preventDefault(); sl.setPointerCapture(e.pointerId); startDrag(); const v = fromY(e.clientY); LD.show(v); queue(v); });
-    sl.addEventListener('pointermove', e => { if (!LD.dragging || LD.drag0) return; LD.set(fromY(e.clientY)); });
-    sl.addEventListener('pointerup', endDrag); sl.addEventListener('pointercancel', endDrag);
-    sl.addEventListener('keydown', e => { const step = { ArrowUp: 5, ArrowRight: 5, ArrowDown: -5, ArrowLeft: -5, Home: -200, End: 200 }[e.key]; if (step == null) return; e.preventDefault(); LD.set(LD.lv + step); });
-  }
+  const startDrag = () => { LD.dragging = true; if (LD.stTween) LD.stTween.kill(); };
+  const endDrag = () => { LD.dragging = false; LD.lastSend = Date.now(); };
+  // The well is a native range: slide.js gates the gesture and boot.js sends the level and writes the readout, so
+  // the only thing left here is the disc, which is the same gesture seen twice and has to breathe with it.
+  if (sl) sl.addEventListener('input', () => { const v = clamp(Math.round(Number(sl.value)), 0, 100); LD.lv = v; quick(v); const tb = root.querySelector('[data-act="ld-timer"]'); if (tb) tb.disabled = v <= 0; disc.setAttribute('aria-label', `Drag up or down to dim, tap to turn ${v > 0 ? 'off' : 'on'}`); });
   // the disc is a drag surface: 240px of travel is the whole range; a plain tap turns the light on or off
   disc.addEventListener('pointerdown', e => { e.preventDefault(); disc.setPointerCapture(e.pointerId); LD.drag0 = { y: e.clientY, lv: LD.lv, moved: false }; if (LD.dim) startDrag(); });
   disc.addEventListener('pointermove', e => { const g = LD.drag0; if (!g || !LD.dim) return; const dy = g.y - e.clientY; if (Math.abs(dy) > 3) g.moved = true; if (g.moved) LD.set(g.lv + dy / 240 * 100); });
@@ -848,8 +863,6 @@ document.addEventListener('click', e => {
     case 'mood': applyMood(d.area, d.mood); break;
     case 'mood-save': openMoodSave(d.area); break;
     case 'mood-save-pick': saveMoodScene(d.area, d.mood); break;
-    case 'ld-step': if (LD && LD.set) LD.set(LD.lv + Number(d.d)); break;
-    case 'ld-toggle': if (LD && LD.show) { const v = LD.lv > 0 ? 0 : 100; LD.show(v); S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); command({ type: 'level', target: `d:${LD.id}`, level: v }); paintState(); } break;
     case 'ld-timer': { const id = LD && LD.id; if (id && !(level(id) > 0)) break; sleepTimerSheet(d.t, { back: id ? () => openLightSheet(id) : null }); break; }
     case 'ld-fav': toggleFav(d.t); el.classList.toggle('on', S.config.favorites.includes(d.t)); break;
     case 'ld-kind': { const id = d.id; openKindSheet(id, { back: () => lightMoreSheet(id) }); break; }

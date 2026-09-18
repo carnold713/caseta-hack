@@ -605,7 +605,9 @@ details.more > div { margin-top: 8px; }
 .sheet.dt-compact { min-height: 180px; max-height: 40dvh; }
 .sheet.dt-medium { height: 56dvh; max-height: 56dvh; }
 .sheet.dt-large { height: 92dvh; }
-.sheet.dt-medium, .sheet.dt-large { transition: transform .32s var(--ease), height .26s var(--ease); }
+/* the height and the incoming content land on the same frame: 255ms is the app's state duration, and the
+   sheet's own travel is the 300ms of docs/design-spec-v5.md 7.6 */
+.sheet.dt-medium, .sheet.dt-large { transition: transform 300ms var(--ease), height 255ms var(--ease); }
 /* the grab zone is 20px tall; the grabber itself is 36x5, 8px from the sheet's top */
 .sheet .grab { height: 20px; flex: none; position: relative; touch-action: none; }
 .sheet .grab::before { content: ""; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 36px; height: 5px; border-radius: 2.5px; background: var(--line-2); }
@@ -864,13 +866,14 @@ input.slider { pointer-events: none; }
 .dtile.on[data-kind="dim"] .dwell { opacity: 1; visibility: visible; transition-delay: 0s; }
 .dtile .slider { --well-h: 36px; --grip-h: 18px; }
 .dtile .dwell .slider { --track: var(--t-well); --fill: var(--t-well-fill); --line-2: var(--t-well-line); }
-/* the 40px action icon, given a 48px touch box the same way .fav and .btn.sm get one */
-.dtile .dpow { width: 40px; height: 40px; flex: none;
+/* the 40px action icon, given a 48px touch box the same way .fav and .btn.sm get one. The light sheet's stage
+   carries the same button at the same size in the same place, so it is named here rather than drawn twice. */
+.dtile .dpow, .lstage .dpow { width: 40px; height: 40px; flex: none;
   background: var(--t-btn-bg); color: var(--t-btn-ink);
   transition: background-color .15s var(--ease), color .15s var(--ease), transform .15s var(--ease); }
-.dtile .dpow::after { content: ""; position: absolute; inset: -4px; }
-.dtile .dpow svg.i { width: 20px; height: 20px; }
-.dtile .dpow:active { transform: scale(.92);
+.dtile .dpow::after, .lstage .dpow::after { content: ""; position: absolute; inset: -4px; }
+.dtile .dpow svg.i, .lstage .dpow svg.i { width: 20px; height: 20px; }
+.dtile .dpow:active, .lstage .dpow:active { transform: scale(.92);
   background: var(--t-btn-bg-pressed); color: var(--t-btn-ink-pressed); box-shadow: none; }
 /* a fan or a shade that is on is not a light: it takes the Tenzing on state, never warmth */
 .dtile.on[data-kind="fan"], .dtile.on[data-kind="shade"] {

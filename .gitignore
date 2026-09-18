@@ -7,3 +7,6 @@ agent/__pycache__/
 .env
 .DS_Store
 .claude/
+
+# screenshots and scratch output from a test run: never project content
+scratchpad/

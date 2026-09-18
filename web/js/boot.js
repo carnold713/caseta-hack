@@ -140,9 +140,10 @@ document.addEventListener('input', e => {
     const row = el.closest('.light');
     const lv = row && row.querySelector('.lv'); if (lv) lv.textContent = v === 0 ? 'Off' : `${v}%`;
     const disc = row && row.querySelector('[data-ldisc]'); if (disc) { const c = lightFill(disc.dataset.ldisc, v); disc.style.backgroundColor = c; disc.dataset.fill = c; disc.classList.toggle('off', v <= 0); }
-    // the dragged tile paints itself and nothing else does: paintState() walks the document with six
-    // querySelectorAll calls, and running that 60 times a second is the last thing this interaction can afford
-    if (row && row.classList.contains('dtile') && typeof tintOptsAt === 'function') { row.classList.toggle('on', v > 0); tintApply(row, tintOptsAt(row.dataset.tile, v)); }
+    // the dragged surface paints itself and nothing else does: paintState() walks the document with six
+    // querySelectorAll calls, and running that 60 times a second is the last thing this interaction can afford.
+    // [data-tile] and not .dtile, because the light sheet is the same tinted object at the size of a screen
+    if (row && row.dataset.tile && typeof tintOptsAt === 'function') { row.classList.toggle('on', v > 0); tintApply(row, tintOptsAt(row.dataset.tile, v)); }
     sendLevel(t, v);
   }
   if (el.dataset.house) {
