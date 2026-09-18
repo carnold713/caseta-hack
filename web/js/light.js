@@ -808,6 +808,7 @@ function paintLight() {
   paintOnChips();
   paintDeviceTiles();
   if (typeof paintRoomTiles === 'function') paintRoomTiles();
+  if (typeof paintRoomHero === 'function') paintRoomHero();
   paintLightDiscs();
   paintLightRowValues();
   paintTiles();

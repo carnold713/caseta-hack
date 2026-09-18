@@ -196,11 +196,18 @@ function roomsRename(id, value) {
 function roomsDelete(id) {
   const r = roomById(id); if (!r) return;
   const before = JSON.stringify(S.config);
+  const hadPhoto = !!r.photo;
   S.config.settings.rooms = appRooms().filter(x => x.id !== id);
   S.roomsEdit = null;
   save({ quiet: true, render: false }).then(() => {
     render();
-    toast(`${r.name} deleted`, { undo: async () => { S.config = JSON.parse(before); await save({ msg: 'Put back', quiet: true }); render(); } });
+    // Deleting the room is the one place a photograph's bytes really go. It cannot happen now: this
+    // toast offers Undo, and Undo restores the stamp, so throwing the file away first would put the
+    // room back pointing at a picture that no longer exists. The file goes once the offer has lapsed,
+    // and the pending delete is dropped the moment Undo is taken.
+    let drop = null;
+    if (hadPhoto) drop = setTimeout(() => { api(`/api/roomphoto/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {}); }, 8000);
+    toast(`${r.name} deleted`, { undo: async () => { clearTimeout(drop); S.config = JSON.parse(before); await save({ msg: 'Put back', quiet: true }); render(); } });
   });
 }
 

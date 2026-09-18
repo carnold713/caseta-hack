@@ -973,3 +973,30 @@ input.slider { pointer-events: none; }
   .dtile:hover:not(:active):not(:has(.dbody.static)), .rtile:not(.new):hover:not(:active) { background-color: var(--t-fill-pressed); }
   .scell:hover:not(:active) .sc-disc { box-shadow: var(--shadow-1); }
 }
+
+/* ---------- the room hero (docs/design-spec-v5.md 4.8) ---------- */
+/* The default is the room as it is lit right now, one soft radial per light in that light's colour.
+   Plain gradients: js/lightfield.js is a singleton bound to Home's hero and a second init would take
+   its host. Nothing is ever drawn on top of this, so there is no scrim and no contrast problem. */
+.rhero { position: relative; height: 180px; margin: 4px 0 16px; border-radius: var(--r-md);
+  background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden;
+  display: grid; place-items: center; }
+.rh-pool { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s);
+  margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2); border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle closest-side, var(--c, transparent), transparent 72%);
+  transition: background-color .255s var(--ease), opacity .255s var(--ease), width .255s var(--ease), height .255s var(--ease); }
+.rhero.photo { background: var(--surface-2); }
+.rhero .rh-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+/* a room with nothing in it yet: its own glyph, no copy and no button. The row below already says it */
+.rhero.empty { color: var(--text-2); }
+.rhero.empty svg.i { width: 48px; height: 48px; stroke-width: 1; }
+@media (max-width: 379px) { .rhero { height: 160px; } }
+/* the photograph's other home: the room tile's 40px slot, never with type on it */
+.rtile .slot .rh-thumb { width: 100%; height: 100%; object-fit: cover; border-radius: var(--r-s); display: block; }
+/* the photo row in Room setup: a 40px thumbnail in the leading slot once there is one */
+.ph-thumb { width: 40px; height: 40px; border-radius: var(--r-s); object-fit: cover; display: block; flex: none; }
+/* a room whose lights are off: the glyph rather than an empty box, fading out as light arrives */
+.rhero .rh-dark { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-2);
+  opacity: 0; transition: opacity .255s var(--ease); pointer-events: none; }
+.rhero.dark .rh-dark { opacity: 1; }
+.rhero .rh-dark svg.i { width: 48px; height: 48px; stroke-width: 1; }

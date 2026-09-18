@@ -85,13 +85,23 @@ function roomOrder(ds) { const f = S.config.favorites; return ds.slice().sort((a
 // [data-tgt] branch already toggles .on, rewrites that line with roomSummary() and fires
 // Motion.lightChanged, and paintOnChips() already fills the disc. Only the tint is new.
 // A room is one control, not five, so the switch stays a .sw: a round power button means one device.
+// The 40px leading slot: the room's photograph when it has one, its lit disc when it does not. The
+// photo is the only other place a room's picture appears (docs/design-spec-v5.md 6.7), and no type is
+// ever drawn on it: the room's name sits beside the slot, never over it. With a photo there is no
+// [data-onchip], so paintOnChips simply finds nothing to fill, and the card's own tint is what says
+// whether the room is lit.
+function roomSlotHTML(a, t, on) {
+  const src = typeof roomPhotoSrc === 'function' ? roomPhotoSrc(a.id) : null;
+  if (src) return `<span class="slot"><img class="rh-thumb" data-phthumb="${esc(a.id)}" src="${esc(src)}" alt="" decoding="async"></span>`;
+  return `<span class="slot"><span class="lamp onchip ${on ? '' : 'off'}" data-onchip="${t}" style="background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span></span>`;
+}
 function roomTileHTML(a) {
   const t = `a:${a.id}`;
   const ds = controllable().filter(d => devArea(d) === a.id);
   const hasToggle = ds.some(d => d.domain !== 'cover');
   const on = targetOn(t);
   return `<div class="rtile room ${on ? 'on' : ''}" data-tgt="${t}" data-room="${a.id}" data-rtile="${a.id}">
-    <button class="head" data-act="room-open" data-id="${a.id}" aria-label="${esc(a.name)}"><span class="slot"><span class="lamp onchip ${on ? '' : 'off'}" data-onchip="${t}" style="background:${lampColor(on ? roomMean(a.id) : 0)}">${ICON(roomIcon(a.name), 'sm')}</span></span><span class="n">${esc(a.name)}</span><span class="s">${esc(roomSummary(a.id))}</span></button>
+    <button class="head" data-act="room-open" data-id="${a.id}" aria-label="${esc(a.name)}">${roomSlotHTML(a, t, on)}<span class="n">${esc(a.name)}</span><span class="s">${esc(roomSummary(a.id))}</span></button>
     <div class="rfoot">${hasToggle ? `<button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(a.name)} on or off"></button>` : ''}</div></div>`;
 }
 // A room tile's tint is its own lights averaged as hue vectors (roomTintSeed in color.js): lights that

@@ -37,7 +37,9 @@ function openRoomSheet(aid) {
 function renderRoomSheet() {
   const aid = S.room;
   if (!aid || !areas().some(a => a.id === aid)) { S.room = null; if (sheet.isOpen() && SHEET_KEY === 'room') sheet.close(); return; }
-  showSheet('room', esc(areaName(aid)), roomSheetBodyHTML(aid), { detent: 'large', sub: esc(roomSummary(aid)), top: true });
+  // the sub line carries data-roomsum so paintState's existing sweep keeps it honest: turning a light on
+  // from inside the sheet used to leave its own header still reading "all off"
+  showSheet('room', esc(areaName(aid)), roomSheetBodyHTML(aid), { detent: 'large', sub: `<span data-roomsum="${esc(aid)}">${esc(roomSummary(aid))}</span>`, top: true });
   // Closing the sheet (the X, or anything that calls sheet.close() without going through goRoom/'room-setup'
   // first) is what sends the hash back to #home; a route change that already moved the hash elsewhere (the
   // hashchange listener, a tab switch) leaves it alone, so the browser's own back button is never fought.
@@ -48,6 +50,63 @@ function renderRoomSheet() {
   };
 }
 
+// ---------- the room hero (docs/design-spec-v5.md 4.8) ----------
+// The default is not a placeholder waiting for a photograph, it is the room as it is lit right now:
+// one soft radial per light, in that light's own colour, at the size of its level. A photograph is a
+// dead picture of a kitchen; this one changes when you turn the desk lamp green, and it is the thing
+// this app can draw that a photo library cannot. A photograph is offered, never asked for.
+//
+// It is plain CSS radial gradients, not js/lightfield.js: that module is a singleton bound to Home's
+// hero with one WebGL context, and a second init would steal its host. This costs no context and no
+// frame, and it is paintable from data attributes like everything else here.
+
+// Stable placement: the same light lands in the same place on every render, so a pool never jumps.
+function rhPlace(id) {
+  let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return { x: 12 + (h % 77), y: 26 + ((h >>> 7) % 44) };   // per cent, inside the box
+}
+const rhSize = lv => Math.round(96 + 148 * (lv / 100));
+// A room's lights, brightest first, at most eight: past that the box is mush and the eight that carry
+// the most light are the ones worth drawing.
+function rhLights(aid) {
+  return controllable()
+    .filter(d => devArea(d) === aid && (d.domain === 'light' || d.domain === 'switch'))
+    .sort((a, b) => (level(b.device_id) || 0) - (level(a.device_id) || 0))
+    .slice(0, 8);
+}
+function roomPhotoSrc(aid) {
+  const r = typeof appRoom === 'function' ? appRoom(aid) : null;
+  if (!r || !r.photo) return null;
+  return `/api/roomphoto/${encodeURIComponent(aid)}?token=${encodeURIComponent(S.token)}&v=${encodeURIComponent(r.photo)}`;
+}
+function roomHeroHTML(aid) {
+  const src = roomPhotoSrc(aid);
+  // no text and no control ever sits on the photograph: the room's name is in the sheet header above it
+  if (src) return `<div class="rhero photo" data-rhero="${aid}"><img class="rh-img" data-roomphoto="${aid}" src="${esc(src)}" alt="" decoding="async"></div>`;
+  const ds = rhLights(aid);
+  if (!ds.length) return `<div class="rhero empty" data-rhero="${aid}">${ICON(roomIcon(areaName(aid)), 'xl')}</div>`;
+  // the pools are emitted once with their place and size; paintRoomHero only ever writes colour and
+  // opacity, so the shape of the DOM never changes while the room is open and a colour can cross-fade
+  const pool = d => { const p = rhPlace(d.device_id); return `<span class="rh-pool" data-rh="${d.device_id}" style="--x:${p.x}%;--y:${p.y}%;--s:${rhSize(level(d.device_id) || 0)}px"></span>`; };
+  // A room with its lights off has no pools to draw, and 180px of empty grey at the top of the sheet
+  // reads as something failing to load rather than as a dark room. The glyph sits under the pools and
+  // fades out as light arrives, so the box always says something: this room, dark, or this room, lit.
+  return `<div class="rhero" data-rhero="${aid}"><span class="rh-dark">${ICON(roomIcon(areaName(aid)), 'xl')}</span>${ds.map(pool).join('')}</div>`;
+}
+function paintRoomHero() {
+  document.querySelectorAll('.rh-pool[data-rh]').forEach(el => {
+    const id = el.dataset.rh; const lv = level(id) || 0;
+    el.style.setProperty('--c', lightFill(id, lv));
+    el.style.setProperty('--s', `${rhSize(lv)}px`);
+    el.style.opacity = lv > 0 ? String(0.18 + 0.62 * lv / 100) : '0';
+  });
+  document.querySelectorAll('.rhero[data-rhero]').forEach(el => {
+    if (el.classList.contains('photo') || el.classList.contains('empty')) return;
+    const lit = [...el.querySelectorAll('.rh-pool[data-rh]')].some(q => (level(q.dataset.rh) || 0) > 0);
+    el.classList.toggle('dark', !lit);
+  });
+}
+
 // The room sheet's body: the whole of what roomPageHTML used to render as a page, plus the whole-room on/off
 // toggle that the page's own header used to carry next to its name (nestedTop's `.tools`; a sheet's header has
 // no equivalent slot, so it becomes the first row instead. Nothing here is new, only moved).
@@ -56,7 +115,7 @@ function roomSheetBodyHTML(aid) {
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
   const t = `a:${aid}`;
   const hasToggle = controllable().some(d => devArea(d) === aid && d.domain !== 'cover');
-  let h = '';
+  let h = roomHeroHTML(aid);
   if (hasToggle) h += `<div class="card pad0 list" style="margin-bottom:8px"><div class="item"><div class="grow"><div class="t">Turn the room on or off</div></div><button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(areaName(aid))} on or off"></button></div></div>`;
   // the moods, or one row that offers to make them
   if (roomDimmers(aid).length) {
@@ -104,7 +163,12 @@ function roomSetupHTML(aid) {
   if (typeof followRoomRowHTML === 'function') h += followRoomRowHTML(aid);
   if (kinds) h += `<div class="gh">Kind of light</div><div class="card pad0 list">${kinds}</div>`;
   // The room itself: its name, what is in it, and whether it should exist at all. One page for every room.
-  h += `<div class="gh">This room</div><div class="card pad0 list"><button class="item" data-act="rooms-open" data-id="${esc(aid)}"><div class="grow"><div class="t">Name and what is in it</div><div class="d">Rename it, move lights and remotes in or out, delete it</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+  // the photograph is the room's own identity, so it is the first row of the card that identity lives in
+  h += `<div class="gh">This room</div><div class="card pad0 list">${roomPhotoRowHTML(aid)}<button class="item" data-act="rooms-open" data-id="${esc(aid)}"><div class="grow"><div class="t">Name and what is in it</div><div class="d">Rename it, move lights and remotes in or out, delete it</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+  // one hidden picker per setup page. <input type="file"> is the only picker a PWA has, and on iOS it
+  // already offers Photo Library, Take Photo and Choose File by itself, so the app puts no sheet of its
+  // own in front of it: the row is one tap and the system asks the rest.
+  h += `<input type="file" accept="image/*" id="photopick" data-area="${esc(aid)}" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">`;
   return h;
 }
 
@@ -132,4 +196,146 @@ document.addEventListener('click', e => {
     // came from, rather than dropping to Home with no context.
     case 'room-setup-back': goRoom(S.room); break;
   }
+});
+
+/* ---------- a room's photograph (docs/design-spec-v5.md 6) ----------
+   Optional, never asked for. No copy anywhere suggests the app would look better with a picture in
+   it: the generated hero is the default and it is the better of the two. The bytes live on the hub's
+   volume (hub/server.js), and the config carries only a stamp saying which picture it is. */
+
+const PHOTO_MAX_PICK = 25 * 1024 * 1024;   // what a phone camera produces, before we shrink it
+const PHOTO_MAX_SEND = 400 * 1024;         // the hub's own cap, so a refusal never travels
+let PHOTO_RETRY = null;                    // the last blob, so "Try again" needs no second pick
+
+function roomPhotoRowHTML(aid) {
+  const src = roomPhotoSrc(aid);
+  if (!src) {
+    return `<button class="item" data-act="photo-open" data-area="${esc(aid)}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Add a photo</div><div class="d">It shows at the top of the room.</div></div></button>`;
+  }
+  return `<button class="item" data-act="photo-open" data-area="${esc(aid)}"><img class="ph-thumb" data-phthumb="${esc(aid)}" src="${esc(src)}" alt="" decoding="async"><div class="grow"><div class="t">Photo</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+}
+
+// With a photo already set there are two things to do, so the row opens a sheet; with none there is
+// one, so the row is the picker itself.
+function openPhotoSheet(aid) {
+  if (!roomPhotoSrc(aid)) { pickPhoto(aid); return; }
+  showSheet('photo', 'Photo', `<div class="card pad0 list">
+    <button class="item" data-act="photo-pick" data-area="${esc(aid)}"><div class="grow"><div class="t">Choose a different photo</div></div></button>
+    <button class="item" data-act="photo-remove" data-area="${esc(aid)}"><div class="grow"><div class="t" style="color:var(--red-text)">Remove the photo</div><div class="d">The room goes back to showing its own light.</div></div></button>
+  </div>`, { detent: 'compact', sub: esc(areaName(aid)) });
+}
+function pickPhoto(aid) {
+  const inp = document.getElementById('photopick'); if (!inp) return;
+  inp.dataset.area = aid;
+  inp.value = '';          // picking the same file twice in a row still fires change
+  inp.click();
+}
+
+// Decode, shrink, then send. The shrink is what makes the hub's 400kb cap generous rather than tight:
+// a room photo lands at 30 to 60kb, and a refusal the phone could have predicted never travels.
+async function photoBlob(file) {
+  if (file.size > PHOTO_MAX_PICK) throw Object.assign(new Error('That photo is too big. Try one under 25 MB.'), { stop: true });
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('decode')); i.src = url; });
+    // 1024 on the long edge covers a 3x phone at the hero's 350 CSS px and the 640px layout
+    const scale = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    for (const q of [0.72, 0.6, 0.5]) {
+      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', q));
+      if (blob && blob.size <= PHOTO_MAX_SEND) return blob;
+    }
+    throw Object.assign(new Error('That photo is too big. Try one under 25 MB.'), { stop: true });
+  } catch (e) {
+    if (e && e.stop) throw e;
+    // a HEIC Safari did not convert, a PDF picked through Choose File, a corrupt file
+    throw Object.assign(new Error('That file is not a photo. Pick an image.'), { stop: true });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+const blobDataURL = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error('read')); r.readAsDataURL(blob); });
+
+async function sendPhoto(aid, blob) {
+  // "not connected" means the connector, not the network: the hub is this same origin and is still
+  // answering, so a photo saves perfectly well while the home is unreachable and no copy says otherwise.
+  if (navigator.onLine === false) throw new Error('No connection. The photo was not added.');
+  const data = await blobDataURL(blob);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20000);
+  try {
+    return await api(`/api/roomphoto/${encodeURIComponent(aid)}`, { method: 'PUT', body: JSON.stringify({ data }), signal: ctl.signal });
+  } catch (e) {
+    // a request that never left the phone rejects before there is a body to read a message out of
+    if (e && (e.name === 'AbortError' || /fetch|network|load failed/i.test(e.message || ''))) throw new Error('No connection. The photo was not added.');
+    throw new Error(e && e.message ? e.message : 'The photo did not save.');
+  } finally { clearTimeout(timer); }
+}
+
+async function applyPhoto(aid, blob) {
+  const room = appRoom(aid); if (!room) return;
+  const had = room.photo || null;
+  PHOTO_RETRY = { aid, blob };
+  // optimistic, the same way a light is: the hero and the row show it before the network does anything
+  const local = URL.createObjectURL(blob);
+  showPhotoPreview(aid, local);
+  try {
+    const out = await sendPhoto(aid, blob);
+    room.photo = String(out.stamp);
+    await save({ quiet: true, render: false });
+    PHOTO_RETRY = null;
+    if (S.view === 'room') render(); else if (SHEET_KEY === 'room') renderRoomSheet();
+    toast(had ? 'Photo changed' : 'Photo added', { undo: () => undoPhoto(aid, had) });
+  } catch (e) {
+    showPhotoPreview(aid, had ? roomPhotoSrc(aid) : null);   // back in one frame, nothing half applied
+    toast(e.message || 'The photo did not save.', { err: true, action: 'Try again', onAction: () => { const r = PHOTO_RETRY; if (r) applyPhoto(r.aid, r.blob); } });
+  } finally {
+    URL.revokeObjectURL(local);
+  }
+}
+// The hero and the row, moved to a given src without waiting for a render.
+function showPhotoPreview(aid, src) {
+  document.querySelectorAll(`[data-rhero="${CSS.escape(aid)}"]`).forEach(el => {
+    if (!src) { el.classList.remove('photo'); const im = el.querySelector('.rh-img'); if (im) im.remove(); return; }
+    el.classList.add('photo');
+    let im = el.querySelector('.rh-img');
+    if (!im) { im = document.createElement('img'); im.className = 'rh-img'; im.alt = ''; im.decoding = 'async'; el.innerHTML = ''; el.appendChild(im); }
+    im.src = src;
+  });
+  document.querySelectorAll(`[data-phthumb="${CSS.escape(aid)}"]`).forEach(el => { if (src) el.src = src; });
+}
+// Removing clears the stamp and does not call DELETE: there is one file per room, a replacement
+// overwrites it, and deleting the room deletes it. That is what makes Undo real, because the picture
+// is still there to come back to. The copy does not claim the bytes are gone.
+async function removePhoto(aid) {
+  const room = appRoom(aid); if (!room || !room.photo) return;
+  const had = room.photo;
+  room.photo = null;
+  await save({ quiet: true, render: false });
+  if (S.view === 'room') render(); else if (SHEET_KEY === 'room') renderRoomSheet();
+  toast('Photo removed', { undo: () => undoPhoto(aid, had) });
+}
+async function undoPhoto(aid, stamp) {
+  const room = appRoom(aid); if (!room) return;
+  room.photo = stamp || null;
+  await save({ quiet: true, render: false });
+  if (S.view === 'room') render(); else if (SHEET_KEY === 'room') renderRoomSheet();
+}
+
+document.addEventListener('change', async e => {
+  const inp = e.target; if (!inp || inp.id !== 'photopick') return;
+  const file = inp.files && inp.files[0]; if (!file) return;
+  const aid = inp.dataset.area;
+  try { await applyPhoto(aid, await photoBlob(file)); }
+  catch (err) { toast(err.message || 'That file is not a photo. Pick an image.', { err: true }); }
+});
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const d = el.dataset;
+  if (d.act === 'photo-open') openPhotoSheet(d.area);
+  else if (d.act === 'photo-pick') { closeSheet(); pickPhoto(d.area); }
+  else if (d.act === 'photo-remove') { closeSheet(); removePhoto(d.area); }
 });
