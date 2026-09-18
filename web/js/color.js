@@ -217,3 +217,244 @@ document.addEventListener('click', e => {
     if (host.more) host.more(id, !!root.querySelector('.cmore'));
   }
 });
+
+/* ---------- tinted surfaces (docs/design-spec-v5.md 3) ----------
+   A card that stands for a light that is on is painted in the colour that light is emitting. The
+   whole system rests on one number: every lit card sits at WCAG relative luminance 0.1529, which is
+   the measured luminance of Lutron blue itself. Hue is kept exactly, chroma is clamped into a band by
+   how much the app actually knows about the device, and lightness is the budget that gets spent
+   reaching the target. Because the luminance is a constant, every contrast ratio on a lit card is a
+   constant too, the ink is the literal '#FFFFFF' rather than a choice between two inks, and there is
+   therefore no threshold for a slider drag to cross and nothing that can flip under a finger.
+   scripts/tint-check.js proves the contract over the whole space. */
+
+// sRGB transfer function, both directions. 8-bit in, linear-light out.
+const srgbToLin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+const linToSrgb = c => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+
+function hexToLin(hex) {
+  const h = String(hex).replace('#', '');
+  const n = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+  return [0, 2, 4].map(i => srgbToLin(parseInt(n.slice(i, i + 2), 16) / 255));
+}
+function linToHex(rgb) {
+  return '#' + rgb.map(v => Math.round(Math.min(1, Math.max(0, linToSrgb(v))) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+// Linear sRGB to OKLab (Ottosson's M1 / M2). The cube root is the perceptual part: it is what makes a
+// fixed L step feel like the same step at the dark end and the light end.
+function linToOklab(r, g, b) {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+          1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+          0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+}
+// OKLab to linear sRGB. May land outside 0..1: that is out of gamut, and the caller decides what to
+// do about it rather than this clipping and lying about the hue it returned.
+function oklabToLin(L, A, B) {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.2914855480 * B) ** 3;
+  return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+          -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+          -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+}
+const RAD = Math.PI / 180;
+function hexToOklch(hex) {
+  const [L, A, B] = linToOklab(...hexToLin(hex));
+  return { L, C: Math.hypot(A, B), H: (Math.atan2(B, A) / RAD + 360) % 360 };
+}
+const oklchToLin = (L, C, H) => oklabToLin(L, C * Math.cos(H * RAD), C * Math.sin(H * RAD));
+
+// WCAG relative luminance and contrast, measured on the quantised 8-bit hex the browser will really
+// paint, not on the float we computed on the way there.
+const lum = hex => { const [r, g, b] = hexToLin(hex); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+function contrast(a, b) {
+  const x = lum(a), y = lum(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+const TINT = {
+  yOn: 0.1529,          // = lum('#006DCC'). White ink lands at 5.17:1 on it
+  yOnNight: 0.1150,     // accepted here, never passed by a call site until the night page lands
+  yInk2: 0.8850,        // the second line of text: 4.61:1 on a card
+  yLine: 0.6050,        // any control boundary: 3.23:1 on a card
+  wellK: 0.42,          // the slider well's interior, as a fraction of the card's luminance
+  hueFallbackLamp: 70,  // amber: where a lamp with no usable hue lands
+  hueFallbackCtl: 250   // the blue family: where a control lands
+};
+
+// Chroma bands, in OKLCh chroma units. This is the one place the system says how much it knows: a
+// colour lamp is allowed to be vivid, a white-temperature lamp less so, a plain dimmer less again.
+// Side by side they read as three degrees of certainty about one thing, which is what they are.
+const TINT_BANDS = {
+  colour: { min: 0.070, max: 0.160, maxNight: 0.130 },
+  ct:     { min: 0.045, max: 0.100, maxNight: 0.090 },
+  dim:    { min: 0.040, max: 0.075, maxNight: 0.070 },
+  ctl:    { min: 0.000, max: 0.200, maxNight: 0.200 }  // a control keeps Lutron blue exactly as it is
+};
+
+const inGamut = rgb => rgb.every(v => v >= -1e-6 && v <= 1 + 1e-6);
+
+// At a fixed chroma and hue, luminance rises with OKLab L, so a bisection finds the L that hits the
+// target exactly. 16 halvings resolve L about two hundred times finer than one 8-bit step.
+function solveL(C, H, yTarget) {
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 16; i++) {
+    const mid = (lo + hi) / 2;
+    const rgb = oklchToLin(mid, C, H);
+    const y = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    if (y < yTarget) lo = mid; else hi = mid;
+  }
+  const rgb = oklchToLin((lo + hi) / 2, C, H);
+  if (!inGamut(rgb)) return null;
+  const y = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  return Math.abs(y - yTarget) > 3e-4 ? null : linToHex(rgb);
+}
+
+// A hue and a wish for chroma in, a paintable hex at yTarget out. Chroma 0 is a grey of the right
+// luminance and is always paintable, so this always returns something.
+function solveC(H, C, yTarget) {
+  const first = solveL(C, H, yTarget);
+  if (first) return first;
+  let lo = 0, hi = C;
+  for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (solveL(mid, H, yTarget)) lo = mid; else hi = mid; }
+  return solveL(lo, H, yTarget) || solveL(0, H, yTarget) || '#6D6D6D';
+}
+
+// Rounding to 8 bits moves luminance by up to 0.0015, which would move a measured ratio by about 0.04
+// and make the guarantee an approximation. The target is nudged until the byte the browser paints
+// falls on the safe side: dir -1 for a surface, dir +1 for ink and lines. The guarantee then reads as
+// "at least", never "about".
+function pinLuma(H, C, yTarget, dir) {
+  let t = yTarget, hex = solveC(H, C, t);
+  for (let i = 0; i < 6 && dir; i++) {
+    const y = lum(hex);
+    if (dir < 0 ? y <= yTarget : y >= yTarget) return hex;
+    t -= (y - yTarget) + 1e-5 * (dir < 0 ? 1 : -1);
+    hex = solveC(H, C, t);
+  }
+  return hex;
+}
+
+// What a device's live state contributes: a hue, a chroma wish and a band.
+function tintSeed(kind, hex, level, night) {
+  const band = TINT_BANDS[kind] || TINT_BANDS.ctl;
+  const src = hexToOklch(hex);
+  const fallback = kind === 'ctl' ? TINT.hueFallbackCtl : TINT.hueFallbackLamp;
+  const H = src.C < 2e-3 ? fallback : src.H;
+  // Level moves chroma over a narrow band and nothing else. A 1% lamp is 82% as colourful as a 100%
+  // lamp, which is felt but never measured: the luminance is pinned either way, so no ratio moves
+  // while a finger is on the slider.
+  const lv = Math.max(0, Math.min(100, Number(level) || 0));
+  const dim = kind === 'ctl' ? 1 : 0.82 + 0.18 * lv / 100;
+  const cap = night ? band.maxNight : band.max;
+  return { H, C: Math.min(cap, Math.max(band.min, src.C)) * dim };
+}
+
+// The memo. A surface depends on four things only: the state, the source hex, the 5% level bucket and
+// the night flag, so a full slider drag can ask for at most 21 distinct surfaces per colour. Past the
+// cap the map is dropped rather than half evicted: one recompute per card, and no bookkeeping on
+// every hit.
+const TINT_MEMO = new Map();
+const TINT_MEMO_CAP = 256;
+function litSurface(opts) {
+  const o = opts || {};
+  const bucket = Math.round(Math.max(0, Math.min(100, Number(o.level) || 0)) / 5);
+  const key = `${o.state || 'on'}|${o.kind || 'ctl'}|${o.hex || ''}|${bucket}|${o.night ? 1 : 0}`;
+  const hit = TINT_MEMO.get(key);
+  if (hit) return hit;
+  const made = buildLitSurface(o, bucket * 5);
+  if (TINT_MEMO.size >= TINT_MEMO_CAP) TINT_MEMO.clear();
+  TINT_MEMO.set(key, made);
+  return made;
+}
+
+function buildLitSurface(o, level) {
+  const night = !!o.night;
+  const yOn = night ? TINT.yOnNight : TINT.yOn;
+
+  // Off, and anything with no state worth tinting: the ordinary card, unchanged.
+  if (o.state === 'off') {
+    return { state: 'off', fill: '#FFFFFF', fillPressed: '#F2F2F2', ink: '#262626', ink2: '#666666',
+             line: '#B3B3B3', wellTrack: '#EDEDED', wellFill: '#006DCC', wellLine: '#B3B3B3',
+             btnBg: '#EDEDED', btnIcon: '#262626', btnBgPressed: '#DEDEDE', btnIconPressed: '#262626',
+             border: 'rgba(0,0,0,.09)' };
+  }
+
+  // On, but nobody is answering. Keeps the luminance, so the card still reads as on, and drops the
+  // hue entirely, so it stops claiming a colour it cannot currently see.
+  const seed = o.state === 'unknown'
+    ? { H: 0, C: 0 }
+    : tintSeed(o.kind || 'ctl', o.hex || '#006DCC', level, night);
+
+  const fill = pinLuma(seed.H, seed.C, yOn, -1);
+  const line = pinLuma(seed.H, seed.C * 0.6, TINT.yLine, +1);
+  const ink2 = pinLuma(seed.H, seed.C * 0.5, TINT.yInk2, +1);
+  return {
+    state: o.state === 'unknown' ? 'unknown' : 'on',
+    fill,
+    // Pressed is a luminance step, not an opacity change, so it is the same felt amount of press on
+    // every hue. 18% deeper reads as a press and keeps white ink above 4.5:1 on its own.
+    fillPressed: pinLuma(seed.H, seed.C, yOn * 0.82, -1),
+    ink: '#FFFFFF',
+    ink2,
+    line,
+    wellLine: line,
+    // The slider: a deepened well with a white fill. The well's outline carries the 3:1 the control
+    // needs, and the fill against the well carries the value.
+    wellTrack: pinLuma(seed.H, seed.C, yOn * TINT.wellK, -1),
+    wellFill: '#FFFFFF',
+    // The round power button inverts the card, the way the reference's does.
+    btnBg: '#FFFFFF',
+    btnIcon: fill,
+    btnBgPressed: ink2,
+    btnIconPressed: fill,
+    border: 'rgba(0,0,0,.28)'
+  };
+}
+
+// Paint a card from a surface. litSurface returns colours, not styles: this writes them onto the
+// element as custom properties and the CSS never mentions a colour again. A colour change is thirteen
+// property writes on one element and no reflow.
+function tintApply(el, opts) {
+  if (!el) return;
+  const s = litSurface(opts);
+  if (el.dataset.tint === s.fill && el.dataset.tintState === s.state) return;   // nothing moved
+  el.dataset.tint = s.fill; el.dataset.tintState = s.state;
+  const st = el.style;
+  st.setProperty('--t-fill', s.fill);
+  st.setProperty('--t-fill-pressed', s.fillPressed);
+  st.setProperty('--t-ink', s.ink);
+  st.setProperty('--t-ink-2', s.ink2);
+  st.setProperty('--t-line', s.line);
+  st.setProperty('--t-well', s.wellTrack);
+  st.setProperty('--t-well-fill', s.wellFill);
+  st.setProperty('--t-well-line', s.wellLine);
+  st.setProperty('--t-btn-bg', s.btnBg);
+  st.setProperty('--t-btn-ink', s.btnIcon);
+  st.setProperty('--t-btn-bg-pressed', s.btnBgPressed);
+  st.setProperty('--t-btn-ink-pressed', s.btnIconPressed);
+  st.setProperty('--t-border', s.border);
+  el.classList.toggle('lit', s.state !== 'off');
+  el.classList.toggle('unknown', s.state === 'unknown');
+}
+// The per-frame path while a finger is on a slider. One property, and no colour work at all.
+function tintLevel(el, v) { if (el) el.style.setProperty('--p', `${Math.round(v)}%`); }
+
+// What to hand tintApply for a device, straight from the state the app already keeps. The four kinds
+// are the four things the app can honestly know about what a device is emitting.
+function tintOptsFor(id) {
+  const d = dev(id), st = S.states[id] || {}, lv = level(id) || 0;
+  // listed by a bridge but never reported: only a light has a level that can be missing
+  if (d && d.domain === 'light' && level(id) == null && devices().length) return { state: 'unknown' };
+  if (!targetOn(`d:${id}`)) return { state: 'off' };
+  if (connLost()) return { state: 'unknown' };                              // last known, and it says so
+  const c = st.color;
+  if (d && d.color && c && c.mode === 'xy' && c.hex) return { kind: 'colour', hex: c.hex, level: lv };
+  if (d && d.ct && c && c.mode === 'ct' && c.kelvin) return { kind: 'ct', hex: kelvinHex(c.kelvin), level: lv };
+  if (d && d.domain === 'light') return { kind: 'dim', hex: lampColor(Math.max(1, lv)), level: lv };
+  return { kind: 'ctl', hex: '#006DCC', level: 100 };                       // a switch, a plug, a fan, a shade
+}

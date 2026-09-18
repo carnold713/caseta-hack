@@ -8,7 +8,8 @@
     "start": "node hub/server.js",
     "dev": "APP_PASSWORD=dev AGENT_TOKEN=dev node hub/server.js",
     "icons": "node scripts/make-icons.js",
-    "test": "node --test hub/"
+    "test": "node --test hub/",
+    "tint-check": "node scripts/tint-check.js"
   },
   "engines": {
     "node": ">=20"
