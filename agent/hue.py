@@ -401,18 +401,36 @@ class Hue:
     # ----- live state -----
     async def _event_loop(self) -> None:
         backoff = 2
+        # This stream carries only what happens while it is held open: Hue replays no backlog on reconnect.
+        # So everything that changed while it was down is still wrong in self.devices, and nothing else here
+        # ever re-reads — start() loads once, and the agent's own _refresh only reconnects the Lutron bridge.
+        # A lamp switched at the wall or in Hue's app during a drop therefore stayed wrong until it happened
+        # to change again. One re-read on the way back closes that; load() fires _on_loaded, which is what
+        # re-announces the corrected state to the app.
+        stale = False
         while self.paired:
             try:
                 async with self._sess().get(self._base() + "/eventstream/clip/v2", headers={"hue-application-key": self.key or "", "Accept": "text/event-stream"}, timeout=aiohttp.ClientTimeout(total=None, sock_read=None)) as r:
                     r.raise_for_status()
                     backoff = 2
+                    if stale:
+                        stale = False
+                        try:
+                            await self.load()
+                        except Exception as exc:  # noqa: BLE001
+                            LOG.warning("hue resync after reconnect failed: %s", exc)
                     async for raw in r.content:
                         line = raw.decode("utf-8", "replace").strip()
                         if line.startswith("data:"):
                             self._on_event(line[5:].strip())
+                # ended without raising, which is still a gap. The pause is what stops a bridge that closes
+                # immediately from turning this into a hot reconnect loop.
+                stale = True
+                await asyncio.sleep(1)
             except asyncio.CancelledError:
                 return
             except Exception as exc:  # noqa: BLE001
+                stale = True
                 LOG.warning("hue event stream: %s (retry in %ss)", exc, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60)
