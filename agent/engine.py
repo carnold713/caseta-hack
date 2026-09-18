@@ -497,6 +497,12 @@ class ActionRunner:
                         if self._color_can(device_id, "ct"):
                             coros.append(self._follow_entry(device_id, lv, fade))
                         else:
+                            # The scene asks this lamp to follow the day and the lamp does not report a
+                            # white-temperature range, so all it can take is the brightness. Silently it
+                            # looks like the scene half worked: say so, because "it only changed the
+                            # brightness" is exactly what gets reported and this is the reason for it.
+                            LOG.warning("scene %s: %s was asked to follow the day but reports no white-temperature range, so only its brightness was set",
+                                        preset["id"], device_id)
                             coros.append(self._set_level(device_id, lv, fade))
                         continue
                     kelvin = level.get("kelvin") if self._color_can(device_id, "ct") else None

@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.11.3"
+VERSION = "0.11.4"
 LOG = logging.getLogger("agent")
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -674,7 +674,15 @@ class Agent:
                 continue
             mirek = daylight.lamp_mirek(now, day_of, ct.get("min"), ct.get("max"))
             shown = ct.get("mirek")
-            if not daylight.worth_sending(self._follow_sent.get(did), mirek) and (shown is None or abs(float(shown) - mirek) < daylight.MIN_STEP_MIREK):
+            # A lamp showing a colour is never "already right", whatever its white reads. ct.mirek is the
+            # last white this lamp was told to show, and it survives the lamp being put on a colour: a
+            # purple lamp whose stale white happens to match today's would be skipped for as long as the
+            # two agreed, which is the whole afternoon. Only a lamp we can positively see is showing
+            # white gets to be close enough to leave alone. No mode at all means a built-in effect or a
+            # mode the app does not model, which is not white either: assert our own rather than assume.
+            # That costs at most one redundant send, because sending sets the mode to "ct".
+            on_white = dev.get("color_mode") == "ct"
+            if on_white and not daylight.worth_sending(self._follow_sent.get(did), mirek) and (shown is None or abs(float(shown) - mirek) < daylight.MIN_STEP_MIREK):
                 continue
             # brightness is the owner's choice and the evening wind-down's number, never a second curve of our own,
             # and it only ever comes down: a lamp already dimmer than the curve is left where it is
