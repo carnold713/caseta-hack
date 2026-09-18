@@ -66,10 +66,10 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .sheet .moods { padding: 2px 24px 4px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
 
 /* ================= F. the light sheet (docs/design-spec-v5.md 4.9, 4.10) ================= */
-/* The device tile, grown to the size of a screen: one tinted object, one readout, one control. `data-tile` is on
-   #ld itself, so the one tintApply() paintDeviceTiles() runs writes the whole screen and the stage, the readout,
-   the well and the corner button all read the same transform. .lit therefore lands on the sheet, not the stage. */
-.ld { position: relative; }
+/* The device tile, grown to the size of a screen: one tinted object, one readout, one control. The stage carries
+   data-tile, so paintDeviceTiles() paints it with the one painter the app has. The --t-* set is written on the
+   stage and reaches nothing outside it, which is right: everything below the stage sits on the sheet's own white,
+   so it takes the untinted fallbacks those tokens carry in :root. */
 /* 140px keeps the whole sheet inside the medium detent (473px at 844) for a plain dimmer; a lamp with colour
    opens large, because the swatch row costs 68px. */
 .lstage { position: relative; height: 140px; margin: 0 0 12px; border-radius: var(--r-md);
@@ -79,19 +79,17 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 /* the corner power button is the tile's corner power button, at the same size in the same place: that is the
    continuity between the two screens. Its look is the .dtile .dpow rule in styles.css, shared, not copied. */
 .lstage .dpow { position: absolute; right: 12px; bottom: 12px; }
-#ld:not(.lit) .lstage { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.lstage:not(.lit) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
 .ld-disc { width: 124px; height: 124px; touch-action: none; cursor: ns-resize; -webkit-user-select: none; user-select: none; outline: none; transition: box-shadow .15s var(--ease); }
 .ld-disc:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--blue); }
 .ld-name { text-align: center; margin-top: 8px; }
 .ld-cap { text-align: center; color: var(--text-2); font-size: 14px; line-height: 16px; margin: 4px 0 12px; }
-/* one readout, in the tinted ink: the third type size, spent here and nowhere else. The ink flips polarity part
-   way through the fill's cross-fade, the same delay the tinted cards use (docs/design-spec-v5.md 7.2). */
-#ld .display { text-align: center; color: var(--t-ink); margin: 0 0 16px;
-  transition: color 1ms var(--ease) var(--m-ink-swap, 60ms); }
-/* one control: the same well as the tile's, at 48px, tinted from the same three tokens */
+/* one readout: the third type size, spent here and nowhere else. --t-ink resolves to the page's own ink here,
+   because the readout is on the sheet's white and not on the stage. */
+#ld .display { text-align: center; color: var(--t-ink); margin: 0 0 16px; }
+/* one control: the same well the tile carries at 36 and the house card at 40, here at 48 */
 #ld .ld-well { margin: 0 0 16px; }
-#ld .ld-well .slider { --well-h: 48px; --grip-h: 24px;
-  --track: var(--t-well); --fill: var(--t-well-fill); --line-2: var(--t-well-line); }
+#ld .ld-well .slider { --well-h: 48px; --grip-h: 24px; }
 /* the swatch row bleeds to the sheet's own 20px gutter, not .chips.scroll's 24, or the last swatch and
    "More colours" fall off the right edge */
 #ld .ld-swrow { margin: 0; }

@@ -366,7 +366,7 @@ function paintDeviceTiles() {
     const lv = (d.domain === 'light' || d.domain === 'switch') ? (level(id) || 0) : (isOn(id) ? 100 : 0);
     el.classList.toggle('on', lv > 0);
     if (d.domain === 'fan' || d.domain === 'cover') return;   // a fan or a shade is never tinted
-    if (el.dataset.track) return;                             // a finger is on its well: it paints itself
+    if (el.closest('[data-track]')) return;                   // a finger is on its well: it paints itself
     tintApply(el, tintOptsFor(id));
     const pw = el.querySelector('.dpow'); if (pw) pw.setAttribute('aria-pressed', lv > 0 ? 'true' : 'false');
   });
@@ -542,12 +542,13 @@ function openLightSheet(id, opts = {}) {
   // the well is the tile's well at 48px, so slide.js's gesture gate and boot.js's input handler both apply
   // with no new code: the app has one slider idiom, at 36 in a tile, 40 on the house card and 48 here
   const well = dim ? `<div class="sliderwrap ld-well"><input class="slider" type="range" min="0" max="100" value="${lv}" style="--p:${lv}%" data-lvl="${id}" data-slide="${t}" aria-label="${esc(d.name)} brightness"></div>` : '';
-  // The tile grown to the size of a screen: one tinted object, one readout, one control. `data-tile` sits on the
-  // sheet rather than on the stage so that one tintApply() writes the whole screen: the stage reads --t-fill, the
-  // readout --t-ink, the well its three tokens and the corner button its pair, all by inheritance. The stage alone
-  // could not hand them to its siblings, and a second tintApply beside it would be the second tint path.
-  const body = `<div class="ld light" id="ld" data-id="${id}" data-tile="${id}">
-    <div class="lstage">
+  // The tile grown to the size of a screen: one tinted object, one readout, one control. The stage carries
+  // `data-tile`, so paintDeviceTiles() paints this screen with the same painter, the same thirteen properties and
+  // the same .lit / .unknown classes that every tile gets. The tint stops at the stage's edge on purpose: the
+  // readout and the well sit on the sheet's own white, where the tinted ink and the tinted well would be a white
+  // number on white and a well filled in reverse.
+  const body = `<div class="ld light" id="ld" data-id="${id}">
+    <div class="lstage" data-tile="${id}">
       <div class="lamp ld-disc ${lv > 0 ? '' : 'off'}" data-ldisc="${id}" style="width:${heroSize(lv)}px;height:${heroSize(lv)}px;background:${discFill(d, lv)}" role="button" tabindex="0" aria-label="Drag up or down to dim, tap to turn ${lv > 0 ? 'off' : 'on'}">${ICON(lightIcon(d), 'lampart')}</div>
       <button class="act dpow" data-act="toggle" data-t="${t}" data-act-lvl="${id}" aria-label="${esc(d.name)} on or off" aria-pressed="${lv > 0}">${ICON('power')}</button>
     </div>
