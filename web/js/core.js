@@ -467,7 +467,13 @@ const sheet = {
     // never changes height inside one flow.
     const detent = sheet.detentOf(opts, walking);
     const cls = 'sheet' + (detent ? ' dt-' + detent : '') + (opts.full ? ' full' : '') + (opts.cls ? ' ' + opts.cls : '') + (walking && !/\bwalk\b/.test(opts.cls || '') ? ' walk' : '');
-    const swap = () => { el.className = cls; if (detent === 'medium') el.dataset.grow = '1'; else delete el.dataset.grow; sheet.header(title, opts); sb.innerHTML = body; sb.scrollTop = 0; sheet.scrolled(); };
+    // A switch or a slider in the body string never carries its "on" class or value inline (every one in the
+    // app relies on a paint pass right after it lands in the DOM, the same as a fresh render() does for the
+    // page). A sheet opened straight from a tap, without a page render in between, used to skip that pass
+    // entirely: a room's own light rows could show the right percentage (baked into the string) next to a
+    // switch stuck reading "off" (the class paintState() would have added, never applied). Every sheet open
+    // or swap gets that same pass now, the same as the page always has.
+    const swap = () => { el.className = cls; if (detent === 'medium') el.dataset.grow = '1'; else delete el.dataset.grow; sheet.header(title, opts); sb.innerHTML = body; sb.scrollTop = 0; sheet.scrolled(); if (typeof paintState === 'function') paintState(); };
     if (root.classList.contains('in')) sheet.morph(swap);
     else {
       el.style.height = ''; el.style.transition = '';

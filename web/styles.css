@@ -277,6 +277,10 @@ main.nested { position: relative; padding-top: 4px; margin-top: 0; }
 .sw.lg { width: 44px; height: 24px; }
 .sw::before { content: ""; position: absolute; inset: -12px -6px; }
 .sw:active::after { box-shadow: var(--shadow-1), 0 0 0 4px rgba(0,0,0,.06); }
+/* the track itself darkens too, the same idiom every other control on the page uses for a press
+   (.btn, .iconbtn, .act: a fill step when off, --blue-pressed when already on) */
+.sw:active { background: var(--line-3); }
+.sw.on:active { background: var(--blue-pressed); }
 
 /* ---------- action button (a light's on/off): the Action Icon toggle, filled, 40px ---------- */
 .act { width: 40px; height: 40px; border-radius: 50%; background: var(--fill-2); color: var(--text); display: grid; place-items: center; position: relative; flex: none; transition: background .255s var(--ease), color .255s var(--ease); }
