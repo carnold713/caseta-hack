@@ -218,10 +218,9 @@ function tzTipHTML() {
   try { if (localStorage.getItem('tzKeep') === `${home}|${phone}`) return ''; } catch (_) { /* ignore */ }
   return `<div class="tip top"><div class="grow"><span class="cap">Time zone</span><div class="t">Your phone is in a different time zone from your home. Which clock should the lights follow?</div><div class="row" style="margin-top:12px"><button class="btn sm" data-act="tz-keep">Keep my home's</button><button class="btn sm" data-act="tz-phone">Use this phone's</button></div></div></div><div class="spacer"></div>`;
 }
-// Painted in place after every 'sun' message and after a run is reported: the rows' next lines, the Home block, the captions.
+// Painted in place after every 'sun' message and after a run is reported: the rows' next lines, Home's due line, the captions.
 function paintSun() {
   document.querySelectorAll('[data-next]').forEach(el => { const sc = scById(el.dataset.next); if (sc) el.innerHTML = nextLineHTML(sc); });
-  const cu = $('#comingup'); if (cu) cu.innerHTML = comingUpHTML();
   const due = $('#ln-due'); if (due) due.innerHTML = dueLineHTML();
   const nc = $('#next-cap'); if (nc) nc.outerHTML = nextCaptionHTML();
   const wc = $('#wd-cap'); if (wc) wc.innerHTML = windDownCaption();
@@ -250,19 +249,6 @@ function nextCaptionHTML() {
   const x = upcoming(7 * 86400000)[0]; if (!x) return '<span id="next-cap"></span>';
   return `<p class="d" id="next-cap" style="margin:-8px 0 16px">Next: ${esc(upcomingLabel(x))}</p>`;
 }
-function comingUpHTML() {
-  const rows = schedules().filter(sc => sc.enabled !== false).map(sc => ({ sc, n: nextRunOf(sc) })).filter(x => x.n && !x.n.past && x.n.d && x.n.d.getTime() - Date.now() < 24 * 3600000)
-    .sort((a, b) => a.n.d - b.n.d).slice(0, 2);
-  if (!rows.length) return '';
-  const row = ({ sc, n }) => {
-    const parent = parentOf(sc) || sc; const sk = skipping(parent);
-    const label = `${sc.name}${parentOf(sc) ? (sc.actions.some(a => a.type === 'raise') ? ' open' : ' off') : ''}`;
-    const when = n.rel === 'today' ? n.time : n.rel === 'tomorrow' ? `tomorrow ${n.time}` : `${DAY_SHORT[weekdayOf(n.date)]} ${n.time}`;
-    return `<div class="item"><div class="grow"><div class="t">${esc(label)}</div><div class="d">${sk ? `Skipping · then ${esc(when)}` : esc(when)}</div></div><button class="btn sm" data-act="${sk ? 'au-unskip' : 'au-skip'}" data-id="${esc(parent.id)}" data-date="${n.date}">${sk ? "Don't skip" : 'Skip'}</button></div>`;
-  };
-  return `<div class="gh">Coming up<a class="link" data-act="nav" data-view="automations" href="#automations">See all</a></div><div class="card pad0 list">${rows.map(row).join('')}</div>`;
-}
-
 // ---------- New automation ---------- (showSheet and SHEET_KEY live in core.js)
 function openNewAutomation() {
   showSheet('new', 'What would you like to set up?', `${guidedRowsHTML()}<p class="d" style="margin:16px 0 0">Have timers in the Lutron app? Keep them in one place, here or there, so they don't fight.</p>`, { detent: 'medium', sub: 'Three ready-made ones, or start from scratch.' });

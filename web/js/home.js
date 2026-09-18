@@ -92,7 +92,10 @@ function lightRowValue(d) {
   if (d.domain === 'fan') return esc(cap(fanName((S.states[id] || {}).fan_speed || 'Off')));
   if (d.domain === 'switch') return isOn(id) ? 'On' : 'Off';
   if (d.domain === 'cover') return isOn(id) ? 'Open' : 'Closed';
-  const lv = level(id) || 0;
+  // The bridge lists this lamp but has never said anything about it. "Off" would be the app inventing a
+  // reading it does not have, and off is the one answer a person acts on without looking twice.
+  const lv = level(id);
+  if (lv == null) return 'Not answering';
   // a lamp that can show colour says which colour it is showing: that is both the sign and the way in
   // the colour's name only: the kelvin behind it belongs on the light's page, not on a row
   if ((d.color || d.ct) && lv > 0 && typeof colourLabel === 'function') { const c = colorState(id); if (c && c.mode) return `${colourDot(c)}${esc(String(colourLabel(c)).split(' · ')[0])} · ${lv}%`; }

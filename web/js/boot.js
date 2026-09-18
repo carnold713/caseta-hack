@@ -170,12 +170,24 @@ document.addEventListener('keydown', e => {
   e.preventDefault(); el.click();
 });
 // Long-press a lit lamp in the row for a sleep timer.
+// A hold has to be told apart from the start of a scroll, and pointerup alone cannot do it: a finger that
+// starts on the lamp and then flicks the page gets a pointercancel and no pointerup at all, so the timer
+// would still be running when it fires and a sleep timer would open in the middle of a scroll. Watch for
+// the cancel, and for the finger travelling far enough that it was never a hold in the first place.
+let LONG_AT = null;
+const longDrop = el => { clearTimeout(el._lt); LONG_AT = null; };
 document.addEventListener('pointerdown', e => {
   const el = e.target.closest('[data-long="open-light"]'); if (!el) return;
   if (e.target.closest('[data-act]') !== el) return;   // a control sitting on the disc (the rainbow button) is not a hold on the lamp
-  el._lt = setTimeout(() => { el._long = true; sleepTimerSheet(el.dataset.t); }, 550);
+  LONG_AT = { x: e.clientX, y: e.clientY, el };
+  el._lt = setTimeout(() => { el._long = true; LONG_AT = null; sleepTimerSheet(el.dataset.t); }, 550);
 });
-document.addEventListener('pointerup', e => { const el = e.target.closest('[data-long]'); if (el) clearTimeout(el._lt); });
+document.addEventListener('pointermove', e => {
+  if (!LONG_AT) return;
+  if (Math.hypot(e.clientX - LONG_AT.x, e.clientY - LONG_AT.y) > 10) longDrop(LONG_AT.el);
+}, { passive: true });
+document.addEventListener('pointerup', e => { const el = e.target.closest('[data-long]'); if (el) longDrop(el); });
+document.addEventListener('pointercancel', () => { if (LONG_AT) longDrop(LONG_AT.el); });
 document.addEventListener('click', e => { const el = e.target.closest('[data-long]'); if (el && el._long) { el._long = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 
 document.addEventListener('submit', async e => {
