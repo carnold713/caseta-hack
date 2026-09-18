@@ -374,11 +374,12 @@ function onLive(m) {
   if (m.type === 'button') { cur.event = m.event; cur.at = Date.now(); }
   else { cur.gesture = m.gesture; cur.at = Date.now(); cur.bound = m.bound; }
   S.live[key] = cur;
-  // A remote the bridge lists without its buttons learns its own numbering from the keys themselves.
+  // A remote the bridge lists without its buttons learns its own numbering from the keys themselves. The
+  // remote's own screen is a sheet now, not part of the page render() reaches, so it is told directly.
   const learned = typeof rememberPress === 'function' && rememberPress(m.device_id, m.button_number);
-  if (learned && S.view === 'remotes' && S.remote === m.device_id) render();
+  if (learned && S.view === 'remotes' && S.remote === m.device_id && typeof renderRemoteSheet === 'function') renderRemoteSheet();
   if (S.view === 'remotes') {
-    if (!S.remote && m.type === 'gesture') { S.remote = m.device_id; render(); toast(`That's the ${dev(m.device_id) ? dev(m.device_id).name : 'remote'}. Tap a button to change it.`); return; }
+    if (!S.remote && m.type === 'gesture') { if (typeof openRemoteSheet === 'function') openRemoteSheet(m.device_id); else { S.remote = m.device_id; render(); } toast(`That's the ${dev(m.device_id) ? dev(m.device_id).name : 'remote'}. Tap a button to change it.`); return; }
     if (m.type === 'gesture' && S.remote === m.device_id) pulseGesture(m.button_number, m.gesture);
   }
   if (S.view === 'settings' && m.type === 'gesture') { const el = $('#tester'); if (el) { el.textContent = `Detected: ${GESTURE_LABEL[userGestureOf({ gesture: m.gesture })] || m.gesture} on ${dev(m.device_id) ? dev(m.device_id).name : 'a remote'}`; el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); } }
@@ -451,11 +452,16 @@ function statusLine() {
 // ---------- sheet ----------
 const sheet = {
   el: null,
+  // Bumped by every open() and close(): a close's delayed cleanup (below) checks this before touching the DOM, so
+  // a sheet closed and reopened again quickly (Room setup's own back arrow, tapped before the first close's ~255ms
+  // animation has finished) never has its fresh content wiped by the earlier close finishing late.
+  _gen: 0,
   // opts: sub, cap (a small caption above the title, "1 of 3"), back, onBack, full (100dvh), cls. `dark` and `question` are accepted and ignored: every sheet is white and every header is the dialog kind.
   // A sheet that is already open never replays its slide-up: the content cross-fades in place and the card eases to
   // the new content's own height (sheet.morph). Sub-sheets opened while a walk is running keep the walk's minimum height.
   open(title, body, opts = {}) {
     const root = $('#sheet-root'); const el = root.querySelector('.sheet'); const sb = root.querySelector('.sb');
+    sheet._gen++;
     const walking = !!WALK.cur || /\bwalk\b/.test(opts.cls || '');
     // Three detents and nothing between them (docs/ia-v5.md 5). A walk step is medium at every step, so the card
     // never changes height inside one flow.
@@ -533,10 +539,14 @@ const sheet = {
   close() {
     const root = $('#sheet-root'); root.classList.remove('in');
     SHEET_KEY = null;
+    sheet._gen++;
+    const myGen = sheet._gen;
     { const nb = $('#nowbar'); if (nb) nb.classList.remove('quiet'); }
     sheet.focusOut();
     placeToast();
-    const done = () => { if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; const el = root.querySelector('.sheet'); el.style.height = ''; el.style.transition = ''; el.classList.remove('dt-compact', 'dt-medium', 'dt-large'); delete el.dataset.grow; root.querySelectorAll('.m-ghost').forEach(g => g.remove()); };
+    // if a new sheet opened while this close was still finishing (sheet._gen moved on), leave it alone: this
+    // close's cleanup is stale and would otherwise wipe the fresh one's content out from under it.
+    const done = () => { if (sheet._gen !== myGen) return; if (root.classList.contains('in')) return; root.classList.remove('open'); root.querySelector('.sb').innerHTML = ''; const el = root.querySelector('.sheet'); el.style.height = ''; el.style.transition = ''; el.classList.remove('dt-compact', 'dt-medium', 'dt-large'); delete el.dataset.grow; root.querySelectorAll('.m-ghost').forEach(g => g.remove()); };
     if (window.Motion) Promise.resolve(Motion.sheetOut(root)).then(done); else setTimeout(done, 320);
     document.body.style.overflow = '';
     if (sheet.onClose) { const f = sheet.onClose; sheet.onClose = null; f(); }

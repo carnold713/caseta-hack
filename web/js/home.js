@@ -24,6 +24,12 @@ VIEWS.home = {
   },
   after() {
     tickCountdowns();
+    // a cold load onto #room/<area>: the sheet waits for the connector's data (areas() is empty before then)
+    if (S._openRoomOnBoot) {
+      const aid = S._openRoomOnBoot; S._openRoomOnBoot = null;
+      if (areas().some(a => a.id === aid)) openRoomSheet(aid);
+      else if (location.hash.replace(/^#/, '').split('/')[0] === 'room') location.hash = 'home';
+    }
     if (!controllable().length && connLost() && !S._setupShown) { S._setupShown = true; setTimeout(openSetupSheet, 350); }
     // the moment the connector's first snapshot lands, the connect walk has done its job
     if (walkIs('connect') && controllable().length && S.agent.online) closeSheet();

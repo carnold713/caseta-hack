@@ -14,7 +14,7 @@ const AD_KINDS = [
   ['fan', 'Fan control', 'Press and hold the Off button on the fan control for about 10 seconds, until its light flashes.'],
 ];
 const AD_SECONDS = 180;
-const AD = { open: false, kind: 'dimmer', step: 'listen', pick: null, name: '', area: null, error: null, showLog: false, startedAt: 0, busy: false, created: null, tick: null };
+const AD = { open: false, kind: 'dimmer', step: 'listen', pick: null, name: '', area: null, error: null, showLog: false, startedAt: 0, busy: false, created: null, tick: null, removeBack: null };
 
 const adHeard = () => (S.add && S.add.heard) || [];
 const adActive = () => !!(S.add && S.add.active);
@@ -182,13 +182,17 @@ async function adCreate() {
 }
 
 // ----- removing a device (the same experimental path, one request) -----
-function openRemoveDevice(id) {
+// opts.onBack: when the remove row was reached from a More sheet (the light's or the remote's), "Keep it"
+// returns there instead of closing past it; AD.removeBack keeps the same choice for the retry-after-error path.
+function openRemoveDevice(id, opts = {}) {
   const d = dev(id); if (!d) return;
+  AD.removeBack = opts.onBack || null;
   const isPico = d.domain === 'pico';
   const uses = bindings().filter(b => isPico ? b.device_id === id : [...b.actions, ...((b.night && b.night.actions) || [])].some(a => tlist(a.target).includes('d:' + id))).length;
   sheet.open(`Remove ${esc(d.name)}?`, `<div class="tip"><div class="grow"><span class="cap">${esc(devAreaName(d))}</span><div class="t">It leaves your Lutron bridge</div><div class="d">It stops working until it is added again${isPico ? ', and its button settings here are cleared' : uses ? `, and the ${plural(uses, 'button')} that used it forget it` : ''}. The Lutron app will not list it any more either.</div></div></div>
     ${AD.showLog ? `<p class="d" style="margin:12px 0 0">This part of the bridge is not documented either; if it keeps saying no, the Lutron app can still remove it.</p>${adLogHTML()}` : ''}
-    <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="sheet-close">Keep it</button></div>`, { detent: 'compact', sub: `${esc(devAreaName(d))} · ${isPico ? 'remote' : d.domain}` });
+    <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="${AD.removeBack ? 'sheet-back' : 'sheet-close'}">Keep it</button></div>`,
+    { detent: 'compact', sub: `${esc(devAreaName(d))} · ${isPico ? 'remote' : d.domain}`, back: !!AD.removeBack, onBack: AD.removeBack });
 }
 function forgetDevice(id) {
   const t = 'd:' + id; const cfg = S.config;
@@ -236,7 +240,7 @@ async function removeDevice(id, btn) {
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Remove'; }
     toast(`The bridge said no: ${e.message}`, { err: true });
-    AD.showLog = true; openRemoveDevice(id);  // the same sheet again, with the technical details open
+    AD.showLog = true; openRemoveDevice(id, { onBack: AD.removeBack });  // the same sheet again, with the technical details open
   }
 }
 
@@ -263,8 +267,13 @@ document.addEventListener('click', e => {
     case 'ad-newroom-save': adNewRoomSave(); break;
     case 'ad-create': adCreate(); break;
     case 'ad-again': Object.assign(AD, { pick: null, name: '', error: null, created: null }); adGo('listen'); adStart(); break;
-    case 'ad-log': AD.showLog = !AD.showLog; if (AD.open) adShow(); else { const cur = el.closest('.sb'); if (cur && cur.querySelector('[data-act="dev-remove-go"]')) openRemoveDevice(cur.querySelector('[data-act="dev-remove-go"]').dataset.id); } break;
-    case 'dev-remove': AD.showLog = false; openRemoveDevice(d.id); break;
+    case 'ad-log': AD.showLog = !AD.showLog; if (AD.open) adShow(); else { const cur = el.closest('.sb'); if (cur && cur.querySelector('[data-act="dev-remove-go"]')) openRemoveDevice(cur.querySelector('[data-act="dev-remove-go"]').dataset.id, { onBack: AD.removeBack }); } break;
+    case 'dev-remove': {
+      AD.showLog = false;
+      const back = SHEET_KEY === 'light-more' ? () => lightMoreSheet(d.id) : SHEET_KEY === 'remote-more' ? renderRemoteSheet : null;
+      openRemoveDevice(d.id, { onBack: back });
+      break;
+    }
     case 'dev-remove-go': removeDevice(d.id, el); break;
   }
 });

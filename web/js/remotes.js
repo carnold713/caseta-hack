@@ -1,19 +1,40 @@
-/* Remotes: pick a button on the picture, say what it does. */
+/* Remotes: the Remotes tab is always the plain list; picking one opens its whole editing experience as one
+   sheet (the same shape automations.js gives an automation), with its own sub-screens (the button's gesture
+   picker, the recipe list, fine-tune, "which room") chaining back inside that one sheet via back/onBack. */
 'use strict';
 
 VIEWS.remotes = {
-  nested() { return !!(S.remote && dev(S.remote)); },
-  top() {
-    if (S.remote && dev(S.remote)) { const d = dev(S.remote); return nestedTop('remote-back', esc(d.name), `${esc(devAreaName(d))} · ${esc(modelName(d))}`); }
-    return `<div class="t1">Remotes</div>${statusCircle()}`;
-  },
+  top() { return `<div class="t1">Remotes</div>${statusCircle()}`; },
   body() {
-    if (S.remote && dev(S.remote)) return remoteDetail(dev(S.remote));
     const list = remotes();
     if (!list.length) return controllable().length ? `<div class="tip" style="margin-top:8px"><div class="grow"><span class="cap">Remotes</span><div class="t">No remotes found</div><div class="d">Pair a Pico in the Lutron app, then look again.</div></div><button class="btn sm" data-act="refresh">Look again</button></div>` : setupEmpty();
     return `<p class="body" style="margin:0 0 16px">Press a button on any remote to open it here.</p><div class="card pad0 list">${list.map(remoteCard).join('')}</div>`;
   },
 };
+
+// Opens a remote's whole editing experience as a sheet over the Remotes list (or wherever the tab happens to
+// be; goRemoteDetail below switches to the Remotes tab first for every caller outside this list).
+function openRemoteSheet(id) {
+  const d = dev(id); if (!d) return;
+  S.remote = id;
+  renderRemoteSheet();
+  // some bridges take a moment to report a picture for a freshly-added remote
+  picoPhotoAvailable(d).then(u => { if (u && S.remote === id && SHEET_KEY === 'remote') renderRemoteSheet(); });
+}
+// Redraws the remote sheet in place: the initial open, and every sub-screen's "back to the remote" landing spot.
+function renderRemoteSheet() {
+  const d = dev(S.remote);
+  if (!d) { S.remote = null; if (sheet.isOpen() && SHEET_KEY === 'remote') sheet.close(); return; }
+  showSheet('remote', esc(d.name), remoteDetail(d), { detent: 'large', sub: `${esc(devAreaName(d))} · ${esc(modelName(d))}`, top: true });
+  sheet.onClose = () => { S.remote = null; };
+}
+// Home's "Next" card, the first-run greeting, and the "needs attention" row all open a remote from outside the
+// Remotes tab: put the list underneath first, then open the sheet on top of it, so the tab bar and any later
+// close both land somewhere sensible.
+function goRemoteDetail(id) {
+  if (S.view !== 'remotes') { S.view = 'remotes'; location.hash = 'remotes'; render(); window.scrollTo(0, 0); }
+  openRemoteSheet(id);
+}
 
 // One row per remote: a 40px pico thumb, the name, "Kitchen · 3 buttons set up", a chevron.
 function remoteCard(d) {
@@ -72,10 +93,12 @@ function usualLayoutHTML(d) {
   const middle = u.round == null ? '' : ` The middle button is ${moods ? 'Relax' : 'Half brightness'}.`;
   return `<div class="tip top" id="usualtip" style="margin-bottom:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Want the usual layout?</div><div class="d">Top turns ${esc(room)} on, bottom turns it off, hold either to brighten or dim.${esc(middle)} Or tap a button on the picture to pick yourself.</div><button class="btn ghost" data-act="usual-hide" data-id="${d.device_id}">I'll pick myself</button></div><button class="go" data-act="usual-layout" title="Set it up the usual way" aria-label="Set it up the usual way">${ICON('chev')}</button></div>`;
 }
-// From the tip at the top the page scrolls up to show the rows it filled; from the More sheet the page stays where it was.
+// From the tip at the top the sheet scrolls up to show the rows it filled; from the More sheet it stays where it was.
+// Either way it lands back on the remote's own sheet, not out of it: this can be called from that sheet itself
+// (the "usualtip" banner) or from a sub-sheet under it (More's "Start over"), and both should end up showing the
+// remote with its new buttons, not close the whole thing.
 function applyUsualLayout(pid, opts = {}) {
   const d = dev(pid); const u = d && usualLayoutTargets(d); if (!u) return;
-  if (sheet.isOpen()) sheet.close();
   const T = `a:${devArea(d)}`; const room = devAreaName(d);
   const mk = (n, gesture, actions) => ({ id: uid(), device_id: pid, button_number: n, gesture, actions, night: null });
   const list = [
@@ -92,7 +115,8 @@ function applyUsualLayout(pid, opts = {}) {
   }
   S.config.bindings = bindings().filter(b => b.device_id !== pid).concat(list);
   save({ msg: `${room} remote set up` });
-  if (opts.scroll) window.scrollTo(0, 0);
+  if (S.remote === pid) renderRemoteSheet();
+  if (opts.scroll) { const sb = document.querySelector('#sheet-root .sb'); if (sb) sb.scrollTop = 0; }
 }
 // The remote page's More sheet (2.5): the picture, start over, the Lutron app caveat, remove.
 function remoteMoreSheet() {
@@ -107,7 +131,7 @@ function remoteMoreSheet() {
     <button class="item" data-act="dev-remove" data-id="${d.device_id}">${ICON('trash')}<div class="grow"><div class="t">Remove this remote from my home</div><div class="d">It leaves the bridge and stops working until it is added again.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>
   </div>
   <p class="d" style="margin:12px 4px 0">What your bridge says about this remote: ${esc(d.type || 'no type')}${d.serial ? `, serial ${esc(d.serial)}` : ''}, ${(() => { const r = buttonsOf(d.device_id).map(b => b.button_number).sort((a, b) => a - b); const seen = picoSeen(d); return r.length ? `buttons ${r.join(', ')}` : seen.length ? `no buttons listed, presses seen from ${seen.join(', ')}` : 'no buttons listed yet'; })()}.</p>`;
-  showSheet('remote-more', esc(d.name), body, { detent: 'medium', sub: `${esc(devAreaName(d))} · ${esc(modelName(d))}` });
+  showSheet('remote-more', esc(d.name), body, { detent: 'medium', sub: `${esc(devAreaName(d))} · ${esc(modelName(d))}`, back: true, onBack: renderRemoteSheet });
 }
 function openLookSheet() {
   const d = dev(S.remote); if (!d) return;
@@ -141,7 +165,7 @@ function openButtonSheet(n) {
     const broken = b && bindingBroken(b);
     return `<button class="item" data-act="gesture-open" data-g="${g}" data-grow="${n}/${g}"><div class="ic ${acts.length ? 'on' : ''}">${ICON(g === 'single' ? 'bolt' : g === 'double' ? 'copy' : 'clock', 'sm')}</div><div class="grow"><div class="t">${GESTURE_LABEL[g]}</div><div class="d ${acts.length ? '' : 'none'}">${acts.length ? esc(shortDescribe(acts)) : 'Nothing yet'}</div>${night.length ? `<div class="d">At night: ${esc(shortDescribe(night))}</div>` : ''}${broken ? `<div class="d"><span class="odot"></span>Points at something that is gone. Pick again.</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
-  showSheet('button', title, `<div class="card pad0 list gestures">${body}</div>`, { detent: 'compact', sub: `${esc((dev(pid) || {}).name || 'Remote')} · pick a kind of press.`, top: true });
+  showSheet('button', title, `<div class="card pad0 list gestures">${body}</div>`, { detent: 'compact', sub: `${esc((dev(pid) || {}).name || 'Remote')} · pick a kind of press.`, top: true, back: true, onBack: renderRemoteSheet });
 }
 
 // ----- recipe sheet -----

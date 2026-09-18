@@ -900,3 +900,25 @@ With the wind-down off there is no number to use and nothing happens.
 
 A Caseta dimmer has no colour at all, so it is never offered the row, the chip, or a place in the
 room's list. Where a room holds both kinds the room control says which lamps it will apply to.
+
+## 9. Room and Remote open in the sheet
+
+7.2 made a room a pushed page and said so plainly. The owner later asked for something closer to how
+an automation already opens: the tab stays a plain list, and picking one opens the whole thing as a
+sheet, not a new page. A room and a remote now do the same: Home and the Remotes tab are unchanged,
+but tapping a room or a remote opens it as a sheet over the tab, matching `openEditor` in
+`automations.js`, the pattern this section follows.
+
+A light opened from inside the room sheet carries a back arrow to the room, redrawn in place rather
+than a second sheet stacked on the first; its own further screens (Colour, More, the sleep timer)
+still end up back at the room, however many panes deep. The same is true of a remote's button and
+"More" screens, back to the remote sheet they came from. Room setup (7.5's own subject) did not
+change: it stays a pushed page, on purpose. It was a sheet once, two of its rows had no way back, and
+it became a page specifically so a nav bar's back arrow could never go missing. Undoing that for the
+room's own screen and the remote's own screen only worked because every row that opens something
+further was checked by hand for a way back, not assumed to have one.
+
+The room's on/off toggle, which the page's own header used to carry next to its name, has no
+header slot to move into on a sheet, so it became the sheet's first row instead. Nothing about it
+changed but where it lives. The `#room/<area>` link still opens the room, now as the sheet; a shared
+link straight to `#room/<area>/setup` still opens the page, unchanged.

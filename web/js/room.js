@@ -1,51 +1,67 @@
-/* The room page and the room setup page (docs/ia-v5.md 3, stage 2).
-   Home is a list of rooms; a room is a pushed page with its moods, its lights and one row for setup. Everything a
-   room's card used to hold inside Home lives here, alone, with the nav bar's back arrow as the way out.
+/* The room sheet and the room setup page (docs/ia-v5.md 3, stage 2, revised: rooms open in the bottom sheet).
+   Home is a list of rooms; tapping one opens the room's moods, its lights and the "Room setup" row as a sheet
+   over Home, the same shape automations.js uses for an automation's editor. Room setup itself stays a pushed
+   page (docs/ux-progressive.md 2.21, docs/ia-v5.md "dead end"): a page's own nav-bar back arrow can never be
+   missing, and a sheet's row-by-row back arrows can be forgotten, which is exactly what happened here once.
    Loaded after home.js and light.js (it uses moodRowHTML, lightRow, roomLights, lightKind). */
 'use strict';
 
-// #room/<area>          the room
-// #room/<area>/setup    what each light is for, its moods, and the kind of each light
+// #room/<area>          the room sheet, over Home
+// #room/<area>/setup    the room setup page (unchanged: a page, never a sheet)
 function roomHash() { return `room/${encodeURIComponent(S.room || '')}${S.roomPage === 'setup' ? '/setup' : ''}`; }
+
+// The single entry point every caller uses: `page` picks setup (a page) or the room itself (a sheet).
 function goRoom(aid, page = null) {
-  S.room = aid; S.roomPage = page; S.view = 'room';
-  location.hash = roomHash();
-  render(); window.scrollTo(0, 0);
-}
-// Reading the hash back (a shared link, the back button): the page is whatever the URL says.
-function roomFromHash(parts) {
-  const aid = parts[1] ? decodeURIComponent(parts[1]) : null;
-  if (!aid || !areas().some(a => a.id === aid)) return false;
-  S.room = aid; S.roomPage = parts[2] === 'setup' ? 'setup' : null;
-  return true;
+  if (page === 'setup') {
+    sheet.onClose = null; if (sheet.isOpen()) sheet.close();
+    S.room = aid; S.roomPage = 'setup'; S.view = 'room';
+    location.hash = `room/${encodeURIComponent(aid || '')}/setup`;
+    render(); window.scrollTo(0, 0);
+    return;
+  }
+  openRoomSheet(aid);
 }
 
-VIEWS.room = {
-  tab: 'home',                                  // the room is pushed from Home, so Home stays lit in the tab bar
-  nested() { return !!(S.room && areas().some(a => a.id === S.room)); },
-  top() {
-    const aid = S.room; if (!aid) return '';
-    if (S.roomPage === 'setup') return nestedTop('room-setup-back', `${esc(areaName(aid))} setup`);
-    const t = `a:${aid}`;
-    const hasToggle = controllable().some(d => devArea(d) === aid && d.domain !== 'cover');
-    return nestedTop('room-back', esc(areaName(aid)), esc(roomSummary(aid)))
-      + `<div class="tools">${hasToggle ? `<button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(areaName(aid))} on or off"></button>` : ''}</div>`;
-  },
-  body() {
-    const aid = S.room;
-    if (!aid || !areas().some(a => a.id === aid)) return `<div class="tip"><div class="grow"><div class="t">That room is gone</div><div class="d">It is no longer in your home.</div></div></div>`;
-    return S.roomPage === 'setup' ? roomSetupHTML(aid) : roomPageHTML(aid);
-  },
-};
+// Opens (or, from a hash echo, re-shows) the room sheet over Home. `S.room` is the sheet's own state, kept
+// alongside the page underneath, which is always Home while this sheet is up.
+function openRoomSheet(aid) {
+  if (!aid || !areas().some(a => a.id === aid)) return;
+  S.room = aid; S.roomPage = null;
+  if (S.view !== 'home') { S.view = 'home'; render(); window.scrollTo(0, 0); }
+  const h = `room/${encodeURIComponent(aid)}`;
+  if (location.hash.replace(/^#/, '') !== h) location.hash = h;
+  renderRoomSheet();
+}
+// Redraws the sheet in place for whichever room `S.room` names right now: the initial open, a reopen from a
+// light's back arrow, and the return trip from "Give this room moods".
+function renderRoomSheet() {
+  const aid = S.room;
+  if (!aid || !areas().some(a => a.id === aid)) { S.room = null; if (sheet.isOpen() && SHEET_KEY === 'room') sheet.close(); return; }
+  showSheet('room', esc(areaName(aid)), roomSheetBodyHTML(aid), { detent: 'large', sub: esc(roomSummary(aid)), top: true });
+  // Closing the sheet (the X, or anything that calls sheet.close() without going through goRoom/'room-setup'
+  // first) is what sends the hash back to #home; a route change that already moved the hash elsewhere (the
+  // hashchange listener, a tab switch) leaves it alone, so the browser's own back button is never fought.
+  sheet.onClose = () => {
+    const cur = location.hash.replace(/^#/, '');
+    S.room = null;
+    if (cur.split('/')[0] === 'room' && cur.split('/')[2] !== 'setup') location.hash = 'home';
+  };
+}
 
-function roomPageHTML(aid) {
+// The room sheet's body: the whole of what roomPageHTML used to render as a page, plus the whole-room on/off
+// toggle that the page's own header used to carry next to its name (nestedTop's `.tools`; a sheet's header has
+// no equivalent slot, so it becomes the first row instead. Nothing here is new, only moved).
+function roomSheetBodyHTML(aid) {
   const ds = roomOrder(controllable().filter(d => devArea(d) === aid));
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
+  const t = `a:${aid}`;
+  const hasToggle = controllable().some(d => devArea(d) === aid && d.domain !== 'cover');
   let h = '';
+  if (hasToggle) h += `<div class="card pad0 list" style="margin-bottom:8px"><div class="item"><div class="grow"><div class="t">Turn the room on or off</div></div><button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(areaName(aid))} on or off"></button></div></div>`;
   // the moods, or one row that offers to make them
   if (roomDimmers(aid).length) {
     h += ps.length
-      ? `<div class="gh">Moods</div><div class="room" data-tgt="a:${aid}" data-room="${aid}">${moodRowHTML(aid)}</div>`
+      ? `<div class="gh">Moods</div><div class="room" data-tgt="${t}" data-room="${aid}">${moodRowHTML(aid)}</div>`
       : `<div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="roles-open" data-area="${aid}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Give this room moods</div><div class="d">Bright, Relax, Dinner, Movie and Night</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   }
   h += `<div class="gh">Lights</div><div class="card pad0 list lights">${ds.map(lightRow).join('')}</div>`;
@@ -54,7 +70,8 @@ function roomPageHTML(aid) {
 }
 
 // Room setup: a grouped list, one value per row. It was a sheet with two rows that dead ended; as a page, back is
-// the nav bar and there is nowhere to get stuck.
+// the nav bar and there is nowhere to get stuck. Left exactly as it was: this page never became part of the
+// sheet stack above.
 function roomSetupHTML(aid) {
   const ds = roomLights(aid);
   const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
@@ -77,13 +94,28 @@ function roomSetupHTML(aid) {
   return h;
 }
 
+VIEWS.room = {
+  tab: 'home',                                  // reached from Home, so Home stays lit in the tab bar
+  nested() { return !!(S.room && S.roomPage === 'setup' && areas().some(a => a.id === S.room)); },
+  top() {
+    const aid = S.room; if (!aid) return '';
+    return nestedTop('room-setup-back', `${esc(areaName(aid))} setup`);
+  },
+  body() {
+    const aid = S.room;
+    if (!aid || !areas().some(a => a.id === aid)) return `<div class="tip"><div class="grow"><div class="t">That room is gone</div><div class="d">It is no longer in your home.</div></div></div>`;
+    return roomSetupHTML(aid);
+  },
+};
+
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const d = el.dataset;
   switch (d.act) {
-    case 'room-open': goRoom(d.id); break;
+    case 'room-open': openRoomSheet(d.id); break;
     case 'room-setup': goRoom(d.area, 'setup'); break;
+    // Room setup's own back arrow: friendliest is landing back in the room's own sheet, reopened at the room it
+    // came from, rather than dropping to Home with no context.
     case 'room-setup-back': goRoom(S.room); break;
-    case 'room-back': S.room = null; S.roomPage = null; S.view = 'home'; location.hash = 'home'; render(); window.scrollTo(0, 0); break;
   }
 });

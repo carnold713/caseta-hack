@@ -1011,7 +1011,14 @@ document.addEventListener('click', e => {
     case 'wd-pt-add': { const { ad } = wdSettings(); const last = ad.points[ad.points.length - 1]; ad.points.push({ time: hmAdd(last ? last.time : '20:00', 60), level: last ? last.level : 50 }); ad.points.sort((a, b) => a.time.localeCompare(b.time)); save({ quiet: true, render: false }); openCurveSheet(); break; }
     case 'wd-pt-remove': { const { ad } = wdSettings(); if (ad.points.length > 2) { ad.points.splice(Number(d.i), 1); save({ quiet: true, render: false }); openCurveSheet(); } break; }
     // roles and moods
-    case 'roles-open': case 'rl-open': openRolesSheet(d.area, { back: backTo(d.back, d.area) }); break;
+    // "Give this room moods" also lives inside the Room sheet now: when that is what is open, both the back
+    // arrow and the finished flow land back on the room's own screen, redrawn, instead of closing past it.
+    case 'roles-open': case 'rl-open': {
+      const fromRoom = SHEET_KEY === 'room' && typeof renderRoomSheet === 'function';
+      const back = d.back ? backTo(d.back, d.area) : (fromRoom ? () => renderRoomSheet() : null);
+      openRolesSheet(d.area, { back, after: fromRoom ? () => renderRoomSheet() : null });
+      break;
+    }
     case 'rl-pick': RS.roles[d.id] = d.r; renderRolesSheet(); break;
     case 'rl-make': rolesMake(); break;
     case 'rl-skip': rolesAdvance(RS.walk, RS.aid, null); break;

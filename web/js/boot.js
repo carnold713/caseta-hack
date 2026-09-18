@@ -27,8 +27,7 @@ document.addEventListener('click', async e => {
     case 'update-connector': el.disabled = true; el.textContent = 'Updating…'; toast('Updating the connector. The dot goes red, then green again in about a minute.'); try { const r = await api('/api/update-connector', { method: 'POST' }); toast(r.detail && r.detail.to ? `Updated to ${r.detail.to}. Restarting…` : 'Updated. Restarting…'); } catch (err) { toast(err.message, { err: true }); render(); } break;
     case 'auto-update': S.config.settings.auto_update = !S.config.settings.auto_update; el.classList.toggle('on', S.config.settings.auto_update); save({ quiet: true, render: false }); break;
     case 'refresh': el.classList.add('dim'); try { await api('/api/refresh', { method: 'POST' }); toast('Looked again'); } catch (err) { toast(err.message, { err: true }); } el.classList.remove('dim'); break;
-    case 'remote-open': S.remote = d.id; render(); window.scrollTo(0, 0); picoPhotoAvailable(dev(d.id)).then(u => { if (u) render(); }); break;
-    case 'remote-back': S.remote = null; render(); break;
+    case 'remote-open': openRemoteSheet(d.id); break;
     case 'remote-look': openLookSheet(); break;
     case 'remote-more': S.remoteLutron = false; remoteMoreSheet(); break;
     case 'remote-lutron': S.remoteLutron = !S.remoteLutron; remoteMoreSheet(); break;
@@ -198,16 +197,48 @@ document.addEventListener('submit', async e => {
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 300); } }, 255);
 $('#sheet-root .scrim').addEventListener('click', () => sheet.close());
 document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; S.remote = null; S.room = null; S.roomPage = null; S.settingsPage = null; location.hash = S.view; render(); window.scrollTo(0, 0); }));
-// The hash is the route: #home, #remotes, #room/<area>, #room/<area>/setup, #scenes, #automations, #settings.
+// The hash is the route: #home, #remotes, #room/<area> (a sheet over Home), #room/<area>/setup (a page),
+// #scenes, #automations, #settings.
 window.addEventListener('hashchange', () => {
   const parts = location.hash.slice(1).split('/'); const v = parts[0];
+  if (v === 'room') {
+    const aid = parts[1] ? decodeURIComponent(parts[1]) : null;
+    if (parts[2] === 'setup') {
+      // the setup page: unchanged, a real route with its own S.view
+      if (aid && areas().some(a => a.id === aid)) {
+        if (sheet.isOpen()) { sheet.onClose = null; sheet.close(); }
+        S.room = aid; S.roomPage = 'setup'; S.view = 'room'; render();
+      }
+      return;
+    }
+    // the plain room: the sheet, over whatever is behind it (always Home). The browser's own back button
+    // lands here from either direction: forward into the sheet, or back out of it to whatever hash preceded it.
+    // Setting the hash ourselves (openRoomSheet) echoes back here a tick later; skip it when the sheet already
+    // shows this exact room, so its entrance animation is never interrupted by a redundant re-open.
+    const already = SHEET_KEY === 'room' && S.room === aid && sheet.isOpen();
+    if (already) return;
+    if (aid && areas().some(a => a.id === aid) && typeof openRoomSheet === 'function') openRoomSheet(aid);
+    else if (sheet.isOpen() && SHEET_KEY === 'room') sheet.close();
+    return;
+  }
   if (!v || !VIEWS[v]) return;
-  if (v === 'room') { if (typeof roomFromHash === 'function' && roomFromHash(parts)) { S.view = 'room'; render(); } return; }
-  if (v !== S.view || S.room) { S.view = v; S.room = null; S.roomPage = null; render(); }
+  if (v !== S.view || S.room) {
+    const hadRoomSheet = sheet.isOpen() && SHEET_KEY === 'room';
+    S.view = v; S.room = null; S.roomPage = null;
+    if (hadRoomSheet) sheet.close();
+    render();
+  }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet.isOpen()) sheet.close(); });
-// a cold load straight onto #room/<area> (a shared link, a reload): read the room out of the hash before the first render
-if (S.view === 'room') { const parts = location.hash.slice(1).split('/'); S.room = parts[1] ? decodeURIComponent(parts[1]) : null; S.roomPage = parts[2] === 'setup' ? 'setup' : null; }
+// a cold load straight onto #room/<area> (a shared link, a reload): read the room out of the hash before the
+// first render. The setup route keeps S.view = 'room'; the plain route becomes Home, with the sheet opened
+// once the connector's data has actually arrived (VIEWS.home.after(), home.js: areas() is empty until then).
+if (S.view === 'room') {
+  const parts = location.hash.slice(1).split('/');
+  const aid = parts[1] ? decodeURIComponent(parts[1]) : null;
+  if (parts[2] === 'setup') { S.room = aid; S.roomPage = 'setup'; }
+  else { S.view = 'home'; S.room = aid; S._openRoomOnBoot = aid; }
+}
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 if (S.token) connectWS();
 render();

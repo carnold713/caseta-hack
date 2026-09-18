@@ -23,7 +23,7 @@ const NEXT = [
   { id: 'remote', can: () => usualRemotes().length > 0, when: () => !!freshRemote(),
     title: () => `Set up the ${esc(devAreaName(freshRemote() || usualRemotes()[0]))} remote?`,
     reason: () => `Top turns ${esc(devAreaName(freshRemote() || usualRemotes()[0]))} on, bottom off, hold to dim. Ten seconds.`,
-    go: () => { const d = freshRemote(); if (!d) return; S.view = 'remotes'; S.remote = d.device_id; location.hash = 'remotes'; render(); window.scrollTo(0, 0); } },
+    go: () => { const d = freshRemote(); if (!d) return; goRemoteDetail(d.device_id); } },
   { id: 'sort', can: () => dimmers().length > 0, when: () => untaggedLights().length > 0,
     title: () => 'Want your lights sorted?', reason: () => 'Say what kind of lamp each one is, and Relax, Dinner and Movie know what to dim.',
     go: () => openSortWalk() },
@@ -117,9 +117,9 @@ document.addEventListener('click', e => {
   switch (d.act) {
     case 'next-go': if (sheet.isOpen() && el.closest('#sheet-root')) sheet.close(); nextGo(d.id); break;
     case 'next-later': nextLater(d.id); break;
-    case 'next-remote': S.view = 'remotes'; S.remote = d.id; location.hash = 'remotes'; render(); window.scrollTo(0, 0); break;
+    case 'next-remote': goRemoteDetail(d.id); break;
     case 'ideas': openIdeas(); break;
-    case 'greet-remote': greetDone(false); sheet.close(); S.view = 'remotes'; S.remote = d.id; location.hash = 'remotes'; render(); window.scrollTo(0, 0); applyUsualLayout(d.id); break;
+    case 'greet-remote': greetDone(false); goRemoteDetail(d.id); applyUsualLayout(d.id); break;
     case 'greet-moods': greetDone(true); { const walk = roomsWithoutMoods(); if (walk.length) openRolesSheet(walk[0], { walk }); else sheet.close(); } break;
     case 'greet-welcome': greetDone(true); openWelcomeSetup(); break;
   }

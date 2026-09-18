@@ -466,11 +466,18 @@ function nowRingHTML(t, v, size, width, cls) {
 
 // ---------- light detail sheet (B): the Tenzing dimmer dialog, white and elevated ----------
 let LD = null;
+// opts.onBack: shown as a back arrow instead of the plain X, for a light opened from somewhere with a screen to
+// return to (a room's own sheet). Left out, this behaves exactly as it always has: no back arrow, since it is
+// the first screen in its own sheet. Every sub-screen (Colour, More, the sleep timer, Follow the day) reopens
+// this same sheet with a bare `openLightSheet(id)`, so the chain below reads that back option straight off the
+// still-open LD rather than losing it: whatever got you here is still where "back" goes, however many panes deep.
 function openLightSheet(id, opts = {}) {
   const d = dev(id); if (!d) return;
+  const reentry = sheet.isOpen() && LD && LD.id === id;
+  const onBack = opts.onBack !== undefined ? opts.onBack : (reentry ? LD.onBack : null);
   const lv = level(id) || 0, t = `d:${id}`, dim = d.domain === 'light';
   const colour = colorState(id); // a Hue lamp's {mode, kelvin, hex}; null for a Caseta light
-  LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null, color: colour ? { ...colour } : null, more: false };
+  LD = { id, lv, dim, dragging: false, lastSend: 0, drag0: null, stTween: null, color: colour ? { ...colour } : null, more: false, onBack };
   const well = `<div class="vcol"><div class="vslider" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}" tabindex="0" style="--p:${lv}%"></div>
       <div class="vsteps"><button class="iconbtn down" data-act="ld-step" data-d="-10" aria-label="Dimmer">${ICON('chev')}</button><button class="iconbtn up" data-act="ld-step" data-d="10" aria-label="Brighter">${ICON('chev')}</button></div></div>`;
   // one composition: the disc and the well side by side, centred; one readout under them; Colour as one value row; the
@@ -486,7 +493,7 @@ function openLightSheet(id, opts = {}) {
       <button class="rbtn" data-act="ld-more" data-id="${id}"><span class="c">${ICON('dots')}</span><span>More</span></button>
     </div>
   </div>`;
-  sheet.open(esc(d.name), body, { detent: 'medium', sub: lightCaption(id) });
+  sheet.open(esc(d.name), body, { detent: 'medium', sub: lightCaption(id), back: !!onBack, onBack });
   wireLightSheet();
   if (opts.colour) openColourSheet(id);
 }
@@ -764,7 +771,8 @@ document.addEventListener('click', e => {
   switch (d.act) {
     case 'lamp-toggle': { const now = Date.now(); if (el._tap && now - el._tap < 300) break; el._tap = now; toggleTarget(`d:${d.id}`); break; }  // a double tap is one toggle, not two
     case 'lamp-room': openRoomCard(d.id); break;
-    case 'light-open': openLightSheet(d.id); break;
+    // opened from inside the Room sheet: its back arrow returns to that room's own screen, redrawn in place
+    case 'light-open': { if (SHEET_KEY === 'room' && S.room) openLightSheet(d.id, { onBack: () => renderRoomSheet() }); else openLightSheet(d.id); break; }
     case 'light-colour': { const id = d.id; if (LD && LD.id === id && sheet.isOpen()) openColourSheet(id); else openLightSheet(id, { colour: true }); break; }
     case 'kind-open': openKindSheet(d.id); break;
     case 'room-more': if (typeof goRoom === 'function') goRoom(d.area, 'setup'); break;
