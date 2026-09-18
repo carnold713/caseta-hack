@@ -39,7 +39,7 @@
   --t-btn-bg-pressed: var(--fill-3); --t-btn-ink-pressed: var(--text);
   --t-border: var(--line);
   --tile-r: var(--r-lg);  --tile-pad: 14px;  --grid-gap: 12px;
-  --tile-min-h: 172px;    --rtile-min-h: 150px;
+  --tile-min-h: 172px;    --rtile-min-h: 134px;
   --hero-h: 180px;        --scell: 62px;     --scell-disc: 56px;
   --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
   --nav-h: 52px; --bar-h: 0px; --toast-h: 64px;
@@ -1008,3 +1008,18 @@ input.slider { pointer-events: none; }
   opacity: 0; transition: opacity .255s var(--ease); pointer-events: none; }
 .rhero.dark .rh-dark { opacity: 1; }
 .rhero .rh-dark svg.i { width: 48px; height: 48px; stroke-width: 1; }
+
+/* ---------- Home's vertical budget ----------
+   A phone that opens on Home has to show at least one whole room without being scrolled, and with a
+   starred light, a due line and the wind-down caption all present the first tile was landing 32px under
+   the tab bar. The space comes back out of rhythm rather than out of content: nothing here is removed,
+   the gaps between blocks are simply not 24px when 16 reads the same. Scoped to Home, because a sheet
+   and a settings page have room to breathe and their spacing is measured by the suite. */
+#view > .gh { margin-top: 16px; }
+#view > .scenerow .scells { padding-top: 2px; padding-bottom: 2px; }
+#view > .scenerow .scell { gap: 6px; }
+/* the room tile is a disc, a name, a line about the room and one switch: at 14px padding with a 10px
+   internal rhythm it was 152px tall, which is what pushed the first row under the tab bar. 12 and 6
+   read the same at arm's length and give the fold back. */
+.rtile { padding: 12px; }
+.rtile .head { gap: 6px; padding: 6px 6px 6px; }

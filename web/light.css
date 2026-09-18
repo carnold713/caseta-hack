@@ -23,10 +23,10 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 /* ---------- Light now: the strip on Home. 88px cells, 8px apart; a lit disc is 56px in a 2px blue ring, an off one 44 ---------- */
 .lightnow { margin: 0 0 8px; }
 .lightnow.norow:not(:has(.ln-due, .wd-home)) { margin: 0; }
-.ln-row { display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 6px 16px 6px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
+.ln-row { display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 2px 16px 2px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
 .ln-row::-webkit-scrollbar { display: none; }
 .ln-row.empty { display: none; }
-.ln-lamp { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; width: 88px; height: 96px; flex: none; padding: 0; border: 0; background: none; }
+.ln-lamp { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; width: 88px; height: 86px; flex: none; padding: 0; border: 0; background: none; }
 .ln-lamp .lring { width: 56px; height: 56px; }
 .ln-lamp .lamp { width: 44px; height: 44px; transition: outline-color .2s var(--ease), transform .15s var(--ease); outline: 2px solid transparent; outline-offset: 3px; }
 .ln-lamp.on .lamp { width: 56px; height: 56px; outline-color: var(--blue); }
