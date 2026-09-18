@@ -898,6 +898,11 @@ input.slider { pointer-events: none; }
   border: 1px solid var(--t-border); color: var(--t-ink); transform-origin: 50% 50%;
   transition: background-color .255s var(--ease), border-color .255s var(--ease),
               color 1ms var(--ease) var(--m-ink-swap, 60ms), transform .15s var(--ease); }
+/* the lit room's mesh: one radial per lamp in its own colour (roomMeshStops in js/color.js), over the
+   --t-fill base. Every stop is pinned to the same luminance as that base, so white ink holds across the
+   whole card and the tile needs no second ink rule. background-image does not tween, so the colour
+   change rides --t-fill's transition underneath it. */
+.rtile.lit { background-image: var(--t-mesh, none); }
 .rtile:active:not(:has(.sw:active)) { background-color: var(--t-fill-pressed); transform: scale(.99); }
 .rtile .head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
   flex: 1 1 auto; min-width: 0; margin: -6px -6px 0; padding: 6px 6px 10px;

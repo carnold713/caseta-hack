@@ -11,6 +11,7 @@ from pathlib import Path
 from aiohttp import web
 
 from color import in_gamut, GAMUT_C
+import nanoleaf as nanoleaf_mod
 from nanoleaf import Nanoleaf, nid
 
 
@@ -197,6 +198,41 @@ async def main():
         assert b_state["puts"][-1]["ct"]["value"] == 3003 and nl.devices[nid("SN-BBB")]["color_mode"] == "ct"
         ok = await nl.set_warmth("nanoleaf_nope", 3000)
         assert ok is False, "an unknown id is refused quietly, not raised"
+
+        # ---- regression: a re-read must not rebind the device dict ----
+        # agent.py's _merge_nanoleaf copies these dicts into bridge.devices BY REFERENCE, and it only runs on
+        # load, pair and forget. engine.py's _level_of() therefore reads whatever object the merge captured.
+        # Rebinding self.devices[key] on every poll left that reference frozen at merge time, so a room
+        # "toggle" (which resolves its direction from _level_of) read a level that never changed: the panels
+        # stayed dark on toggle-on, while the light's own page — an explicit level, never a toggle — worked.
+        merged = nl.devices[nid("SN-BBB")]        # the object the merge would have handed the engine
+        b_state["on"], b_state["bri"] = True, 77
+        await nl._refresh_all()
+        assert nl.devices[nid("SN-BBB")] is merged, "a re-read must keep the dict's identity"
+        assert merged["current_state"] == 77, f"the merged reference must see the new level, got {merged['current_state']}"
+        b_state["on"] = False
+        await nl._refresh_all()
+        assert merged["current_state"] == 0, "and must see the light go off"
+
+        # ---- a change made elsewhere reaches the app, and keeps that same identity ----
+        # There is no event stream here, so a poll is the only way a light someone turned on by hand (or from
+        # Nanoleaf's own app) is noticed. It must both fire on_state and update in place.
+        seen = []
+        nl2 = Nanoleaf(Path(tmp), on_state=lambda d: seen.append(d))
+        await nl2.start()
+        held = nl2.devices[nid("SN-BBB")]
+        nanoleaf_mod.POLL_SECONDS = 0.05
+        nl2._ensure_poll()
+        b_state["on"], b_state["bri"] = True, 42       # someone turns it on by hand
+        for _ in range(80):
+            await asyncio.sleep(0.05)
+            if seen:
+                break
+        assert seen, "a change made elsewhere must be noticed by the poll"
+        assert nl2.devices[nid("SN-BBB")] is held, "the poll must keep the dict's identity too"
+        assert held["current_state"] == 42, f"and update it in place, got {held['current_state']}"
+        await nl2.stop()
+        nanoleaf_mod.POLL_SECONDS = 20
 
         # forgetting one leaves the other alone
         await nl.forget("SN-AAA")

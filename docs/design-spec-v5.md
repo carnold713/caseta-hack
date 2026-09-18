@@ -662,6 +662,33 @@ and 4.07:1 at 0.86. There is no alpha that reaches 4.5:1 while still letting the
 which is the entire reason to have a photograph. Lantern's answer is simpler than a band: **nothing
 is ever drawn over the hero at all** (§4.8).
 
+### 3.5a The room tile's mesh
+
+§3.5 answers "if this room were **one** colour, which one". Home's room tile no longer asks that
+question. A tile is a picture of the room, and a room with two purple lamps and a red one is not one
+colour and is certainly not blue: below the coherence floor the flat fill was giving a lit room a
+Lutron-blue card that said nothing about what was actually on in it.
+
+> **One soft radial per lit lamp, in that lamp's own colour, over a base of the strongest lamp.**
+
+`roomMeshStops()` (js/color.js) returns one stop per lit lamp, in the room's own order, so two purple
+lamps and a red one give two purple blobs and a red one. Anchors are fixed per index, never random, so
+a repaint does not make the blobs walk around the tile. One lamp is not a mesh: a single blob over its
+own colour is the flat fill with a seam in it, so a one-lamp room stays flat.
+
+**Contrast is carried by construction, and no proven unit moved.** Every stop is
+`pinLuma(H, C, yOn, -1)` fed by `tintSeed` — the same generator, the same luminance target and the
+same chroma bands that already produce `buildLitSurface`'s `fill`. The validator measures white ink
+over every surface that generator can make, so a stop cannot be a colour it has not already measured.
+Checked directly over 3,456 stops spanning every hue pair at three levels: **worst white-on-stop
+5.17:1**, against the 4.5:1 the body text needs. The ink therefore stays `#FFFFFF` across the whole
+mesh and the tile needs no second ink rule.
+
+`roomTintSeed` and the 0.72 coherence floor are unchanged and still govern anywhere a single flat
+colour is the answer; §3.5's reasoning against a mean, the brightest and the dominant all still hold
+for that case. The mesh is not a mean — it shows each lamp rather than inventing one colour for all
+of them — so the objection those rules answer does not arise here.
+
 ### 3.6 Memoisation and per-frame cost
 
 Measured by the validator on node 20, 20000 calls:

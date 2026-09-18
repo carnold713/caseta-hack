@@ -64,7 +64,11 @@ from color import GAMUT_C, hex_to_rgb, hsv_to_rgb, kelvin_to_mirek, mirek_to_kel
 LOG = logging.getLogger("nanoleaf")
 PORT = 16021
 PAIR_SECONDS = 40         # the panels stay in pairing mode for about 30s after the button is held; a little slack
-POLL_SECONDS = 20         # no event stream here (unlike Hue's CLIP v2), so a light poll picks up a change made elsewhere
+POLL_SECONDS = 5          # no event stream here (unlike Hue's CLIP v2) and no LEAP subscription either, so this
+                          # poll is the ONLY way a panel someone turned on by hand, or from Nanoleaf's own app,
+                          # is ever noticed. Every other backend reports a change the moment it happens, so at 20s
+                          # these lights were the one place the app could sit visibly wrong for a third of a
+                          # minute. One small LAN GET per panel at 5s is cheap and keeps them in step.
 
 
 def nid(serial: str) -> str:
@@ -158,6 +162,27 @@ class Nanoleaf:
         except aiohttp.ClientError as exc:
             self._note(host, body, False, f"could not reach it: {exc}")
             raise RuntimeError(f"could not reach the Nanoleaf controller: {exc}") from exc
+
+    def _store(self, key: str, after: dict) -> dict:
+        """Write a freshly-read device into self.devices WITHOUT rebinding the dict.
+
+        agent.py's _merge_nanoleaf copies these dicts into bridge.devices by reference, and it only runs
+        on load, pair and forget. Rebinding self.devices[key] to a new object on every poll therefore left
+        bridge.devices — and so engine.py's _level_of(), which reads bridge.devices[id]["current_state"] —
+        pointing at the dict as it was at merge time, permanently stale. A "toggle" resolves its direction
+        from that reading, so a panel the stale copy believed was on was sent level 0 and stayed dark,
+        while the light's own page (which sends an explicit level, never a toggle) worked. Hue never had
+        this because it mutates its device dicts in place.
+
+        Updating in place keeps every holder of the reference correct, which is the invariant the merge
+        assumes."""
+        cur = self.devices.get(key)
+        if cur is None:
+            self.devices[key] = after
+            return after
+        cur.clear()
+        cur.update(after)
+        return cur
 
     def _entry(self, device_id: str) -> dict:
         serial = _serial_of(device_id)
@@ -267,7 +292,7 @@ class Nanoleaf:
         for e in list(self.entries):
             try:
                 info = await self._get_info(e["host"], e["token"])
-                self.devices[nid(e["serial"])] = _device_from_info(e, info)
+                self._store(nid(e["serial"]), _device_from_info(e, info))
                 self.errors.pop(e["serial"], None)
             except Exception as exc:  # noqa: BLE001
                 self.errors[e["serial"]] = str(exc)
@@ -284,12 +309,14 @@ class Nanoleaf:
             for e in list(self.entries):
                 try:
                     info = await self._get_info(e["host"], e["token"])
-                    before = self.devices.get(nid(e["serial"]))
+                    key = nid(e["serial"])
+                    cur = self.devices.get(key)
+                    before = dict(cur) if cur is not None else None
                     after = _device_from_info(e, info)
-                    self.devices[nid(e["serial"])] = after
+                    self._store(key, after)
                     self.errors.pop(e["serial"], None)
                     if before != after and self._on_state:
-                        self._on_state(nid(e["serial"]))
+                        self._on_state(key)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:  # noqa: BLE001

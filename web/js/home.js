@@ -109,14 +109,19 @@ function roomTileHTML(a) {
 function paintRoomTiles() {
   document.querySelectorAll('[data-rtile]').forEach(el => {
     const aid = el.dataset.rtile;
-    if (!targetOn(`a:${aid}`)) { tintApply(el, { state: 'off' }); return; }
-    if (connLost()) { tintApply(el, { state: 'unknown' }); return; }   // still on, but it stops claiming a colour
+    if (!targetOn(`a:${aid}`)) { meshApply(el, null); tintApply(el, { state: 'off' }); return; }
+    if (connLost()) { meshApply(el, null); tintApply(el, { state: 'unknown' }); return; }   // still on, but it stops claiming a colour
     // lights and switches only, the same two domains the device tile tints: a room whose fan is running
     // has nothing lit in it, and a fan's ctl blue pulling a warm room towards the house colour would be
     // warmth meaning something other than emitted light
     const lights = controllable().filter(d => devArea(d) === aid && (d.domain === 'light' || d.domain === 'switch'))
       .map(d => tintOptsFor(d.device_id)).filter(o => !o.state);
-    tintApply(el, roomTintSeed(lights) || { state: 'off' });
+    // the mesh is the room's own lamps, one blob each; the base under it is the strongest of them, so a
+    // room whose lights disagree shows the colours that are actually in it instead of the blue a single
+    // flat fill has to fall back to. roomTintSeed still answers for a room with nothing to mesh.
+    const mesh = roomMeshStops(lights);
+    meshApply(el, mesh);
+    tintApply(el, (mesh && mesh.base) || roomTintSeed(lights) || { state: 'off' });
   });
 }
 // The grid's last cell: the room grid's own add affordance, so making a room is one tap from the page

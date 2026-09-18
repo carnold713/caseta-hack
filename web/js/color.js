@@ -483,6 +483,54 @@ function roomTintSeed(lights, night) {
   return { kind: 'colour', hex: pinLuma(H, C, night ? TINT.yOnNight : TINT.yOn), level: lv / lit.length, coherence: R };
 }
 
+// ── A room tile's mesh ───────────────────────────────────────────────────────────────────────────
+// roomTintSeed answers "if this room were one colour, which", and below the coherence floor it honestly
+// refuses and wears Lutron blue. That is right for one flat fill and wrong as a picture of the room: two
+// purple lamps and a red one are not blue, they are two purple blobs and a red one. This builds that
+// picture — one soft radial per lit lamp, in that lamp's own colour, over a base of the strongest.
+//
+// Contrast needs no new proof and none of the thirteen proven units move. Every stop is
+// pinLuma(H, C, yOn, -1) fed by tintSeed: the same generator, the same luminance target and the same
+// chroma bands that produce buildLitSurface's own `fill`. scripts/tint-check.js already measures white
+// ink over every surface that generator can make, so a stop cannot be a colour it has not measured —
+// which is why the ink stays #FFFFFF across the whole mesh.
+const MESH_ANCHORS = [[[50, 50]], [[22, 26], [78, 74]], [[20, 24], [80, 30], [50, 84]],
+                      [[20, 22], [80, 24], [22, 80], [80, 78]]];
+// Fixed per index, never random: a repaint must not make the blobs walk around the tile.
+function meshAnchor(i, n) {
+  if (n <= 4) return MESH_ANCHORS[n - 1][i];
+  const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+  return [Math.round(50 + 32 * Math.cos(a)), Math.round(50 + 32 * Math.sin(a))];
+}
+// One stop per lit lamp, in the room's own order, so a room with two purple and one red gets two purple
+// blobs and one red one rather than an average of the three.
+function roomMeshStops(lights, night) {
+  const lit = (lights || []).filter(l => (l.level || 0) > 0);
+  if (!lit.length) return null;
+  const yOn = night ? TINT.yOnNight : TINT.yOn;
+  const stops = lit.map(l => {
+    const s = tintSeed(l.kind || 'colour', l.hex || '#006DCC', l.level, night);
+    return { hex: pinLuma(s.H, s.C, yOn, -1), w: (l.level / 100) * Math.max(0.02, s.C) };
+  });
+  // the strongest lamp is what the blobs sit on, so the gaps read as a colour that is actually in the
+  // room instead of a fallback that is not
+  const base = stops.reduce((a, b) => (b.w > a.w ? b : a), stops[0]);
+  const lv = lit.reduce((n, l) => n + l.level, 0) / lit.length;
+  return { stops, base: { kind: 'colour', hex: base.hex, level: lv } };
+}
+// Paint the mesh onto a card. One property write, and the CSS never names a colour.
+function meshApply(el, mesh) {
+  if (!el) return;
+  // one lamp is not a mesh: a single blob over its own colour is just the flat fill with a seam
+  const css = mesh && mesh.stops.length > 1
+    ? mesh.stops.map((s, i) => { const [x, y] = meshAnchor(i, mesh.stops.length);
+        return `radial-gradient(circle at ${x}% ${y}%, ${s.hex} 0%, transparent 62%)`; }).join(', ')
+    : '';
+  if (el.dataset.mesh === css) return;
+  el.dataset.mesh = css;
+  el.style.setProperty('--t-mesh', css || 'none');
+}
+
 // The tile under a finger. tintOptsFor reads the level the bridge has confirmed; a drag is ahead of
 // that, so this asks for the same options at the level the finger is at. A drag to 0 is an off card,
 // and a drag up from an off lamp is the warm ramp, not the blue a stateless card would fall back to.
