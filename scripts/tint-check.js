@@ -602,6 +602,7 @@ for (const k of Object.keys(byPair).sort()) {
 // the copy the app ships is the same code. The two are kept apart on purpose (the app loads a plain
 // script in a browser, this runs under node with no bundler between them), so nothing but a check
 // stops them drifting. Comments and whitespace are allowed to differ; a single token of logic is not.
+let HEAD_COUNT = 0;
 const drift = (() => {
   let appSrc;
   try { appSrc = require('fs').readFileSync(require('path').join(__dirname, '..', 'web', 'js', 'color.js'), 'utf8'); }
@@ -619,7 +620,10 @@ const drift = (() => {
   };
   const HEADS = ['function linToOklab', 'function oklabToLin', 'function hexToOklch', 'function solveL',
                  'function solveC', 'function pinLuma', 'function tintSeed', 'function litSurface',
-                 'function buildLitSurface', 'const TINT =', 'const TINT_BANDS ='];
+                 'function buildLitSurface', 'const TINT =', 'const TINT_BANDS =',
+                 // a room tile's colour comes from here, so it is as much of the contract as a device's
+                 'function roomTintSeed', 'const ROOM_COHERENCE_MIN ='];
+  HEAD_COUNT = HEADS.length;
   const out = [];
   for (const h of HEADS) {
     const mine = unit(mySrc, h), theirs = unit(appSrc, h);
@@ -632,7 +636,7 @@ const drift = (() => {
 console.log('\nThe app is running this code');
 console.log('  ' + '-'.repeat(110));
 if (drift.length) { for (const d of drift) console.log(`  ${d}   FAIL`); fails += drift.length; checks += drift.length; }
-else console.log(`  web/js/color.js matches all ${11} proven units   PASS`);
+else console.log(`  web/js/color.js matches all ${HEAD_COUNT} proven units   PASS`);
 
 // --- the verdict -------------------------------------------------------------
 console.log('\n' + '='.repeat(114));

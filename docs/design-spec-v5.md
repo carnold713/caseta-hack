@@ -2731,3 +2731,49 @@ is deleting `.item` from the selector. `polish_test.js` and `fav_test.js` read `
 also at the device tile's well. Anything asserting a swipe tray on a light row or a room row is
 testing something that has moved to a visible button, and the assertion moves with it. Slice 6 adds
 `npm run tint-check` to whatever runs before a commit. The suite must still print `errors: none`.
+
+---
+
+## 14. What building slices 2 and 3 settled
+
+Written after the build, from what the code and the browser said rather than from what this document
+predicted. Where a section above is now wrong, this one wins.
+
+### 14.1 Contradictions between sections, resolved
+
+| where | the disagreement | ruled |
+|---|---|---|
+| §1.5 vs §4.4 | §1.5 says a lit card carries no blue; §4.4 keeps the room tile's 44x24 `.sw`, whose track is `--blue`. §2.1 has no token for a switch track, which is the gap that let the two pass each other | The switch inverts on a lit card, the way the device tile's power button does: track `--t-well`, on `--t-btn-bg` with `--t-btn-ink` as the knob. Both are pairs the validator already proves. Measured 5.19 to 5.20:1 on every lit room |
+| §5.1 table vs §4.6 prose | the table numbers the scope row above the `ROOMS` header; the prose says it "sits with that block and under its header" | The prose. Above the header, the row reads as a filter on Scenes |
+| §3.5 | `roomTintSeed` takes "lights" without saying which devices count | Lights and switches only, the two kinds the device tile tints. A fan is not emitting light, and its `ctl` blue dragged a warm room towards the house colour. A fan-only room that is on is therefore a white card with its switch on, which is honest |
+| §4.3 | "five `flex: 1` chips, 52px each" | Does not survive its own labels at 360px, where "Med-hi" needs 54. The chips size to their labels (`flex: 1 1 auto`, `nowrap`, 8px padding) and all five fit at both widths |
+| §4.6 | centring the selected pill with `scrollIntoView({inline: 'center'})` | Sets the pill row's own `scrollLeft`. `scrollIntoView` centres the pill by moving whatever scrolls, and the nearest scroller that can satisfy it is the page, so a 14-room Home was thrown off the top on every render |
+
+### 14.2 The disc of a device that emits no light
+
+§4.3 says "the disc" without saying what colour, and the tile inherited `lightFill()` from the row it
+replaced, so a running fan wore the lamp ramp's full orange in the corner of a card that §1.5 forbids
+warmth on. That is the same contradiction one level down: warmth that no light is making.
+
+One rule now, `discFill(d, lv)` in `light.js`, read by the markup and by `paintLightDiscs` so the two
+cannot drift: a light or a switch takes `lightFill()`, anything else takes the ordinary on state
+(`--blue-20` when on, `--lamp-off` when not). The token is resolved to a real colour rather than left
+as a `var()`, because the disc is cross-faded by GSAP and GSAP cannot interpolate a custom property.
+
+### 14.3 The validator now covers the room rule
+
+`roomTintSeed` and `ROOM_COHERENCE_MIN` were listed under slice 1 but were not shipped with it, and a
+room tile cannot be painted without them. They are in `web/js/color.js` verbatim, and the drift check
+at the end of `scripts/tint-check.js` covers **13** units rather than 11, so the room's colour is
+guarded the same way a device's is. Proved by moving `ROOM_COHERENCE_MIN` in the app's copy and
+watching the check fail.
+
+### 14.4 Still open
+
+- `roomSummary()` says "1 light · all off" for a room holding only a fan, and counts a running fan in
+  "2 of 2 on". It was always wrong; the room tile's sub line is a much more prominent place for it.
+- §7.6's `m-morph` guard has its CSS but not its JS half, which is a `core.js` sheet change. Nothing
+  needs it until the light sheet is tinted in slice 5.
+- The rig's suite consumes its own fixture: `remove_test.js` takes the Bedside Lamp off the fake
+  bridge, so a second run in a row fails until `fake_agent2.js` is restarted. `nanoleaf_test.js` and
+  `daylight_test.js` are not ported by `mkport.sh` and need `PORT` set.

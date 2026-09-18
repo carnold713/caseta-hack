@@ -343,7 +343,7 @@ function deviceTileHTML(d) {
   const ring = typeof ringClass === 'function' ? ringClass(d) : '';
   const glyph = ICON(opens ? lightIcon(d) : domainIcon(dm));
   // the card is the tint, the disc is the truth: a yellow lamp's card is olive and the dot at its corner is pure yellow
-  const inner = `<span class="ddisc lamp ${lv > 0 ? '' : 'off'}" data-ldisc="${id}" style="background:${lightFill(id, lv)}">${glyph}</span>`;
+  const inner = `<span class="ddisc lamp ${lv > 0 ? '' : 'off'}" data-ldisc="${id}" style="background:${discFill(d, lv)}">${glyph}</span>`;
   const badge = timerOn(id) ? `<span class="badge">${ICON('clock')}</span>` : '';
   const disc = ring || badge ? `<span class="lring ${ring}">${inner}${badge}</span>` : inner;
   const head = `${disc}<span class="dn">${esc(d.name)}</span><span class="lv dv" data-lrowval="${id}">${lightRowValue(d)}</span>`;
@@ -371,11 +371,26 @@ function paintDeviceTiles() {
     const pw = el.querySelector('.dpow'); if (pw) pw.setAttribute('aria-pressed', lv > 0 ? 'true' : 'false');
   });
 }
+// What a device's disc is filled with. A fan and a shade emit no light, so neither wears the lamp ramp:
+// their card already takes the ordinary on state rather than a tint, and full orange in the corner of a
+// blue card was that same contradiction one level down, warmth that no light is making. They take the
+// on state too. One rule, read by the markup and by the painter, so the two cannot drift.
+// The tween resolves a real colour, never a var(): GSAP cannot interpolate a custom property, so a
+// var() here would snap instead of cross-fading, the way lampOff() already reads its token once.
+let ON_CHIP_CACHE = null;
+function onChipFill() {
+  if (!ON_CHIP_CACHE) ON_CHIP_CACHE = (getComputedStyle(document.documentElement).getPropertyValue('--blue-20') || '').trim() || 'rgba(0,109,204,.20)';
+  return ON_CHIP_CACHE;
+}
+function discFill(d, lv) {
+  if (d.domain === 'light' || d.domain === 'switch') return lightFill(d.device_id, lv);
+  return lv > 0 ? onChipFill() : lampOff();
+}
 function paintLightDiscs() {
   document.querySelectorAll('[data-ldisc]').forEach(el => {
     const id = el.dataset.ldisc; const d = dev(id); if (!d) return;
     const lv = d.domain === 'light' || d.domain === 'switch' ? (level(id) || 0) : (isOn(id) ? 100 : 0);
-    const c = lightFill(id, lv);
+    const c = discFill(d, lv);
     el.classList.toggle('off', lv <= 0);
     if (el.dataset.fill === c) return;
     if (el.dataset.fill) tween(el, { backgroundColor: c }); else el.style.backgroundColor = c;
@@ -768,7 +783,7 @@ function applyNightLook() {
   if ((html.dataset.night === '1') === on) return;
   if (on) html.dataset.night = '1'; else delete html.dataset.night;
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = on ? THEME_COLOR.night : THEME_COLOR.day;
-  LAMP_OFF_CACHE = null;
+  LAMP_OFF_CACHE = null; ON_CHIP_CACHE = null;
   document.querySelectorAll('.lamp.off').forEach(el => { el.style.background = lampOff(); delete el.dataset.fill; });
 }
 function nightLookRowHTML() {
