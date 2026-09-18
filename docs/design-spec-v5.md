@@ -2804,3 +2804,32 @@ watching the check fail.
 - The rig's suite consumes its own fixture: `remove_test.js` takes the Bedside Lamp off the fake
   bridge, so a second run in a row fails until `fake_agent2.js` is restarted. `nanoleaf_test.js` and
   `daylight_test.js` are not ported by `mkport.sh` and need `PORT` set.
+
+### 14.5 How to get a run you can believe, and three failures that were not what they looked like
+
+**Wiping the hub's data directory is not a reset.** `fake_agent2.js` holds the bridge's inventory in
+memory, so a `remove_test.js` from an earlier run keeps that device missing for as long as that
+process lives, however many times the documents are deleted. A run that matters resets **both**: kill
+the fake connector, delete the data directory, start the hub, start the connector, then `seed4.js`.
+Miss the first step and the suite reports failures that belong to the last run.
+
+That is what two of the three failures in the first full run turned out to be:
+
+| reported | what it was |
+|---|---|
+| Home's first room card is cut off (823 against a tab bar at 791) | **Real.** With a starred light, a due line and the wind-down caption, the first tile sat 32px under the bar. Fixed in §14.6 below; both suites now measure 771 |
+| the "All ways" list no longer scrolls (0px in a 776px sheet) | **Fixture.** The Bedroom had lost its dimmer, so `recipeCtx` reported no dimmers and no moods and `applies()` dropped most of the 23 recipes, leaving 5, which fit. On a fresh fixture: 568px of scroll, the same number the pre-redesign build gives |
+| `ia_test` times out clicking `au-open` | **Neither, and pre-existing.** It fails identically on `edcac19`, before any of this work, when `polish_test` has run before it. An order dependency in the suite, not a fault in the app |
+
+The method that settled the last two is worth keeping: a second worktree at the pre-redesign commit,
+served on its own port with its own connector, and the same suite run against both. A failure that
+reproduces on code from before the change is not a regression, whatever it looks like.
+
+### 14.6 Home's vertical budget
+
+Nothing on Home was removed to win the fold back. The space came out of rhythm: the room tile from
+152px to 136 (14px padding and a 10px internal gap became 12 and 6), Home's own section headers from
+24px above to 16 (scoped to Home, because the suite measures a sheet's spacing), the starred lamp row
+10px of the dead space around its 56px disc, and the scene cells 8px. That is 20px of clearance at
+390x844 rather than the 2px the first attempt left. At 360x800 the first tile still peeks: that phone
+is 44px shorter, and scrolling a little there is honest.

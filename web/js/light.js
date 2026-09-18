@@ -130,7 +130,9 @@ function pickKind(id, k) {
   saveSoon();
   if (KP && KP.id === id) kindRender();
   const d = dev(id); if (!d) return;
-  document.querySelectorAll(`.lkind[data-ldisc="${id}"]`).forEach(b => { b.innerHTML = ICON(lightIcon(d)); });
+  // the glyph is the one thing paintLightDiscs does not repaint, so the kind's new icon is written here. `.ddisc`
+  // is the device tile's disc and `.lkind` the light row's: both draw the kind, and neither is re-rendered by this.
+  document.querySelectorAll(`.lkind[data-ldisc="${id}"], .ddisc[data-ldisc="${id}"]`).forEach(b => { b.innerHTML = ICON(lightIcon(d)); });
   document.querySelectorAll('.tile[data-tgt] .face').forEach(f => { delete f.dataset.k; });
   paintLight();
 }
@@ -625,8 +627,8 @@ function wireLightSheet() {
   const root = $('#ld'); if (!root || !LD) return;
   const disc = root.querySelector('.ld-disc'), sl = root.querySelector('.ld-well .slider');
   const st = { lv: LD.lv };
-  // the disc glows in the lamp's own colour when it has one. The well no longer needs a tint of its own: it reads
-  // --t-well-fill off the sheet, which is the same transform the tile's well reads.
+  // the disc glows in the lamp's own colour when it has one. The well has no tint of its own any more: it is a
+  // native range on the sheet's white, so it is the app's ordinary well and `--vfill` went with the vertical one.
   const fill = v => { const h = stateHex(LD.color); return h && v > 0 ? lampFill(h, v) : lampColor(v); };
   // dataset.fill is written here too: paintLightDiscs reads it as "already this colour" and so leaves the disc
   // alone instead of tweening it back over a drag that is still running
