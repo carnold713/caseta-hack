@@ -487,12 +487,12 @@ function roomTintSeed(lights, night) {
 // roomTintSeed answers "if this room were one colour, which", and below the coherence floor it honestly
 // refuses and wears Lutron blue. That is right for one flat fill and wrong as a picture of the room: two
 // purple lamps and a red one are not blue, they are two purple blobs and a red one. This builds that
-// picture — one soft radial per lit lamp, in that lamp's own colour, over a base of the strongest.
+// picture: one soft radial per lit lamp, in that lamp's own colour, over a base of the strongest.
 //
 // Contrast needs no new proof and none of the thirteen proven units move. Every stop is
 // pinLuma(H, C, yOn, -1) fed by tintSeed: the same generator, the same luminance target and the same
 // chroma bands that produce buildLitSurface's own `fill`. scripts/tint-check.js already measures white
-// ink over every surface that generator can make, so a stop cannot be a colour it has not measured —
+// ink over every surface that generator can make, so a stop cannot be a colour it has not measured,
 // which is why the ink stays #FFFFFF across the whole mesh.
 const MESH_ANCHORS = [[[50, 50]], [[22, 26], [78, 74]], [[20, 24], [80, 30], [50, 84]],
                       [[20, 22], [80, 24], [22, 80], [80, 78]]];

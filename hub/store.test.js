@@ -1,5 +1,5 @@
 'use strict';
-/* hub/store.js — the little JSON store on the volume, and the room photographs beside it.
+/* hub/store.js: the little JSON store on the volume, and the room photographs beside it.
    DATA_DIR is read once at require time, so it is set here before the module is loaded.
    Run: npm test */
 const { test } = require('node:test');
@@ -31,7 +31,7 @@ test('a document written comes back, and a missing one falls back', () => {
 
 test('the data directory is made on demand', () => {
   // DATA_DIR is read once at require time, so proving this needs a fresh process pointed at a path that
-  // does not exist yet — which is exactly the first boot on a new Railway volume.
+  // does not exist yet, which is exactly the first boot on a new Railway volume.
   const fresh = path.join(os.tmpdir(), `hub-store-fresh-${process.pid}-${Date.now()}`);
   assert.ok(!fs.existsSync(fresh), 'the directory does not exist before the child runs');
   const code = "const s=require(process.argv[1]); s.write('config',{made:true}); console.log(s.read('config',null).made);";

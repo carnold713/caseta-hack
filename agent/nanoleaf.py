@@ -168,8 +168,8 @@ class Nanoleaf:
 
         agent.py's _merge_nanoleaf copies these dicts into bridge.devices by reference, and it only runs
         on load, pair and forget. Rebinding self.devices[key] to a new object on every poll therefore left
-        bridge.devices — and so engine.py's _level_of(), which reads bridge.devices[id]["current_state"] —
-        pointing at the dict as it was at merge time, permanently stale. A "toggle" resolves its direction
+        bridge.devices pointing at the dict as it was at merge time, permanently stale, and with it
+        engine.py's _level_of(), which reads bridge.devices[id]["current_state"]. A "toggle" resolves its direction
         from that reading, so a panel the stale copy believed was on was sent level 0 and stayed dark,
         while the light's own page (which sends an explicit level, never a toggle) worked. Hue never had
         this because it mutates its device dicts in place.

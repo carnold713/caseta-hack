@@ -403,7 +403,7 @@ class Hue:
         backoff = 2
         # This stream carries only what happens while it is held open: Hue replays no backlog on reconnect.
         # So everything that changed while it was down is still wrong in self.devices, and nothing else here
-        # ever re-reads — start() loads once, and the agent's own _refresh only reconnects the Lutron bridge.
+        # ever re-reads: start() loads once, and the agent's own _refresh only reconnects the Lutron bridge.
         # A lamp switched at the wall or in Hue's app during a drop therefore stayed wrong until it happened
         # to change again. One re-read on the way back closes that; load() fires _on_loaded, which is what
         # re-announces the corrected state to the app.

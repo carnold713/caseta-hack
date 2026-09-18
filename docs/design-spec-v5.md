@@ -677,7 +677,7 @@ a repaint does not make the blobs walk around the tile. One lamp is not a mesh: 
 own colour is the flat fill with a seam in it, so a one-lamp room stays flat.
 
 **Contrast is carried by construction, and no proven unit moved.** Every stop is
-`pinLuma(H, C, yOn, -1)` fed by `tintSeed` — the same generator, the same luminance target and the
+`pinLuma(H, C, yOn, -1)` fed by `tintSeed`: the same generator, the same luminance target and the
 same chroma bands that already produce `buildLitSurface`'s `fill`. The validator measures white ink
 over every surface that generator can make, so a stop cannot be a colour it has not already measured.
 Checked directly over 3,456 stops spanning every hue pair at three levels: **worst white-on-stop
@@ -686,8 +686,8 @@ mesh and the tile needs no second ink rule.
 
 `roomTintSeed` and the 0.72 coherence floor are unchanged and still govern anywhere a single flat
 colour is the answer; §3.5's reasoning against a mean, the brightest and the dominant all still hold
-for that case. The mesh is not a mean — it shows each lamp rather than inventing one colour for all
-of them — so the objection those rules answer does not arise here.
+for that case. The mesh is not a mean: it shows each lamp rather than inventing one colour for all
+of them, so the objection those rules answer does not arise here.
 
 ### 3.6 Memoisation and per-frame cost
 

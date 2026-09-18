@@ -204,7 +204,7 @@ async def main():
         # load, pair and forget. engine.py's _level_of() therefore reads whatever object the merge captured.
         # Rebinding self.devices[key] on every poll left that reference frozen at merge time, so a room
         # "toggle" (which resolves its direction from _level_of) read a level that never changed: the panels
-        # stayed dark on toggle-on, while the light's own page — an explicit level, never a toggle — worked.
+        # stayed dark on toggle-on, while the light's own page, which sends an explicit level and never a toggle, worked.
         merged = nl.devices[nid("SN-BBB")]        # the object the merge would have handed the engine
         b_state["on"], b_state["bri"] = True, 77
         await nl._refresh_all()

@@ -1,5 +1,5 @@
 'use strict';
-/* hub/validate.js — the hub is where a malformed document gets rejected, because the agent trusts
+/* hub/validate.js: the hub is where a malformed document gets rejected, because the agent trusts
    whatever the hub hands it. These are the rules that keep a bad config off the bridge.
    Run: npm test   (node --test hub/) */
 const { test } = require('node:test');
