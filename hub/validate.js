@@ -192,7 +192,11 @@ function validateConfig(cfg) {
       }
       const area = typeof r.bridge_area === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(r.bridge_area) && !r.bridge_area.startsWith('hue_') ? r.bridge_area : null;
       const hue = typeof r.hue_room === 'string' && /^hue_[A-Za-z0-9_-]{1,60}$/.test(r.hue_room) ? r.hue_room : null;
-      out.settings.rooms.push({ id: r.id, name, device_ids: ids.slice(0, 200), bridge_area: area, hue_room: hue });
+      // photo: a stamp saying "this room has a picture, and this is which one". The bytes live on the
+      // volume beside the documents (hub/store.js); only the stamp travels in the config, and it changes
+      // whenever the photo does so a cached <img> knows to fetch again.
+      const photo = typeof r.photo === 'string' && /^[0-9]{1,16}$/.test(r.photo) ? r.photo : null;
+      out.settings.rooms.push({ id: r.id, name, device_ids: ids.slice(0, 200), bridge_area: area, hue_room: hue, photo });
     }
   }
   // Set once, the first time a bridge room becomes one of the app's own (js/rooms.js ensureRooms): after that,

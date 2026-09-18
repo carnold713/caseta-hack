@@ -199,6 +199,41 @@ app.post('/api/adddevice', requireAuth, async (req, res) => {
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
+// A room's photograph. The picture the phone sends has already been shrunk through a canvas by the app,
+// so the bytes arriving here are tens of kilobytes, not the several megabytes a phone camera produces.
+// The image is served back from this same origin so it is never a cross-origin load: `?token=` is what
+// lets a plain <img src> authenticate, the same trick /install.sh uses.
+// Base64 costs a third, so a 400kb photo arrives as a 533kb body: this one route gets its own, larger
+// parser rather than raising the limit on the config and every command with it.
+const PHOTO_MAX = 400 * 1024;
+const photoBody = express.json({ limit: '1mb' });
+const roomKey = req => (/^[A-Za-z0-9_-]{1,64}$/.test(String(req.params.room || '')) ? String(req.params.room) : null);
+app.get('/api/roomphoto/:room', requireAuth, (req, res) => {
+  const key = roomKey(req); if (!key) return res.status(400).json({ error: 'bad room' });
+  const found = store.readPhoto(key);
+  if (!found) return res.status(404).json({ error: 'no photo' });
+  // the URL carries a stamp that changes whenever the photo does, so this can be cached hard
+  res.type(found.type).set('Cache-Control', req.query.v ? 'private, max-age=31536000, immutable' : 'private, no-cache').send(found.buf);
+});
+app.put('/api/roomphoto/:room', requireAuth, photoBody, (req, res) => {
+  const key = roomKey(req); if (!key) return res.status(400).json({ error: 'bad room' });
+  const url = String((req.body || {}).data || '');
+  const m = url.match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return res.status(400).json({ error: "that file isn't a photo we can read" });
+  const buf = Buffer.from(m[2], 'base64');
+  if (!buf.length) return res.status(400).json({ error: "that file isn't a photo we can read" });
+  if (buf.length > PHOTO_MAX) return res.status(413).json({ error: 'that photo is too big' });
+  try {
+    store.writePhoto(key, buf, m[1] === 'jpg' ? 'jpg' : m[1] === 'jpeg' ? 'jpg' : m[1]);
+    res.json({ ok: true, stamp: String(Date.now()) });
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+app.delete('/api/roomphoto/:room', requireAuth, (req, res) => {
+  const key = roomKey(req); if (!key) return res.status(400).json({ error: 'bad room' });
+  store.removePhoto(key);
+  res.json({ ok: true });
+});
+
 // One-line installer for the home connector, with this hub's URL and token baked in.
 // Requires the app token (as ?token=) so only a signed-in user can fetch it.
 const fs = require('fs');
@@ -236,6 +271,17 @@ app.use(express.static(WEB, {
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/ws/')) return res.status(404).json({ error: 'not found' });
   res.sendFile(path.join(WEB, 'index.html'));
+});
+
+// A body the JSON parser refused (too big, or not JSON) used to answer with Express's HTML stack trace,
+// which the app then tried to parse as JSON and reported as an unreadable error. Answer in the shape
+// every other failure here uses, so the app can show the person what actually went wrong.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) return res.status(413).json({ error: 'that is too big to send' });
+  if (err && (err.type === 'entity.parse.failed' || err.status === 400)) return res.status(400).json({ error: 'the hub could not read that' });
+  log('unhandled:', (err && err.message) || err);
+  res.status(500).json({ error: 'something went wrong at the hub' });
 });
 
 // ---------- websockets ----------
