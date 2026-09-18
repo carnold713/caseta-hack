@@ -124,7 +124,7 @@ function scopePillsHTML() {
 function roomGridHTML() {
   const as = areas();
   // connected, but no rooms yet: a Hue-only home can hit this
-  if (!as.length) return `<div class="rgrid" id="rgrid"><div class="rtile"><div class="head"><span class="n">No rooms yet</span><span class="s">Your rooms appear here as soon as your home is connected</span></div></div>${newRoomTileHTML()}</div>`;
+  if (!as.length) return `<div class="rgrid" id="rgrid"><div class="rtile note"><div class="head"><span class="n">No rooms yet</span><span class="s">Your rooms appear here as soon as your home is connected</span></div></div>${newRoomTileHTML()}</div>`;
   const sel = S.homeScope && S.homeScope !== 'all' && as.some(a => a.id === S.homeScope) ? S.homeScope : null;
   if (sel) {
     return `<div class="rgrid scoped" id="rgrid">${roomTileHTML(as.find(a => a.id === sel))}${moodRowHTML(sel)}</div>`;

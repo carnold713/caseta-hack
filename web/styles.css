@@ -826,7 +826,7 @@ input.slider { pointer-events: none; }
   padding: var(--tile-pad); border-radius: var(--tile-r); background: var(--t-fill);
   border: 1px solid var(--t-border); color: var(--t-ink); transform-origin: 50% 50%;
   transition: background-color .255s var(--ease), border-color .255s var(--ease),
-              color 1ms var(--ease) var(--m-ink-swap), transform .15s var(--ease); }
+              color 1ms var(--ease) var(--m-ink-swap, 60ms), transform .15s var(--ease); }
 .dtile.wide { min-height: 0; }
 /* the whole card is the press surface, so the pressed fill is the transform's own fillPressed, which is
    the surface the validator measures the white ink against. :has() keeps the two controls inside from
@@ -837,6 +837,8 @@ input.slider { pointer-events: none; }
   flex: 1 1 auto; min-width: 0; margin: -6px -6px 0; padding: 6px 6px 12px;
   border-radius: var(--r-md); color: inherit; text-align: left; background: none; }
 .dtile .dbody:focus-visible { outline: 0; box-shadow: inset 0 0 0 2px var(--blue); }
+/* a fan's and a shade's body is a caption, not a button: it gives its 12px back to the controls under it */
+.dtile .dbody.static { padding-bottom: 0; }
 .dtile .ddisc { width: 40px; height: 40px; }
 .dtile .ddisc svg.i { width: 20px; height: 20px; }
 /* the capability rings stay (they say what the lamp can do); the blue "on" ring goes, because the
@@ -893,7 +895,7 @@ input.slider { pointer-events: none; }
   padding: var(--tile-pad); border-radius: var(--tile-r); background: var(--t-fill);
   border: 1px solid var(--t-border); color: var(--t-ink); transform-origin: 50% 50%;
   transition: background-color .255s var(--ease), border-color .255s var(--ease),
-              color 1ms var(--ease) var(--m-ink-swap), transform .15s var(--ease); }
+              color 1ms var(--ease) var(--m-ink-swap, 60ms), transform .15s var(--ease); }
 .rtile:active:not(:has(.sw:active)) { background-color: var(--t-fill-pressed); transform: scale(.99); }
 .rtile .head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
   flex: 1 1 auto; min-width: 0; margin: -6px -6px 0; padding: 6px 6px 10px;
@@ -911,10 +913,19 @@ input.slider { pointer-events: none; }
 .rtile .s { display: block; font-size: 14px; line-height: 16px; font-weight: 400; color: var(--t-ink-2);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -8px; }
 .rtile .rfoot { display: flex; align-items: center; justify-content: flex-end; height: 24px; margin-top: auto; }
+/* a lit card carries no blue (docs/design-spec-v5.md 1.5), so the room's switch inverts the way the
+   device tile's power button does. Both ends are pairs the validator already measures: white on the
+   fill and the fill on white are both 5.17:1, and the off track is the well's own deepened hue. */
+.rtile.lit .sw { background: var(--t-well); }
+.rtile.lit .sw.on { background: var(--t-btn-bg); }
+.rtile.lit .sw.on::after { background: var(--t-btn-ink); box-shadow: none; }
+.rtile.lit .sw.on:active { background: var(--t-btn-bg-pressed); }
 /* the scope pill's selected room: one tile across the whole grid, its moods under it */
 .rgrid.scoped .rtile, .rgrid.scoped .moodrow { grid-column: 1 / -1; }
 .rgrid.scoped .moodrow { margin: 0 0 4px; }
 /* the add affordance, not a device: an outline and blue ink, never a fill */
+/* the empty grid's note is prose, not a room's sub line, so it wraps instead of ending in an ellipsis */
+.rtile.note .s { white-space: normal; overflow: visible; }
 .rtile.new { border: 1px dashed var(--line-2); background: none; color: var(--blue);
   align-items: center; justify-content: center; gap: 8px; font-size: 16px; line-height: 20px; font-weight: 500; }
 .rtile.new svg.i { width: 24px; height: 24px; }
