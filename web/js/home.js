@@ -27,9 +27,10 @@ VIEWS.home = {
   },
   after() {
     tickCountdowns();
-    // a fourteen-room row opens with the selected pill in the middle, and never mid-animation
-    const sp = document.querySelector('.scopes .chip.sel');
-    if (sp && sp.scrollIntoView) sp.scrollIntoView({ inline: 'center', block: 'nearest' });
+    // a fourteen-room row opens with the selected pill in the middle, and never mid-animation. The row's
+    // own scrollLeft, not scrollIntoView: that would also scroll the page to wherever the row happens to
+    // sit, and Home has just been rendered at the top on purpose.
+    centreScopePill(false);
     // a cold load onto #room/<area>: the sheet waits for the connector's data (areas() is empty before then)
     if (S._openRoomOnBoot) {
       const aid = S._openRoomOnBoot; S._openRoomOnBoot = null;
@@ -100,7 +101,10 @@ function paintRoomTiles() {
     const aid = el.dataset.rtile;
     if (!targetOn(`a:${aid}`)) { tintApply(el, { state: 'off' }); return; }
     if (connLost()) { tintApply(el, { state: 'unknown' }); return; }   // still on, but it stops claiming a colour
-    const lights = controllable().filter(d => devArea(d) === aid && d.domain !== 'cover')
+    // lights and switches only, the same two domains the device tile tints: a room whose fan is running
+    // has nothing lit in it, and a fan's ctl blue pulling a warm room towards the house colour would be
+    // warmth meaning something other than emitted light
+    const lights = controllable().filter(d => devArea(d) === aid && (d.domain === 'light' || d.domain === 'switch'))
       .map(d => tintOptsFor(d.device_id)).filter(o => !o.state);
     tintApply(el, roomTintSeed(lights) || { state: 'off' });
   });
@@ -211,5 +215,12 @@ document.addEventListener('click', e => {
   });
   const g = document.getElementById('rgrid');
   if (g) { g.outerHTML = roomGridHTML(); paintState(); }
-  if (b.scrollIntoView) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  centreScopePill(true);
 });
+// The selected pill, centred inside its own scroller and nothing else.
+function centreScopePill(smooth) {
+  const sp = document.querySelector('.scopes .chip.sel'); if (!sp) return;
+  const row = sp.parentElement; if (!row) return;
+  const left = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, sp.offsetLeft - (row.clientWidth - sp.offsetWidth) / 2));
+  if (smooth && row.scrollTo) row.scrollTo({ left, behavior: 'smooth' }); else row.scrollLeft = left;
+}

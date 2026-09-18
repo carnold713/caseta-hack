@@ -882,8 +882,10 @@ input.slider { pointer-events: none; }
 /* five speeds across a spanning tile: the chips share one row instead of wrapping onto two, which is
    what makes the fan's boolean (its Off chip) reachable without a corner button */
 .dtile .fan, .dtile .shade { margin-top: 12px; flex-wrap: nowrap; }
-.dtile .fan .chip { flex: 1 1 0; min-width: 0; height: 32px; padding: 0 6px; justify-content: center;
-  font-size: 14px; line-height: 16px; }
+/* flex: 1 1 auto, not 1 1 0: equal fifths of 290px are 52px each and "Med-hi" is 54, so equal tracks
+   wrap it onto a second line inside a 32px chip. Sized to their labels, the five fit with room over. */
+.dtile .fan .chip { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; justify-content: center;
+  font-size: 14px; line-height: 16px; white-space: nowrap; }
 .dtile .shade .btn { flex: 1 1 0; min-width: 0; }
 .dtile[data-kind="shade"] .sliderwrap { margin-top: 10px; }
 

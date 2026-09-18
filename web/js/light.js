@@ -7,7 +7,10 @@
 
 // ---------- the lamp ramp: five stops, interpolated continuously; off is --lamp-off (--fill-2: every surface is white now) ----------
 const LAMP_RAMP = [[10, '#FDF1E1'], [25, '#FCE3C4'], [50, '#F9C489'], [75, '#F7A64F'], [100, '#F58A1F']];
-const MOTION = { d: .255, ease: 'power3.out' };
+// The ease is the app's real CSS curve, not an approximation of it: a disc tweened by GSAP and the card
+// behind it cross-faded by CSS have to land on the same frame (docs/design-spec-v5.md 7.1). vendor/gsap
+// is core with no CustomEase, so Motion.E.ease is the Newton solve that stands in for it.
+const MOTION = { d: .255, ease: (window.Motion && Motion.E && Motion.E.ease) || 'power3.out' };
 if (window.gsap && gsap.matchMedia) gsap.matchMedia().add('(prefers-reduced-motion: reduce)', () => { MOTION.d = 0; return () => { MOTION.d = .255; }; });
 
 let LAMP_OFF_CACHE = null;
