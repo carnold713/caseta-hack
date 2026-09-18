@@ -2825,7 +2825,26 @@ The method that settled the last two is worth keeping: a second worktree at the 
 served on its own port with its own connector, and the same suite run against both. A failure that
 reproduces on code from before the change is not a regression, whatever it looks like.
 
-### 14.6 Home's vertical budget
+### 14.6 Two ways a suite lies about the app
+
+Both cost a full run each, and neither was the app's fault.
+
+**The suites exist in more than one copy.** Each rig gets its own port-rewritten set, so a suite updated
+while working on one rig is still the old assertion on another. Slice 5 was verified on one rig and
+then run on another whose copies still asserted the retired `Colour` value row, `.ld-level` and
+`.vslider`. Five suites failed and every one of them was testing an interface that had been
+deliberately replaced. A suite edited for an interface change has to go back to the master in
+`scratchpad/` as well as to the rig it was fixed on, and `mkport.sh` has to know that rig's port or
+the master will not rewrite cleanly.
+
+**`:nth-of-type` counts element types, not classes.** `ia_test` picked a swatch with
+`.ld-swrow .swatch:nth-of-type(3)` and then asserted that the third `.swatch` carried the ring. Both
+read as "the third swatch" until a `<button class="chip">` joined the row: `nth-of-type` counts every
+sibling button, so leading the row with the chip shifted the click one place left while the assertion
+stayed where it was. The test clicked the second swatch and checked the third. It reads
+`querySelectorAll('.swatch')[2].click()` now, which says what it means.
+
+### 14.7 Home's vertical budget
 
 Nothing on Home was removed to win the fold back. The space came out of rhythm: the room tile from
 152px to 136 (14px padding and a 10px internal gap became 12 and 6), Home's own section headers from
