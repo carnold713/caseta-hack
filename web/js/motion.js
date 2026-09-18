@@ -32,6 +32,69 @@
   function safe(fn) { return function () { try { return fn.apply(null, arguments); } catch (e) { if (window.console) console.warn('Motion:', e); } }; }
   function restart(node, cls) { node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); }
 
+  // ---------- the real curves, for GSAP ----------
+  // vendor/gsap.min.js is GSAP core with no CustomEase, so every tween here used to approximate the CSS
+  // curve with power2.out. That mismatch shows the moment a CSS transition and a tween run on the same
+  // object, which is exactly what a tinted card does. GSAP core takes a plain function as an ease, so
+  // give it the real one: a Newton solve for x, then the cubic in y.
+  function bezier(x1, y1, x2, y2) {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const fx = t => ((ax * t + bx) * t + cx) * t;
+    const dx = t => (3 * ax * t + 2 * bx) * t + cx;
+    return function (p) {
+      if (p <= 0) return 0; if (p >= 1) return 1;
+      let t = p;
+      for (let i = 0; i < 8; i++) { const e = fx(t) - p, d = dx(t); if (Math.abs(e) < 1e-5) break; if (Math.abs(d) < 1e-6) break; t -= e / d; }
+      t = Math.min(1, Math.max(0, t));
+      return ((ay * t + by) * t + cy) * t;
+    };
+  }
+  const EASE = bezier(.4, .12, .3, 1);
+  const EASE_SLOW = bezier(.3, 0, 0, 1);
+
+  // ---------- which changes were ours ----------
+  // levelQuiet is not enough on its own: sendGated stamps its quiet window only after the command
+  // resolves, and a plain command() toggle never stamps one. So stamp at the optimistic write instead.
+  // Anything that arrives without a stamp (a Pico, the Hue app, an automation, the hub) was not you.
+  const MINE = Object.create(null);
+  const MINE_MS = 1500;
+  function mine(t) {
+    const list = typeof targetDevices === 'function' ? targetDevices(t) : [];
+    const until = Date.now() + MINE_MS;
+    for (const id of (list.length ? list : [String(t).replace(/^d:/, '')])) MINE[id] = until;
+  }
+  const isMine = id => (MINE[id] || 0) > Date.now() || (typeof levelQuiet === 'function' && levelQuiet(`d:${id}`));
+
+  // A beat drawn on a card nobody can see is a beat spent on nothing.
+  function inView(e) {
+    const r = e.getBoundingClientRect();
+    return r.bottom > 0 && r.right > 0 && r.top < (window.innerHeight || document.documentElement.clientHeight) && r.left < (window.innerWidth || document.documentElement.clientWidth);
+  }
+
+  // ---------- a value is arriving at 60fps: the surfaces that follow it drop their transitions ----------
+  // A transition and a 60fps value stream are incompatible: every input event restarts a 255ms ease and
+  // the card ends up permanently behind the thumb. The finger owns the frame. slide.js's own data-drag
+  // is not reused as the switch: it is cleared 1500ms after release, and 1500ms of suppressed
+  // transitions would turn the settle after the finger lifts into a snap.
+  const TRACK_OFF = 120;   // ms of quiet after the last input event before transitions come back
+  function trackLevel(sliderEl, level) {
+    const s = el(sliderEl); if (!s) return;
+    const v = Math.max(0, Math.min(100, Number(level) || 0));
+    const id = s.dataset && (s.dataset.lvl || (s.dataset.slide || '').replace(/^d:/, ''));
+    const host = s.closest('.dtile') || s.closest('.light') || s.closest('#ld');
+    if (host && !host.dataset.track) host.dataset.track = '1';
+    clearTimeout(s._mTrack);
+    s._mTrack = setTimeout(() => { if (host) delete host.dataset.track; }, TRACK_OFF);
+    // the room's hero follows the same finger, at its own lag: one property write on one pool
+    const pool = id && document.querySelector(`.rh-pool[data-rh="${id}"]`);
+    if (pool) {
+      pool.dataset.track = '1'; clearTimeout(pool._mt);
+      pool._mt = setTimeout(() => delete pool.dataset.track, TRACK_OFF);
+      if (typeof window.paintRoomHeroPool === 'function') window.paintRoomHeroPool(pool, v);
+    }
+  }
+
   // ---------- view change / app launch ----------
   let lastPage = 0;
   function pageIn(viewEl, opts) {
@@ -87,7 +150,11 @@
     const { root, sheet, scrim, sh, sb } = p;
     g.killTweensOf([sheet, scrim].filter(Boolean));
     root.classList.add('m-sheet-gsap');
-    const content = [sh, ...(sb ? Array.from(sb.children).slice(0, 4) : [])].filter(Boolean);
+    // the device grid moves as one 8px block with its neighbours: twelve tiles, one tween. A stagger
+    // shows causality, never arrival, and a screen appearing is arrival.
+    const blocks = sb ? Array.from(sb.children).filter(n => !n.classList.contains('dgrid')).slice(0, 3) : [];
+    const grid = sb ? sb.querySelector('.dgrid') : null;
+    const content = [sh, ...blocks, grid].filter(Boolean);
     const tl = g.timeline({ onComplete: () => { root.classList.remove('m-sheet-gsap'); g.set([sheet, scrim].filter(Boolean), { clearProps: 'transform,opacity' }); } });
     if (scrim) tl.fromTo(scrim, { opacity: 0 }, { opacity: 1, duration: 0.24, ease: 'power1.out' }, 0);
     tl.fromTo(sheet, { y: '100%' }, { y: '0%', duration: 0.3, ease: 'power3.out' }, 0);
@@ -183,14 +250,38 @@
   }
 
   // ---------- a light changed ----------
-  // rowEl is a .light row, a room card, or the .act button itself. Pass wasOn when you know it;
-  // otherwise the first call on a fresh element only seeds and later calls animate the flips.
+  // rowEl is a device tile, a .light row, a room card, or the .act button itself. Pass wasOn when you
+  // know it; otherwise the first call on a fresh element only seeds and later calls animate the flips.
+  //
+  // A change you caused gets no extra motion: the press already answered you and the fill is the
+  // confirmation. A change you did not cause gets exactly one extra beat, on the control that carries
+  // the boolean, which is where the eye goes to check.
+  const PASS_MS = 40;      // paintState fires its sweeps in one burst; this is the width of that burst
+  const RING_BUDGET = 2;   // a scene that lights twelve tiles must not fire twelve rings
+  let passAt = -1e9, passRings = 0;
+  function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
   function lightChanged(rowEl, level, wasOn) {
     const e = el(rowEl); if (!e) return;
     const on = Number(level) > 0;
+    const now = nowMs();
+    // paintState's [data-tgt] sweep and its [data-act-lvl] sweep both find a device tile, and both
+    // describe the same flip. The second one is dropped rather than drawn twice.
+    if (e._mOn === on && now - (e._mAt || -1e9) < PASS_MS) return;
     const prev = typeof wasOn === 'boolean' ? wasOn : e._mOn;
-    e._mOn = on;
-    const g = G(); if (!g || typeof prev !== 'boolean' || prev === on) return;
+    e._mOn = on; e._mAt = now;
+    if (typeof prev !== 'boolean' || prev === on) return;
+    if (now - passAt > PASS_MS) { passAt = now; passRings = 0; }
+    // the device tile: the whole card has just inverted, so a button that also jumps on top of that is
+    // two answers to one question. The ring is the whole addition, and only when it was not your thumb.
+    if (e.classList.contains('dtile')) {
+      const id = e.dataset.tile;
+      if (!on || isMine(id) || passRings >= RING_BUDGET || !inView(e)) return;
+      passRings++;
+      if (reduced()) { e.classList.add('m-said'); clearTimeout(e._mSaid); e._mSaid = setTimeout(() => e.classList.remove('m-said'), 1200); return; }
+      const pw = e.querySelector('.dpow'); if (pw) ring(pw);
+      return;
+    }
+    const g = G(); if (!g) return;
     const isRoom = e.classList.contains('room');
     const act = e.classList.contains('act') ? e : isRoom ? null : e.querySelector('.act');
     const chip = isRoom ? e.querySelector('.onchip') : null;
@@ -260,5 +351,6 @@
     press: safe(press), sceneRun: safe(sceneRun), allOff: safe(allOff),
     lightChanged: safe(lightChanged), sliderFeedback: safe(sliderFeedback),
     expand: safe(expand), pulse: safe(pulse), textSwap: safe(textSwap), barIn: safe(barIn), reduced,
+    E: { ease: EASE, slow: EASE_SLOW }, mine: safe(mine), isMine, trackLevel: safe(trackLevel), inView,
   };
 })();

@@ -413,6 +413,7 @@ function paintState() {
     const t = el.dataset.tgt; const on = targetOn(t);
     if (el.classList.contains('sw')) el.classList.toggle('on', on);
     else if (el.classList.contains('room')) { const was = el.classList.contains('on'); el.classList.toggle('on', on); const s = el.querySelector('.head .s'); if (s) s.textContent = roomSummary(t.slice(2)); if (was !== on && window.Motion) Motion.lightChanged(el, roomMeanLevel(t.slice(2)), was); }
+    else if (el.classList.contains('dtile')) { const was = el.classList.contains('on'); el.classList.toggle('on', on); if (was !== on && window.Motion) Motion.lightChanged(el, level(el.dataset.tile) || (on ? 100 : 0), was); }
     else if (el.classList.contains('tile')) { el.classList.toggle('on', on); const s = el.querySelector('.s'); if (s) s.textContent = tileSub(t); }
   });
   document.querySelectorAll('[data-roomsum]').forEach(el => { el.textContent = roomSummary(el.dataset.roomsum); });

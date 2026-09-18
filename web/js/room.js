@@ -3,7 +3,7 @@
    over Home, the same shape automations.js uses for an automation's editor. Room setup itself stays a pushed
    page (docs/ux-progressive.md 2.21, docs/ia-v5.md "dead end"): a page's own nav-bar back arrow can never be
    missing, and a sheet's row-by-row back arrows can be forgotten, which is exactly what happened here once.
-   Loaded after home.js and light.js (it uses moodRowHTML, lightRow, roomLights, lightKind). */
+   Loaded after home.js and light.js (it uses moodRowHTML, deviceTileHTML, roomLights, lightKind). */
 'use strict';
 
 // #room/<area>          the room sheet, over Home
@@ -64,9 +64,23 @@ function roomSheetBodyHTML(aid) {
       ? `<div class="gh">Moods</div><div class="room" data-tgt="${t}" data-room="${aid}">${moodRowHTML(aid)}</div>`
       : `<div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="roles-open" data-area="${aid}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Give this room moods</div><div class="d">Bright, Relax, Dinner, Movie and Night</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   }
-  h += `<div class="gh">Lights</div><div class="card pad0 list lights">${ds.map(lightRow).join('')}</div>`;
+  h += deviceGridHTML(aid, ds);
   h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="room-setup" data-area="${aid}"><div class="grow"><div class="t">Room setup</div><div class="d">What each light is for, moods, kinds</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   return h;
+}
+
+// The devices in a room, as a two-column grid of tiles (docs/design-spec-v5.md 4.2). Fans and shades are last
+// because their tiles span both columns, and a spanning tile in the middle of a grid leaves a hole beside it.
+// The grid is never re-sorted by state: a tile that jumped to the front when its light came on would move
+// under the thumb that just turned it on.
+const DOMAIN_LAST = { light: 0, switch: 0, fan: 1, cover: 2 };
+function deviceGridHTML(aid, ds) {
+  if (!ds.length) return `<div class="card pad0 list"><button class="item" data-act="rooms-add" data-id="${esc(aid)}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Nothing in this room yet</div><div class="d">Move a light or a remote in here.</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+  const order = ds.slice().sort((a, b) => (DOMAIN_LAST[a.domain] || 0) - (DOMAIN_LAST[b.domain] || 0));
+  // a grid headed Lights with a fan in it is a small lie, and the room sheet is the one screen that holds mixed devices
+  const head = order.every(d => d.domain === 'light' || d.domain === 'switch') ? 'Lights' : 'In this room';
+  // only a grid of exactly one stretches: stretching a widow breaks the column rhythm for every row above it
+  return `<div class="gh">${head}</div><div class="dgrid ${order.length === 1 ? 'one' : ''}" id="dgrid">${order.map(deviceTileHTML).join('')}</div>`;
 }
 
 // Room setup: a grouped list, one value per row. It was a sheet with two rows that dead ended; as a page, back is

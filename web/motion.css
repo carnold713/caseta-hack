@@ -1,7 +1,24 @@
 /* Pico Hack motion layer. Pure-CSS moments from docs/motion-spec.md.
    Every selector here is prefixed m- and this file is loaded after styles.css.
    GSAP-driven moments live in js/motion.js; the light field in js/lightfield.js. */
-:root { --m-ease: cubic-bezier(.4,.12,.3,1); --m-ease-slow: cubic-bezier(.3,0,0,1); --m-warm: #FFD9A0; --m-warm-deep: #FFB547; --m-warm-tint: #FCE3C4; }
+:root { --m-ease: cubic-bezier(.4,.12,.3,1); --m-ease-slow: cubic-bezier(.3,0,0,1); --m-warm: #FFD9A0; --m-warm-deep: #FFB547; --m-warm-tint: #FCE3C4;
+  /* docs/design-spec-v5.md 2.4. --m-track is the lag a surface uses to follow a finger that is still
+     moving, not a transition between two states; the number was already hard coded in light.js and
+     this gives it one home. The two ink-swap values are delays, not durations: the point inside a
+     fill cross-fade at which the ink flips polarity. They are solved, not chosen (7.2), and they are
+     a consequence of TINT.yOn: if that moves, rerun the solve. */
+  --m-track: 80ms; --m-ink-swap: 60ms; --m-ink-swap-slow: 95ms; }
+
+/* ---------- a value arriving at 60fps ----------
+   Nothing on a surface that is following a finger transitions: not the fill, not the ink, not the
+   well's own custom property. A surface that is being told about a change has a transition; the
+   finger owns the frame. The attribute is set and cleared in Motion.trackLevel and nowhere else. */
+[data-track], [data-track] * { transition: none !important; }
+/* except the room hero's pool, which is allowed to lag by the one follow duration in the vocabulary */
+.rh-pool[data-track] { transition: opacity var(--m-track) var(--ease) !important; }
+/* a sheet swapping its content: the incoming tinted surface arrives already tinted, never cross-faded
+   from the colour the outgoing screen happened to be wearing */
+#sheet-root.m-morph .lstage, #sheet-root.m-morph .dtile { transition: none !important; }
 
 /* ---------- light field placement (Home) ----------
    <div class="m-hero"><div class="m-lightfield" id="lightfield"></div> …Light now strip, scene tiles…</div>
@@ -76,4 +93,13 @@
   .m-press, .m-flash, .m-land, .m-pulse, .m-pulse .ic, .m-hold.holding, .status .dot.m-dot-hello, .status .dot.m-dot-lost { animation: none !important; }
   .m-timer-line { animation-play-state: paused !important; }   /* still shows how much is left, just does not move */
   .m-wash, .m-veil { display: none !important; }
+  /* styles.css forces every duration to 1ms, which does not touch a delay: the ink flip's solved 60ms
+     would still hold 60ms of unreadable text on a card that has just inverted */
+  * { transition-delay: 0s !important; }
+  /* a state change must still be perceivable. An unprompted one holds a 2px outline for 1.2s instead of
+     expanding a ring: a step change, not an animation, so nothing moves. */
+  .m-ring { display: none !important; }
+  .dtile.m-said { outline: 2px solid var(--t-line); outline-offset: 2px; }
+  /* presses do not scale; the fill change is the whole feedback */
+  .dtile:active, .rtile:active, .dtile .dpow:active { transform: none !important; }
 }

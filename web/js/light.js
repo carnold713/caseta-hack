@@ -325,6 +325,49 @@ function paintLightRowValues() {
     const v = lightRowValue(d); if (el.innerHTML !== v) el.innerHTML = v;
   });
 }
+// ---------- the device tile: one controllable device in the room sheet's grid (docs/design-spec-v5.md 4.1) ----------
+// A lit device is drawn in the colour it is emitting, at the size of a card. The tile keeps the class
+// `light` and its value keeps the class `lv` on purpose: boot.js's slider handler does
+// el.closest('.light'), then writes the dragged value into .lv and repaints [data-ldisc], so the
+// inline dimmer works with no JS written for it. `data-lswipe` is deliberately absent: a sideways drag
+// across a 169px cell has no unambiguous reading and would fight slide.js for the same gesture.
+function deviceTileHTML(d) {
+  const id = d.device_id; const t = `d:${id}`;
+  const dm = d.domain;
+  const kind = dm === 'fan' ? 'fan' : dm === 'cover' ? 'shade' : dm === 'switch' ? 'switch' : 'dim';
+  const opens = dm === 'light' || dm === 'switch';
+  const lv = opens ? (level(id) || 0) : (isOn(id) ? 100 : 0);
+  const ring = typeof ringClass === 'function' ? ringClass(d) : '';
+  const glyph = ICON(opens ? lightIcon(d) : domainIcon(dm));
+  // the card is the tint, the disc is the truth: a yellow lamp's card is olive and the dot at its corner is pure yellow
+  const inner = `<span class="ddisc lamp ${lv > 0 ? '' : 'off'}" data-ldisc="${id}" style="background:${lightFill(id, lv)}">${glyph}</span>`;
+  const badge = timerOn(id) ? `<span class="badge">${ICON('clock')}</span>` : '';
+  const disc = ring || badge ? `<span class="lring ${ring}">${inner}${badge}</span>` : inner;
+  const head = `${disc}<span class="dn">${esc(d.name)}</span><span class="lv dv" data-lrowval="${id}">${lightRowValue(d)}</span>`;
+  const shell = body => `<div class="dtile light ${kind === 'fan' || kind === 'shade' ? 'wide ' : ''}" data-tile="${id}" data-tgt="${t}" data-kind="${kind}">${body}</div>`;
+  if (dm === 'fan') return shell(`<div class="dbody static">${head}</div><div class="fan">${['Off', 'Low', 'Medium', 'MediumHigh', 'High'].map(s => `<button class="chip" data-lvl="${id}" data-speed="${s}" data-act="fan" data-id="${id}" data-s="${s}">${s === 'MediumHigh' ? 'Med-hi' : s}</button>`).join('')}</div>`);
+  // a shade has no on and off, so no corner button: Stop is the control a two-state button cannot carry
+  if (dm === 'cover') return shell(`<div class="dbody static">${head}</div><div class="shade"><button class="btn sm" data-act="cmd" data-cmd='{"type":"raise","target":"${t}"}'>Open</button><button class="btn sm" data-act="cmd" data-cmd='{"type":"stop","target":"${t}"}'>Stop</button><button class="btn sm" data-act="cmd" data-cmd='{"type":"lower","target":"${t}"}'>Close</button></div><div class="sliderwrap"><input class="slider" type="range" min="0" max="100" data-lvl="${id}" data-slide="${t}" aria-label="${esc(d.name)} openness"></div>`);
+  // the well is in the string for every dimmable light and hidden by visibility when it is off, so the
+  // tile's geometry is identical in both states and the power button never moves under the thumb
+  const well = kind === 'dim' ? `<div class="sliderwrap dwell"><input class="slider" type="range" min="0" max="100" data-lvl="${id}" data-slide="${t}" aria-label="${esc(d.name)} brightness"></div>` : '';
+  const pow = `<button class="act dpow" data-act="toggle" data-t="${t}" data-act-lvl="${id}" aria-label="${esc(d.name)} on or off" aria-pressed="${lv > 0}">${ICON('power')}</button>`;
+  return shell(`<button class="dbody" data-act="light-open" data-id="${id}">${head}</button><div class="dfoot">${well}${pow}</div>`);
+}
+// The tile's one new painter: the .lit / .unknown class and the thirteen --t-* properties. Everything
+// else on the tile (the disc, the value, the well, the power button, the .on class) is painted by a
+// sweep that already existed, which is the whole reason the markup reuses those hooks.
+function paintDeviceTiles() {
+  document.querySelectorAll('[data-tile]').forEach(el => {
+    const id = el.dataset.tile, d = dev(id); if (!d) return;
+    const lv = (d.domain === 'light' || d.domain === 'switch') ? (level(id) || 0) : (isOn(id) ? 100 : 0);
+    el.classList.toggle('on', lv > 0);
+    if (d.domain === 'fan' || d.domain === 'cover') return;   // a fan or a shade is never tinted
+    if (el.dataset.track) return;                             // a finger is on its well: it paints itself
+    tintApply(el, tintOptsFor(id));
+    const pw = el.querySelector('.dpow'); if (pw) pw.setAttribute('aria-pressed', lv > 0 ? 'true' : 'false');
+  });
+}
 function paintLightDiscs() {
   document.querySelectorAll('[data-ldisc]').forEach(el => {
     const id = el.dataset.ldisc; const d = dev(id); if (!d) return;
@@ -569,7 +612,7 @@ function wireLightSheet() {
     disc.setAttribute('aria-label', `Drag up or down to dim, tap to turn ${v > 0 ? 'off' : 'on'}`);
   };
   // one command in flight while dragging, the last value always lands (sendLevel drops the ones between)
-  const sendNow = v => { S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); sendLevel(`d:${LD.id}`, v); paintState(); };
+  const sendNow = v => { S.states[LD.id] = { ...(S.states[LD.id] || {}), level: v }; LD.lastSend = Date.now(); if (window.Motion) Motion.mine(`d:${LD.id}`); sendLevel(`d:${LD.id}`, v); paintState(); };
   const queue = sendNow;
   LD.set = v => { v = clamp(Math.round(v), 0, 100); if (v === LD.lv) return; LD.show(v); queue(v); };
   const startDrag = () => { LD.dragging = true; if (LD.stTween) LD.stTween.kill(); if (sl) sl.classList.add('drag'); };
@@ -601,6 +644,7 @@ colorHost('ld', {
     // a colour change turns the lamp on (the connector sends on: true); show it at full until the echo says otherwise
     if (LD.lv <= 0) { LD.show(100); S.states[id].level = 100; }
     LD.lastSend = Date.now();
+    if (window.Motion) Motion.mine(`d:${id}`);
     sendColor(`d:${id}`, v);
     LD.paintColor(); paintState();
   },
@@ -744,6 +788,8 @@ function paintLight() {
   applyNightLook();
   paintLightNow();
   paintOnChips();
+  paintDeviceTiles();
+  if (typeof paintRoomTiles === 'function') paintRoomTiles();
   paintLightDiscs();
   paintLightRowValues();
   paintTiles();

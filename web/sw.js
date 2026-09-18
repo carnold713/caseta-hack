@@ -1,6 +1,6 @@
 /* Service worker: caches the app shell so the PWA opens instantly and offline.
    API and WebSocket traffic is never cached. Bump VERSION when shell files change. */
-const VERSION = 'v28';
+const VERSION = 'v29';
 const SHELL = ['/', '/index.html', '/styles.css', '/light.css', '/manifest.webmanifest', '/vendor/gsap.min.js', '/js/core.js', '/js/pico.js', '/js/home.js', '/js/room.js', '/js/kinds.js', '/js/color.js', '/js/daylight.js', '/js/light.js', '/js/remotes.js', '/js/scenes.js', '/js/settings.js', '/js/cities.js', '/js/automations.js', '/js/adddevice.js', '/js/hue.js', '/js/next.js', '/js/boot.js', '/js/slide.js', '/js/swipe.js', '/js/rowswipe.js', '/motion.css', '/js/motion.js', '/js/lightfield.js', '/vendor/three.module.js', '/vendor/three.core.js', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png'];
 
 self.addEventListener('install', e => {

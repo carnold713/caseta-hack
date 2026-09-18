@@ -135,11 +135,14 @@ document.addEventListener('input', e => {
   if (el.dataset.sceneLvl) { const it = el.closest('.item'); const dd = it && it.querySelector('.grow .d'); if (dd) dd.textContent = Number(el.value) > 0 ? `${el.value}%` : 'Off'; }
   if (el.dataset.slide) {
     el.dataset.drag = '1';
-    if (window.Motion) Motion.sliderFeedback(el, Number(el.value));
+    if (window.Motion) { Motion.sliderFeedback(el, Number(el.value)); Motion.trackLevel(el, Number(el.value)); }
     const t = el.dataset.slide; const v = Number(el.value);
     const row = el.closest('.light');
     const lv = row && row.querySelector('.lv'); if (lv) lv.textContent = v === 0 ? 'Off' : `${v}%`;
     const disc = row && row.querySelector('[data-ldisc]'); if (disc) { const c = lightFill(disc.dataset.ldisc, v); disc.style.backgroundColor = c; disc.dataset.fill = c; disc.classList.toggle('off', v <= 0); }
+    // the dragged tile paints itself and nothing else does: paintState() walks the document with six
+    // querySelectorAll calls, and running that 60 times a second is the last thing this interaction can afford
+    if (row && row.classList.contains('dtile') && typeof tintOptsAt === 'function') { row.classList.toggle('on', v > 0); tintApply(row, tintOptsAt(row.dataset.tile, v)); }
     sendLevel(t, v);
   }
   if (el.dataset.house) {

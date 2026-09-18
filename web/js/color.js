@@ -458,3 +458,38 @@ function tintOptsFor(id) {
   if (d && d.domain === 'light') return { kind: 'dim', hex: lampColor(Math.max(1, lv)), level: lv };
   return { kind: 'ctl', hex: '#006DCC', level: 100 };                       // a switch, a plug, a fan, a shade
 }
+
+// A room's tint. Not a mean of hexes: averaging a red lamp and a green lamp gives yellow, and no lamp
+// in that room is yellow. Hue is averaged as a vector weighted by level and chroma, and the length of
+// that vector (its coherence) scales the room's chroma. Lights that agree give a saturated room;
+// lights that disagree pull the chroma down towards nothing. Below 0.72 the room stops guessing and
+// wears Lutron blue: 0.72 is the resultant of two equal lights 90 degrees apart in hue, and past a
+// right angle there is no honest mean.
+const ROOM_COHERENCE_MIN = 0.72;
+function roomTintSeed(lights, night) {
+  const lit = (lights || []).filter(l => (l.level || 0) > 0);
+  if (!lit.length) return null;
+  let x = 0, y = 0, wc = 0, w = 0, lv = 0;
+  for (const l of lit) {
+    const s = tintSeed(l.kind || 'colour', l.hex || '#006DCC', l.level, night);
+    const k = (l.level / 100) * Math.max(0.02, s.C);
+    x += k * Math.cos(s.H * RAD); y += k * Math.sin(s.H * RAD);
+    wc += k * s.C; w += k; lv += l.level;
+  }
+  const R = w > 0 ? Math.hypot(x, y) / w : 0;
+  if (R < ROOM_COHERENCE_MIN) return { kind: 'ctl', hex: '#006DCC', level: lv / lit.length, coherence: R };
+  const H = (Math.atan2(y, x) / RAD + 360) % 360;
+  const C = (wc / w) * R;
+  return { kind: 'colour', hex: pinLuma(H, C, night ? TINT.yOnNight : TINT.yOn), level: lv / lit.length, coherence: R };
+}
+
+// The tile under a finger. tintOptsFor reads the level the bridge has confirmed; a drag is ahead of
+// that, so this asks for the same options at the level the finger is at. A drag to 0 is an off card,
+// and a drag up from an off lamp is the warm ramp, not the blue a stateless card would fall back to.
+function tintOptsAt(id, v) {
+  const lv = Math.max(0, Math.min(100, Number(v) || 0));
+  if (!lv) return { state: 'off' };
+  const o = tintOptsFor(id);
+  if (o.state) { const d = dev(id); return d && d.domain === 'light' ? { kind: 'dim', hex: lampColor(Math.max(1, lv)), level: lv } : { kind: 'ctl', hex: '#006DCC', level: 100 }; }
+  return { kind: o.kind, level: lv, hex: o.kind === 'dim' ? lampColor(Math.max(1, lv)) : o.hex };
+}
