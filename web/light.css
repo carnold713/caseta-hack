@@ -229,3 +229,11 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .dayspark .dsn { stroke: var(--line-2); stroke-width: 1; }
 .dayspark .dsd { stroke: var(--text); stroke-width: 1.5; }
 .dayspark .dsl { fill: var(--text-2); font-size: 11px; font-family: inherit; }
+/* the way into the warmth slider and the hue strip leads the row and never scrolls out of reach */
+#ld .ld-swrow .ld-more { position: sticky; left: 0; z-index: 1; flex: none; background: var(--surface);
+  box-shadow: 0 0 0 4px var(--surface); }
+/* A colour lamp needs the large detent for its swatch row, but its composition ends about 200px short of
+   92dvh, and on a fresh open that reads as a sheet that failed to load rather than as room to scroll. The
+   light sheet alone sizes to its content and keeps the 92dvh ceiling, so a tall one still scrolls. Scoped
+   with :has rather than changed on .dt-large, because other large sheets hold lists that should fill. */
+#sheet-root .sheet.dt-large:has(#ld) { height: auto; }

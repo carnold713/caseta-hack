@@ -385,7 +385,11 @@ function onChipFill() {
   return ON_CHIP_CACHE;
 }
 function discFill(d, lv) {
-  if (d.domain === 'light' || d.domain === 'switch') return lightFill(d.device_id, lv);
+  // Only a light with a level is warm. A switch reports on or off and no level, which is why its card
+  // already takes the ordinary on state rather than a tint, and a disc on the full orange ramp in front
+  // of that blue card was the two halves of one object disagreeing. At tile size it was a detail; at 96px
+  // on a light's own screen it was the loudest thing there. Warmth follows the level, everywhere.
+  if (d.domain === 'light') return lightFill(d.device_id, lv);
   return lv > 0 ? onChipFill() : lampOff();
 }
 function paintLightDiscs() {
@@ -588,8 +592,12 @@ function ldSwatchRowHTML(id, d, cur) {
   const near = isXy ? nearestSwatch(cur.hex, SWATCH_ROW.map(([, hx]) => hx)) : null;
   const ws = whites.map(w => `<button class="swatch ${selWhite === w && Math.abs(k - w) <= 250 ? 'sel' : ''}" data-act="c-swatch" data-k="${w}" style="background:${kelvinHex(w)}" aria-label="${warmthName(w)}, ${w} K" title="${warmthName(w)}"></button>`).join('');
   const cs = d.color ? SWATCH_ROW.map(([n, hx]) => `<button class="swatch ${isXy && (sameHex(cur.hex, hx) || (near && sameHex(near, hx))) ? 'sel' : ''}" data-act="c-swatch" data-hex="${hx}" style="background:${hx}" aria-label="${n}" title="${n}"></button>`).join('') : '';
-  const more = `<button class="chip sm" data-act="light-colour" data-id="${id}">More ${d.color ? 'colours' : 'warmth'}</button>`;
-  return `<div class="ccol ld-swrow" data-cns="ld" data-cid="${id}" data-kmin="${kmin}" data-kmax="${kmax}"><div class="chips scroll swatches">${ws}${cs}${more}</div></div>`;
+  // The chip leads, it does not trail. Eight 40px swatches and their gaps are 404px inside a 350px body,
+  // so anything after them starts off the right edge: the warmth slider and the hue strip, the only two
+  // controls that can reach a colour the row does not carry, would have been behind a horizontal scroll.
+  // That is further away than the value row this replaced, which is the one thing this change must not do.
+  const more = `<button class="chip sm ld-more" data-act="light-colour" data-id="${id}">More ${d.color ? 'colours' : 'warmth'}</button>`;
+  return `<div class="ccol ld-swrow" data-cns="ld" data-cid="${id}" data-kmin="${kmin}" data-kmax="${kmax}"><div class="chips scroll swatches">${more}${ws}${cs}</div></div>`;
 }
 // Follow the day keeps its own row, under the swatches and unchanged (docs/ux-progressive.md 2.24).
 function ldFollowHTML(id) {

@@ -143,8 +143,10 @@ function followWouldText(id) {
   const k = followKelvinFor(id); if (k == null) return '';
   return `${warmthName(k)}, ${k} K, ${followWhen()}`;
 }
-// The small tag on the Colour row. A lamp somebody has just set by hand is not following at this moment, so it
-// carries no tag: the row under it is the one that says "Paused".
+// The small tag that used to sit on the Colour row. The light sheet's Colour value row retired into its swatch
+// row (docs/design-spec-v5.md 4.9) and the tag went with it, so nothing calls this at the moment: the Follow the
+// day row's own value ("On", "Paused", "Off") is the one place the state is said. Kept because it is the phrase
+// any other host would want, and because its painter still finds whatever renders it.
 const followTagHTML = id => (isFollowing(id) && !followPaused(id) ? `<span class="daytag" data-followtag="${id}">Following the day</span>` : '');
 
 // ---------- the day's shape ----------
