@@ -2852,3 +2852,47 @@ Nothing on Home was removed to win the fold back. The space came out of rhythm: 
 10px of the dead space around its 56px disc, and the scene cells 8px. That is 20px of clearance at
 390x844 rather than the 2px the first attempt left. At 360x800 the first tile still peeks: that phone
 is 44px shorter, and scrolling a little there is honest.
+
+### 14.8 The night look is not a second skin
+
+A lit room tile went white-on-grey after dark. The cause was one line left over from Tenzing, in
+light.css:
+
+```css
+:root[data-night="1"] .room.on { background: var(--fill-1); border-color: var(--line); }
+```
+
+When a lit room was flat Lutron blue, quietening it after dark was right. Under the tinted surface it
+is wrong twice over. It paints `--fill-1` over the room's own colour, and because it is the
+`background` shorthand it also drops `background-image`, which is where the room's mesh lives. What it
+cannot reach is everything driven by a custom property: `--t-ink` stayed white, `--t-ink-2` stayed the
+pale tint of the light, the switch kept its inverted pair and the disc kept its lamp colour. So the
+card read as white text on a grey box with a brown switch on it, and every one of those pieces was
+individually correct.
+
+The rule for anything built on the tinted surface: **night is a different set of numbers, not a
+different set of rules.** It belongs inside the transform, where `TINT.yOnNight` (0.1150 rather than
+0.1529) and the `maxNight` chroma caps already say what after dark means, and where
+`scripts/tint-check.js` measures all 440 states again with the flag set. A stylesheet that repaints a
+tinted surface under `[data-night]` is a bug by construction: it can only ever move some of the
+thirteen properties, and the other twelve will disagree with it.
+
+Two things followed from fixing it. The flag was declared in `TINT` and threaded through
+`buildLitSurface`, but **no call site had ever passed it** ("accepted here, never passed by a call site
+until the night page lands"), so the night numbers had never once been used; `tintNight()` in
+js/color.js now reads the attribute and `tintOptsFor`, `tintOptsAt` and `paintRoomTiles` carry it. And
+because the look can flip with nobody touching the app (the clock reaching the quiet hours, the phone
+going into dark mode), `applyNightLook()` now returns whether it changed anything and those two paths
+repaint.
+
+The measured result on a two-lamp room at 100%: fill `#906341` by day and `#7F5637` at night, white ink
+5.19:1 then 6.39:1, second line 4.63:1 then 5.69:1. Darker, less saturated, still the colour of the
+light.
+
+### 14.9 A room's light pools were one blob
+
+`rhPlace()` in js/room.js placed each pool in the room hero from a rolling hash of the device id. A
+Lutron device id is a short decimal and a room's are consecutive, so the hash moved by one per id:
+ids 5, 6, 7 and 8 landed at x 65, 66, 67, 68 and the same y. Every pool in the room stacked into one.
+It now avalanches the bits before taking the place, which spreads fourteen real ids to a closest pair
+of 3% instead of 1%, and is still a pure function of the id so a pool never jumps between renders.

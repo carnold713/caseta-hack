@@ -62,8 +62,13 @@ function renderRoomSheet() {
 
 // Stable placement: the same light lands in the same place on every render, so a pool never jumps.
 function rhPlace(id) {
-  let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return { x: 12 + (h % 77), y: 26 + ((h >>> 7) % 44) };   // per cent, inside the box
+  // A Lutron device id is a short decimal and a room's are consecutive ("5", "6", "7"), so a plain
+  // rolling hash moved by one per id: every pool in the room landed within a percent of the last and
+  // the box showed one blob however many lights were lit. Avalanche the bits before taking the place.
+  let h = 0; for (const ch of String(id)) h = (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0; h = Math.imul(h, 0x7feb352d) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0; h = Math.imul(h, 0x846ca68b) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
+  return { x: 12 + (h % 77), y: 26 + ((h >>> 11) % 44) };   // per cent, inside the box
 }
 const rhSize = lv => Math.round(96 + 148 * (lv / 100));
 // A room's lights, brightest first, at most eight: past that the box is mush and the eight that carry

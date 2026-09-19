@@ -114,14 +114,16 @@ function paintRoomTiles() {
     // lights and switches only, the same two domains the device tile tints: a room whose fan is running
     // has nothing lit in it, and a fan's ctl blue pulling a warm room towards the house colour would be
     // warmth meaning something other than emitted light
+    const night = tintNight();
     const lights = controllable().filter(d => devArea(d) === aid && (d.domain === 'light' || d.domain === 'switch'))
       .map(d => tintOptsFor(d.device_id)).filter(o => !o.state);
     // the mesh is the room's own lamps, one blob each; the base under it is the strongest of them, so a
     // room whose lights disagree shows the colours that are actually in it instead of the blue a single
     // flat fill has to fall back to. roomTintSeed still answers for a room with nothing to mesh.
-    const mesh = roomMeshStops(lights);
+    const mesh = roomMeshStops(lights, night);
     meshApply(el, mesh);
-    tintApply(el, (mesh && mesh.base) || roomTintSeed(lights) || { state: 'off' });
+    const base = (mesh && mesh.base) || roomTintSeed(lights, night);
+    tintApply(el, base ? Object.assign({ night }, base) : { state: 'off' });
   });
 }
 // The grid's last cell: the room grid's own add affordance, so making a room is one tap from the page

@@ -163,8 +163,14 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 .ring40 .track, .ring40 .prog { stroke-width: 4; }
 .ring40 .lamp { width: 24px; height: 24px; }
 
-/* ---------- night look: the surfaces stay; lit rooms glow warm from their discs and the light field rests ---------- */
-:root[data-night="1"] .room.on { background: var(--fill-1); border-color: var(--line); }
+/* ---------- night look ----------
+   A lit room tile used to go quiet grey here, from the days when its lit state was a flat Lutron blue
+   that was too loud after dark. Under the tinted surface the tile wears the colour of the light in the
+   room, and that grey was painting over it: the `background` shorthand also dropped the room's mesh,
+   while the ink, the switch and the disc kept their lit values, so a lit room read as white on grey.
+   Night now happens inside the transform instead (TINT.yOnNight and the maxNight chroma caps in
+   js/color.js, proved at night by scripts/tint-check.js), which is the same intent without the
+   repaint: darker, less saturated, still the colour of the light. */
 :root[data-night="1"] .m-lightfield { opacity: .6; }
 
 /* the round All off button in the Now view sweeps the pressed blue while held, like the one on the bar */

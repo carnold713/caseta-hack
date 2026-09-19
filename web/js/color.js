@@ -444,6 +444,11 @@ function tintApply(el, opts) {
 // The per-frame path while a finger is on a slider. One property, and no colour work at all.
 function tintLevel(el, v) { if (el) el.style.setProperty('--p', `${Math.round(v)}%`); }
 
+// Is the app wearing its night look right now (js/light.js applyNightLook sets the attribute)? Every
+// lit surface asks, because after dark the same light is painted darker and less saturated: yOnNight
+// and the maxNight chroma caps, both measured across all 440 states by scripts/tint-check.js.
+function tintNight() { return document.documentElement.dataset.night === '1'; }
+
 // What to hand tintApply for a device, straight from the state the app already keeps. The four kinds
 // are the four things the app can honestly know about what a device is emitting.
 function tintOptsFor(id) {
@@ -452,11 +457,11 @@ function tintOptsFor(id) {
   if (d && d.domain === 'light' && level(id) == null && devices().length) return { state: 'unknown' };
   if (!targetOn(`d:${id}`)) return { state: 'off' };
   if (connLost()) return { state: 'unknown' };                              // last known, and it says so
-  const c = st.color;
-  if (d && d.color && c && c.mode === 'xy' && c.hex) return { kind: 'colour', hex: c.hex, level: lv };
-  if (d && d.ct && c && c.mode === 'ct' && c.kelvin) return { kind: 'ct', hex: kelvinHex(c.kelvin), level: lv };
-  if (d && d.domain === 'light') return { kind: 'dim', hex: lampColor(Math.max(1, lv)), level: lv };
-  return { kind: 'ctl', hex: '#006DCC', level: 100 };                       // a switch, a plug, a fan, a shade
+  const c = st.color, night = tintNight();
+  if (d && d.color && c && c.mode === 'xy' && c.hex) return { kind: 'colour', hex: c.hex, level: lv, night };
+  if (d && d.ct && c && c.mode === 'ct' && c.kelvin) return { kind: 'ct', hex: kelvinHex(c.kelvin), level: lv, night };
+  if (d && d.domain === 'light') return { kind: 'dim', hex: lampColor(Math.max(1, lv)), level: lv, night };
+  return { kind: 'ctl', hex: '#006DCC', level: 100, night };                // a switch, a plug, a fan, a shade
 }
 
 // A room's tint. Not a mean of hexes: averaging a red lamp and a green lamp gives yellow, and no lamp
@@ -537,7 +542,7 @@ function meshApply(el, mesh) {
 function tintOptsAt(id, v) {
   const lv = Math.max(0, Math.min(100, Number(v) || 0));
   if (!lv) return { state: 'off' };
-  const o = tintOptsFor(id);
-  if (o.state) { const d = dev(id); return d && d.domain === 'light' ? { kind: 'dim', hex: lampColor(Math.max(1, lv)), level: lv } : { kind: 'ctl', hex: '#006DCC', level: 100 }; }
-  return { kind: o.kind, level: lv, hex: o.kind === 'dim' ? lampColor(Math.max(1, lv)) : o.hex };
+  const o = tintOptsFor(id), night = tintNight();
+  if (o.state) { const d = dev(id); return d && d.domain === 'light' ? { kind: 'dim', hex: lampColor(Math.max(1, lv)), level: lv, night } : { kind: 'ctl', hex: '#006DCC', level: 100, night }; }
+  return { kind: o.kind, level: lv, night, hex: o.kind === 'dim' ? lampColor(Math.max(1, lv)) : o.hex };
 }

@@ -804,13 +804,16 @@ function nightWanted() {
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return true;
   return inNightHours(s.night_start || '22:00', s.night_end || '06:30');
 }
+// Returns whether the look actually flipped, so a caller that is not already on its way to the painters
+// knows it has to repaint: every tinted surface is a different colour after dark.
 function applyNightLook() {
   const on = nightWanted(), html = document.documentElement;
-  if ((html.dataset.night === '1') === on) return;
+  if ((html.dataset.night === '1') === on) return false;
   if (on) html.dataset.night = '1'; else delete html.dataset.night;
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = on ? THEME_COLOR.night : THEME_COLOR.day;
   LAMP_OFF_CACHE = null; ON_CHIP_CACHE = null;
   document.querySelectorAll('.lamp.off').forEach(el => { el.style.background = lampOff(); delete el.dataset.fill; });
+  return true;
 }
 function nightLookRowHTML() {
   const cur = (S.config.settings.night_look) || 'auto';
@@ -820,11 +823,14 @@ function nightLookRowHTML() {
 function setNightLook(v) {
   S.config.settings.night_look = v;
   document.querySelectorAll('[data-act="night-look"]').forEach(c => c.classList.toggle('sel', c.dataset.v === v));
-  applyNightLook();
+  if (applyNightLook()) paintState();
   save({ quiet: true, render: false });
 }
-setInterval(applyNightLook, 30000);
-if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', applyNightLook); }
+// The two ways the look flips with nobody touching the app: the clock reaching the quiet hours, and the
+// phone going into dark mode. Neither is on its way to a painter, so both repaint.
+const nightFlip = () => { if (applyNightLook()) paintState(); };
+setInterval(nightFlip, 30000);
+if (window.matchMedia) { const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', nightFlip); }
 applyNightLook();
 
 // ---------- painting: called from paintState() after every render and every state message ----------
