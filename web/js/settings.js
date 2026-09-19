@@ -31,6 +31,21 @@ function ago(ms) {
   if (hours < 24) return `${plural(hours, 'hour')} ago`;
   return `${plural(Math.round(hours / 24), 'day')} ago`;
 }
+// What counts as "look at this" in the connection card and in the one word row at the top of Settings.
+// buttons_ok is false only once the bridge has refused to report presses and would not take it back:
+// every remote in the house is dead in that state, so it outranks the rest.
+function healthWarn(h) { return !!h && (!h.bridge_ok || !h.buttons || !h.bindings || h.buttons_ok === false); }
+// The last few complaints the Lutron library made, verbatim, plus which version of it the connector
+// ended up with. Nobody needs this until a remote goes quiet, and then it is the whole answer, so it
+// only appears once there is something to read.
+function bridgeNotesHTML() {
+  const h = (S.agent.info || {}).health || null;
+  if (!h) return '';
+  const notes = (h.notes || []).slice().reverse();
+  if (!notes.length && !h.lib) return '';
+  const lines = notes.map(n => `<div class="d">${esc(ago(n.at * 1000))}: ${esc(n.text)}</div>`).join('');
+  return `<div class="item"><div class="grow"><div class="t">What your bridge last said</div>${h.lib ? `<div class="d">Lutron library ${esc(h.lib)}</div>` : ''}${lines || '<div class="d">Nothing to report.</div>'}</div></div>`;
+}
 function connectionTipHTML() {
   const nd = controllable().length, np = remotes().length;
   const everConnected = devices().length > 0;
@@ -46,16 +61,21 @@ function connectionTipHTML() {
       h.bridge_ok ? `${plural(h.buttons || 0, 'button')} on the bridge` : 'the bridge is not answering',
       `${plural(h.bindings || 0, 'button setting')}`,
       h.last_press_at ? `last press ${ago(h.last_press_at * 1000)}` : 'no press seen yet',
-    ].join(' · ') : '';
-    const warn = h && (!h.bridge_ok || !h.buttons || !h.bindings);
-    return `<div class="tip"><div class="grow"><span class="cap">Connection</span><div class="t">Connected to your home</div><div class="d">${plural(nd, 'light')} · ${plural(np, 'remote')}</div>${facts ? `<div class="d">${esc(facts)}</div>` : ''}</div><span class="tag ${warn ? 'red' : 'green'}">${warn ? 'Check this' : 'Connected'}</span></div>`;
+      h.uptime_s ? `connector started ${ago(Date.now() - h.uptime_s * 1000)}` : '',
+    ].filter(Boolean).join(' · ') : '';
+    const warn = healthWarn(h);
+    // The one fault the facts line cannot say plainly, because it looks like nothing is wrong: the bridge
+    // answers about everything except buttons, so every remote goes dead while the app reads healthy.
+    const deaf = h && h.buttons_ok === false
+      ? `<div class="d">Your Lutron bridge has stopped reporting button presses, so your remotes will not do anything. The app can still control your lights. Unplugging the bridge for ten seconds and plugging it back in usually clears this.</div>` : '';
+    return `<div class="tip"><div class="grow"><span class="cap">Connection</span><div class="t">Connected to your home</div><div class="d">${plural(nd, 'light')} · ${plural(np, 'remote')}</div>${facts ? `<div class="d">${esc(facts)}</div>` : ''}${deaf}</div><span class="tag ${warn ? 'red' : 'green'}">${warn ? 'Check this' : 'Connected'}</span></div>`;
   }
   return `<div class="tip top"><div class="grow"><span class="cap">Connection</span><div class="t">${everConnected ? 'Not connected right now' : 'Not connected yet'}</div><div class="d">${everConnected ? `Last seen with ${plural(nd, 'light')} and ${plural(np, 'remote')}.` : 'A small helper program on a computer in your house links this app to your Lutron bridge.'}</div>${everConnected ? `<div class="d">Is the computer running the connector on and awake?<br>Is it on the same Wi-Fi as your Lutron bridge?<br>Is the internet working there?</div><div class="d">Your remotes keep working from their last saved settings while disconnected.</div>` : ''}</div><span class="tag red">Not connected</span></div>`;
 }
 // One word for the state of the link, for the row at the top of Settings.
 function connTag() {
   if (connState() === 'reconnecting' && devices().length) return `<span class="tag">Reconnecting</span>`;
-  if (S.agent.online) { const h = (S.agent.info || {}).health || null; const warn = h && (!h.bridge_ok || !h.buttons || !h.bindings); return `<span class="tag ${warn ? 'red' : 'green'}">${warn ? 'Check this' : 'Connected'}</span>`; }
+  if (S.agent.online) { const warn = healthWarn((S.agent.info || {}).health || null); return `<span class="tag ${warn ? 'red' : 'green'}">${warn ? 'Check this' : 'Connected'}</span>`; }
   return `<span class="tag red">Not connected</span>`;
 }
 // Settings, one screen (docs/ia-v5.md 3): the connection, your home, the house, this app, advanced, sign out.
@@ -108,6 +128,7 @@ function settingsHomePage() {
     <div class="gh">The connector</div>
     <div class="card pad0 list">
       <div class="item"><div class="grow"><div class="t">Connector ${esc(info.version || '?')}${info.commit ? ` <span class="faint small">(${esc(info.commit)})</span>` : ''}</div><div class="d">${info.update_available ? `${esc(info.latest)} is available` : 'Up to date'}${(info.bridge || {}).host ? ` · bridge at ${esc(info.bridge.host)}` : ''}</div></div>${info.update_available ? `<button class="btn sm primary" data-act="update-connector">Update</button>` : ''}</div>
+      ${bridgeNotesHTML()}
       <label class="item"><div class="grow"><div class="t">Update automatically</div><div class="d">Whenever a new version is out, the connector updates itself.</div></div><button class="sw ${s.auto_update ? 'on' : ''}" data-act="auto-update"></button></label>
       <div class="item disc" style="flex-wrap:wrap"><button class="dsum grow" data-act="settings-how" aria-expanded="${S.settingsHow ? 'true' : 'false'}"><div><div class="t">How your home connects</div><div class="d">The helper program, and the line that installs it</div></div>${ICON('chev', 'sm')}</button><div class="dwrap ${S.settingsHow ? 'open' : ''}"><div>${howToHTML()}</div></div></div>
     </div>`;

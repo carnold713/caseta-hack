@@ -41,8 +41,53 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.12.0"
+VERSION = "0.13.0"
+# How long to wait before each fresh ask when the bridge refuses to report button presses. A test
+# shortens these; nothing else should.
+RESUB_WAITS = (2, 4, 6)
 LOG = logging.getLogger("agent")
+
+
+class BridgeWatch(logging.Handler):
+    """Keeps what pylutron-caseta complains about, so the app can say it out loud.
+
+    The library subscribes to the buttons one at a time and, on the first refusal, logs an error and
+    stops: the rest never get subscribed and login still reports success. From the outside that is
+    silent. The bridge lists every button, the connector looks healthy, and no press ever arrives
+    again. Reading the library's own warnings back is the only way to tell that apart from a remote
+    with a flat battery.
+    """
+
+    KEEP = 8
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.notes: List[dict] = []
+        self.sub_failed_at: Optional[float] = None
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            text = record.getMessage()
+        except Exception:  # noqa: BLE001  a broken log line must never take the connector down
+            return
+        if "status subscription" in text:
+            self.sub_failed_at = record.created
+        self.notes.append({"at": record.created, "level": record.levelname.lower(), "text": text[:300]})
+        del self.notes[:-self.KEEP]
+
+
+WATCH = BridgeWatch()
+logging.getLogger("pylutron_caseta").addHandler(WATCH)
+
+
+def lib_version() -> Optional[str]:
+    """Which pylutron-caseta the Pi ended up with. requirements.txt does not pin it, so this can move
+    under us on any self-update and is worth reporting beside the connector's own version."""
+    try:
+        from importlib.metadata import version
+        return version("pylutron-caseta")
+    except Exception:  # noqa: BLE001
+        return None
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
 HUB_URL = os.environ.get("HUB_URL", "").strip()
@@ -146,6 +191,12 @@ class Agent:
         self._last_press_at: Optional[float] = None
         self._last_press: Optional[str] = None
         self._press_count = 0
+        self._started_at = time.time()
+        # button_id/event -> when we last saw it. A retried subscription can leave one button subscribed
+        # twice, and the bridge then reports its press twice; the second copy would read as a double tap.
+        self._button_seen: Dict[str, float] = {}
+        self._resubscribing = False
+        self._resub_next = 0.0
 
     # ---------- config ----------
     def _load_cached_config(self) -> Dict[str, Any]:
@@ -217,6 +268,7 @@ class Agent:
         LOG.info("bridge connected: %d devices, %d buttons, %d scenes",
                  len(self.bridge.devices), len(self.bridge.buttons), len(self.bridge.scenes))
         self._wire_subscriptions()
+        await self._ensure_buttons_subscribed()
 
     def _on_bridge_connect(self) -> None:
         # pylutron-caseta reconnects on its own; re-announce the inventory when it does.
@@ -322,6 +374,45 @@ class Agent:
             if dev.get("zone"):
                 self.bridge.add_subscriber(device_id, lambda d=device_id: self._on_zone(d))
 
+    async def _ensure_buttons_subscribed(self) -> None:
+        """Ask the bridge again for the button events it refused.
+
+        pylutron-caseta walks the button list and abandons the whole walk at the first refusal, so one
+        bad answer costs every press on every remote until something restarts. Nothing above it is told.
+        We only get here when BridgeWatch saw that refusal, because a second pass over buttons that did
+        subscribe has the bridge report their presses twice (_on_button drops the repeat, but not asking
+        twice is better than catching it late).
+        """
+        if not self.bridge or WATCH.sub_failed_at is None or self._resubscribing:
+            return
+        if time.time() < self._resub_next:
+            return  # a round of asking just failed; a bridge that means it will still mean it in ten minutes
+        self._resubscribing = True
+        try:
+            await self._resubscribe_buttons()
+        finally:
+            self._resubscribing = False
+            self._resub_next = time.time() + 600
+
+    async def _resubscribe_buttons(self) -> None:
+        assert self.bridge
+        for attempt, wait in enumerate(RESUB_WAITS, 1):
+            await asyncio.sleep(wait)
+            LOG.warning("the bridge refused a button subscription, asking again (%d of %d)", attempt, len(RESUB_WAITS))
+            WATCH.sub_failed_at = None
+            try:
+                await self.bridge._subscribe_to_button_status()  # noqa: SLF001
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("button subscription retry failed: %s", exc)
+                WATCH.sub_failed_at = time.time()
+                continue
+            if WATCH.sub_failed_at is None:
+                LOG.info("button presses are being reported again")
+                self.send({"type": "health", "health": self.health()})
+                return
+        LOG.error("the bridge is still refusing to report button presses; remotes will do nothing")
+        self.send({"type": "health", "health": self.health()})
+
     def inventory(self) -> Dict[str, Any]:
         assert self.bridge
         b = self.bridge
@@ -376,12 +467,23 @@ class Agent:
             "last_press_at": self._last_press_at,
             "last_press": self._last_press,
             "presses": self._press_count,
+            # False once the bridge has refused to report presses and would not take it back. This is the
+            # difference between "your remote is broken" and "your bridge stopped talking about buttons".
+            "buttons_ok": WATCH.sub_failed_at is None,
+            "uptime_s": round(time.time() - self._started_at),
+            "lib": lib_version(),
+            "notes": WATCH.notes[-4:],
             "quiet_remotes": [did for did, d in (self.bridge.devices if self.bridge else {}).items()
                               if _domain(d.get("type")) == "pico"
                               and not any(b.get("parent_device") == did for b in self.bridge.buttons.values())],
         }
 
     def _on_button(self, button_id: str, event: str) -> None:
+        now = time.time()
+        seen = f"{button_id}/{event}"
+        if now - self._button_seen.get(seen, 0.0) < 0.06:
+            return  # the same press reported twice, from a button that ended up subscribed twice
+        self._button_seen[seen] = now
         key = self._button_keys.get(button_id)
         if event == "Press":
             self._last_press_at = time.time()
@@ -933,13 +1035,27 @@ class Agent:
         os.execv(sys.executable, [sys.executable, *sys.argv])
 
     async def button_watch(self) -> None:
-        """A remote the bridge lists without its buttons can never be pressed: nothing is subscribed to it.
-        The bridge does list them eventually, so look again every few minutes until it does, and say so."""
+        """Two ways a remote goes quiet, watched on the same loop.
+
+        A remote the bridge lists without its buttons can never be pressed: nothing is subscribed to it.
+        The bridge does list them eventually, so look again every few minutes until it does, and say so.
+        The other way is the bridge refusing to report presses at all, which takes every remote out at
+        once and is worth catching sooner, so that check runs on the shorter beat."""
+        every = 30
+        since_sweep = 0
         while True:
-            await asyncio.sleep(300)
+            await asyncio.sleep(every)
+            since_sweep += every
             try:
                 if not self.bridge:
                     continue
+                await self._ensure_buttons_subscribed()
+                if since_sweep < 300:
+                    continue
+                since_sweep = 0
+                # Every sweep, whether or not anything is wrong: the app reads the connector's health out
+                # of the last one of these, and a stale reading is what sends someone hunting the wrong fault.
+                self.send({"type": "health", "health": self.health()})
                 quiet = [did for did, d in self.bridge.devices.items()
                          if _domain(d.get("type")) == "pico"
                          and not any(b.get("parent_device") == did for b in self.bridge.buttons.values())]
@@ -962,6 +1078,7 @@ class Agent:
         assert self.bridge
         await self.bridge.connect()
         self._wire_subscriptions()
+        await self._ensure_buttons_subscribed()
         # connect() rebuilds the bridge's own dictionaries, so the Hue and Nanoleaf lights have to be put back
         # beside them or they would disappear from the app until the next load of each.
         self._merge_hue(send=False)

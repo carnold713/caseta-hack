@@ -200,6 +200,18 @@ to the bridge). It then reports presses and does nothing else, and your
 bindings are the only thing that runs. A Pico can stay half-Lutron too:
 leave its native "On" and "Off", and bind only the double click.
 
+**When every remote goes quiet at once.** The bridge reports presses only
+to a client that has subscribed to each button, and pylutron-caseta walks
+that list one button at a time and abandons the whole walk at the first
+refusal: it logs an error, returns, and lets its login report success. From
+the outside nothing looks wrong. The bridge still lists every button, the
+lights still answer, and no press ever arrives again. The connector watches
+the library's own log for that refusal, asks the bridge again three times,
+and if it is still refused says so in Settings › Connection, along with how
+long the connector has been running, which version of the library it ended
+up with, and the bridge's own last words. Power-cycling the bridge is what
+usually clears it.
+
 Rooms are this app's own (Settings › Rooms). It still asks your Lutron
 bridge to keep up: a new room is offered to it as a `CreateRequest /area`,
 a rename as an `UpdateRequest /area/{id}`, and a light moved between rooms
