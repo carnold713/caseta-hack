@@ -2896,3 +2896,30 @@ Lutron device id is a short decimal and a room's are consecutive, so the hash mo
 ids 5, 6, 7 and 8 landed at x 65, 66, 67, 68 and the same y. Every pool in the room stacked into one.
 It now avalanches the bits before taking the place, which spreads fourteen real ids to a closest pair
 of 3% instead of 1%, and is still a pure function of the id so a pool never jumps between renders.
+
+### 14.10 A stale selector is a test that passes for nothing
+
+Chasing the night-look bug turned up five suite failures that were not regressions. Three were plumbing
+(`ui_test2`, `height_test`, `dimoff_test` hardcode `127.0.0.1:4400` and ignore `PORT`) and one was a
+fixture gap (`ia_test` opens an automation the fresh rig has none of, because the step before it opens
+the new-automation editor without saving one). The other two were worse than a failure.
+
+The room grid stopped being a list of rows and became a grid of tiles. Two tests never followed:
+
+```
+rooms_test      .rooms .room .n        ->  .rgrid .room .n
+                .lights .light .n      ->  .dgrid .dtile.light .dn
+reconnect_test  .list.rooms .item.room ->  .rgrid .rtile.room
+```
+
+`rooms_test` failed loudly, which is the good case. `reconnect_test` did not. Its first check wanted
+`rooms > 0` and failed, but the three checks after it compared the count before a drop with the count
+after, and `0 === 0` passes. The line "the rooms stay on screen" was reporting `(0 of 0)` and had been
+proving nothing for as long as the selector had been wrong. It reads `(5 of 5)` now.
+
+So: when a suite line prints a count, read the count, not the word next to it. A zero on both sides of
+a comparison is the shape a dead selector makes, and it looks exactly like a pass.
+
+Both failures reproduced identically on the commit before the night-look fix, checked out into a second
+worktree and run against an identically fresh rig. That is the only way to tell a regression from rot,
+and it is worth the two minutes every time.
