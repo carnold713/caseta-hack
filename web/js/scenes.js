@@ -49,7 +49,8 @@ VIEWS.scenes = {
 // where the scene editor came from, so its sub-sheets can return to it and it can return where it started
 let SCENE_BACK = null;
 const reopenEditor = id => openSceneEditor(id, false, { back: SCENE_BACK });
-const sceneSub = p => `${plural(Object.keys(p.levels).length, 'light')}${p.fade ? ` · fades over ${fmtDur(p.fade)}` : ''}`;
+const sceneSub = p => `${plural(Object.keys(p.levels).length, 'light')}${
+  p.fade === 0 ? ' · at once' : p.fade > SUGGESTED_FADE ? ` · fades over ${fmtDur(p.fade)}` : ''}`;
 // What a light is doing now, as a scene entry: a fan speed, a level, or {level, kelvin | hex} for a Hue lamp showing a colour.
 function sceneEntryNow(d, dflt) {
   const id = d.device_id;

@@ -130,6 +130,9 @@ function connectWS() {
         S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; noteSunClock();
         S.follow = m.follow || null;
         S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
+        // Once, quietly: the five a room is offered fade over a second now, and a scene made before
+        // that still holds the eight it was given (js/light.js shortenSuggestedFades).
+        if (typeof shortenSuggestedFades === 'function' && shortenSuggestedFades()) save({ quiet: true, render: false });
         S.wsOpen = true; connChanged(!!(m.agent && m.agent.online));
         // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
         if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); setTimeout(() => { if (typeof openGreeting === 'function') openGreeting(); }, 450); }, 900); break; } }

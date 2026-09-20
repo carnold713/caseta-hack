@@ -158,14 +158,31 @@ function paintTiles() {
 }
 
 // ---------- the five a room is offered (D): computed from roles, never stored ----------
+const SUGGESTED_FADE = 1;
 const MOODS = [
-  { id: 'bright', name: 'Bright', icon: 'sun', head: 100, fade: 1, roles: { ambient: 100, task: 100, accent: 60, decor: 50 }, sw: true },
-  { id: 'relax', name: 'Relax', icon: 'sofa', head: 40, fade: 3, roles: { ambient: 35, task: 0, accent: 60, decor: 40 } },
-  { id: 'dinner', name: 'Dinner', icon: 'kitchen', head: 60, fade: 3, roles: { ambient: 20, task: 0, accent: 50, decor: 40 } },
-  { id: 'movie', name: 'Movie', icon: 'film', head: 20, fade: 8, roles: { ambient: 0, task: 0, accent: 15, decor: 0 } },
-  { id: 'night', name: 'Night', icon: 'moon', head: 5, fade: 2, night: true },
+  { id: 'bright', name: 'Bright', icon: 'sun', head: 100, fade: SUGGESTED_FADE, roles: { ambient: 100, task: 100, accent: 60, decor: 50 }, sw: true },
+  { id: 'relax', name: 'Relax', icon: 'sofa', head: 40, fade: SUGGESTED_FADE, roles: { ambient: 35, task: 0, accent: 60, decor: 40 } },
+  { id: 'dinner', name: 'Dinner', icon: 'kitchen', head: 60, fade: SUGGESTED_FADE, roles: { ambient: 20, task: 0, accent: 50, decor: 40 } },
+  { id: 'movie', name: 'Movie', icon: 'film', head: 20, fade: SUGGESTED_FADE, roles: { ambient: 0, task: 0, accent: 15, decor: 0 } },
+  { id: 'night', name: 'Night', icon: 'moon', head: 5, fade: SUGGESTED_FADE, night: true },
 ];
+// What each of the five used to fade over, so a scene still carrying one can be brought forward. Once
+// nothing matches, this does nothing, which is what makes it safe to leave in place.
+const OLD_SUGGESTED_FADE = { bright: 1, relax: 3, dinner: 3, movie: 8, night: 2 };
 const moodById = id => MOODS.find(m => m.id === id);
+// The five used to fade over as much as eight seconds, and a scene keeps whatever fade it was made
+// with, so shortening the table alone would have left every scene already in a home still crawling.
+// A scene is brought forward only when it still holds exactly the number the app gave it and the
+// person has not been into it: anything they chose, at any length, is theirs. Idempotent by
+// construction, because after one pass nothing matches any more.
+function shortenSuggestedFades() {
+  let n = 0;
+  for (const p of presets()) {
+    if (!p.mood || p.edited) continue;
+    if (p.fade === OLD_SUGGESTED_FADE[p.mood] && p.fade !== SUGGESTED_FADE) { p.fade = SUGGESTED_FADE; n++; }
+  }
+  return n;
+}
 // Levels per light for one of the five in a room. Switches are on only in Bright; fans and shades are left alone.
 function moodLevels(aid, mood) {
   const ds = roomLights(aid);
