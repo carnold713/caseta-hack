@@ -43,8 +43,16 @@ function bridgeNotesHTML() {
   if (!h) return '';
   const notes = (h.notes || []).slice().reverse();
   if (!notes.length && !h.lib) return '';
-  const lines = notes.map(n => `<div class="d">${esc(ago(n.at * 1000))}: ${esc(n.text)}</div>`).join('');
-  return `<div class="item"><div class="grow"><div class="t">What your bridge last said</div>${h.lib ? `<div class="d">Lutron library ${esc(h.lib)}</div>` : ''}${lines || '<div class="d">Nothing to report.</div>'}</div></div>`;
+  // A line the connector knows it caused is still shown, because a line nobody can read is a line
+  // nobody can check. It is just not left looking like a fault: "Add a device" puts the bridge in and
+  // out of association mode and the bridge answers each twice, which the Lutron library logs as an
+  // error for want of anywhere to put the second answer.
+  const bad = notes.filter(n => !n.ok);
+  const verdict = !notes.length ? 'Nothing to report.'
+    : bad.length ? `${plural(bad.length, 'thing')} to look at.`
+    : 'Nothing here needs you. These are answers to things the app asked for.';
+  const lines = notes.map(n => `<div class="d${n.ok ? ' faint' : ' warnline'}">${esc(ago(n.at * 1000))}: ${esc(n.text)}</div>`).join('');
+  return `<div class="item disc" style="flex-wrap:wrap"><button class="dsum grow" data-act="settings-notes" aria-expanded="${S.settingsNotes ? 'true' : 'false'}"><div><div class="t">What your bridge last said</div><div class="d">${esc(verdict)}${h.lib ? ` Lutron library ${esc(h.lib)}.` : ''}</div></div>${ICON('chev', 'sm')}</button><div class="dwrap ${S.settingsNotes ? 'open' : ''}"><div>${lines || '<p class="d">Nothing yet.</p>'}</div></div></div>`;
 }
 function connectionTipHTML() {
   const nd = controllable().length, np = remotes().length;

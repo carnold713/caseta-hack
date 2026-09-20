@@ -426,14 +426,35 @@ scripts/          install.sh (served filled-in by the hub), make-icons.js
 ```
 npm install
 APP_PASSWORD=dev AGENT_TOKEN=dev npm start     # http://localhost:4400
-cd agent && python test_engine.py             # gesture timing tests
-cd agent && python test_adddevice.py          # add-device session against a stub bridge
-cd agent && python test_hue.py                # Hue client against a fake bridge (needs aiohttp)
-cd agent && python test_nanoleaf.py           # Nanoleaf client against two fake controllers (needs aiohttp)
-cd agent && python test_color.py              # colour maths: round trips, gamut clamping, kelvin
-cd agent && python test_daylight.py           # Follow the day: the anchors, mireds, a lamp's limits, a northern summer
 ```
 
-Without a bridge, a fake agent that speaks the same protocol is all the
+Without a bridge, a fake connector that speaks the same protocol is all the
 hub needs; the message shapes are documented at the top of `hub/server.js`
-and in `agent/agent.py`.
+and in `agent/agent.py`. `test/browser/fake_connector.js` is one, and the
+browser suite starts it for you.
+
+### Tests
+
+```
+npm test               the hub's contracts, and a check that no two app scripts declare
+                       the same top-level name (they share one global scope)
+npm run tint-check     every colour the tinted surface can make, measured for contrast
+npm run test:browser   the app itself in Chromium, against a hub and a fake connector
+                       the runner starts on a port it picks. test/browser/README.md
+```
+
+The connector's own tests need nothing but Python, except where noted:
+
+```
+cd agent
+python3 test_engine.py      gesture timing, and the action runner's presets and colour
+python3 test_buttons.py     a bridge that answers about everything except buttons
+python3 test_cycle.py       stepping through scenes, forwards and backwards
+python3 test_adddevice.py   the add-device session against a stub bridge
+python3 test_color.py       colour maths: round trips, gamut clamping, kelvin
+python3 test_daylight.py    Follow the day: anchors, mireds, a lamp's limits, a northern summer
+python3 test_lanes.py       a fast swipe: latest level wins, the rest are dropped
+python3 test_hue.py         the Hue client against a fake bridge (needs aiohttp)
+python3 test_nanoleaf.py    the Nanoleaf client against two fake controllers (needs aiohttp)
+python3 test_followscene.py a scene that says "follow the day" (needs aiohttp)
+```

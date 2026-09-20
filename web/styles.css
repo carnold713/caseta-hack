@@ -84,6 +84,8 @@ svg.i.tick, svg.i.xl.tick { width: 20px; height: 20px; padding: 3px; border-radi
 .wordmark { font-size: 14px; line-height: 16px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .muted { color: var(--text-2); }
 .faint { color: var(--text-2); }
+/* a line in the connector's own log that needs somebody, as against one the app caused itself */
+.warnline { color: var(--red-text); }
 .faint.small { font-weight: 400; }
 .small, .cap, .tiny { font-size: 12px; line-height: 16px; }
 .center { text-align: center; }

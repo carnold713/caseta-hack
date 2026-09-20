@@ -129,7 +129,28 @@ async def main():
     a._on_button("101", "Press")
     check("a second real press still counts", a._press_count, 2)
 
-    # 6. what health says beyond the press itself
+    # 6. the bridge answering its own way is not a fault. "Add a device" sends two UpdateRequests to
+    #    /system/status and the bridge answers each of them twice; the library has dropped the request
+    #    it was waiting on by the time the second answer lands, so it logs an error for a bridge that is
+    #    working. The panel has to tell that apart from something that needs somebody.
+    reset_watch()
+    a = fresh_agent(FakeBridge(refusals=0))
+    LIB.error("Was not expecting message with tag %s: %s", "0e8fdd", "{'Url': '/system/status', 'InAssociationMode': True}")
+    LIB.error("Was not expecting message with tag %s: %s", "020aa8", "{'Url': '/system/status', 'InAssociationMode': False}")
+    h = a.health()
+    check("association mode is not a fault", h["quiet"], True)
+    check("and is kept to be read anyway", len(h["notes"]), 2)
+    check("both marked as ours", [n["ok"] for n in h["notes"]], [True, True])
+    LIB.warning("ping was not answered. closing connection.")
+    h = a.health()
+    check("something the app did not ask for is not quiet", h["quiet"], False)
+    check("and it is the one marked", [n["ok"] for n in h["notes"]], [True, True, False])
+    # an unexpected message about anything else is still worth seeing
+    reset_watch()
+    LIB.error("Was not expecting message with tag %s: %s", "aa", "{'Url': '/device/5/status'}")
+    check("an unexpected answer about something else stands", A.WATCH.notes[-1]["ok"], False)
+
+    # 7. what health says beyond the press itself
     h = a.health()
     check("uptime is reported", h["uptime_s"] >= 90, True)
     check("the library version is reported", "lib" in h, True)

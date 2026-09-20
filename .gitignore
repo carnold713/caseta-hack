@@ -10,3 +10,10 @@ agent/__pycache__/
 
 # screenshots and scratch output from a test run: never project content
 scratchpad/
+
+# a browser test writing beside itself: run.js puts a run's cwd in a temp directory, but a test run by
+# hand from test/browser drops its screenshots and logs here
+test/browser/*.png
+test/browser/*.log
+test/browser/*.pid
+test/browser/*token*.txt

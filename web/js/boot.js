@@ -43,6 +43,7 @@ document.addEventListener('click', async e => {
     case 'recipe-all': openAllWaysSheet(); break;
     case 'pick-open': S.pickOpen = !S.pickOpen; renderRecipeSheet(); break;
     case 'scene-lights': openSceneLightsSheet(); break;
+    case 'settings-notes': { S.settingsNotes = !S.settingsNotes; const w = el.parentElement.querySelector('.dwrap'); if (w) w.classList.toggle('open', S.settingsNotes); el.setAttribute('aria-expanded', S.settingsNotes ? 'true' : 'false'); break; }
     case 'scene-room': openSceneRoomSheet(); break;
     case 'scene-room-pick': setSceneRoom(d.a); break;
     case 'scene-more': sceneMoreSheet(); break;

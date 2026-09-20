@@ -1,4 +1,15 @@
-pylutron-caseta>=0.24
-websockets>=12
-zeroconf>=0.130
-aiohttp>=3.9
+# Upper bounds, not floors. The connector updates itself whenever VERSION moves: it pulls the branch
+# and runs pip install -r on this file, so an unbounded requirement means any of these can change
+# underneath a working house at a moment nobody chose. That is worth avoiding for its own sake, and it
+# is also what made a Pico outage take a day to rule out: there was no way to tell from the app which
+# versions the Pi had ended up with. (It now reports pylutron-caseta in Settings, Connection.)
+#
+# The bounds are per package, at the level where that project breaks things:
+#   pylutron-caseta is pre-1.0 and reshapes its internals between minors, so the minor is pinned. 0.29
+#   is what the house runs today and what agent/test_buttons.py's reading of the library was written
+#   against. Raise it deliberately, with the button subscription path re-read.
+pylutron-caseta>=0.29,<0.30
+#   The rest keep to a major, which is where each of them promises to break.
+websockets>=12,<16
+zeroconf>=0.130,<1
+aiohttp>=3.9,<4

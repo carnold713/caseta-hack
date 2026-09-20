@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.14.0"
+VERSION = "0.15.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -60,10 +60,22 @@ class BridgeWatch(logging.Handler):
 
     KEEP = 8
 
+    # Lines the library logs loudly that are a known consequence of something this connector asked for.
+    # The bridge answers an UpdateRequest twice: once straight away, and again with the same ClientTag
+    # once the change has really happened. By then the library has dropped the request it was waiting on
+    # and has nothing to match the second message to, so it logs an error for a bridge doing its job.
+    # "Add a device" makes exactly two of those, entering association mode and leaving it.
+    EXPECTED = (("was not expecting message with tag", "/system/status"),)
+
     def __init__(self) -> None:
         super().__init__(level=logging.WARNING)
         self.notes: List[dict] = []
         self.sub_failed_at: Optional[float] = None
+
+    @classmethod
+    def expected(cls, text: str) -> bool:
+        low = text.lower()
+        return any(all(part in low for part in parts) for parts in cls.EXPECTED)
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -72,7 +84,10 @@ class BridgeWatch(logging.Handler):
             return
         if "status subscription" in text:
             self.sub_failed_at = record.created
-        self.notes.append({"at": record.created, "level": record.levelname.lower(), "text": text[:300]})
+        # kept either way: the panel exists to be read when something is wrong, and a line it decided
+        # not to show is a line nobody can check. It is marked, not dropped.
+        self.notes.append({"at": record.created, "level": record.levelname.lower(),
+                           "ok": self.expected(text), "text": text[:300]})
         del self.notes[:-self.KEEP]
 
 
@@ -81,8 +96,9 @@ logging.getLogger("pylutron_caseta").addHandler(WATCH)
 
 
 def lib_version() -> Optional[str]:
-    """Which pylutron-caseta the Pi ended up with. requirements.txt does not pin it, so this can move
-    under us on any self-update and is worth reporting beside the connector's own version."""
+    """Which pylutron-caseta the Pi ended up with. requirements.txt holds it to one minor now, but the
+    Pi is the only thing that knows what actually installed, so it is still worth saying out loud beside
+    the connector's own version."""
     try:
         from importlib.metadata import version
         return version("pylutron-caseta")
@@ -473,6 +489,8 @@ class Agent:
             "uptime_s": round(time.time() - self._started_at),
             "lib": lib_version(),
             "notes": WATCH.notes[-4:],
+            # nothing in what the bridge has said needs anybody to do anything
+            "quiet": all(n.get("ok") for n in WATCH.notes),
             "quiet_remotes": [did for did, d in (self.bridge.devices if self.bridge else {}).items()
                               if _domain(d.get("type")) == "pico"
                               and not any(b.get("parent_device") == did for b in self.bridge.buttons.values())],
