@@ -1,6 +1,6 @@
 /* Pico Hack: light as a flat disc (docs/ui-concepts.md A, B, D, E, F, H; surfaces from docs/design-spec-v4.md).
    The "Light now" strip on Home, the white light detail sheet, the Now view and the house well
-   behind the house card, room moods, lamp kinds, the sleep-timer dial and the night look.
+   behind the house card, a room's scenes, lamp kinds, the sleep-timer dial and the night look.
    Loaded after home.js; paintState() in core.js calls paintLight() so every real state change
    moves the discs once. */
 'use strict';
@@ -79,7 +79,7 @@ function kindRender() {
   const who = `${esc(d.name)} · ${esc(devAreaName(d))}`;
   const onBack = place ? () => { KP.place = null; kindRender(); } : KP.back;
   showSheet(w ? 'sort' : 'kind', place ? 'What is it?' : 'Where is this light?', (place ? kindFixturesHTML(id, place) : kindPlacesHTML(id)) + kindFootHTML(id, !!place),
-    { detent: 'medium', sub: place ? `${who} · ${esc(place.name)}` : `${who}. Moods use it to know what to dim.`, back: !!onBack, onBack, cap: w ? `Light ${w.list.indexOf(id) + 1} of ${w.list.length}` : '', top: true });
+    { detent: 'medium', sub: place ? `${who} · ${esc(place.name)}` : `${who}. Suggested scenes use it to know what to dim.`, back: !!onBack, onBack, cap: w ? `Light ${w.list.indexOf(id) + 1} of ${w.list.length}` : '', top: true });
 }
 // Step 1: the places. The row's second line names a few of its fixtures, or the kind already chosen there.
 function kindPlacesHTML(id) {
@@ -157,7 +157,7 @@ function paintTiles() {
   });
 }
 
-// ---------- moods (D): computed from roles, never stored ----------
+// ---------- the five a room is offered (D): computed from roles, never stored ----------
 const MOODS = [
   { id: 'bright', name: 'Bright', icon: 'sun', head: 100, fade: 1, roles: { ambient: 100, task: 100, accent: 60, decor: 50 }, sw: true },
   { id: 'relax', name: 'Relax', icon: 'sofa', head: 40, fade: 3, roles: { ambient: 35, task: 0, accent: 60, decor: 40 } },
@@ -166,7 +166,7 @@ const MOODS = [
   { id: 'night', name: 'Night', icon: 'moon', head: 5, fade: 2, night: true },
 ];
 const moodById = id => MOODS.find(m => m.id === id);
-// Levels per light for a mood in a room. Switches are on only in Bright; fans and shades are left alone.
+// Levels per light for one of the five in a room. Switches are on only in Bright; fans and shades are left alone.
 function moodLevels(aid, mood) {
   const ds = roomLights(aid);
   const tagged = ds.some(d => lightRole(d.device_id));
@@ -186,36 +186,52 @@ function moodLevels(aid, mood) {
     else if (!tagged) out[d.device_id] = mood.head;
     else out[d.device_id] = mood.roles[lightRole(d.device_id) || 'ambient'];
   }
-  // a mood that would leave the room dark is not a look: the main light keeps a floor
+  // one that would leave the room dark is not a look: the main light keeps a floor
   if (!Object.values(out).some(v => levelOf(v) > 0)) { const dim = roomDimmers(aid)[0]; if (dim) out[dim.device_id] = 15; }
   return out;
 }
-// Which mood the room is in right now, if any (within a couple of percent). A room with mood scenes is matched against them.
+// Which of a room's scenes the lights are showing right now, if any (within a couple of percent).
 function levelsMatch(lv) {
   const ids = Object.keys(lv).filter(dev); if (!ids.length) return false;
-  // a mood that leaves every light off is not a look: a dark room is dark, not "in Movie"
+  // a look that leaves every light off is not a look: a dark room is dark, not "in Movie"
   if (!ids.some(id => levelOf(lv[id]) > 0)) return false;
   return ids.every(id => { const cur = level(id) || 0, want = levelOf(lv[id]); return dev(id).domain === 'switch' || dev(id).domain === 'fan' ? (cur > 0) === (want > 0) : Math.abs(cur - want) <= 2; });
 }
-function moodMatch(aid) {
-  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
-  if (ps.length) { const p = ps.find(x => levelsMatch(x.levels)); return p ? p.mood : null; }
-  for (const m of MOODS) { if (levelsMatch(moodLevels(aid, m))) return m.id; }
+// The scene the room is in, by id. A room with no scenes of its own is still matched against the five
+// it would be offered, so the row that offers them can say which one the lights are already showing.
+function sceneMatch(aid) {
+  const ps = typeof roomScenes === 'function' ? roomScenes(aid) : [];
+  const p = ps.find(x => levelsMatch(x.levels));
+  return p ? p.id : null;
+}
+function suggestedMatch(aid) {
+  for (const m of MOODS) if (levelsMatch(moodLevels(aid, m))) return m.id;
   return null;
 }
-// The room card's first row (docs/ux-flows.md 7): the room's five mood scenes, or one chip that makes them.
-// The room card's first row (docs/ux-flows.md 7): the room's mood scenes, nothing else. Making and changing moods lives under the room's More.
-function moodRowHTML(aid) {
+// The room's own row of scenes (docs/ux-flows.md 7). Every scene filed under the room, whether it came
+// from the five it was offered or was made by hand: a scene with a room is a scene with a room, and this
+// row is the one place that difference used to show.
+function roomSceneRowHTML(aid) {
   if (!roomDimmers(aid).length) return '';
-  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
+  const ps = typeof roomScenes === 'function' ? roomScenes(aid) : [];
   if (!ps.length) return '';
-  const cur = moodMatch(aid);
-  return `<div class="moodrow" data-moods="${aid}"><div class="moods">${ps.map(p => { const m = moodById(p.mood); return `<button class="mood ${cur === m.id ? 'sel' : ''}" data-act="mood" data-area="${aid}" data-mood="${m.id}">${lampHTML(presetMax(p), 32, ICON(m.icon, 'sm'))}<span>${m.name}</span></button>`; }).join('')}</div></div>`;
+  const cur = sceneMatch(aid);
+  return `<div class="moodrow" data-scenerow="${aid}"><div class="moods">${ps.map(p => { const m = p.mood ? moodById(p.mood) : null; return `<button class="mood ${cur === p.id ? 'sel' : ''}" data-act="room-scene" data-p="${esc(p.id)}">${lampHTML(presetMax(p), 32, ICON(m ? m.icon : 'scene', 'sm'))}<span>${esc(sceneShortName(p))}</span></button>`; }).join('')}</div></div>`;
 }
+// Run one of a room's scenes, by its id: the row no longer has to know which of five it is, which is
+// what kept a scene somebody made from ever appearing there.
+async function applyRoomScene(pid) {
+  const p = presets().find(x => x.id === pid); if (!p) return;
+  for (const [id, v] of Object.entries(p.levels)) if (dev(id)) S.states[id] = { ...(S.states[id] || {}), level: levelOf(v) };
+  paintState();
+  await command({ type: 'preset', preset_id: p.id });
+}
+// One of the five as a look rather than as a scene: used where no scene exists to run, such as "Night in
+// every lit room" on a room that was never given any.
 async function applyMood(aid, mid) {
   const m = moodById(mid); if (!m) return;
-  const p = (typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []).find(x => x.mood === mid);
-  if (p) { for (const [id, v] of Object.entries(p.levels)) if (dev(id)) S.states[id] = { ...(S.states[id] || {}), level: levelOf(v) }; paintState(); await command({ type: 'preset', preset_id: p.id }); return; }
+  const p = (typeof roomSuggested === 'function' ? roomSuggested(aid) : []).find(x => x.mood === mid);
+  if (p) { await applyRoomScene(p.id); return; }
   const lv = moodLevels(aid, m);
   const byLevel = {};
   for (const [id, v] of Object.entries(lv)) { (byLevel[v] = byLevel[v] || []).push(`d:${id}`); S.states[id] = { ...(S.states[id] || {}), level: v }; }
@@ -224,7 +240,7 @@ async function applyMood(aid, mid) {
 }
 function openMoodSave(aid) {
   const rows = MOODS.map(m => { const lv = moodLevels(aid, m); const desc = Object.entries(lv).map(([id, v]) => `${dev(id).name} ${dev(id).domain === 'switch' ? (v > 0 ? 'on' : 'off') : lvText(v).toLowerCase()}`).join(', '); return `<button class="item" data-act="mood-save-pick" data-area="${aid}" data-mood="${m.id}">${lampHTML(m.head, 40, ICON(m.icon, 'sm'))}<div class="grow"><div class="t">${m.name}</div><div class="d">${esc(desc)}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('');
-  sheet.open('Which mood?', `<div class="card pad0 list">${rows}</div>`, { detent: 'compact', sub: `It becomes a scene for ${esc(areaName(aid))} that a remote button can run.` });
+  sheet.open('Which one?', `<div class="card pad0 list">${rows}</div>`, { detent: 'compact', sub: `It becomes a scene for ${esc(areaName(aid))} that a remote button can run.` });
 }
 function saveMoodScene(aid, mid) {
   const m = moodById(mid); if (!m) return;
@@ -404,7 +420,7 @@ function paintLightDiscs() {
   });
 }
 function paintMoodRows() {
-  document.querySelectorAll('[data-moods]').forEach(row => { const m = moodMatch(row.dataset.moods); row.querySelectorAll('[data-mood]').forEach(ch => ch.classList.toggle('sel', ch.dataset.mood === m)); });
+  document.querySelectorAll('[data-scenerow]').forEach(row => { const cur = sceneMatch(row.dataset.scenerow); row.querySelectorAll('[data-act="room-scene"]').forEach(ch => ch.classList.toggle('sel', ch.dataset.p === cur)); });
 }
 
 // ---------- the house: every light that is on, its mean level, and one slider for all of them ----------
@@ -499,7 +515,7 @@ function houseCardHTML() {
 function houseMenuSheet() {
   const on = litLights();
   const body = `<div class="card pad0 list">
-    <button class="item" data-act="now-night" ${on.length ? '' : 'disabled'}>${ICON('moon')}<div class="grow"><div class="t">Night in every lit room</div><div class="d">${on.length ? 'The Night mood wherever a light is on' : 'Nothing is on'}</div></div></button>
+    <button class="item" data-act="now-night" ${on.length ? '' : 'disabled'}>${ICON('moon')}<div class="grow"><div class="t">Night in every lit room</div><div class="d">${on.length ? 'The Night scene wherever a light is on' : 'Nothing is on'}</div></div></button>
     <button class="item" data-act="house-timer" ${on.length ? '' : 'disabled'}>${ICON('clock')}<div class="grow"><div class="t">Sleep timer</div><div class="d">${on.length ? `${plural(on.length, 'light')} fade off when the time is up` : 'Nothing is on'}</div></div></button>
     <button class="item" data-act="house-shades">${ICON('shade')}<div class="grow"><div class="t">Everything off, and close the shades</div><div class="d">The fans stop too. Holding the power button does the same.</div></div></button>
   </div>`;
@@ -877,7 +893,7 @@ document.addEventListener('click', e => {
     case 'timer-pick': if (TD && TD.show) TD.show(Number(d.m), true); break;
     case 'kind-place': pickPlace(d.id, d.p); break;
     case 'kind-pick': pickKind(d.id, d.k); break;
-    case 'mood': applyMood(d.area, d.mood); break;
+    case 'room-scene': applyRoomScene(d.p); break;
     case 'mood-save': openMoodSave(d.area); break;
     case 'mood-save-pick': saveMoodScene(d.area, d.mood); break;
     case 'ld-timer': { const id = LD && LD.id; if (id && !(level(id) > 0)) break; sleepTimerSheet(d.t, { back: id ? () => openLightSheet(id) : null }); break; }

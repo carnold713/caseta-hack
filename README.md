@@ -52,7 +52,8 @@ Pico bindings from its cached config.
   yours, a short "from the Lutron app" sheet for Lutron's, where the star
   that pins it to the front on Home lives). Making one has a single door:
   the "+" in the page's nav bar, or the empty state's one button. Under
-  the tiles, only what a tile cannot show: Room moods.
+  the tiles, only what a tile cannot show: a room that has never been
+  offered its five.
 - **Home is a list of rooms** (docs/ia-v5.md). A large title that collapses
   to a 44px bar on scroll, then the **house card**: the headline ("Kitchen
   and Bedroom are on"), the count and the mean level, a dimmer for
@@ -71,14 +72,14 @@ Pico bindings from its cached config.
   the Scenes page), then the **rooms as one grouped inset list**: a disc,
   the name, what the room is doing, a chevron and a switch. One row of
   advice (Next) comes last.
-- **A room is a page.** Its chevron pushes it: the room's mood chips, its
+- **A room is a page.** Its chevron pushes it: the room's scene chips, its
   lights as one list, and one "Room setup" row. A light's row carries its
   name, its value ("62%", "Off", "Medium", or a colour dot and the colour's
   name), a chevron into the light's page and a switch. No inline slider, no
   sun button, no star, no rainbow button: the light's own page is one tap
   away and is a better dimmer than a 40px well in a list. Fan speeds and
   the open/stop/close of a shade stay on the row. **Room setup** is a page
-  under it: what each light is for, the room's moods, and the kind of each
+  under it: what each light is for, the room's scenes, and the kind of each
   light.
 - **The light page, and colour.** Drag the disc to dim (or the well beside
   it, or the two chevrons), then one value row: **Colour** (or **Warmth** on
@@ -109,14 +110,22 @@ Pico bindings from its cached config.
   editing puts "Done" in its top right and has no footer; a sheet with a real
   primary action keeps a 74px footer. Swipe one down to close it, or from
   large down to medium.
-- **Room moods:** say which lights are the main light, task light, lamps
-  or decor, and each room gets Bright, Relax, Dinner, Movie and Night as
-  scenes a chip or a remote button can run. Making and changing them,
-  and the kind of each light, live on the room's **Room setup** page; back
-  is the nav bar, so no row on it can dead end.
+- **One kind of scene.** A scene is a scene wherever it came from. It can
+  belong to a room or to none, and that is the only difference between
+  them: a scene with a room shows on that room's page, joins its
+  step-through, and is grouped under it on the Scenes tab; a scene without
+  one is listed under "Any room". Say which lights are the main light, task
+  light, lamps or decor and a room can be **suggested five scenes**, Bright,
+  Relax, Dinner, Movie and Night, computed from what each light is for.
+  They are ordinary scenes from the moment they exist: change any of them
+  and it becomes yours, and a later refresh leaves it alone. A scene you
+  made yourself can be given a room in its editor and then sits beside
+  them. What each light is for, the room's scenes and the kind of each
+  light live on the room's **Room setup** page; back is the nav bar, so no
+  row on it can dead end.
 - **Arrows that step through scenes:** "Step through scenes" asks which
   scenes, in the order you want them walked. Tap a room's row to take all
-  five of its moods at once, or tick scenes one at a time from any room;
+  the scenes in a room at once, or tick them one at a time from any room;
   ticking is the ordering. On a remote with a pair of arrows it sets both,
   the up arrow going forwards and the down arrow back, so one press moves
   on and the other undoes it. The loop remembers where it is and checks
@@ -130,7 +139,7 @@ Pico bindings from its cached config.
   that place (a desk lamp or a desk tape light, a ceiling track light or
   a window track light, a pendant, a chandelier, puck lights, a porch
   light, 46 in all). The kind picks the light's icon and its part in the
-  room's moods. The table is one file, `web/js/kinds.js`, shared by the
+  room's suggested scenes. The table is one file, `web/js/kinds.js`, shared by the
   app and the hub.
 - **Automations:** things the home does by itself. Three guided setups
   (Welcome lights before sunset, a Wake-up light that rises slowly before
@@ -156,8 +165,8 @@ Pico bindings from its cached config.
   connector finds the bridge on the network, you press its round button,
   and its lights and rooms join the app beside the Caséta ones (its own
   scenes stay in the Hue app; scenes made here can mix both),
-  with live state from the bridge's event stream. Rooms, sliders, moods,
-  scenes, automations, sleep timers and Pico buttons all work on them, so
+  with live state from the bridge's event stream. Rooms, sliders, scenes,
+  automations, sleep timers and Pico buttons all work on them, so
   one button can drive a Caséta dimmer and a Hue lamp together. A lamp
   that can do white temperature gets a Warmth slider (Candle to Daylight,
   over the lamp's own range) on its **colour screen**, one tap from the
@@ -179,7 +188,7 @@ Pico bindings from its cached config.
   forgotten on its own without touching any other one. It has no room of
   its own to match, so it files into one of your rooms exactly like a
   Caséta device, and it is offered on/off, brightness, colour and warmth
-  and works with rooms, moods, scenes, automations and Follow the day the
+  and works with rooms, scenes, automations and Follow the day the
   same way a Hue lamp does. Built-in Nanoleaf effects are not part of this.
 - **Follow the day.** A lamp can keep its white matched to the time of day by
   itself, for as long as it is on: cool and bright around midday, warm in the
@@ -382,7 +391,8 @@ binding fires instantly.
 from the Sonos iOS app: a light grey sheet with grouped grey cards, black
 pills and chips, Inter, big left-aligned titles, a dark slate "Light now"
 bar above the tabs, dark full-screen Now and light pages, and the lamp ramp
-as the only colour. `docs/ui-concepts.md` covers the lamp discs and moods,
+as the only colour. `docs/ui-concepts.md` covers the lamp discs and a room's
+scene chips,
 `docs/ux-flows.md` the automations, `docs/motion-spec.md` the motion (GSAP
 hooks in `js/motion.js`, the three.js light field in `js/lightfield.js`).
 Read the spec before changing styles. Sliders are inert to a passing finger

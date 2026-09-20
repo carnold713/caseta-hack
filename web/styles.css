@@ -649,7 +649,7 @@ details.more > div { margin-top: 8px; }
 .sheet.full { height: 100dvh; max-height: 100dvh; border-radius: var(--r-md) var(--r-md) 0 0; }
 @media (min-width: 700px) { .sheet { bottom: 24px; border-radius: var(--r-md); } .sheet.full { bottom: 0; border-radius: var(--r-md) var(--r-md) 0 0; } .m-lightfield { -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); } }
 
-/* the mood chips on a room page: the row bleeds to the page's gutters */
+/* a room's scene chips: the row bleeds to the page's gutters */
 .room > .moodrow { margin: 0 -16px 0; }
 
 /* an empty page that says what to do: one line and one primary button */

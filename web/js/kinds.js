@@ -1,6 +1,6 @@
 /* Pico Hack: the kinds of light. A kind is a place and a fixture, `<place>-<fixture>`: `desk-lamp`, `desk-tape`,
    `ceiling-track`, `window-track`. The room is separate (it comes from the bridge), so "Living room · Window track light"
-   is the room name plus the kind's label. Every fixture has a role that moods dim by: ambient fills the room, task is
+   is the room name plus the kind's label. Every fixture has a role that a suggested scene dims by: ambient fills the room, task is
    light for your hands, accent is lamps and glow.
    One file for both halves: the browser gets `window.KIND_DEF`, the hub does `require('../web/js/kinds.js')`, so the
    app and the validator agree on the ids and the roles. */

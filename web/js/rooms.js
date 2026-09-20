@@ -4,7 +4,7 @@
    thrown away, and the one place a light or a remote moves from one room to another. Lutron and Hue together.
 
    The list is seeded from the bridges the first time it is needed, keeping each bridge room's own id, so every
-   scene, mood, remote button and automation that already names a room keeps working untouched.
+   scene, remote button and automation that already names a room keeps working untouched.
 
    The bridges are kept in step where they let us: the Hue bridge documents rooms and does as it is told; the
    Lutron bridge does not document them and may simply say no. A refusal never loses the person's work: the room
@@ -57,7 +57,7 @@ function bridgeTag(deviceId) {
 const fileable = () => [...controllable(), ...remotes()];
 
 // ----- seeding: the bridges' rooms become the app's, ids and all -----
-// Keeping each bridge room's own id is what makes this free: `a:20` still means the Kitchen, the Kitchen's moods
+// Keeping each bridge room's own id is what makes this free: `a:20` still means the Kitchen, the Kitchen's scenes
 // are still the Kitchen's. This runs once, ever, per home (settings.rooms_seeded marks it done): after that, a
 // room here comes only from this app. A room made since in the Lutron app or the Hue app is never imported on
 // its own; its devices are simply unfiled until you put them in one of your own rooms, which is easy from

@@ -224,6 +224,25 @@ test('a scene holds a level, a fan speed, or a level with a colour', () => {
   assert.deepStrictEqual(validateConfig({ presets: [{ id: 'p', name: 'X', levels: [] }] }).presets[0].levels, {});
 });
 
+test('a scene belongs to a room whether or not it came from the five', () => {
+  // Moods and scenes are one thing in the app now: a scene somebody made can be filed under a room, and
+  // the room has to survive the round trip for that to mean anything. `mood` is only a note of which of
+  // the five a scene came from, so the two fields stand alone.
+  const cfg = validateConfig({ presets: [
+    { id: 'a', name: 'Kitchen · Relax', levels: { 5: 40 }, area: '20', mood: 'relax', edited: false },
+    { id: 'b', name: 'Kitchen · Pizza night', levels: { 5: 80 }, area: '20' },
+    { id: 'c', name: 'Away', levels: { 5: 0 } },
+    { id: 'd', name: 'Odd', levels: { 5: 10 }, area: '20', mood: 'pizza' },
+  ] });
+  const by = id => cfg.presets.find(p => p.id === id);
+  assert.equal(by('a').area, '20'); assert.equal(by('a').mood, 'relax');
+  assert.equal(by('b').area, '20', 'a scene made by hand keeps the room it was filed under');
+  assert.equal(by('b').mood, null, 'and carries no suggestion it never came from');
+  assert.equal(by('c').area, null, 'a scene with no room stays that way');
+  assert.equal(by('d').mood, null, 'a suggestion id that is not one of the five is dropped');
+  assert.equal(by('d').area, '20', 'without taking the room with it');
+});
+
 test('validateConfig returns a fresh document and never the one it was handed', () => {
   // the hub writes what comes back, so anything it did not validate must not survive
   const sneaky = { settings: { double_ms: 350, evil: true }, groups: [], extra_top_level: 1 };

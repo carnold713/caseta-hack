@@ -1,7 +1,7 @@
 /* Pico Hack: light as a flat disc. Extensions from docs/ui-concepts.md on top of styles.css,
    retokened for the Tenzing skin (docs/design-spec-v4.md). The lamp ramp is the only warm colour on
    the page; blue is the control state. Lamp ramp, "Light now" strip, the white light detail sheet with
-   the vertical well, the Now view, mood chips, lamp kinds, the sleep-timer dial, the night look. */
+   the vertical well, the Now view, a room's scene chips, lamp kinds, the sleep-timer dial, the night look. */
 :root { --lamp-10: #FDF1E1; --lamp-25: #FCE3C4; --lamp-50: #F9C489; --lamp-75: #F7A64F; --lamp-100: #F58A1F; }
 
 /* ---------- lamp disc: an opaque circle whose fill (and where there is room, size) is the level ---------- */
@@ -51,7 +51,9 @@ svg.i.lampart.md { width: 40px; height: 40px; stroke-width: .9; }
 .light .row .fav { width: 32px; height: 32px; }
 .tile .lopen { display: block; }
 
-/* ---------- mood row: Large chips whose leading icon is a lamp disc at the mood's level; the row bleeds to the card's edge and fades on the scrolling side ---------- */
+/* ---------- a room's scene row: large chips whose leading icon is a lamp disc at the scene's level; the row
+   bleeds to the card's edge and fades on the scrolling side. The class names are the ones the row was born
+   with, when a room's scenes were called moods; only the word changed. ---------- */
 .moodrow { margin: 0 -16px 4px; }
 .moods { display: flex; gap: 8px; overflow-x: auto; padding: 2px 16px 4px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
 .moods::-webkit-scrollbar { display: none; }

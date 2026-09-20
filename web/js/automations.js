@@ -304,7 +304,7 @@ function aeApplyRecipe(rid) {
   aeSave();
 }
 function openAutoScenePicker() {
-  const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.mood ? 'Room mood' : 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
+  const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.area ? areaName(p.area) : 'Any room' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
   AE.scenePick = items;
   const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="ae-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
   showSheet('ae-scene', 'Which scene?', body, { detent: 'medium', back: true, onBack: renderEditor });
@@ -406,7 +406,7 @@ function openNewAutoWalk() {
   ] });
 }
 function openNwScenePicker() {
-  const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.mood ? 'Room mood' : 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
+  const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.area ? areaName(p.area) : 'Any room' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
   NW.scenePick = items;
   const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="nw-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
   showSheet('nw-scene', 'Which scene?', body, { detent: 'medium', back: true, onBack: renderSetup });
@@ -846,11 +846,33 @@ function guessRole(name) {
   if (/shelf|string|display/.test(n)) return 'decor';
   return 'ambient';
 }
-function roomMoodPresets(aid) { return MOOD_ORDER.map(m => presets().find(p => p.area === aid && p.mood === m)).filter(Boolean); }
-const roomHasMoods = aid => roomMoodPresets(aid).length > 0;
+// A room's scenes: every scene filed under that room, whoever made it. The five suggested ones lead, in
+// the order they are suggested in, and anything made by hand follows in the order it was made.
+//
+// `mood` on a scene is not a kind of thing any more. A scene is a scene; the field only notes which of
+// the five suggestions this one came from, so "back to the suggestion" and a later refresh know what to
+// put back. A scene without one is an ordinary scene that happens to live in a room, and everything in
+// the app treats the two the same.
+function roomScenes(aid) {
+  const rank = p => { const i = MOOD_ORDER.indexOf(p.mood); return i < 0 ? MOOD_ORDER.length : i; };
+  return presets().filter(p => p.area === aid).map((p, i) => ({ p, i }))
+    .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(x => x.p);
+}
+const roomHasScenes = aid => roomScenes(aid).length > 0;
+// The five a room is offered, specifically: what "make them again" refreshes and what the walk counts.
+const roomSuggested = aid => MOOD_ORDER.map(m => presets().find(p => p.area === aid && p.mood === m)).filter(Boolean);
+const roomHasSuggested = aid => roomSuggested(aid).length > 0;
+// A scene filed under a room carries the room in its name ("Kitchen · Relax"), which is right in a list
+// of every scene and repetition on the room's own page. Strip it there, and leave a name that never had
+// it alone.
+function sceneShortName(p) {
+  const room = p && p.area ? areaName(p.area) : null;
+  const n = (p && p.name) || '';
+  return room && n.startsWith(`${room} · `) ? n.slice(room.length + 3) : n;
+}
 const presetMax = p => Math.max(0, ...Object.values(p.levels || {}).map(levelOf));
-// Write (or refresh) the five moods of a room as ordinary scenes. A mood the person changed is left alone.
-function makeMoods(aid) {
+// Write (or refresh) the five scenes a room is offered. One the person changed is left alone.
+function suggestScenes(aid) {
   let made = 0, kept = 0;
   for (const m of MOODS) {
     const p = presets().find(x => x.area === aid && x.mood === m.id);
@@ -871,21 +893,21 @@ function openRolesSheet(aid, opts = {}) {
   renderRolesSheet();
 }
 function renderRolesSheet() {
-  const { aid, roles } = RS; const ds = roomLights(aid); const has = roomHasMoods(aid);
+  const { aid, roles } = RS; const ds = roomLights(aid); const has = roomHasSuggested(aid);
   const rows = ds.map(d => `<div class="item" style="flex-wrap:wrap"><div class="grow"><div class="t">${esc(d.name)}</div>${d.domain === 'switch' ? '<div class="d">On or off only: on in Bright, off in the others.</div>' : ''}</div><div class="chips" style="flex-basis:100%;margin-top:6px">${ROLE_CHIPS.map(([r, l]) => `<button class="chip ${roles[d.device_id] === r ? 'sel' : ''}" data-act="rl-pick" data-id="${d.device_id}" data-r="${r}">${l}</button>`).join('')}</div></div>`).join('');
   const walk = RS.walk; const nextAid = walk ? walk[walk.indexOf(aid) + 1] : null;
   const body = `<p class="d">Main is the ceiling light. Task is where hands work. Lamps are for atmosphere. Decor is lit to be looked at.</p>
     <div class="card pad0 list" style="margin-top:12px">${rows}</div>
-    <div class="sfoot"><button class="btn primary lg block" data-act="rl-make">${has ? 'Update moods' : 'Make moods'}</button>${walk ? `<button class="btn ghost block" data-act="rl-skip">${nextAid ? `Next: ${esc(areaName(nextAid))}` : 'Skip this room'}</button>` : ''}</div>`;
+    <div class="sfoot"><button class="btn primary lg block" data-act="rl-make">${has ? 'Suggest them again' : 'Suggest five scenes'}</button>${walk ? `<button class="btn ghost block" data-act="rl-skip">${nextAid ? `Next: ${esc(areaName(nextAid))}` : 'Skip this room'}</button>` : ''}</div>`;
   void ds;
   showSheet('roles', `What kind of light is each one in the ${esc(areaName(aid))}?`, body, { detent: 'medium', sub: 'We guessed from the names. Fix any that are wrong.', back: !!RS.back, onBack: RS.back, cap: walk ? `Room ${walk.indexOf(aid) + 1} of ${walk.length}` : '', top: true });
 }
 function rolesMake() {
   const { aid, roles, walk } = RS; const s = S.config.settings; s.roles = s.roles || {};
   for (const [id, r] of Object.entries(roles)) s.roles[id] = r;
-  const had = roomHasMoods(aid); const { kept } = makeMoods(aid);
+  const had = roomHasSuggested(aid); const { kept } = suggestScenes(aid);
   const room = areaName(aid);
-  const msg = had ? `${room}'s moods updated${kept ? ` · ${kept} kept as you changed ${kept === 1 ? 'it' : 'them'}` : ''}` : `${room} has five moods`;
+  const msg = had ? `${room}'s scenes refreshed${kept ? ` · ${kept} kept as you changed ${kept === 1 ? 'it' : 'them'}` : ''}` : `${room} has five scenes`;
   rolesAdvance(walk, aid, msg);
 }
 // In the walk, the next room's sheet follows; otherwise the sheet closes and whatever asked for moods gets them.
@@ -896,22 +918,18 @@ function rolesAdvance(walk, aid, msg) {
   if (msg) save({ msg });
   if (after) setTimeout(after, msg ? 0 : 350);
 }
-// Rooms the moods walk visits: every room with two or more lights. (The Home tip that offered it is now the Next card, next.js.)
-function moodsWalkRooms() { return lightRooms().filter(a => roomLights(a.id).length >= 2).map(a => a.id); }
-// The Scenes tab's "Room moods" section: one row per room that has them.
-function roomMoodsSectionHTML() {
-  const rooms = lightRooms().filter(a => roomHasMoods(a.id)); if (!rooms.length) return '';
-  return `<div class="gh">Room moods</div><div class="card pad0 list">${rooms.map(a => { const ps = roomMoodPresets(a.id); const ch = ps.filter(p => p.edited).length; return `<button class="item" data-act="rm-open" data-area="${a.id}">${lampHTML(targetOn(`a:${a.id}`) ? roomMean(a.id) : 0, 40, ICON(roomIcon(a.name), 'sm'))}<div class="grow"><div class="t">${esc(a.name)}</div><div class="d">${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('')}</div>`;
-}
+// Rooms the suggestion walk visits: every room with two or more lights. (The Home tip that offered it is now the Next card, next.js.)
+function suggestWalkRooms() { return lightRooms().filter(a => roomLights(a.id).length >= 2).map(a => a.id); }
 // `back` is a route name, so a sheet opened from the room setup page can walk back to the one that opened it.
 // 'room-more' is the old name of the room setup page, which is a page now: there is nothing to go back to in a sheet.
-function backTo(name, aid) { return name === 'roommoods' ? () => openRoomMoodsSheet(aid) : null; }
-function openRoomMoodsSheet(aid, opts = {}) {
-  const ps = roomMoodPresets(aid); const ch = ps.filter(p => p.edited).length;
-  const rows = ps.map(p => { const m = moodById(p.mood); return `<div class="item"><button class="ic" data-act="run-scene" data-t="p:${p.id}" title="Run" aria-label="Run ${esc(m.name)}">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${p.edited ? 'Changed by you' : 'Suggested'} · ${plural(Object.keys(p.levels).length, 'light')}</div></div><button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}" data-back="roommoods" data-area="${aid}" title="Edit" aria-label="Edit ${esc(m.name)}">${ICON('edit', 'sm')}</button></div>`; }).join('');
-  const body = `<div class="card pad0 list">${rows}</div><div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="rl-open" data-area="${aid}" data-back="roommoods">${ICON('dots')}<div class="grow"><div class="t">Change what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+function backTo(name, aid) { return name === 'roomscenes' ? () => openRoomScenesSheet(aid) : null; }
+function openRoomScenesSheet(aid, opts = {}) {
+  const ps = roomScenes(aid); const ch = ps.filter(p => p.mood && p.edited).length;
+  const sub = p => (p.mood ? (p.edited ? 'Changed by you' : 'Suggested') : 'Yours');
+  const rows = ps.map(p => { const n = sceneShortName(p); return `<div class="item"><button class="ic" data-act="run-scene" data-t="p:${p.id}" title="Run" aria-label="Run ${esc(n)}">${ICON('play', 'sm')}</button><div class="grow"><div class="t">${esc(n)}</div><div class="d">${sub(p)} · ${plural(Object.keys(p.levels).length, 'light')}</div></div><button class="iconbtn plain" data-act="scene-edit" data-id="${p.id}" data-back="roomscenes" data-area="${aid}" title="Edit" aria-label="Edit ${esc(n)}">${ICON('edit', 'sm')}</button></div>`; }).join('');
+  const body = `<div class="card pad0 list">${rows}</div><div class="card pad0 list" style="margin-top:16px"><button class="item" data-act="rl-open" data-area="${aid}" data-back="roomscenes">${ICON('dots')}<div class="grow"><div class="t">Change what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   const back = backTo(opts.back, aid);
-  showSheet('roommoods', `${esc(areaName(aid))} moods`, body, { detent: 'medium', sub: `${plural(ps.length, 'mood')}${ch ? ` · ${ch} changed by you` : ''}`, back: !!back, onBack: back });
+  showSheet('roomscenes', `${esc(areaName(aid))} scenes`, body, { detent: 'medium', sub: `${plural(ps.length, 'scene')}${ch ? ` · ${ch} changed by you` : ''}`, back: !!back, onBack: back });
 }
 
 // ---------- events ----------
@@ -997,7 +1015,7 @@ document.addEventListener('click', e => {
     case 'wd-pt-add': { const { ad } = wdSettings(); const last = ad.points[ad.points.length - 1]; ad.points.push({ time: hmAdd(last ? last.time : '20:00', 60), level: last ? last.level : 50 }); ad.points.sort((a, b) => a.time.localeCompare(b.time)); save({ quiet: true, render: false }); openCurveSheet(); break; }
     case 'wd-pt-remove': { const { ad } = wdSettings(); if (ad.points.length > 2) { ad.points.splice(Number(d.i), 1); save({ quiet: true, render: false }); openCurveSheet(); } break; }
     // roles and moods
-    // "Give this room moods" also lives inside the Room sheet now: when that is what is open, both the back
+    // "Suggest five scenes" also lives inside the Room sheet now: when that is what is open, both the back
     // arrow and the finished flow land back on the room's own screen, redrawn, instead of closing past it.
     case 'roles-open': case 'rl-open': {
       const fromRoom = SHEET_KEY === 'room' && typeof renderRoomSheet === 'function';
@@ -1008,8 +1026,8 @@ document.addEventListener('click', e => {
     case 'rl-pick': RS.roles[d.id] = d.r; renderRolesSheet(); break;
     case 'rl-make': rolesMake(); break;
     case 'rl-skip': rolesAdvance(RS.walk, RS.aid, null); break;
-    case 'moods-walk': { const walk = moodsWalkRooms(); if (walk.length) openRolesSheet(walk[0], { walk }); break; }
-    case 'rm-open': openRoomMoodsSheet(d.area, { back: d.back }); break;
+    case 'moods-walk': { const walk = suggestWalkRooms(); if (walk.length) openRolesSheet(walk[0], { walk }); break; }
+    case 'rm-open': openRoomScenesSheet(d.area, { back: d.back }); break;
   }
 });
 document.addEventListener('change', e => {

@@ -2923,3 +2923,45 @@ a comparison is the shape a dead selector makes, and it looks exactly like a pas
 Both failures reproduced identically on the commit before the night-look fix, checked out into a second
 worktree and run against an identically fresh rig. That is the only way to tell a regression from rot,
 and it is worth the two minutes every time.
+
+### 14.11 Moods and scenes were the same thing wearing two hats
+
+Both were `presets`. They shared the editor, the validator and the connector's `preset` action. What
+differed was everything around them: a mood was called a mood, lived in its own section of the Scenes
+tab and its own row on a room page, had its own picker on a remote ("Room mood…") and its own
+step-through ("Next mood"), and a scene you made yourself **could not be put on a room at all**, because
+`roomMoodPresets()` found presets by `mood` being one of five fixed ids rather than by `area`.
+
+Now there is one kind of scene. The fields stay, and what they mean changes:
+
+- `area` is the room a scene belongs to, on any scene, or null for "any room".
+- `mood` is no longer a kind of thing. It only notes which of the five suggestions a scene came from, so
+  "back to the suggestion" and a later refresh know what to put back. A scene without one is an
+  ordinary scene that happens to live in a room.
+
+`roomScenes(aid)` replaces `roomMoodPresets(aid)`: every scene filed under the room, the five it was
+offered leading in their own order and anything made by hand following. `roomSuggested(aid)` is the
+narrower question, for the refresh and the walk. The room's row is keyed on the scene's own id rather
+than on one of five, which is the single change that let a scene somebody made appear there at all.
+
+Two remote rows folded rather than went away. "Run a scene…" lists every scene grouped by room, led by
+the remote's own, so "Room mood…" had nothing of its own left to offer; "Step through scenes…" already
+walked any list, so "Next mood" was a special case of it. Bindings those rows wrote are untouched and
+keep doing exactly what they did; `recipeOf` simply resolves them to the row that is still there.
+
+The word "mood" is gone from every line the owner can read. Bright, Relax, Dinner, Movie and Night are
+scene names.
+
+### 14.12 One global scope, and the bug it hides
+
+`web/js/*.js` are plain `<script>` tags sharing one global scope. Adding the room's row as
+`sceneRowHTML` in light.js collided with home.js's own `sceneRowHTML`, which had built Home's row of
+scene cells since Home existed. light.js loads after home.js, so light.js won, Home called it with no
+argument, and it returned '' for a room with no dimmers. Home's scene row vanished. **Nothing threw**,
+no console error, no failed assertion anywhere near the cause; the suite caught it three checks later
+as "the scene row comes before the rooms".
+
+`scripts/globals.test.js` now runs with `npm test` and fails on any top-level name declared by two
+plain scripts. A `<script type="module">` has a scope of its own and is excluded, which is why
+lightfield.js may keep its own `clamp`. The check was written, then deliberately broken by putting the
+name back, to confirm it goes red.

@@ -12,24 +12,37 @@ VIEWS.scenes = {
       + `<div class="tools"><button class="iconbtn plain" data-act="scene-new" title="New scene" aria-label="New scene" style="color:var(--blue)">${ICON('plus')}</button></div>`;
   },
   body() {
-    const mine = presets().filter(p => !(p.mood && p.area)); const theirs = lutronScenes();
-    const moods = typeof roomMoodsSectionHTML === 'function' ? roomMoodsSectionHTML() : '';
-    if (!mine.length && !theirs.length && !moods) return `<div class="empty-state"><p class="body">Set your lights the way you like them, then save that look. A remote button can run it later.</p><button class="btn primary lg block" data-act="scene-new">New scene</button></div>`;
+    const all = presets(); const theirs = lutronScenes();
+    const rooms = areas().filter(a => all.some(p => p.area === a.id));
+    const loose = all.filter(p => !p.area);
+    if (!all.length && !theirs.length) return `<div class="empty-state"><p class="body">Set your lights the way you like them, then save that look. A remote button can run it later.</p><button class="btn primary lg block" data-act="scene-new">New scene</button></div>`;
     // The tiles are the scenes (a scene is a picture). At rest a tile has one job: run the scene. Edit turns on the
     // pencils; a tap on a tile then opens its editor, and Done turns it off again.
+    //
+    // One list, grouped by the room a scene is filed under. There is no second kind of scene here any
+    // more: the five a room is offered are scenes in that room's group, and a scene you made and gave a
+    // room to sits beside them.
     const edit = !!S.scenesEdit;
-    const tiles = [...mine.map(p => ({ id: 'p:' + p.id, name: p.name, sub: sceneSub(p), edit: p.id })), ...theirs.map(s => ({ id: 's:' + s.scene_id, name: s.name, sub: 'From the Lutron app', lutron: s.scene_id }))];
     const corner = s => s.edit
       ? `<button class="iconbtn sm tile-edit" data-act="scene-edit" data-id="${s.edit}" aria-label="Edit ${esc(s.name)}">${ICON('edit', 'sm')}</button>`
       : `<button class="iconbtn sm tile-edit" data-act="scene-lutron" data-id="${s.lutron}" aria-label="About ${esc(s.name)}">${ICON('dots', 'sm')}</button>`;
     const tile = s => edit
       ? `<div class="tile editing" role="button" tabindex="0" data-act="${s.edit ? 'scene-edit' : 'scene-lutron'}" data-id="${s.edit || s.lutron}"><div class="face">${tileFaceHTML(tileItems(s.id))}${corner(s)}</div><div class="label"><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></div>`
       : `<div class="tile" role="button" tabindex="0" data-act="run-scene" data-t="${s.id}"><div class="face">${tileFaceHTML(tileItems(s.id))}</div><div class="label"><div class="n">${esc(s.name)}</div><div class="s">${esc(s.sub)}</div></div></div>`;
-    let h = `<div class="gh">Scenes${tiles.length ? `<button class="link" data-act="scenes-edit">${edit ? 'Done' : 'Edit'}</button>` : ''}</div>`;
-    h += `<div class="tiles grid">${tiles.map(tile).join('')}</div>`;
-    h += moods;
-    // a home with no room moods yet: the one thing the tiles cannot show, offered rather than left blank
-    if (!moods && typeof moodsWalkRooms === 'function' && moodsWalkRooms().length) h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="moods-walk"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Give a room five moods</div><div class="d">Bright, Relax, Dinner, Movie and Night, from what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+    const asTile = p => ({ id: 'p:' + p.id, name: sceneShortName(p), sub: sceneSub(p), edit: p.id });
+    let first = true;
+    const group = (capn, tiles) => {
+      if (!tiles.length) return '';
+      const link = first && (all.length || theirs.length) ? `<button class="link" data-act="scenes-edit">${edit ? 'Done' : 'Edit'}</button>` : '';
+      first = false;
+      return `<div class="gh">${capn}${link}</div><div class="tiles grid">${tiles.map(tile).join('')}</div>`;
+    };
+    let h = rooms.map(a => group(esc(a.name), roomScenes(a.id).map(asTile))).join('');
+    h += group(rooms.length ? 'Any room' : 'Scenes', loose.map(asTile));
+    h += group('From the Lutron app', theirs.map(x => ({ id: 's:' + x.scene_id, name: x.name, sub: 'From the Lutron app', lutron: x.scene_id })));
+    // a room that has never been offered its five: the one thing the tiles cannot show
+    const toOffer = typeof suggestWalkRooms === 'function' ? suggestWalkRooms().filter(aid => !roomHasSuggested(aid)) : [];
+    if (toOffer.length) h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="moods-walk"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Suggest five scenes for a room</div><div class="d">Bright, Relax, Dinner, Movie and Night, from what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
     return h;
   },
 };
@@ -119,9 +132,15 @@ function openSceneEditor(id, fresh = false, opts = {}) {
     if (!ds.length) return '';
     return `<div class="h3">${esc(a.name)}</div><div class="card pad0 list">${ds.map(d => sceneLightRow(p, d)).join('')}</div>`;
   }).join('');
-  // A room mood: a suggested scene until the person changes it; then it is theirs and Update moods leaves it alone.
-  const mood = p.mood && p.area ? `<div class="tip" style="margin-top:8px"><div class="grow"><span class="cap">Room mood</span><div class="t">${p.edited ? 'Changed by you.' : 'A suggested mood.'} Change anything you like; from then on it's yours and won't be replaced.</div>${p.edited ? `<button class="btn ghost" data-act="scene-suggest" data-id="${p.id}">Back to the suggestion</button>` : ''}</div></div>` : '';
+  // One of the five a room was offered: a suggestion until the person changes it, and then it is theirs
+  // and a refresh leaves it alone. Nothing else about it differs from any other scene.
+  const mood = p.mood ? `<div class="tip" style="margin-top:8px"><div class="grow"><span class="cap">Suggested</span><div class="t">${p.edited ? 'Changed by you.' : 'One of the five this room was offered.'} Change anything you like; from then on it's yours and won't be replaced.</div>${p.edited ? `<button class="btn ghost" data-act="scene-suggest" data-id="${p.id}">Back to the suggestion</button>` : ''}</div></div>` : '';
+  // The room a scene belongs to. This is the row that makes every scene the same thing: a scene with a
+  // room shows on that room's page and in its step-through, and any scene can be given one or have it
+  // taken away.
+  const roomRow = valueRow('Room', esc(p.area ? areaName(p.area) : 'Any room'), 'scene-room', '', { sub: p.area ? `Shows on the ${esc(areaName(p.area))} page` : 'Shows under Any room' });
   const body = `${mood}<label class="field"><span>Name</span><input class="input" id="scene-name" value="${esc(p.name)}" ${fresh ? 'autofocus' : ''}></label>
+    <div class="card pad0 list" style="margin-top:4px">${roomRow}</div>
     <div class="h2">In this look</div>${rows || `<p class="d">No lights yet. Add some below.</p>`}
     <div class="card pad0 list" style="margin-top:16px">${valueRow('Add or remove lights', `${inc.length} of ${all.length}`, 'scene-lights')}</div>
     <div class="btnpair" style="margin-top:16px"><button class="btn" data-act="scene-capture">${ICON('copy', 'sm')} Use current levels</button><button class="btn" data-act="run-scene" data-t="p:${p.id}">${ICON('play', 'sm')} Try it</button></div>
@@ -132,6 +151,26 @@ function openSceneEditor(id, fresh = false, opts = {}) {
   // "Done" in the top right, no footer: it is an editor, and every change has already autosaved (docs/ia-v5.md 5)
   showSheet('scene', title, body, { detent: 'large', done: true, sub, back: !!SCENE_BACK, onBack: SCENE_BACK });
   if (fresh) { const i = $('#scene-name'); if (i) setTimeout(() => { i.focus(); i.select(); }, 350); }
+}
+// "Which room?": filing a scene under a room, or under none. A scene that came from the five keeps its
+// note of which one it came from either way, so moving it out and back does not lose the suggestion.
+function openSceneRoomSheet() {
+  const p = presets().find(x => x.id === S.sceneEdit); if (!p) return;
+  const row = (aid, name, sub) => `<button class="item" data-act="scene-room-pick" data-a="${esc(aid)}"><div class="ic">${ICON(aid ? roomIcon(name) : 'house', 'sm')}</div><div class="grow"><div class="t">${esc(name)}</div>${sub ? `<div class="d">${esc(sub)}</div>` : ''}</div>${(p.area || '') === aid ? `<span class="chk">${ICON('check', 'sm')}</span>` : ''}</button>`;
+  const body = `<div class="card pad0 list">${row('', 'Any room', 'Listed on its own, not on a room page')}${areas().map(a => row(a.id, a.name, `${plural(roomScenes(a.id).filter(x => x.id !== p.id).length, 'scene')} there now`)).join('')}</div>`;
+  showSheet('scene-room', 'Which room?', body, { detent: 'medium', back: true, onBack: reopenEditor, sub: 'A scene with a room shows on that page and steps through with the others there.' });
+}
+function setSceneRoom(aid) {
+  const p = presets().find(x => x.id === S.sceneEdit); if (!p) return;
+  const was = p.area || '';
+  if (was === aid) { reopenEditor(p.id); return; }
+  // the name carries the room ("Kitchen · Relax"), so it follows the scene rather than going stale
+  const short = sceneShortName(p);
+  p.area = aid || null;
+  p.name = (aid ? `${areaName(aid)} · ${short}` : short).slice(0, 60);
+  markEdited(p);
+  save({ msg: aid ? `${cap(short)} is a ${areaName(aid)} scene` : `${cap(short)} is not in a room any more` });
+  reopenEditor(p.id);
 }
 // "Which lights are in this look?": every light in the house with a checkbox, back to the editor.
 function openSceneLightsSheet() {
@@ -161,8 +200,8 @@ function sceneLutronSheet(sid) {
     <div class="spacer"></div><button class="btn block" data-act="run-scene" data-t="${t}">${ICON('play', 'sm')} Try it</button>`;
   showSheet('scene-lutron', esc(sc.name), body, { detent: 'compact', sub: 'From the Lutron app' });
 }
-// Any change to a room mood marks it as the person's own.
-function markEdited(p) { if (p && p.mood && p.area && !p.edited) { p.edited = true; const t = $('#sheet-root .tip .t'); if (t && /suggested mood/i.test(t.textContent)) reopenEditor(p.id); } }
+// Any change to one of the five marks it as the person's own, so a refresh leaves it alone.
+function markEdited(p) { if (p && p.mood && !p.edited) { p.edited = true; const t = $('#sheet-root .tip .t'); if (t && /this room was offered/i.test(t.textContent)) reopenEditor(p.id); } }
 function sceneEdit(k, v) {
   const p = presets().find(x => x.id === S.sceneEdit); if (!p) return;
   if (k === 'name') { p.name = v.trim() || 'Untitled'; const h = $('#sheet-root .sh h2'); if (h && SHEET_KEY === 'scene' && !/call this look/.test(h.textContent)) h.textContent = p.name; }
@@ -181,9 +220,9 @@ function sceneCapture() {
   for (const did of Object.keys(p.levels)) { const d = dev(did); if (!d) continue; p.levels[did] = sceneEntryNow(d, 0); }
   markEdited(p); saveSoon(); reopenEditor(p.id); toast('Captured');
 }
-// "Back to the suggestion": the mood's computed levels again, and Update moods may refresh it from now on.
+// "Back to the suggestion": the computed levels again, and a refresh may replace it from now on.
 function sceneSuggest(id) {
-  const p = presets().find(x => x.id === id); if (!p || !p.mood || !p.area) return;
+  const p = presets().find(x => x.id === id); if (!p || !p.mood || !p.area) return;   // a suggestion needs the room it was computed for
   const m = moodById(p.mood); p.levels = moodLevels(p.area, m); p.fade = m.fade; p.name = `${areaName(p.area)} · ${m.name}`.slice(0, 60); p.edited = false;
   save({ msg: 'Back to the suggestion', render: S.view === 'scenes' }); reopenEditor(id);
 }

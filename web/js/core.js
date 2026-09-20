@@ -352,12 +352,12 @@ function describe(actions) {
         const ids = a.preset_ids || [];
         const p = presets().find(x => x.id === ids[0]);
         const back = a.dir === -1 ? ' backwards' : '';
-        // A room's name is only honest when the loop holds every one of that room's moods. Three of five
+        // A room's name is only honest when the loop holds every one of that room's scenes. Some of them
         // are a list somebody chose, and it reads as the count.
-        const whole = typeof roomMoodPresets === 'function' && p && p.area
-          && (m => m.length === ids.length && m.every((v, i) => v === ids[i]))(roomMoodPresets(p.area).map(x => x.id));
+        const whole = typeof roomScenes === 'function' && p && p.area
+          && (m => m.length === ids.length && m.every((v, i) => v === ids[i]))(roomScenes(p.area).map(x => x.id));
         const oneRoom = whole;
-        return oneRoom ? `Steps${back} through ${areaName(p.area)}'s moods` : `Steps${back} through ${plural(ids.length, 'scene')}`;
+        return oneRoom ? `Steps${back} through ${areaName(p.area)}'s scenes` : `Steps${back} through ${plural(ids.length, 'scene')}`;
       }
       case 'fan': return a.speed === 'Off' ? `Turns ${t}${t === 'the fans' ? '' : ' fan'} off` : `Sets ${t}${t === 'the fans' ? '' : ' fan'} to ${fanName(a.speed)}`;
       case 'scene': return `Runs the ${targetName('s:' + a.scene_id)} scene`;
@@ -428,7 +428,7 @@ function paintState() {
   });
   document.querySelectorAll('[data-roomsum]').forEach(el => { el.textContent = roomSummary(el.dataset.roomsum); });
   document.querySelectorAll('[data-act-lvl]').forEach(el => { const was = el.classList.contains('on'); const on = isOn(el.dataset.actLvl); el.classList.toggle('on', on); if (was !== on && window.Motion) Motion.lightChanged(el.closest('.light') || el, level(el.dataset.actLvl) || 0, was); });
-  if (typeof paintLight === 'function') paintLight(); // light.js: lamp discs, moods, rings, night look
+  if (typeof paintLight === 'function') paintLight(); // light.js: lamp discs, scene rows, rings, night look
   paintNowBar();
   if (window.LightField && S.view === 'home') LightField.update();
 }

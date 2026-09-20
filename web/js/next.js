@@ -13,7 +13,7 @@ const outsideRooms = () => lightRooms().filter(a => OUTSIDE_RE.test(a.name));
 const bedroomLamp = () => { const beds = dimmers().filter(d => BEDROOM_RE.test(devAreaName(d))); return beds.find(d => /lamp/i.test(d.name)) || beds[0] || null; };
 const usualRemotes = () => remotes().filter(d => usualLayoutTargets(d));
 const freshRemote = () => usualRemotes().find(d => !remoteHasSettings(d)) || null;
-const roomsWithoutMoods = () => moodsWalkRooms().filter(aid => !roomHasMoods(aid));
+const roomsWithoutScenes = () => suggestWalkRooms().filter(aid => !roomHasScenes(aid));
 const hasGoodnight = () => bindings().some(b => userGestureOf(b) === 'hold' && recipeOf(b.actions) === 'goodnight');
 const bedRemote = () => remotes().find(x => BEDROOM_RE.test(devAreaName(x))) || remotes()[0] || null;
 const standalone = () => !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
@@ -27,9 +27,9 @@ const NEXT = [
   { id: 'sort', can: () => dimmers().length > 0, when: () => untaggedLights().length > 0,
     title: () => 'Want your lights sorted?', reason: () => 'Say what kind of lamp each one is, and Relax, Dinner and Movie know what to dim.',
     go: () => openSortWalk() },
-  { id: 'moods', can: () => moodsWalkRooms().length > 0, when: () => roomsWithoutMoods().length > 0,
-    title: () => `Give the ${esc(areaName(roomsWithoutMoods()[0] || moodsWalkRooms()[0]))} moods?`, reason: () => 'Bright, Relax, Dinner, Movie and Night, made from what each light is.',
-    go: () => { const walk = roomsWithoutMoods(); if (walk.length) openRolesSheet(walk[0], { walk }); } },
+  { id: 'moods', can: () => suggestWalkRooms().length > 0, when: () => roomsWithoutScenes().length > 0,
+    title: () => `Suggest scenes for the ${esc(areaName(roomsWithoutScenes()[0] || suggestWalkRooms()[0]))}?`, reason: () => 'Bright, Relax, Dinner, Movie and Night, made from what each light is.',
+    go: () => { const walk = roomsWithoutScenes(); if (walk.length) openRolesSheet(walk[0], { walk }); } },
   { id: 'welcome', can: () => outsideRooms().length > 0, when: () => !schedules().some(sc => sc.kind === 'welcome'),
     title: () => 'Lights on before you get home?', reason: () => `${esc(outsideRooms()[0].name)} comes on 20 minutes before sunset and goes off at bedtime.`,
     go: () => openWelcomeSetup() },
@@ -91,7 +91,7 @@ function openGreeting() {
   const row = (act, id, icon, t, d) => `<button class="item" data-act="${act}" ${id ? `data-id="${esc(id)}"` : ''}>${ICON(icon)}<div class="grow"><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   const rows = [];
   const r = freshRemote(); if (r) rows.push(row('greet-remote', r.device_id, 'remote', `Set up the ${esc(devAreaName(r))} remote`, 'Top on, bottom off, hold to dim'));
-  if (roomsWithoutMoods().length) rows.push(row('greet-moods', '', 'sofa', 'Give a room moods', 'Bright, Relax, Dinner, Movie and Night'));
+  if (roomsWithoutScenes().length) rows.push(row('greet-moods', '', 'sofa', 'Suggest scenes for a room', 'Bright, Relax, Dinner, Movie and Night'));
   if (outsideRooms().length && !schedules().some(sc => sc.kind === 'welcome')) rows.push(row('greet-welcome', '', 'moon', 'Lights on before you get home', 'On before sunset, off at bedtime'));
   rows.push(row('sheet-close', '', 'house', 'Just look around', ''));
   sheet.open('Your home is connected', `<div class="card pad0 list">${rows.join('')}</div>`, { detent: 'compact', sub: `${plural(nd, 'light')} in ${plural(nr, 'room')}${np ? `, and ${plural(np, 'remote')}` : ''}. Where would you like to start?` });
@@ -120,7 +120,7 @@ document.addEventListener('click', e => {
     case 'next-remote': goRemoteDetail(d.id); break;
     case 'ideas': openIdeas(); break;
     case 'greet-remote': greetDone(false); goRemoteDetail(d.id); applyUsualLayout(d.id); break;
-    case 'greet-moods': greetDone(true); { const walk = roomsWithoutMoods(); if (walk.length) openRolesSheet(walk[0], { walk }); else sheet.close(); } break;
+    case 'greet-moods': greetDone(true); { const walk = roomsWithoutScenes(); if (walk.length) openRolesSheet(walk[0], { walk }); else sheet.close(); } break;
     case 'greet-welcome': greetDone(true); openWelcomeSetup(); break;
   }
 });

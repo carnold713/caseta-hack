@@ -1,9 +1,9 @@
 /* The room sheet and the room setup page (docs/ia-v5.md 3, stage 2, revised: rooms open in the bottom sheet).
-   Home is a list of rooms; tapping one opens the room's moods, its lights and the "Room setup" row as a sheet
+   Home is a list of rooms; tapping one opens the room's scenes, its lights and the "Room setup" row as a sheet
    over Home, the same shape automations.js uses for an automation's editor. Room setup itself stays a pushed
    page (docs/ux-progressive.md 2.21, docs/ia-v5.md "dead end"): a page's own nav-bar back arrow can never be
    missing, and a sheet's row-by-row back arrows can be forgotten, which is exactly what happened here once.
-   Loaded after home.js and light.js (it uses moodRowHTML, deviceTileHTML, roomLights, lightKind). */
+   Loaded after home.js and light.js (it uses roomSceneRowHTML, deviceTileHTML, roomLights, lightKind). */
 'use strict';
 
 // #room/<area>          the room sheet, over Home
@@ -33,7 +33,7 @@ function openRoomSheet(aid) {
   renderRoomSheet();
 }
 // Redraws the sheet in place for whichever room `S.room` names right now: the initial open, a reopen from a
-// light's back arrow, and the return trip from "Give this room moods".
+// light's back arrow, and the return trip from "Suggest five scenes for this room".
 function renderRoomSheet() {
   const aid = S.room;
   if (!aid || !areas().some(a => a.id === aid)) { S.room = null; if (sheet.isOpen() && SHEET_KEY === 'room') sheet.close(); return; }
@@ -117,19 +117,19 @@ function paintRoomHero() {
 // no equivalent slot, so it becomes the first row instead. Nothing here is new, only moved).
 function roomSheetBodyHTML(aid) {
   const ds = roomOrder(controllable().filter(d => devArea(d) === aid));
-  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
+  const ps = typeof roomScenes === 'function' ? roomScenes(aid) : [];
   const t = `a:${aid}`;
   const hasToggle = controllable().some(d => devArea(d) === aid && d.domain !== 'cover');
   let h = roomHeroHTML(aid);
   if (hasToggle) h += `<div class="card pad0 list" style="margin-bottom:8px"><div class="item"><div class="grow"><div class="t">Turn the room on or off</div></div><button class="sw" data-tgt="${t}" data-act="toggle" data-t="${t}" aria-label="${esc(areaName(aid))} on or off"></button></div></div>`;
-  // the moods, or one row that offers to make them
+  // the room's scenes, or one row that offers to suggest some
   if (roomDimmers(aid).length) {
     h += ps.length
-      ? `<div class="gh">Moods</div><div class="room" data-tgt="${t}" data-room="${aid}">${moodRowHTML(aid)}</div>`
-      : `<div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="roles-open" data-area="${aid}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Give this room moods</div><div class="d">Bright, Relax, Dinner, Movie and Night</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+      ? `<div class="gh">Scenes</div><div class="room" data-tgt="${t}" data-room="${aid}">${roomSceneRowHTML(aid)}</div>`
+      : `<div class="card pad0 list" style="margin-top:8px"><button class="item" data-act="roles-open" data-area="${aid}"><span class="plus">${ICON('plus', 'sm')}</span><div class="grow"><div class="t">Suggest five scenes for this room</div><div class="d">Bright, Relax, Dinner, Movie and Night</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   }
   h += deviceGridHTML(aid, ds);
-  h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="room-setup" data-area="${aid}"><div class="grow"><div class="t">Room setup</div><div class="d">What each light is for, moods, kinds</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+  h += `<div class="card pad0 list" style="margin-top:24px"><button class="item" data-act="room-setup" data-area="${aid}"><div class="grow"><div class="t">Room setup</div><div class="d">What each light is for, scenes, kinds</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   return h;
 }
 
@@ -152,16 +152,17 @@ function deviceGridHTML(aid, ds) {
 // sheet stack above.
 function roomSetupHTML(aid) {
   const ds = roomLights(aid);
-  const ps = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : [];
+  const ps = typeof roomScenes === 'function' ? roomScenes(aid) : [];
+  const sug = typeof roomSuggested === 'function' ? roomSuggested(aid) : [];
   const roles = ds.map(d => { const r = lightRole(d.device_id); return `<button class="item" data-act="roles-open" data-area="${aid}"><div class="grow"><div class="t">${esc(d.name)}</div></div><span class="val">${r ? esc(ROLE_LABEL[r]) : 'Not set'}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('');
   const kinds = ds.map(d => { const k = lightKind(d.device_id); return `<button class="item" data-act="room-kind" data-id="${d.device_id}" data-area="${aid}">${lampHTML(level(d.device_id) || 0, 28, ICON(lightIcon(d), 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div></div><span class="val">${k ? esc(kindLabel(k)) : 'Not set'}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`; }).join('');
   let h = `<div class="gh">What each light is for</div><div class="card pad0 list">${roles || `<div class="item"><div class="grow"><div class="d">No lights in this room yet.</div></div></div>`}</div>`;
   if (roomDimmers(aid).length) {
-    h += `<div class="gh">Moods</div><div class="card pad0 list">`;
+    h += `<div class="gh">Scenes</div><div class="card pad0 list">`;
     h += ps.length
-      ? `<button class="item" data-act="rm-open" data-area="${aid}"><div class="grow"><div class="t">The five moods</div><div class="d">Bright, Relax, Dinner, Movie and Night</div></div><span class="val">${plural(ps.length, 'mood')}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`
+      ? `<button class="item" data-act="rm-open" data-area="${aid}"><div class="grow"><div class="t">This room's scenes</div><div class="d">Run one, change one, or make a new one</div></div><span class="val">${plural(ps.length, 'scene')}</span><span class="chev">${ICON('chev', 'sm')}</span></button>`
       : '';
-    h += `<button class="item" data-act="roles-open" data-area="${aid}"><div class="grow"><div class="t">${ps.length ? 'Make them again from what they are' : 'Make the moods'}</div><div class="d">From what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
+    h += `<button class="item" data-act="roles-open" data-area="${aid}"><div class="grow"><div class="t">${sug.length ? 'Suggest the five again' : 'Suggest five scenes'}</div><div class="d">Bright, Relax, Dinner, Movie and Night, from what each light is for</div></div><span class="chev">${ICON('chev', 'sm')}</span></button></div>`;
   }
   // Follow the day, for the lamps in this room that can change their warmth (js/daylight.js). A room of Caseta
   // dimmers has no row at all: there is nothing here it could apply to.

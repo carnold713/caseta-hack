@@ -63,7 +63,8 @@ function openSetupSheet() {
 // Scenes on Home: one chip row under a small caption. A tap runs the scene; the first chip makes a new one. A starred scene is pinned to the front.
 function homeScenes() {
   const favs = S.config.favorites;
-  const sc = [...presets().filter(p => !(p.mood && p.area)).map(p => ({ id: 'p:' + p.id, name: p.name })), ...lutronScenes().map(s => ({ id: 's:' + s.scene_id, name: s.name }))];
+  // every scene, a room's included: there is one kind of scene now, so universal search finds them all
+  const sc = [...presets().map(p => ({ id: 'p:' + p.id, name: p.name })), ...lutronScenes().map(s => ({ id: 's:' + s.scene_id, name: s.name }))];
   return sc.sort((a, b) => (favs.includes(b.id) ? 1 : 0) - (favs.includes(a.id) ? 1 : 0));
 }
 // Running a scene is one tap, here. Making one is two taps deeper, behind the "+" on the Scenes page.
@@ -148,7 +149,7 @@ function roomGridHTML() {
   if (!as.length) return `<div class="rgrid" id="rgrid"><div class="rtile note"><div class="head"><span class="n">No rooms yet</span><span class="s">Your rooms appear here as soon as your home is connected</span></div></div>${newRoomTileHTML()}</div>`;
   const sel = S.homeScope && S.homeScope !== 'all' && as.some(a => a.id === S.homeScope) ? S.homeScope : null;
   if (sel) {
-    return `<div class="rgrid scoped" id="rgrid">${roomTileHTML(as.find(a => a.id === sel))}${moodRowHTML(sel)}</div>`;
+    return `<div class="rgrid scoped" id="rgrid">${roomTileHTML(as.find(a => a.id === sel))}${roomSceneRowHTML(sel)}</div>`;
   }
   return `<div class="rgrid" id="rgrid">${as.map(roomTileHTML).join('')}${newRoomTileHTML()}</div>`;
 }

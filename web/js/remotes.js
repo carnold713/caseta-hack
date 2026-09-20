@@ -79,7 +79,7 @@ function remoteDetail(d) {
     <div class="spacer"></div>
     ${moreRow('Change the picture, the Lutron app, start over, remove', 'remote-more')}`;
 }
-// The usual layout (docs/ux-flows.md 8): top on, bottom off, hold to brighten or dim, the round button a mood.
+// The usual layout (docs/ux-flows.md 8): top on, bottom off, hold to brighten or dim, the round button a scene.
 // Offered above the Buttons on a fresh remote with a room; "Start over" lives under More once it has settings.
 function usualLayoutTargets(d) {
   const real = picoSlots(d).filter(s => s.real).map(s => s.n); const l = LAYOUTS[d.type] || {};
@@ -89,7 +89,7 @@ function usualLayoutTargets(d) {
 function usualHidden(pid) { try { return !!localStorage.getItem(`usualHidden:${pid}`); } catch (_) { return false; } }
 function usualLayoutHTML(d) {
   const u = usualLayoutTargets(d); if (!u || remoteHasSettings(d) || usualHidden(d.device_id)) return '';
-  const room = devAreaName(d); const moods = typeof roomHasMoods === 'function' && roomHasMoods(devArea(d));
+  const room = devAreaName(d); const moods = typeof roomHasScenes === 'function' && roomHasScenes(devArea(d));
   const middle = u.round == null ? '' : ` The middle button is ${moods ? 'Relax' : 'Half brightness'}.`;
   return `<div class="tip top" id="usualtip" style="margin-bottom:8px"><div class="grow"><span class="cap">Set up</span><div class="t">Want the usual layout?</div><div class="d">Top turns ${esc(room)} on, bottom turns it off, hold either to brighten or dim.${esc(middle)} Or tap a button on the picture to pick yourself.</div><button class="btn ghost" data-act="usual-hide" data-id="${d.device_id}">I'll pick myself</button></div><button class="go" data-act="usual-layout" title="Set it up the usual way" aria-label="Set it up the usual way">${ICON('chev')}</button></div>`;
 }
@@ -108,7 +108,7 @@ function applyUsualLayout(pid, opts = {}) {
     mk(u.bottom, 'hold_start', [{ type: 'lower', target: T, floor: 1 }]), mk(u.bottom, 'hold_end', [{ type: 'stop', target: T }]),
   ];
   if (u.round != null) {
-    const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(devArea(d)) : [];
+    const mp = typeof roomSuggested === 'function' ? roomSuggested(devArea(d)) : [];
     const relax = mp.find(p => p.mood === 'relax');
     if (relax) { list.push(mk(u.round, 'single', [{ type: 'preset', preset_id: relax.id }])); if (mp.length >= 2) list.push(mk(u.round, 'double', [{ type: 'cycle_presets', preset_ids: mp.map(p => p.id) }])); }
     else list.push(mk(u.round, 'single', [{ type: 'level', target: T, level: 50 }]), mk(u.round, 'double', [{ type: 'level', target: T, level: 10, fade: 1 }]));
@@ -190,15 +190,13 @@ const RECIPES = [
   { id: 'leaving', t: 'Leaving', d: () => `Everything off. The light by the door stays on for two minutes.${houseExtras()}`, any: true, pick: 'door' },
   { id: 'alloff', t: 'Turn everything off', d: 'Every light in the house', any: true, mk: () => [{ type: 'level', target: 'h:all', level: 'off' }] },
   { id: 'scene', t: 'Run a scene…', any: true, pick: true },
-  // In a room with moods (docs/ux-flows.md 7): a picker over the room's mood scenes, and a step through them. Without moods, one row that makes them.
-  { id: 'mood', t: 'Room mood…', d: ctx => `Bright, Relax, Dinner, Movie or Night for ${ctx.room}`, any: true, moods: true, pick: 'mood' },
-  { id: 'nextmood', t: 'Next mood', d: ctx => `Steps through ${ctx.room}'s moods, one per press`, any: true, moods: 'two', mk: (T, ctx) => [{ type: 'cycle_presets', preset_ids: ctx.moodIds }] },
+
   // The same walk over scenes you choose rather than one room's five, and the reason the walk has a
   // direction: on a remote with arrows this sets both of them, up going forwards and down going back.
   { id: 'scenecycle', t: 'Step through scenes…', any: true, scenes: 'two',
     d: ctx => (ctx.arrows ? 'The arrows go forwards and backwards through scenes you pick' : 'One step per press, through scenes you pick'),
     pick: 'cycle' },
-  { id: 'moodsfirst', t: 'Room moods', d: ctx => `Make moods for ${ctx.room} first`, any: true, moods: 'none', pick: 'roles' },
+  { id: 'moodsfirst', t: 'Suggest scenes…', d: ctx => `${ctx.room} has none yet. Five, from what each light is for.`, any: true, moods: 'none', pick: 'roles' },
   { id: 'fan_up', t: 'Fan: faster', fan: true, mk: T => [{ type: 'step', target: T, delta: 1 }] },
   { id: 'fan_down', t: 'Fan: slower', fan: true, mk: T => [{ type: 'step', target: T, delta: -1 }] },
 ];
@@ -215,20 +213,16 @@ function recipeOf(actions) {
     if (a.type === 'step') { const f = dev((a.target || '').slice(2)); if (f && f.domain === 'fan') return a.delta > 0 ? 'fan_up' : 'fan_down'; return a.delta > 0 ? 'up' : 'down'; }
     if (a.type === 'raise') return 'hold_up'; if (a.type === 'lower') return 'hold_down';
     if (a.type === 'timer') return 'sleep';
-    if (a.type === 'preset') { const p = presets().find(x => x.id === a.preset_id); return p && p.mood ? 'mood' : 'scene'; }
+    if (a.type === 'preset') return 'scene';
     if (a.type === 'scene') return 'scene';
-    // A plain forward walk over exactly one room's moods is still "Next mood", the row that made it.
-    // Anything else is a list somebody chose: a direction, or scenes that are not one room's five.
-    if (a.type === 'cycle_presets') {
-      const ids = a.preset_ids || [];
-      const roomsMoods = typeof roomMoodPresets === 'function' && areas().some(x => { const m = roomMoodPresets(x.id).map(p => p.id); return m.length === ids.length && m.every((v, i) => v === ids[i]); });
-      return !a.dir && roomsMoods ? 'nextmood' : 'scenecycle';
-    }
+    // Every walk through scenes is the same row now, including the ones "Next mood" wrote before there
+    // was one kind of scene. Their actions are unchanged, so they keep doing exactly what they did.
+    if (a.type === 'cycle_presets') return 'scenecycle';
   }
   return 'custom';
 }
-// The room a remote sits in, and that room's mood scenes, for the mood recipes.
-function recipeCtx(pid) { const d = dev(pid); const aid = devArea(d); const mp = typeof roomMoodPresets === 'function' ? roomMoodPresets(aid) : []; return { aid, room: areaName(aid), moodIds: mp.map(p => p.id), moods: mp.length, dimmers: typeof roomDimmers === 'function' ? roomDimmers(aid).length : 0, arrows: arrowPair(pid), scenes: presets().length }; }
+// The room a remote sits in and that room's scenes, for the rows that start from where the remote is.
+function recipeCtx(pid) { const d = dev(pid); const aid = devArea(d); const mp = typeof roomScenes === 'function' ? roomScenes(aid) : []; return { aid, room: areaName(aid), moodIds: mp.map(p => p.id), moods: mp.length, dimmers: typeof roomDimmers === 'function' ? roomDimmers(aid).length : 0, arrows: arrowPair(pid), scenes: presets().length }; }
 // The two arrow keys on this remote, when it has a pair of them, as {up, down} button numbers. The
 // picture already knows which slot is which (picoSlots' glyph), so nothing new has to be guessed.
 function arrowPair(pid) {
@@ -241,10 +235,10 @@ function defaultTarget(pid) { const d = dev(pid); const aid = devArea(d); return
 // The chooser holds a list; one entry is stored as a plain string, several as a list.
 const packTarget = list => (list.length === 1 ? list[0] : list.slice());
 
-// The usual ways for each kind of press (2.7); `mood` stands for the room-mood recipe that applies to the room.
+// The usual ways for each kind of press (2.7); `mood` stands for whichever scene row fits the room.
 const USUAL = { single: ['on', 'off', 'toggle', 'scene', 'mood'], double: ['full', 'night', 'alloff', 'scene', 'mood'], hold: ['hold_up', 'hold_down', 'sleep', 'goodnight', 'alloff'], fan: ['fan_up', 'fan_down', 'toggle', 'off'] };
 // Every way, grouped, for "Show all ways".
-const RECIPE_GROUPS = [['Brightness', ['on', 'off', 'toggle', 'full', 'half', 'night', 'movie', 'cycle', 'up', 'down', 'hold_up', 'hold_down']], ['Scenes and moods', ['scene', 'mood', 'nextmood', 'scenecycle', 'moodsfirst']], ['Timers and going out', ['sleep', 'lightway', 'goodnight', 'leaving', 'alloff']], ['Fans', ['fan_up', 'fan_down']]];
+const RECIPE_GROUPS = [['Brightness', ['on', 'off', 'toggle', 'full', 'half', 'night', 'movie', 'cycle', 'up', 'down', 'hold_up', 'hold_down']], ['Scenes', ['scene', 'scenecycle', 'moodsfirst']], ['Timers and going out', ['sleep', 'lightway', 'goodnight', 'leaving', 'alloff']], ['Fans', ['fan_up', 'fan_down']]];
 function openRecipeSheet(g, night = false) {
   const pid = S.remote, n = S.button; S.gesture = g; S.night = night; S.advCustom = null;
   const acts = gestureActions(pid, n, g, night);
@@ -279,8 +273,8 @@ function renderRecipeSheet() {
   const byId = id => RECIPES.find(r => r.id === id);
   // the five usual ways, and one row into the rest: the other seventeen are a pushed sheet, never twenty two rows
   // under your finger (docs/ia-v5.md 2, stage 5).
-  // the mood row stands in for whichever mood recipe fits the room: the picker, the step-through, or "make moods first"
-  const moodId = ctx.moods === 0 ? (ctx.dimmers > 0 ? 'moodsfirst' : null) : (ctx.moods >= 2 && selected !== 'mood' ? 'nextmood' : 'mood');
+  // the room slot: step through the room's scenes when it has two or more, otherwise offer to make some
+  const moodId = ctx.moods >= 2 ? 'scenecycle' : (ctx.moods === 0 && ctx.dimmers > 0 ? 'moodsfirst' : null);
   // On an arrow key the walk through scenes is one of the usual ways rather than something to go looking
   // for: an arrow is the key you press again and again, which is what a loop is for.
   const onArrow = ctx.arrows && (n === ctx.arrows.up || n === ctx.arrows.down);
@@ -365,7 +359,6 @@ function applyRecipe(rid) {
   const pid = S.remote, n = S.button, g = S.gesture, night = S.night, T = packTarget(S.pickTargets);
   const r = RECIPES.find(x => x.id === rid);
   if (r && r.pick === true) { openScenePicker(); return; }
-  if (r && r.pick === 'mood') { openMoodPicker(); return; }
   if (r && r.pick === 'cycle') { openCyclePicker(); return; }
   if (r && r.pick === 'roles') { const ctx = recipeCtx(pid); openRolesSheet(ctx.aid, { back: renderRecipeSheet, after: renderRecipeSheet }); return; }
   if (r && r.pick === 'door') { openDoorPicker(); return; }
@@ -399,14 +392,6 @@ function applyRecipe(rid) {
   save({ msg: acts.length ? describe(acts) : 'Cleared', render: true });
   if (SHEET_KEY === 'all-ways') openAllWaysSheet(); else renderRecipeSheet();
 }
-// "Room mood…": the room's mood scenes, saved as a scene action through pickScene.
-function openMoodPicker() {
-  const ctx = recipeCtx(S.remote);
-  const items = roomMoodPresets(ctx.aid).map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: p.edited ? 'Changed by you' : 'Suggested' }));
-  S.scenePick = items;
-  const body = `<div class="card pad0 list">${items.map((it, i) => { const p = presets().find(x => x.id === it.a.preset_id); const m = moodById(p.mood); return `<button class="item" data-act="pick-scene" data-i="${i}">${lampHTML(presetMax(p), 40, ICON(m.icon, 'sm'))}<div class="grow"><div class="t">${esc(m.name)}</div><div class="d">${it.s}</div></div></button>`; }).join('')}</div>`;
-  showSheet('mood-pick', `Which mood for ${esc(ctx.room)}?`, body, { detent: 'compact', back: true, onBack: renderRecipeSheet, sub: 'One press runs it.' });
-}
 // "Leaving": one question, which light is by the door, then it is saved.
 function openDoorPicker() {
   const pid = S.remote, n = S.button, g = S.gesture;
@@ -427,7 +412,7 @@ function saveLeaving(door) {
 }
 // "Step through scenes…": which scenes, in the order the presses should walk them. Ticking is the
 // ordering, because a list of four is quicker to tick in order than to tick and then drag. A room's
-// row takes all five of its moods at once, which is the common case and the one the owner asked for.
+// row takes all of that room's scenes at once, which is the common case and the one the owner asked for.
 function openCyclePicker() {
   const pid = S.remote, n = S.button, g = S.gesture, night = S.night;
   const cur = gestureActions(pid, n, g, night).find(a => a.type === 'cycle_presets');
@@ -442,12 +427,12 @@ function renderCyclePicker() {
     ? `<div class="chips scroll cyrow" style="margin:4px 0 8px"><button class="chip cy-clear" data-act="cycle-clear">Start over</button>${picked.map((id, i) => { const p = byId(id); return `<button class="chip sel" data-act="cycle-scene" data-p="${esc(id)}">${i + 1}. ${esc(p ? p.name : 'Gone')}</button>`; }).join('')}</div>`
     : `<p class="d" style="margin:4px 0 8px">Tap them in the order you want the presses to walk them.</p>`;
   const rows = areas().map(a => {
-    const mp = roomMoodPresets(a.id); if (!mp.length) return '';
+    const mp = roomScenes(a.id); if (!mp.length) return '';
     const all = mp.every(p => picked.includes(p.id));
-    return `<div class="lcap">${esc(a.name)}</div><button class="item" data-act="cycle-room" data-a="${esc(a.id)}"><div class="ic">${ICON(roomIcon(a.name), 'sm')}</div><div class="grow"><div class="t">All of ${esc(a.name)}'s moods</div><div class="d">${all ? 'Already in the loop' : `Adds ${plural(mp.length, 'mood')} in order`}</div></div></button>${mp.map(p => sceneRow(p, picked)).join('')}`;
+    return `<div class="lcap">${esc(a.name)}</div><button class="item" data-act="cycle-room" data-a="${esc(a.id)}"><div class="ic">${ICON(roomIcon(a.name), 'sm')}</div><div class="grow"><div class="t">All of ${esc(a.name)}'s scenes</div><div class="d">${all ? 'Already in the loop' : `Adds ${plural(mp.length, 'scene')} in order`}</div></div></button>${mp.map(p => sceneRow(p, picked)).join('')}`;
   }).join('');
-  const others = presets().filter(p => !p.mood);
-  const mine = others.length ? `<div class="lcap">Your scenes</div>${others.map(p => sceneRow(p, picked)).join('')}` : '';
+  const others = presets().filter(p => !p.area);
+  const mine = others.length ? `<div class="lcap">Any room</div>${others.map(p => sceneRow(p, picked)).join('')}` : '';
   const note = picked.length < 2 ? `<p class="d" style="margin-top:12px">Pick at least two.</p>` : '';
   const ctx = recipeCtx(S.remote);
   const done = `<button class="btn block primary" data-act="cycle-save" ${picked.length < 2 ? 'disabled' : ''} style="margin-top:16px">${ctx.arrows ? 'Set both arrows' : 'Use these'}</button>`;
@@ -457,7 +442,7 @@ function renderCyclePicker() {
 function sceneRow(p, picked) {
   const at = picked.indexOf(p.id);
   const m = p.mood && typeof moodById === 'function' ? moodById(p.mood) : null;
-  return `<button class="item ${at >= 0 ? 'sel' : ''}" data-act="cycle-scene" data-p="${esc(p.id)}">${lampHTML(presetMax(p), 40, ICON(m ? m.icon : 'scene', 'sm'))}<div class="grow"><div class="t">${esc(m ? m.name : p.name)}</div><div class="d">${at >= 0 ? `Number ${at + 1} in the loop` : 'Not in the loop'}</div></div>${at >= 0 ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`;
+  return `<button class="item ${at >= 0 ? 'sel' : ''}" data-act="cycle-scene" data-p="${esc(p.id)}">${lampHTML(presetMax(p), 40, ICON(m ? m.icon : 'scene', 'sm'))}<div class="grow"><div class="t">${esc(sceneShortName(p))}</div><div class="d">${at >= 0 ? `Number ${at + 1} in the loop` : 'Not in the loop'}</div></div>${at >= 0 ? `<span class="chk">${ICON('check')}</span>` : ''}</button>`;
 }
 function toggleCycleScene(id) {
   const list = S.cyclePick || (S.cyclePick = []);
@@ -467,7 +452,7 @@ function toggleCycleScene(id) {
 }
 function addCycleRoom(aid) {
   const list = S.cyclePick || (S.cyclePick = []);
-  const mp = roomMoodPresets(aid);
+  const mp = roomScenes(aid);
   // a second tap on a room that is already all in takes it back out, so the row is its own undo
   if (mp.length && mp.every(p => list.includes(p.id))) S.cyclePick = list.filter(id => !mp.some(p => p.id === id));
   else for (const p of mp) if (!list.includes(p.id)) list.push(p.id);
@@ -498,11 +483,31 @@ function saveCycle() {
   save({ msg: done === 2 ? `The arrows step through ${many}` : pair ? `One arrow steps through ${many}` : `Steps through ${many}` });
   renderRecipeSheet();
 }
+// "Run a scene…": every scene there is, grouped by the room it belongs to and led by the remote's own
+// room. This is the only scene picker now: a room's five are scenes in its group, so the separate
+// "Room mood…" row it used to take to had nothing of its own left to offer.
 function openScenePicker() {
-  const items = [...presets().map(p => ({ a: { type: 'preset', preset_id: p.id }, n: p.name, s: 'Your scene' })), ...lutronScenes().map(s => ({ a: { type: 'scene', scene_id: s.scene_id }, n: s.name, s: 'From the Lutron app' }))];
-  const body = items.length ? `<div class="card pad0 list">${items.map((it, i) => `<button class="item" data-act="pick-scene" data-i="${i}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(it.n)}</div><div class="d">${it.s}</div></div></button>`).join('')}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
+  const ctx = recipeCtx(S.remote);
+  const rooms = areas().filter(a => presets().some(p => p.area === a.id))
+    .sort((a, b) => (b.id === ctx.aid) - (a.id === ctx.aid));
+  const items = [];
+  const rowFor = (p, note) => {
+    items.push({ a: { type: 'preset', preset_id: p.id }, n: sceneShortName(p), s: note });
+    const m = p.mood && typeof moodById === 'function' ? moodById(p.mood) : null;
+    return `<button class="item" data-act="pick-scene" data-i="${items.length - 1}">${lampHTML(presetMax(p), 40, ICON(m ? m.icon : 'scene', 'sm'))}<div class="grow"><div class="t">${esc(sceneShortName(p))}</div><div class="d">${esc(note)}</div></div></button>`;
+  };
+  const note = p => (p.mood ? (p.edited ? 'Changed by you' : 'Suggested') : 'Yours');
+  let body = rooms.map(a => `<div class="lcap">${esc(a.name)}${a.id === ctx.aid ? " · this remote's room" : ''}</div>${roomScenes(a.id).map(p => rowFor(p, note(p))).join('')}`).join('');
+  const loose = presets().filter(p => !p.area);
+  if (loose.length) body += `<div class="lcap">Any room</div>${loose.map(p => rowFor(p, 'Yours')).join('')}`;
+  const theirs = lutronScenes();
+  if (theirs.length) body += `<div class="lcap">From the Lutron app</div>${theirs.map(x => {
+    items.push({ a: { type: 'scene', scene_id: x.scene_id }, n: x.name, s: 'From the Lutron app' });
+    return `<button class="item" data-act="pick-scene" data-i="${items.length - 1}"><div class="ic">${ICON('scene', 'sm')}</div><div class="grow"><div class="t">${esc(x.name)}</div><div class="d">From the Lutron app</div></div></button>`;
+  }).join('')}`;
   S.scenePick = items;
-  showSheet('scene-pick', 'Which scene?', body, { detent: 'medium', back: true, onBack: renderRecipeSheet });
+  const html = items.length ? `<div class="card pad0 list">${body}</div>` : `<div class="tip"><div class="grow"><span class="cap">Scenes</span><div class="t">No scenes yet</div><div class="d">Make one on the Scenes tab first.</div></div></div>`;
+  showSheet('scene-pick', 'Which scene?', html, { detent: 'medium', back: true, onBack: renderRecipeSheet, sub: 'One press runs it.' });
 }
 function pickScene(i) {
   const it = S.scenePick[i];
@@ -512,7 +517,7 @@ function pickScene(i) {
     S.config.bindings = S.config.bindings.filter(b => !(b.device_id === pid && b.button_number === n && (b.gesture === g || (g === 'hold' && ['hold_start', 'hold_end'].includes(b.gesture)))));
     S.config.bindings.push({ id: uid(), device_id: pid, button_number: n, gesture: g, actions: [it.a], night: null });
   }
-  save({ msg: `Runs the ${it.n} scene` });
+  save({ msg: `Runs ${it.n}` });
   renderRecipeSheet();
 }
 // Multi-select picker: rooms, everything, each light, and any hand-made sets. Used by the recipe sheet and the fine-tune editor.

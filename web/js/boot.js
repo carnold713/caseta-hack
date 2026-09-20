@@ -43,6 +43,8 @@ document.addEventListener('click', async e => {
     case 'recipe-all': openAllWaysSheet(); break;
     case 'pick-open': S.pickOpen = !S.pickOpen; renderRecipeSheet(); break;
     case 'scene-lights': openSceneLightsSheet(); break;
+    case 'scene-room': openSceneRoomSheet(); break;
+    case 'scene-room-pick': setSceneRoom(d.a); break;
     case 'scene-more': sceneMoreSheet(); break;
     case 'look-model': setLook('model', d.m); break;
     case 'look-finish': setLook('finish', d.f); break;

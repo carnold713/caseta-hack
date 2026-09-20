@@ -71,7 +71,7 @@
   document.addEventListener('pointercancel', e => { if (g && e.pointerId === g.id) g = null; });
 })();
 
-/* Horizontal rows on a desktop. Chip rows, scene tiles and mood rows scroll sideways under a finger;
+/* Horizontal rows on a desktop. Chip rows, scene tiles and a room's scene row scroll sideways under a finger;
    a mouse gets the same: drag the row to scroll it (a real drag, not a click), and a wheel over the
    row scrolls it sideways when the row has somewhere to go. */
 (function () {
