@@ -275,11 +275,12 @@ function renderRecipeSheet() {
   // under your finger (docs/ia-v5.md 2, stage 5).
   // the room slot: step through the room's scenes when it has two or more, otherwise offer to make some
   const moodId = ctx.moods >= 2 ? 'scenecycle' : (ctx.moods === 0 && ctx.dimmers > 0 ? 'moodsfirst' : null);
-  // On an arrow key the walk through scenes is one of the usual ways rather than something to go looking
-  // for: an arrow is the key you press again and again, which is what a loop is for.
+  // The room slot above already offers the walk on any key, so what an arrow key changes is where it
+  // sits: an arrow is the key you press again and again, which is what a loop is for, so it leads
+  // rather than trailing four rows down. Moving it, not adding it, is what that takes.
   const onArrow = ctx.arrows && (n === ctx.arrows.up || n === ctx.arrows.down);
-  const ids = (isFan ? USUAL.fan : USUAL[g] || USUAL.single).map(id => (id === 'mood' ? moodId : id)).filter(Boolean);
-  if (onArrow && !isFan && !ids.includes('scenecycle')) ids.splice(Math.min(1, ids.length), 0, 'scenecycle');
+  let ids = (isFan ? USUAL.fan : USUAL[g] || USUAL.single).map(id => (id === 'mood' ? moodId : id)).filter(Boolean);
+  if (onArrow && !isFan) { ids = ids.filter(id => id !== 'scenecycle'); ids.splice(Math.min(1, ids.length), 0, 'scenecycle'); }
   const rs = ids.map(byId).filter(r => r && applies(r));
   const cur = byId(selected); if (cur && applies(cur) && !rs.includes(cur)) rs.push(cur);
   const list = rs.map(row).join('') + `<button class="item recipe all" data-act="recipe-all"><div class="grow"><div class="t">Show all ways</div></div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
