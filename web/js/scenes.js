@@ -134,7 +134,7 @@ function openSceneEditor(id, fresh = false, opts = {}) {
   }).join('');
   // One of the five a room was offered: a suggestion until the person changes it, and then it is theirs
   // and a refresh leaves it alone. Nothing else about it differs from any other scene.
-  const mood = p.mood ? `<div class="tip" style="margin-top:8px"><div class="grow"><span class="cap">Suggested</span><div class="t">${p.edited ? 'Changed by you.' : 'One of the five this room was offered.'} Change anything you like; from then on it's yours and won't be replaced.</div>${p.edited ? `<button class="btn ghost" data-act="scene-suggest" data-id="${p.id}">Back to the suggestion</button>` : ''}</div></div>` : '';
+  const mood = p.mood ? `<div class="tip"><div class="grow"><span class="cap">Suggested</span><div class="t">${p.edited ? 'Changed by you.' : 'One of the five this room was offered.'} Change anything you like; from then on it's yours and won't be replaced.</div>${p.edited ? `<button class="btn ghost" data-act="scene-suggest" data-id="${p.id}">Back to the suggestion</button>` : ''}</div></div>` : '';
   // The room a scene belongs to. This is the row that makes every scene the same thing: a scene with a
   // room shows on that room's page and in its step-through, and any scene can be given one or have it
   // taken away.
