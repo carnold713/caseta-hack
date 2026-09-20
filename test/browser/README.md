@@ -54,6 +54,13 @@ killing only the one on its own port by reading `/proc/<pid>/environ`.
 A test that leaves state behind is a test the next run starts inside. Reset what you set up, at the top
 of the test, rather than assuming a clean rig.
 
+Reset it *consistently*, too. The hub refuses a config whose bindings name scenes that are not there,
+so a test that clears the presets and leaves a remote pointing at one gets a 400 on every save from
+then on. `fade_test` did exactly that and still printed twelve green checks: the assertions were all
+about values it held in the page, and nothing it asserted needed the save to have worked. It failed on
+the console errors alone. Collect `page.on('console')` and assert on it at the end; it is the only
+thing that catches a test whose writes are being thrown away.
+
 ## Writing one
 
 Take the shape from any of them. The parts that matter: a `check(ok, what)` that prints the measured

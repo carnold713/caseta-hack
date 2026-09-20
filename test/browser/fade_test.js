@@ -21,7 +21,13 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await page.evaluate(() => { if (sheet.isOpen()) sheet.close(); }); await page.waitForTimeout(400);
 
   // 1. a room offered its five gets five one-second scenes
-  await page.evaluate(async () => { S.config.presets = []; suggestScenes('20'); await save({ quiet: true }); });
+  await page.evaluate(async () => {
+    const usesScene = b => (b.actions || []).some(a => a.preset_id || a.preset_ids);
+    S.config.bindings = bindings().filter(b => !usesScene(b));
+    S.config.presets = [];
+    suggestScenes('20');
+    await save({ quiet: true });
+  });
   await page.waitForTimeout(700);
   const fades = await page.evaluate(() => roomSuggested('20').map(p => [p.mood, p.fade]));
   check(fades.length === 5, `the room has its five (${fades.length})`);
