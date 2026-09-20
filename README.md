@@ -114,6 +114,16 @@ Pico bindings from its cached config.
   scenes a chip or a remote button can run. Making and changing them,
   and the kind of each light, live on the room's **Room setup** page; back
   is the nav bar, so no row on it can dead end.
+- **Arrows that step through scenes:** "Step through scenes" asks which
+  scenes, in the order you want them walked. Tap a room's row to take all
+  five of its moods at once, or tick scenes one at a time from any room;
+  ticking is the ordering. On a remote with a pair of arrows it sets both,
+  the up arrow going forwards and the down arrow back, so one press moves
+  on and the other undoes it. The loop remembers where it is and checks
+  that against the lights, so an arrow pressed twice in opposite
+  directions lands where it started even when two scenes are only a few
+  per cent apart, and anything that moves the lights in between puts the
+  loop back on whichever scene now fits.
 - **Kinds of light:** each light can say where it is and what it is,
   two questions in one sheet: Ceiling, Wall, Window, Desk, Table, Floor,
   Under a cabinet, Shelf or cove, Bed or Outside, then the fixture for

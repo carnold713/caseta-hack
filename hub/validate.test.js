@@ -106,6 +106,10 @@ test('the actions that cycle need something to cycle through', () => {
   bad(() => validateAction({ type: 'cycle', target: 'd:1', levels: [10, 101] }, 'x'), 'a bad level in the list');
   assert.ok(validateAction({ type: 'cycle_presets', preset_ids: ['a', 'b'] }, 'x'));
   bad(() => validateAction({ type: 'cycle_presets', preset_ids: ['a'] }, 'x'), 'one scene is not a cycle');
+  assert.equal(validateAction({ type: 'cycle_presets', preset_ids: ['a', 'b'], dir: -1 }, 'x').dir, -1, 'a backwards walk keeps its direction');
+  assert.equal(validateAction({ type: 'cycle_presets', preset_ids: ['a', 'b'], dir: 1 }, 'x').dir, undefined, 'a forwards walk keeps the shape it had before there was a direction');
+  bad(() => validateAction({ type: 'cycle_presets', preset_ids: ['a', 'b'], dir: 0 }, 'x'), 'a direction is forwards or backwards, nothing else');
+  bad(() => validateAction({ type: 'cycle_presets', preset_ids: ['a', 'b'], dir: 'back' }, 'x'), 'a direction is a number');
 });
 
 // ───────────────────────── config ─────────────────────────

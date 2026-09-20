@@ -348,7 +348,17 @@ function describe(actions) {
       case 'lower': return isShadeTarget(a.target) ? `Closes ${t}` : `Dims ${t} while holding`;
       case 'stop': return `Stops ${t}`;
       case 'cap': return `Lowers ${t} to ${a.level}% where it is brighter`;
-      case 'cycle_presets': { const p = presets().find(x => x.id === (a.preset_ids || [])[0]); return p && p.area ? `Steps through ${areaName(p.area)}'s moods` : 'Steps through scenes'; }
+      case 'cycle_presets': {
+        const ids = a.preset_ids || [];
+        const p = presets().find(x => x.id === ids[0]);
+        const back = a.dir === -1 ? ' backwards' : '';
+        // A room's name is only honest when the loop holds every one of that room's moods. Three of five
+        // are a list somebody chose, and it reads as the count.
+        const whole = typeof roomMoodPresets === 'function' && p && p.area
+          && (m => m.length === ids.length && m.every((v, i) => v === ids[i]))(roomMoodPresets(p.area).map(x => x.id));
+        const oneRoom = whole;
+        return oneRoom ? `Steps${back} through ${areaName(p.area)}'s moods` : `Steps${back} through ${plural(ids.length, 'scene')}`;
+      }
       case 'fan': return a.speed === 'Off' ? `Turns ${t}${t === 'the fans' ? '' : ' fan'} off` : `Sets ${t}${t === 'the fans' ? '' : ' fan'} to ${fanName(a.speed)}`;
       case 'scene': return `Runs the ${targetName('s:' + a.scene_id)} scene`;
       case 'preset': return `Runs the ${targetName('p:' + a.preset_id)} scene`;

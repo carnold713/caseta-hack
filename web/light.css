@@ -238,6 +238,11 @@ svg.tring { position: absolute; inset: 0; transform: rotate(-90deg); }
 /* the way into the warmth slider and the hue strip leads the row and never scrolls out of reach */
 #ld .ld-swrow .ld-more { position: sticky; left: 0; z-index: 1; flex: none; background: var(--surface);
   box-shadow: 0 0 0 4px var(--surface); }
+/* the loop's own scenes are what scrolls; the way to clear the lot leads the row and stays reachable,
+   the same rule as the way into the colours above */
+.cyrow .cy-clear { position: sticky; left: 0; z-index: 1; flex: none; background: var(--surface);
+  box-shadow: 0 0 0 4px var(--surface); }
+
 /* A colour lamp needs the large detent for its swatch row, but its composition ends about 200px short of
    92dvh, and on a fresh open that reads as a sheet that failed to load rather than as room to scroll. The
    light sheet alone sizes to its content and keeps the 92dvh ceiling, so a tall one still scrolls. Scoped

@@ -9,6 +9,8 @@ Actions are the same JSON shape the hub validates (see hub/validate.js):
 Targets are "d:<device_id>", "g:<group_id>", "a:<room>" or "h:all" / "h:shades" / "h:fans".
 "a:<room>" names one of the app's own rooms when the config carries them (settings.rooms), and the
 bridge's own area when it does not.
+cycle_presets: {preset_ids, dir?} steps through those scenes, one per press; dir -1 steps back, so
+one button can go forwards through a room's moods and another back through the same list.
 color: {target, kelvin | hex, level?, fade?} reaches only the Hue and Nanoleaf lights in the target
 that can do it. A preset level may be {level, kelvin?, hex?} for such a lamp; anything else is a
 number or a fan speed.
@@ -163,6 +165,10 @@ class ActionRunner:
         self._last_lit: Dict[str, tuple] = {}   # device_id -> (level, when)
         self.last_on: Dict[str, int] = {}
         self.memory_file: Optional[Any] = None  # a Path the agent sets so last_on survives a restart
+        # "|".join(scene ids) -> the one this loop last ran, so a pair of buttons stepping the same
+        # scenes forwards and backwards agree on where they are. Trusted only while the lights still
+        # match it, so anything else touching them puts the loop back on closeness.
+        self._cycle_at: Dict[str, str] = {}
 
     @property
     def timers(self) -> Dict[str, dict]:
@@ -526,15 +532,31 @@ class ActionRunner:
         if t == "cycle_presets":
             ids = [p for p in a.get("preset_ids", [])]
             presets = {p["id"]: p for p in self._config().get("presets", []) if p.get("id") in ids}
+            live = [i for i in ids if i in presets]
+            if not live:
+                raise RuntimeError("none of those scenes exist any more")
+            step = -1 if int(a.get("dir", 1)) < 0 else 1
+
             # which one are we in now? the preset whose levels are closest to the current state
             def distance(p: dict) -> float:
                 lv = p.get("levels", {})
                 if not lv:
                     return 1e9
                 return sum(abs(self._level_of(d) - _preset_level(v)) for d, v in lv.items() if d in bridge.devices) / len(lv)
-            ranked = sorted((distance(presets[i]), n) for n, i in enumerate(ids) if i in presets)
-            current = ranked[0][1] if ranked and ranked[0][0] < 8 else -1
-            nxt = ids[(current + 1) % len(ids)]
+
+            # Two buttons stepping the same scenes are one loop, keyed on the scenes themselves, so the
+            # up arrow and the down arrow agree on where they are. Closeness alone cannot promise that:
+            # two scenes a few per cent apart both match, the sort picks whichever comes first, and
+            # pressing up then down can land somewhere else entirely. What we last ran is not a guess.
+            key = "|".join(live)
+            was = self._cycle_at.get(key)
+            current = live.index(was) if was in live and distance(presets[was]) < 8 else -1
+            if current < 0:
+                ranked = sorted((distance(presets[i]), n) for n, i in enumerate(live))
+                current = ranked[0][1] if ranked and ranked[0][0] < 8 else -1
+            # nothing in the loop is on the lights: forwards starts at the first, backwards at the last
+            nxt = live[(current + step) % len(live)] if current >= 0 else live[0 if step > 0 else -1]
+            self._cycle_at[key] = nxt
             await self.run_one({"type": "preset", "preset_id": nxt})
             return None
 

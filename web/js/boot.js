@@ -56,6 +56,10 @@ document.addEventListener('click', async e => {
     case 'adv-target': { const i = Number(d.i); const list = advList(); if (!list || !list[i]) break; openTargetPicker(tlist(list[i].target), sel => { const l = advList(); if (l && l[i]) l[i].target = packTarget(sel); advChanged(); renderAdvanced(); }, renderAdvanced, { shades: !!S.advCustom }); break; }
     case 'recipe': applyRecipe(d.r); break;
     case 'pick-scene': pickScene(Number(d.i)); break;
+    case 'cycle-scene': toggleCycleScene(d.p); break;
+    case 'cycle-room': addCycleRoom(d.a); break;
+    case 'cycle-clear': S.cyclePick = []; renderCyclePicker(); break;
+    case 'cycle-save': saveCycle(); break;
     case 'advanced': openAdvanced(); break;
     case 'adv-add': { const list = advList(); if (!list) break; list.push({ type: 'level', target: advDefaultTarget(), level: S.advCustom ? 'on' : 'toggle' }); renderAdvanced(); advChanged(); break; }
     case 'adv-remove': { const list = advList(); if (!list) break; list.splice(Number(d.i), 1); renderAdvanced(); advChanged(); break; }

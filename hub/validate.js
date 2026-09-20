@@ -68,6 +68,12 @@ function validateAction(a, where) {
       break;
     case 'cycle_presets':
       if (!Array.isArray(a.preset_ids) || a.preset_ids.length < 2 || !a.preset_ids.every(isId)) fail(`${where}: cycle_presets needs at least two scenes`);
+      // dir -1 walks the same list the other way, so one button goes forwards and another back. Stored
+      // only when it is -1: a plain forward step keeps the shape it had before there was a direction.
+      if (a.dir != null) {
+        if (a.dir !== 1 && a.dir !== -1) fail(`${where}: cycle_presets dir must be 1 or -1`);
+        if (a.dir === 1) delete a.dir;
+      }
       break;
     case 'fan':
       if (!isTarget(a.target)) fail(`${where}: fan needs a target`);
