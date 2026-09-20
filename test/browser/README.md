@@ -26,6 +26,17 @@ app did: two of them still looked for `.rooms .room` and `.list.rooms .item.room
 grid became `.rgrid`. One failed loudly, which is the good case. The other compared a count before a
 change with the count after and passed on `0 === 0` for as long as its selector had been wrong.
 
+## One login for the whole run
+
+The hub allows 20 logins from an address in 15 minutes, and this is 28 tests. A run that logged in per
+test died two thirds of the way down, and the way it died is worth knowing: every remaining test timed
+out waiting for `#nav`, because the page was sitting on the password gate and nothing said so. Seven
+tests failed at once, all with a selector timeout that looks like a broken app.
+
+`run.js` logs in once, puts the token in `APP_TOKEN`, and every test seeds `localStorage` with it
+before its first navigation. A test run by hand without the runner falls back to typing the password,
+which is fine for one test and is what the `#pw` line in each of them is still for.
+
 ## Order matters
 
 `hue_color_test` and `nanoleaf_test` pair the fake bridges, and what they leave behind is what lets

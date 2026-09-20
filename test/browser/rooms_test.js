@@ -49,7 +49,9 @@ async function resetConfig(page) {
   restartFake(false); await wait(2000);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   const ctx = await browser.newContext({ viewport: { width: 400, height: 820 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-  try { const t = require('fs').readFileSync(__dirname + '/rooms_token.txt', 'utf8').trim(); if (t) await ctx.addInitScript(tok => { try { localStorage.setItem('token', tok); } catch (_) {} }, t); } catch (_) {}
+  // The hub allows 20 logins in 15 minutes from one address and this suite is 28 tests, so they
+  // share the one token run.js logged in with. Without the runner the #pw fallback below still works.
+  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, process.env.APP_TOKEN);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));

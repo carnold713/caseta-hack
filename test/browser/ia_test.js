@@ -20,7 +20,9 @@ const PLAN_HOME_CONTROLS = 19;   // docs/ia-v5.md 3: Home at rest, five rooms an
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   const errors = [];
-  let token = null; try { token = fs.readFileSync(`${__dirname}/polish_token.txt`, 'utf8').trim(); } catch (_) { /* log in instead */ }
+  let token = null;  // The hub allows 20 logins in 15 minutes from one address and this suite is 28 tests, so they
+  // share the one token run.js logged in with. Without the runner the #pw fallback below still works.
+  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, process.env.APP_TOKEN);
   const open = async size => {
     const ctx = await browser.newContext({ ...SIZES[size], timezoneId: 'America/Los_Angeles' });
     if (token) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, token);

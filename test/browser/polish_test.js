@@ -13,6 +13,9 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   let token = null;
   const open = async size => {
     const ctx = await browser.newContext({ ...SIZES[size] });
+  // The hub allows 20 logins in 15 minutes from one address and this suite is 28 tests, so they
+  // share the one token run.js logged in with. Without the runner the #pw fallback below still works.
+  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, process.env.APP_TOKEN);
     if (token) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, token);
     await ctx.addInitScript(() => { window.__cls = []; try { new PerformanceObserver(l => { for (const e of l.getEntries()) window.__cls.push({ v: e.value, t: e.startTime }); }).observe({ type: 'layout-shift', buffered: true }); } catch (_) {} });
     const page = await ctx.newPage();

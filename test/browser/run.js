@@ -63,6 +63,14 @@ const healthy = port => fetch(`http://127.0.0.1:${port}/healthz`).then(r => r.js
   if (!await until(() => healthy(PORT))) {
     console.error(`the fake connector never reached the hub. ${path.join(DATA, 'rig.log')}`); process.exit(1);
   }
+  // One login for the whole suite. The hub allows 20 from an address in 15 minutes and this is 28
+  // tests, so a run that logged in per test used to die two thirds of the way down with every
+  // remaining test timing out on #nav: the page was sitting on the password gate and nothing said so.
+  const login = await fetch(`http://127.0.0.1:${PORT}/api/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: 'secret' }),
+  }).then(r => r.json()).catch(e => ({ error: e.message }));
+  if (!login.token) { console.error(`could not log in to the rig: ${login.error || 'no token'}`); process.exit(1); }
+  env.APP_TOKEN = login.token;
   console.log(`rig on ${PORT}, data in ${DATA}\n`);
 
   const results = [];
