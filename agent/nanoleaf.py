@@ -388,24 +388,27 @@ class Nanoleaf:
         if self._on_state:
             self._on_state(device_id)
 
-    async def set_warmth(self, device_id: str, kelvin: float, fade_s: Optional[float] = None, level: Optional[int] = None) -> bool:  # noqa: ARG002
+    async def set_warmth(self, device_id: str, kelvin: float, fade_s: Optional[float] = None, level: Optional[int] = None, while_off: bool = False) -> bool:  # noqa: ARG002
         """Same three promises as Hue.set_warmth: never sends on, only touches a lamp already on, and
         returns False (sending nothing) when it cannot or should not act."""
         d = self.devices.get(device_id)
         ct = (d or {}).get("ct")
         if not d or not ct:
             return False
-        if int(d.get("current_state") or 0) <= 0:
+        # while_off is the one caller that means it: a lamp about to be turned on, given its white now,
+        # while it is dark and the change cannot be seen. The promise above still holds, because what goes
+        # out is a colour and nothing else: a colour cannot light a lamp that is off.
+        if not while_off and int(d.get("current_state") or 0) <= 0:
             return False
         e = self._entry(device_id)
         mirek = max(int(ct["min"]), min(int(ct["max"]), kelvin_to_mirek(kelvin)))
         body: Dict[str, Any] = {"ct": {"value": mirek_to_kelvin(mirek)}}
-        if level is not None:
+        if level is not None and not while_off:
             body["brightness"] = {"value": max(1, min(100, int(level)))}
         await self._put_state(e["host"], e["token"], body)
         ct["mirek"] = mirek
         d["color_mode"] = "ct"
-        if level is not None:
+        if level is not None and not while_off:
             d["current_state"] = int(level)
         if self._on_state:
             self._on_state(device_id)

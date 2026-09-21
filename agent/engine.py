@@ -165,6 +165,9 @@ class ActionRunner:
         self._last_lit: Dict[str, tuple] = {}   # device_id -> (level, when)
         self.last_on: Dict[str, int] = {}
         self.memory_file: Optional[Any] = None  # a Path the agent sets so last_on survives a restart
+        # "this lamp is about to be turned on": agent.py uses it to give a lamp that follows the day
+        # today's white while the lamp is still dark. Nothing else is allowed to light a lamp from here.
+        self.before_on: Optional[Callable[[str], Awaitable[None]]] = None
         # "|".join(scene ids) -> the one this loop last ran, so a pair of buttons stepping the same
         # scenes forwards and backwards agree on where they are. Trusted only while the lights still
         # match it, so anything else touching them puts the loop back on closeness.
@@ -340,6 +343,11 @@ class ActionRunner:
             if self.hue_set is None:
                 raise RuntimeError("no light backend connected")
             fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
+            # A lamp coming on from off is given its colour first, while it is dark and the change cannot
+            # be seen, so the brightness comes up already the right colour. Setting it afterwards is what
+            # made a lamp left on blue arrive blue and then travel to white while somebody watched.
+            if level > 0 and self.before_on is not None and self._level_of(device_id) <= 0:
+                await self.before_on(device_id)
             await self.hue_set(device_id, int(level), float(fs) if fs is not None else None)
             return
         if self._is_fan(device_id):

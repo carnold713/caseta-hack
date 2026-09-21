@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.16.0"
+VERSION = "0.17.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -197,6 +197,7 @@ class Agent:
         #   _follow_lit      device id -> was it on when we last looked (an off to on is what applies it at once)
         self.runner.color_watch = self._color_by_hand
         self.runner.follow_start = self._follow_start
+        self.runner.before_on = self._before_on
         self._follow_paused: set = set()
         self._follow_scene: set = set()
         self._follow_cfg: set = set()
@@ -322,13 +323,13 @@ class Agent:
             raise RuntimeError(f"no backend can recall scene {scene_id}")
         await backend.recall_scene(scene_id)
 
-    async def _warmth_set(self, device_id: str, kelvin: float, fade_s: Optional[float] = None, level: Optional[int] = None) -> bool:
+    async def _warmth_set(self, device_id: str, kelvin: float, fade_s: Optional[float] = None, level: Optional[int] = None, while_off: bool = False) -> bool:
         """Follow the day's own path to a lamp (agent.py's _follow_apply), one backend removed: same three
         promises as Hue.set_warmth and Nanoleaf.set_warmth, for whichever backend this id belongs to."""
         backend = self._backend_for(device_id)
         if backend is None:
             return False
-        return await backend.set_warmth(device_id, kelvin, fade_s=fade_s, level=level)
+        return await backend.set_warmth(device_id, kelvin, fade_s=fade_s, level=level, while_off=while_off)
 
     # ---------- Hue: its lights, rooms and scenes sit in the bridge's dictionaries under hue_ ids ----------
     def _merge_hue(self, send: bool = True) -> None:
@@ -746,6 +747,29 @@ class Agent:
         self._follow_paused.add(device_id)
         self._follow_sent.pop(device_id, None)
         self._send_follow()
+
+    async def _before_on(self, device_id: str) -> None:
+        """A lamp is about to be turned on. If it follows the day, give it today's white now, while it is
+        still dark: nobody can see a colour change on a lamp that is off, and the brightness then comes up
+        already white. Setting it after the lamp is lit is two requests and one visible swing from
+        whatever colour it was left on.
+
+        Everything here is best effort. A lamp that will not take a colour while off is left to the
+        off-to-on watcher, which is what used to do this on its own, so the worst case is what happened
+        before rather than a lamp that does not come on.
+        """
+        if not self.bridge or device_id not in self.following():
+            return
+        day_of = self._day_of()
+        ct = (self.bridge.devices.get(device_id) or {}).get("ct")
+        if day_of is None or not ct:
+            return
+        mirek = daylight.lamp_mirek(self.local_time(), day_of, ct.get("min"), ct.get("max"))
+        try:
+            if await self._warmth_set(device_id, daylight.mirek_to_kelvin(mirek), fade_s=None, while_off=True):
+                self._follow_sent[device_id] = mirek   # the watcher then has nothing left to send
+        except Exception as exc:  # noqa: BLE001
+            LOG.info("%s would not take its white while off (%s); it gets it once it is on", device_id, exc)
 
     async def _follow_start(self, device_id: str) -> None:
         """A scene entry that says "follow the day": from now on it follows, starting at the white for right now."""

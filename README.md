@@ -379,7 +379,10 @@ at the white `agent/daylight.py` asks for. Three speeds, because they are three 
 things: drifting with the sun is a change nobody asked for, so it takes 30 seconds on a look every
 five minutes and goes unnoticed; a lamp switched on gets today's white in 0.4 seconds, because a lamp
 left on a colour is showing the wrong thing until it arrives; a scene that says "follow the day"
-brings it over a second, with the scene, pauses a lamp somebody sets by hand until it is next switched off and on, and
+brings it over a second, with the scene. A lamp coming on from off is a case of its own: it is given
+today's white while it is still dark, in a request of its own that carries no brightness and no "on",
+so the fade up happens at the colour it is going to be rather than travelling there from whatever the
+lamp was left on, pauses a lamp somebody sets by hand until it is next switched off and on, and
 sends `{type: "follow", follow: {ids, paused, kelvin, brightness, ready}}` up so the app can say what
 each lamp is doing. The `sun` message carries `noon` now, which is what the app's copy of the curve
 hangs on.
@@ -461,4 +464,5 @@ python3 test_hue.py         the Hue client against a fake bridge (needs aiohttp)
 python3 test_nanoleaf.py    the Nanoleaf client against two fake controllers (needs aiohttp)
 python3 test_followscene.py a scene that says "follow the day" (needs aiohttp)
 python3 test_followfade.py  how fast the white arrives, and why it is not one answer
+python3 test_beforeon.py    a lamp comes on already the colour it is going to be (needs aiohttp)
 ```
