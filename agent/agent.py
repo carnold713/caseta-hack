@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -752,12 +752,13 @@ class Agent:
         self._follow_scene.add(device_id)
         self._follow_paused.discard(device_id)
         self._follow_sent.pop(device_id, None)
-        await self._follow_apply([device_id], fade=2.0)
+        await self._follow_apply([device_id], fade=daylight.SCENE_FADE_SECONDS)
         self._send_follow()
 
     def _follow_zone(self, device_id: str, level: Optional[int]) -> None:
-        """Every state change passes here: an off-to-on sets the white at once, and going off lets a lamp that was
-        set by hand start following again the next time it comes on."""
+        """Every state change passes here: an off-to-on sets the white at once (ON_FADE_SECONDS, not the
+        slow drift the five minute look uses), and going off lets a lamp that was set by hand start
+        following again the next time it comes on."""
         lit = bool(level and level > 0)
         was = self._follow_lit.get(device_id)
         self._follow_lit[device_id] = lit
@@ -770,7 +771,7 @@ class Agent:
                 self._send_follow()
             return
         if device_id in self.following():
-            asyncio.create_task(self._follow_apply([device_id]))
+            asyncio.create_task(self._follow_apply([device_id], fade=daylight.ON_FADE_SECONDS))
 
     async def _follow_apply(self, only: Optional[List[str]] = None, fade: float = daylight.FADE_SECONDS) -> int:
         day_of = self._day_of()

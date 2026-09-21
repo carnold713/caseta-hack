@@ -375,8 +375,11 @@ The connector reports a lamp's abilities in the inventory (`color: true`,
 **Follow the day** is one setting, `settings.follow_day = {device_ids: [], brightness: false}`, and
 one extra shape for a scene's `levels[id]`: `{level, follow: true}` in place of a colour, for a Hue
 lamp that can change its white. The connector owns the rest: it keeps every following lamp that is on
-at the white `agent/daylight.py` asks for (a 30 second fade, a look every five minutes and at once
-when a lamp comes on), pauses a lamp somebody sets by hand until it is next switched off and on, and
+at the white `agent/daylight.py` asks for. Three speeds, because they are three different
+things: drifting with the sun is a change nobody asked for, so it takes 30 seconds on a look every
+five minutes and goes unnoticed; a lamp switched on gets today's white in 0.4 seconds, because a lamp
+left on a colour is showing the wrong thing until it arrives; a scene that says "follow the day"
+brings it over a second, with the scene, pauses a lamp somebody sets by hand until it is next switched off and on, and
 sends `{type: "follow", follow: {ids, paused, kelvin, brightness, ready}}` up so the app can say what
 each lamp is doing. The `sun` message carries `noon` now, which is what the app's copy of the curve
 hangs on.
@@ -457,4 +460,5 @@ python3 test_lanes.py       a fast swipe: latest level wins, the rest are droppe
 python3 test_hue.py         the Hue client against a fake bridge (needs aiohttp)
 python3 test_nanoleaf.py    the Nanoleaf client against two fake controllers (needs aiohttp)
 python3 test_followscene.py a scene that says "follow the day" (needs aiohttp)
+python3 test_followfade.py  how fast the white arrives, and why it is not one answer
 ```

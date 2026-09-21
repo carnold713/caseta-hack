@@ -39,8 +39,16 @@ ANCHORS: List[Tuple[str, int, int]] = [
     ("sunset", 0, 2900),       # sunset
     ("sunset", 60, 2400),      # dusk is over
 ]
-# How long a change takes, and how often the connector looks. A change is never a jump.
-FADE_SECONDS = 30.0
+# How long a change takes, and how often the connector looks.
+#
+# Drifting with the sun is a change nobody asked for. It should not be noticed happening, so it is slow.
+# A change somebody did ask for is not that. A lamp left on a colour and then switched on is showing the
+# wrong thing until the white arrives, and half a minute of it crawling from purple to white reads as
+# the app being broken rather than as the app being gentle: there, the white is the point of the press
+# and it should be there when the light is.
+FADE_SECONDS = 30.0        # drifting with the sun, on the five minute look
+ON_FADE_SECONDS = 0.4      # a lamp just switched on, arriving at today's white
+SCENE_FADE_SECONDS = 1.0   # a scene that says "follow the day", matching what a scene fades over
 EVERY_SECONDS = 300
 # Below this, a new value is not worth sending: two mireds is under a tenth of a percent of the white.
 MIN_STEP_MIREK = 2.0
