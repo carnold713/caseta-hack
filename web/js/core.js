@@ -1,293 +1,140 @@
-/* Pico Hack: shared state, transport, helpers, sheet and toast. */
+/* Pico Hack: the old UI's shared glue. The state, the transport and every question asked of the state now live in
+   the data layer (web/data/caseta-data.js), which the new Copper Night UI runs on too. This file keeps the global
+   names every other script calls, pointed at that layer, plus what is really the UI's: the sheet, the walk, the
+   toast, the render dispatcher, painting state in place. */
 'use strict';
 
-const S = {
-  token: localStorage.getItem('token') || '',
-  inv: { devices: {}, buttons: {}, scenes: {}, areas: {}, bridge: null, updated: null },
-  states: {}, timers: {}, activity: [],
-  config: null,
-  agent: { online: false, info: null },
+const DATA = CasetaData.create({ storage: localStorage });
+const S = DATA.S;
+// What the screen is showing rides on the same object as the data: which page, which remote or room is open.
+Object.assign(S, {
   view: (location.hash || '#home').slice(1).split('/')[0] || 'home',
-  ready: false, ws: null,
   remote: null, room: null, roomPage: null, settingsPage: null,
-  live: {}, lastSaved: null,
-  sun: null, nextRuns: {}, // today's sun and the next run of each automation, from the connector (automations.js reads them)
-  // "Follow the day" as the connector sees it (which lamps, which were set by hand, the white each shows), and how
-  // far this phone's clock is from the home's, so js/daylight.js reads the curve at the home's own time.
-  follow: null, sunSkew: 0,
-  // A drop is quiet until it has lasted: `troubleSince` is when the socket or the connector last went away.
-  // Nothing turns red until RECONNECT_GRACE has passed, and the app never blanks what it already knows.
-  troubleSince: 0, wsOpen: false,
-};
-const RECONNECT_GRACE = 10000;
-// 'ok' while the connector is there, 'reconnecting' for the first ten seconds of trouble, 'off' after that.
-function connState() {
-  if (S.agent.online && S.wsOpen) return 'ok';
-  if (!S.troubleSince) return S.agent.online ? 'ok' : 'off';
-  return Date.now() - S.troubleSince < RECONNECT_GRACE ? 'reconnecting' : 'off';
-}
-const connOk = () => connState() === 'ok';
-const connLost = () => connState() === 'off';
-// Called whenever the socket or the connector changes state: starts or clears the quiet window, and books the one
-// repaint that turns the dot red when the window runs out.
+});
+DATA.hooks.signedOut = () => render();
+// A loop of scenes is named for its room only when it holds all of that room's scenes (js/light.js knows which).
+DATA.hooks.roomScenes = aid => (typeof roomScenes === 'function' ? roomScenes(aid) : null);
+
+// ---------- the connection ----------
+const RECONNECT_GRACE = CasetaData.RECONNECT_GRACE;
+const connState = DATA.connState;
+const connOk = DATA.connOk;
+const connLost = DATA.connLost;
+// The layer keeps the quiet window; the screen books the one repaint that turns the dot red when it runs out.
 let connTimer = null;
-function connChanged(ok) {
-  if (ok) { S.troubleSince = 0; clearTimeout(connTimer); connTimer = null; return; }
-  if (S.troubleSince) return;
-  S.troubleSince = Date.now();
+function connBook(ok, conn) {
+  if (ok) { clearTimeout(connTimer); connTimer = null; return; }
+  if (conn !== 'started') return;
   clearTimeout(connTimer);
   connTimer = setTimeout(() => { connTimer = null; if (!connOk()) render(); }, RECONNECT_GRACE + 50);
 }
+function connChanged(ok) { connBook(ok, DATA.noteConn(ok)); }
 
 const ICON = (n, cls = '') => `<svg class="i ${cls}"><use href="#i-${n}"/></svg>`;
 const $ = s => document.querySelector(s);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const uid = () => Math.random().toString(36).slice(2, 10);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const esc = CasetaData.esc;
+const uid = CasetaData.uid;
+const clamp = CasetaData.clamp;
+const cap = CasetaData.cap;
+const plural = CasetaData.plural;
 
 // ---------- transport ----------
-async function api(path, opts = {}) {
-  const res = await fetch(path, { ...opts, headers: { 'content-type': 'application/json', authorization: `Bearer ${S.token}`, ...(opts.headers || {}) } });
-  if (res.status === 401) { S.token = ''; localStorage.removeItem('token'); render(); throw new Error('Signed out'); }
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(friendlyError(body.error || `${res.status}`));
-  return body;
-}
-function friendlyError(msg) {
-  if (/agent is offline/i.test(msg)) return "Can't reach your home right now. Is the home connector running?";
-  if (/did not answer/i.test(msg)) return 'Your home did not respond. Try again in a moment.';
-  if (/unknown (preset|group)/i.test(msg)) return 'That points at something that no longer exists. Pick it again.';
-  return msg;
-}
+const api = DATA.api;
+const friendlyError = CasetaData.friendlyError;
 async function command(action) {
-  try { await api('/api/command', { method: 'POST', body: JSON.stringify(action) }); return true; }
+  try { await DATA.run(action); return true; }
   catch (e) { toast(e.message, { err: true }); return false; }
 }
-// While a finger is moving: one command in flight per target and kind (brightness, colour), the newest value
-// always goes next and everything between is dropped. Echoes from the bridge are ignored for a moment after.
-const LV = { inflight: {}, latest: {}, quiet: {} };
-function sendGated(key, target, action) {
-  LV.latest[key] = { target, action };
-  if (LV.inflight[key]) return;
-  LV.inflight[key] = (async () => {
-    while (LV.latest[key]) {
-      const p = LV.latest[key]; delete LV.latest[key];
-      await command(p.action);
-      LV.quiet[JSON.stringify(p.target)] = Date.now() + 1500;
-      for (const t of Array.isArray(p.target) ? p.target : [p.target]) LV.quiet[JSON.stringify(t)] = Date.now() + 1500;
-    }
-    delete LV.inflight[key];
-  })();
-}
-function sendLevel(target, level, extra) { sendGated(JSON.stringify(target), target, { type: 'level', target, level, fade: 0, ...(extra || {}) }); }
-// Colour or white temperature for a Hue lamp: payload is {kelvin} or {hex}, with an optional level.
-function sendColor(target, payload) { sendGated('color:' + JSON.stringify(target), target, { type: 'color', target, fade: 0, ...payload }); }
-// True while a target was set from this phone recently: the bridge's own echo must not pull the slider back.
-function levelQuiet(target) { const q = LV.quiet[JSON.stringify(target)]; return !!(q && q > Date.now()); }
+// While a finger is moving: one command in flight per light, the newest value next (the layer's gate, sending
+// through command() so a failure still shows).
+const GATE = DATA.gate(command);
+const sendGated = GATE.sendGated;
+const sendLevel = GATE.sendLevel;
+const sendColor = GATE.sendColor;
+const levelQuiet = GATE.levelQuiet;
 // Autosave. Every edit calls save(); the previous config is kept for a one-tap Undo.
 let saveTimer = null;
 async function save(opts = {}) {
   clearTimeout(saveTimer);
-  const prev = S.lastSaved;
   try {
-    const r = await api('/api/config', { method: 'PUT', body: JSON.stringify(S.config) });
-    S.config = r.config; S.lastSaved = JSON.stringify(r.config);
-    if (!opts.quiet) toast(opts.msg || 'Saved', { undo: prev ? async () => { S.config = JSON.parse(prev); await save({ msg: 'Undone', quiet: false }); render(); } : null });
+    const { prev } = await DATA.saveConfig();
+    if (!opts.quiet) toast(opts.msg || 'Saved', { undo: prev ? async () => { DATA.restoreConfig(prev); await save({ msg: 'Undone', quiet: false }); render(); } : null });
   } catch (e) {
     toast(`Couldn't save. ${e.message}`, { err: true, action: 'Retry', onAction: () => save(opts) });
   }
   if (opts.render !== false) render();
 }
 function saveSoon(ms = 600) { clearTimeout(saveTimer); saveTimer = setTimeout(() => save({ quiet: true }), ms); }
+const noteSunClock = DATA.noteSunClock;
 
-// The home's clock, as an offset from this phone's: the connector sends the time in the home's own zone with every
-// sun message, and "Follow the day" reads the curve at that time rather than at whatever the phone thinks it is.
-function noteSunClock() {
-  const iso = S.sun && S.sun.now; if (!iso) return;
-  const t = new Date(iso); if (isNaN(t.getTime())) return;
-  S.sunSkew = Date.now() - t.getTime();
-}
-
+// The socket. The layer applies every message to the state and says what changed; this decides what to redraw.
 function connectWS() {
-  if (S.ws) { try { S.ws.onclose = null; S.ws.close(); } catch (_) { /* ignore */ } }
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws/app?token=${encodeURIComponent(S.token)}`);
-  S.ws = ws;
-  ws.onopen = () => { S.wsOpen = true; };
-  ws.onmessage = ev => {
-    const m = JSON.parse(ev.data);
-    switch (m.type) {
-      case 'snapshot': {
-        S.add = m.add || null;
-        // A hub that has just restarted has an empty inventory until its connector is back. Keep the home we
-        // already know rather than blanking the app for the minute that takes.
-        const fresh = Object.keys((m.inventory && m.inventory.devices) || {}).length;
-        const known = Object.keys(S.inv.devices || {}).length;
-        if (fresh || !known) { S.inv = m.inventory; S.states = m.states; S.timers = m.timers || {}; }
-        S.agent = m.agent; S.activity = m.activity || [];
-        S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; noteSunClock();
-        S.follow = m.follow || null;
-        S.config = m.config; S.lastSaved = JSON.stringify(m.config); S.ready = true;
-        // Once, quietly: the five a room is offered fade over a second now, and a scene made before
-        // that still holds the eight it was given (js/light.js shortenSuggestedFades).
-        if (typeof shortenSuggestedFades === 'function' && shortenSuggestedFades()) save({ quiet: true, render: false });
-        S.wsOpen = true; connChanged(!!(m.agent && m.agent.online));
-        // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
-        if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); setTimeout(() => { if (typeof openGreeting === 'function') openGreeting(); }, 450); }, 900); break; } }
-        render(); break;
-      }
-      // the same rule: an empty list from a hub that is still waiting for its connector is not news
-      case 'inventory': if (Object.keys((m.inventory && m.inventory.devices) || {}).length || !Object.keys(S.inv.devices || {}).length) { S.inv = m.inventory; render(); } break;
-      case 'state': Object.assign(S.states, m.states); paintState(); break;
-      // a timer's block belongs on Home; when the news arrives while a sheet is still sliding shut, render once it has
-      case 'timers': S.timers = m.timers || {}; if (S.view === 'home') { if (sheet.isOpen()) setTimeout(() => { if (S.view === 'home' && !sheet.isOpen()) render(); }, 420); else render(); } else paintNowBar(); break;
-      case 'config': if (JSON.stringify(m.config) !== S.lastSaved) { S.config = m.config; S.lastSaved = JSON.stringify(m.config); render(); } break;
-      case 'agent': S.agent = { online: m.online, info: m.info || null }; connChanged(!!m.online); render(); if (window.Hue) Hue.onAgent(); if (window.Nanoleaf) Nanoleaf.onAgent(); break;
-      case 'activity': S.activity.unshift(m.entry); S.activity.length = Math.min(S.activity.length, 100); if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
-      // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
-      case 'sun': S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; noteSunClock(); if (typeof paintSun === 'function') paintSun(); if (typeof paintFollow === 'function') paintFollow(); break;
-      // which lamps are following the day, and the white each one is showing: painted in place, never a full render
-      case 'follow': S.follow = m.follow || null; if (typeof paintFollow === 'function') paintFollow(); if (sheet.isOpen() && (SHEET_KEY === 'follow' || SHEET_KEY === 'follow-room')) { const el = $('#sheet-root [data-act="follow-toggle"]'); if (el && SHEET_KEY === 'follow') openFollowSheet(el.dataset.id); } break;
-      case 'add_state': case 'add_heard': case 'add_log': if (window.AddDevice) AddDevice.onMessage(m); break;
-      case 'nanoleaf_log': if (window.Nanoleaf) Nanoleaf.onMessage(m); break;
-      case 'button': case 'gesture': onLive(m); break;
-      case 'toast': toast(m.msg, { err: m.level === 'error' }); break;
+  DATA.connectWS({
+    message: onSocket,
+    // keep what we know on screen; the dot says "Reconnecting" for ten seconds before it admits anything
+    close: conn => { connBook(false, conn); if (S.ready) render(); },
+  });
+}
+function onSocket(m, r) {
+  switch (m.type) {
+    case 'snapshot': {
+      // Once, quietly: the five a room is offered fade over a second now, and a scene made before
+      // that still holds the eight it was given (js/light.js shortenSuggestedFades).
+      if (typeof shortenSuggestedFades === 'function' && shortenSuggestedFades()) save({ quiet: true, render: false });
+      connBook(!!(m.agent && m.agent.online), r.conn);
+      // First snapshot after "Getting your home ready...": show "Connected to your home" with a tick for 900ms, then Home.
+      if (!S._everReady) { S._everReady = true; if (S.agent.online && S._loadingShown) { S._holdLoading = true; render(); setTimeout(() => { S._holdLoading = false; render(); setTimeout(() => { if (typeof openGreeting === 'function') openGreeting(); }, 450); }, 900); break; } }
+      render(); break;
     }
-  };
-  // The hub restarting looks like this. Stay quiet: keep what we know on screen, say "Reconnecting" for ten
-  // seconds, and only then admit that the home is not there.
-  ws.onclose = () => {
-    S.wsOpen = false; connChanged(false);
-    if (S.ready) render();
-    setTimeout(() => { if (S.token) connectWS(); }, 2000);
-  };
+    // an empty list from a hub that is still waiting for its connector is not news (the layer kept the home)
+    case 'inventory': if (r.changed) render(); break;
+    case 'state': paintState(); break;
+    // a timer's block belongs on Home; when the news arrives while a sheet is still sliding shut, render once it has
+    case 'timers': if (S.view === 'home') { if (sheet.isOpen()) setTimeout(() => { if (S.view === 'home' && !sheet.isOpen()) render(); }, 420); else render(); } else paintNowBar(); break;
+    // the hub's echo of this phone's own save is not news
+    case 'config': if (r.changed) render(); break;
+    case 'agent': connBook(!!m.online, r.conn); render(); if (window.Hue) Hue.onAgent(); if (window.Nanoleaf) Nanoleaf.onAgent(); break;
+    case 'activity': if (S.view === 'settings') paintActivity(); if (m.entry && m.entry.kind === 'schedule' && typeof paintSun === 'function') paintSun(); break;
+    // after every config change and every ten minutes: the sun, the curve level and the next runs. Painted in place, never a full render.
+    case 'sun': if (typeof paintSun === 'function') paintSun(); if (typeof paintFollow === 'function') paintFollow(); break;
+    // which lamps are following the day, and the white each one is showing: painted in place, never a full render
+    case 'follow': if (typeof paintFollow === 'function') paintFollow(); if (sheet.isOpen() && (SHEET_KEY === 'follow' || SHEET_KEY === 'follow-room')) { const el = $('#sheet-root [data-act="follow-toggle"]'); if (el && SHEET_KEY === 'follow') openFollowSheet(el.dataset.id); } break;
+    case 'add_state': case 'add_heard': case 'add_log': if (window.AddDevice) AddDevice.onMessage(m); break;
+    case 'nanoleaf_log': if (window.Nanoleaf) Nanoleaf.onMessage(m); break;
+    case 'button': case 'gesture': onLive(m); break;
+    case 'toast': toast(m.msg, { err: m.level === 'error' }); break;
+  }
 }
 
-// ---------- inventory helpers ----------
-// A device removed from the app stays hidden even when the bridge goes on listing it: some bridges keep a
-// deleted remote in their own list until it is unpaired there, and it should not come back on the next refresh.
-const hiddenDevices = () => ((S.config && S.config.settings && S.config.settings.hidden_devices) || []);
-const devices = () => { const hide = hiddenDevices(); return Object.values(S.inv.devices || {}).filter(d => !hide.includes(d.device_id)); };
-const dev = id => (S.inv.devices || {})[id];
-// ---------- rooms the app owns ----------
-// settings.rooms is the truth about rooms once it exists: the app's own list, seeded from the bridges the first time
-// it is needed (ensureRooms in js/rooms.js) and edited from the Rooms page. While it is empty the app reads the
-// bridges exactly as it always did, so a home that never opens Rooms sees no change at all.
-const appRooms = () => ((S.config && S.config.settings && S.config.settings.rooms) || []);
-const appRoom = id => appRooms().find(r => r.id === id) || null;
-// Which app room a device is in: the room that names it, else the room standing for its bridge room, else Elsewhere.
-// Built once per config and inventory (both are replaced wholesale, so identity is a safe cache key).
-let RIDX = { rooms: null, devs: null, byDevice: null, byArea: null };
-function roomIndex() {
-  const rooms = appRooms(); const devs = S.inv.devices || {};
-  if (RIDX.rooms === rooms && RIDX.devs === devs) return RIDX;
-  const byDevice = new Map(), byArea = new Map();
-  for (const r of rooms) for (const id of (r.device_ids || [])) if (!byDevice.has(id)) byDevice.set(id, r.id);
-  for (const r of rooms) {
-    if (r.bridge_area && !byArea.has(r.bridge_area)) byArea.set(r.bridge_area, r.id);
-    if (r.hue_room && !byArea.has(r.hue_room)) byArea.set(r.hue_room, r.id);
-  }
-  RIDX = { rooms, devs, byDevice, byArea };
-  return RIDX;
-}
-// The room id to file a device under: the app room that names it, the app room standing for its bridge room, or
-// the bridge room itself when the app has not taken that one over (a Hue bridge paired after the list was made,
-// a room added in the Lutron app since). `d` may be a bare {} (a device that has gone).
-function devArea(d) {
-  if (!d) return 'none';
-  if (!appRooms().length) return d.area || 'none';
-  const ix = roomIndex();
-  return ix.byDevice.get(d.device_id) || ix.byArea.get(d.area) || d.area || 'none';
-}
-const devAreaName = d => areaName(devArea(d));
-// A room's name, whether the id is one of the app's rooms or a bridge area.
-function areaName(id) {
-  const r = appRoom(id);
-  if (r) return r.name;
-  return ((S.inv.areas || {})[id] || {}).name || 'Elsewhere';
-}
-// Every room, in name order: the app's own list (an empty room still shows, because the person made it and it is
-// where the next light goes), then any room the app has not taken over that something is actually in, then
-// Elsewhere for anything in no room at all. With no app list this is exactly what it always was.
-const areas = () => {
-  const out = appRooms().map(r => ({ id: r.id, name: r.name }));
-  const have = new Set(out.map(o => o.id));
-  for (const id of new Set(controllable().map(devArea))) {
-    if (have.has(id)) continue;
-    have.add(id);
-    out.push({ id, name: id === 'none' ? 'Elsewhere' : areaName(id) });
-  }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
-};
-const controllable = () => devices().filter(d => ['light', 'switch', 'fan', 'cover'].includes(d.domain)).sort(byName);
-const remotes = () => devices().filter(d => d.domain === 'pico').sort(byName);
-function byName(a, b) { return (devAreaName(a) + a.name).localeCompare(devAreaName(b) + b.name); }
-const level = id => { const s = S.states[id]; return s && s.level != null ? s.level : null; };
-// A scene's entry for a light is a number, a fan speed, or {level, kelvin?, hex?} for a Hue lamp with its colour.
-function levelOf(v) { if (v && typeof v === 'object') return Number(v.level) || 0; if (typeof v === 'number') return v; return v && v !== 'Off' ? 100 : 0; }
-function colorOf(v) { if (!v || typeof v !== 'object') return null; if (v.follow === true) return { follow: true }; if (v.kelvin != null) return { mode: 'ct', kelvin: v.kelvin }; if (v.hex) return { mode: 'xy', hex: v.hex }; return null; }
-const isOn = id => (level(id) || 0) > 0 || !!((S.states[id] || {}).fan_speed && S.states[id].fan_speed !== 'Off');
-const buttonsOf = pid => Object.values(S.inv.buttons || {}).filter(b => b.device_id === pid).sort((a, b) => a.button_number - b.button_number);
-const groups = () => (S.config && S.config.groups) || [];
-const presets = () => (S.config && S.config.presets) || [];
-const lutronScenes = () => Object.values(S.inv.scenes || {});
-
-// Targets: d:<device> a:<area> g:<group> h:all, or a list of those; favorites also allow p:<preset> s:<lutron scene>
-const tlist = t => (Array.isArray(t) ? t : t ? [t] : []);
-const tsplit = t => (typeof t === 'string' && t.includes('|') ? t.split('|') : t);
-function targetDevices(t) {
-  if (Array.isArray(t)) return [...new Set(t.flatMap(targetDevices))];
-  if (!t) return [];
-  const [k, id] = [t.slice(0, 1), t.slice(2)];
-  if (k === 'd') return dev(id) ? [id] : [];
-  if (k === 'a') return controllable().filter(d => devArea(d) === id && d.domain !== 'cover').map(d => d.device_id);
-  if (k === 'g') { const g = groups().find(x => x.id === id); return g ? g.device_ids.filter(dev) : []; }
-  if (t === 'h:all') return controllable().filter(d => d.domain === 'light' || d.domain === 'switch').map(d => d.device_id);
-  if (t === 'h:shades') return controllable().filter(d => d.domain === 'cover').map(d => d.device_id);
-  if (t === 'h:fans') return controllable().filter(d => d.domain === 'fan').map(d => d.device_id);
-  return [];
-}
-function targetName(t) {
-  if (Array.isArray(t)) { const names = t.map(targetName); return names.length > 3 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more` : names.join(', '); }
-  if (!t) return 'nothing';
-  if (t === 'h:all') return 'everything';
-  if (t === 'h:shades') return 'the shades';
-  if (t === 'h:fans') return 'the fans';
-  const [k, id] = [t.slice(0, 1), t.slice(2)];
-  if (k === 'd') return dev(id) ? dev(id).name : 'a light that is gone';
-  if (k === 'a') return id === 'none' ? 'Elsewhere' : areaName(id);
-  if (k === 'g') { const g = groups().find(x => x.id === id); return g ? g.name : 'a set of lights that is gone'; }
-  if (k === 'p') { const p = presets().find(x => x.id === id); return p ? p.name : 'a scene that is gone'; }
-  if (k === 's') { const s = (S.inv.scenes || {})[id]; return s ? s.name : 'a scene that is gone'; }
-  return t;
-}
-function targetOn(t) { return targetDevices(t).some(isOn); }
-function targetExists(t) {
-  if (Array.isArray(t)) return t.length > 0 && t.every(targetExists);
-  if (t === 'h:all' || t === 'h:shades' || t === 'h:fans') return true;
-  const [k, id] = [t.slice(0, 1), t.slice(2)];
-  if (k === 'd') return !!dev(id);
-  if (k === 'a') return areas().some(a => a.id === id);
-  if (k === 'g') return groups().some(g => g.id === id);
-  if (k === 'p') return presets().some(p => p.id === id);
-  if (k === 's') return !!(S.inv.scenes || {})[id];
-  return false;
-}
-// All pickable targets, rooms first, then individual lights inside each room.
-function targetOptions(opts = {}) {
-  const out = [];
-  if (!opts.noAll) out.push({ id: 'h:all', name: 'Everything', sub: 'every light in the house', kind: 'all' });
-  for (const a of areas()) {
-    const ds = controllable().filter(d => devArea(d) === a.id);
-    if (opts.fansOnly && !ds.some(d => d.domain === 'fan')) continue;
-    if (!opts.fansOnly && !opts.noRooms && ds.some(d => d.domain !== 'cover')) out.push({ id: `a:${a.id}`, name: a.name, sub: `${ds.filter(d => d.domain !== 'cover').length} lights`, kind: 'room' });
-    for (const d of ds) if (!opts.fansOnly || d.domain === 'fan') out.push({ id: `d:${d.device_id}`, name: d.name, sub: a.name, kind: d.domain });
-  }
-  for (const g of groups()) out.push({ id: `g:${g.id}`, name: g.name, sub: `${g.device_ids.length} lights`, kind: 'group' });
-  return out;
-}
+// ---------- inventory, rooms, targets, remotes: all the layer's ----------
+const hiddenDevices = DATA.hiddenDevices;
+const devices = DATA.devices;
+const dev = DATA.dev;
+const appRooms = DATA.appRooms;
+const appRoom = DATA.appRoom;
+const roomIndex = DATA.roomIndex;
+const devArea = DATA.devArea;
+const devAreaName = DATA.devAreaName;
+const areaName = DATA.areaName;
+const areas = DATA.areas;
+const controllable = DATA.controllable;
+const remotes = DATA.remotes;
+const byName = DATA.byName;
+const level = DATA.level;
+const levelOf = CasetaData.levelOf;
+const colorOf = CasetaData.colorOf;
+const isOn = DATA.isOn;
+const buttonsOf = DATA.buttonsOf;
+const groups = DATA.groups;
+const presets = DATA.presets;
+const lutronScenes = DATA.lutronScenes;
+const tlist = CasetaData.tlist;
+const tsplit = CasetaData.tsplit;
+const targetDevices = DATA.targetDevices;
+const targetName = DATA.targetName;
+const targetOn = DATA.targetOn;
+const targetExists = DATA.targetExists;
+const targetOptions = DATA.targetOptions;
 
 // Room colours (docs/design-spec.md): flat fills, a soft variant, black text on all. Keys stored per room in settings.room_colors.
 const ROOM_PALETTE = { mustard: { bg: '#E3A82B', soft: '#F7E6BE', ink: '#111111' }, steel: { bg: '#5C8CA8', soft: '#D3E1EA', ink: '#111111' }, sky: { bg: '#8FBDD6', soft: '#DCEBF3', ink: '#111111' }, meadow: { bg: '#4B9B5E', soft: '#C9E3CF', ink: '#111111' }, lemon: { bg: '#FFD400', soft: '#FFF2A8', ink: '#111111' }, blush: { bg: '#F2B8BC', soft: '#FADFE1', ink: '#111111' }, clay: { bg: '#C99B6C', soft: '#EAD8C3', ink: '#111111' }, sand: { bg: '#D9CDB5', soft: '#EFE9DD', ink: '#111111' } };
@@ -311,83 +158,29 @@ function roomColor(areaId) {
   const idx = areas().findIndex(a => a.id === (areaId || 'none'));
   return ROOM_PALETTE[keys[(idx < 0 ? 0 : idx) % keys.length]];
 }
-// Pico button labels by LEAP button number (what the bridge reports). Cosmetic only.
-const MODEL_NAMES = { Pico1Button: '1-button remote', Pico2Button: '2-button remote', Pico2ButtonRaiseLower: '2-button remote with dimming', Pico3Button: '3-button remote', Pico3ButtonRaiseLower: '3-button remote with dimming', Pico4Button: '4-button remote', Pico4ButtonScene: '4-button scene remote', Pico4ButtonZone: '4-button remote', Pico4Button2Group: '4-button remote', PaddleSwitchPico: 'Paddle remote' };
-const LAYOUTS = {
-  Pico2Button: { 0: 'On', 2: 'Off' }, PaddleSwitchPico: { 0: 'On', 2: 'Off' },
-  Pico2ButtonRaiseLower: { 0: 'On', 2: 'Off', 3: 'Raise', 4: 'Lower' },
-  Pico3Button: { 0: 'On', 1: 'Round', 2: 'Off' }, Pico3ButtonRaiseLower: { 0: 'On', 1: 'Round', 2: 'Off', 3: 'Raise', 4: 'Lower' },
-  Pico4Button: { 1: '1', 2: '2', 3: '3', 4: '4' }, Pico4ButtonScene: { 0: '1', 1: '2', 2: '3', 3: '4' }, Pico4ButtonZone: { 0: '1', 1: '2', 2: '3', 3: '4' },
-  Pico4Button2Group: { 0: 'A on', 1: 'A off', 2: 'B on', 3: 'B off' }, Pico1Button: { 0: 'Button' },
-};
-const modelName = d => MODEL_NAMES[d.type] || 'Remote';
-const buttonLabel = (pid, n) => { const d = dev(pid); const l = d && LAYOUTS[d.type]; return (l && l[n]) || `Button ${n + 1}`; };
-const buttonTitle = (pid, n) => { const l = buttonLabel(pid, n); return /^\d$/.test(l) ? `button ${l}` : `${l} button`; };
+const MODEL_NAMES = CasetaData.MODEL_NAMES;
+const LAYOUTS = CasetaData.LAYOUTS;
+const modelName = DATA.modelName;
+const buttonLabel = DATA.buttonLabel;
+const buttonTitle = DATA.buttonTitle;
 
 // ---------- bindings ----------
-const bindings = () => (S.config && S.config.bindings) || [];
-const bindingsFor = (pid, n) => bindings().filter(b => b.device_id === pid && b.button_number === n);
-const binding = (pid, n, g) => bindingsFor(pid, n).find(b => b.gesture === g);
-const GESTURE_LABEL = { single: 'Press', double: 'Press twice', hold: 'Hold' };
-// The user sees three gestures. "Hold" may be stored as hold (on release) or as hold_start + hold_end (while holding).
-function userGestureOf(b) { return b.gesture === 'hold_start' || b.gesture === 'hold_end' ? 'hold' : b.gesture; }
-function holdBindings(pid, n) { return bindingsFor(pid, n).filter(b => userGestureOf(b) === 'hold'); }
-
-// Plain-language summary of an action list.
-function describe(actions) {
-  if (!actions || !actions.length) return '';
-  const parts = actions.map(a => {
-    const t = a.target ? targetName(a.target) : '';
-    switch (a.type) {
-      case 'level': {
-        if (a.type === 'level' && a.level === 'toggle') return `Turns ${t} on or off`;
-        if (a.level === 'on') return `Turns ${t} on`;
-        if (a.level === 'off' || a.level === 0) return a.fade >= 5 ? `Fades ${t} off over ${fmtDur(a.fade)}` : `Turns ${t} off`;
-        return a.fade >= 5 ? `Fades ${t} to ${a.level}% over ${fmtDur(a.fade)}` : `Sets ${t} to ${a.level}%`;
-      }
-      case 'restore': return `Puts ${t} back the way it was`;
-      case 'step': return a.delta > 0 ? `Makes ${t} a little brighter` : `Makes ${t} a little dimmer`;
-      case 'cycle': return `Steps ${t} through ${a.levels.map(l => l === 0 ? 'off' : l + '%').join(', ')}`;
-      case 'raise': return isShadeTarget(a.target) ? `Opens ${t}` : `Brightens ${t} while holding`;
-      case 'lower': return isShadeTarget(a.target) ? `Closes ${t}` : `Dims ${t} while holding`;
-      case 'stop': return `Stops ${t}`;
-      case 'cap': return `Lowers ${t} to ${a.level}% where it is brighter`;
-      case 'cycle_presets': {
-        const ids = a.preset_ids || [];
-        const p = presets().find(x => x.id === ids[0]);
-        const back = a.dir === -1 ? ' backwards' : '';
-        // A room's name is only honest when the loop holds every one of that room's scenes. Some of them
-        // are a list somebody chose, and it reads as the count.
-        const whole = typeof roomScenes === 'function' && p && p.area
-          && (m => m.length === ids.length && m.every((v, i) => v === ids[i]))(roomScenes(p.area).map(x => x.id));
-        const oneRoom = whole;
-        return oneRoom ? `Steps${back} through ${areaName(p.area)}'s scenes` : `Steps${back} through ${plural(ids.length, 'scene')}`;
-      }
-      case 'fan': return a.speed === 'Off' ? `Turns ${t}${t === 'the fans' ? '' : ' fan'} off` : `Sets ${t}${t === 'the fans' ? '' : ' fan'} to ${fanName(a.speed)}`;
-      case 'scene': return `Runs the ${targetName('s:' + a.scene_id)} scene`;
-      case 'preset': return `Runs the ${targetName('p:' + a.preset_id)} scene`;
-      case 'timer': return `Turns ${t} ${a.level ? 'to ' + a.level + '%' : 'off'} after ${a.minutes} min`;
-      case 'cancel_timer': return `Cancels the timer on ${t}`;
-      case 'delay': return `waits ${a.ms >= 1000 ? (a.ms / 1000) + ' s' : a.ms + ' ms'}`;
-      default: return a.type;
-    }
-  });
-  const kept = parts.filter((x, i) => i === 0 || x !== parts[i - 1]);
-  return cap(kept.map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)).join(', then '));
-}
-// True when every device a target names is a shade (so raise and lower read as open and close).
-function isShadeTarget(t) { if (t === 'h:shades') return true; const ids = targetDevices(t); return ids.length > 0 && ids.every(id => (dev(id) || {}).domain === 'cover'); }
-function fmtDur(s) { return s >= 60 ? `${Math.round(s / 60)} min` : `${s} ${s === 1 ? 'second' : 'seconds'}`; }
-function fanName(s) { return { Off: 'off', Low: 'low', Medium: 'medium', MediumHigh: 'medium-high', High: 'high' }[s] || s; }
-function fmtTime(hm) { const [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${ap}`; }
+const bindings = DATA.bindings;
+const bindingsFor = DATA.bindingsFor;
+const binding = DATA.binding;
+const GESTURE_LABEL = CasetaData.GESTURE_LABEL;
+const userGestureOf = CasetaData.userGestureOf;
+const holdBindings = DATA.holdBindings;
+const describe = DATA.describe;
+const isShadeTarget = DATA.isShadeTarget;
+const fmtDur = CasetaData.fmtDur;
+const fanName = CasetaData.fanName;
+const fmtTime = CasetaData.fmtTime;
 
 // ---------- live pico events ----------
+// The press itself has already been written down by the data layer (DATA.apply, noteLive); this is what the screen
+// does about it.
 function onLive(m) {
-  const key = `${m.device_id}/${m.button_number}`;
-  const cur = S.live[key] || {};
-  if (m.type === 'button') { cur.event = m.event; cur.at = Date.now(); }
-  else { cur.gesture = m.gesture; cur.at = Date.now(); cur.bound = m.bound; }
-  S.live[key] = cur;
   // A remote the bridge lists without its buttons learns its own numbering from the keys themselves. The
   // remote's own screen is a sheet now, not part of the page render() reaches, so it is told directly.
   const learned = typeof rememberPress === 'function' && rememberPress(m.device_id, m.button_number);
@@ -436,26 +229,13 @@ function paintState() {
   paintNowBar();
   if (window.LightField && S.view === 'home') LightField.update();
 }
+const roomMeanLevel = DATA.roomMeanLevel;
 // Rooms for the light field: id = area id (matches the room card's data-room), the colour of its light, mean level of its lights.
-function roomMeanLevel(aid, overrides = {}) {
-  const ds = controllable().filter(d => devArea(d) === aid && d.domain !== 'cover');
-  if (!ds.length) return 0;
-  return ds.reduce((a, d) => a + (overrides[d.device_id] ?? level(d.device_id) ?? 0), 0) / ds.length;
-}
 function roomsForLight(overrides = {}) {
   return areas().map(a => { const lv = roomMeanLevel(a.id, overrides); return { id: a.id, color: typeof lampColor === 'function' ? lampColor(Math.max(1, lv)) : '#F7A64F', level: lv }; });
 }
-function roomSummary(aid) {
-  const ds = controllable().filter(d => devArea(d) === aid);
-  const on = ds.filter(d => isOn(d.device_id)).length;
-  if (!ds.length) return 'No lights yet';   // a room the person just made, waiting for its first light
-  return on ? `${on} of ${ds.length} on` : `${ds.length} ${ds.length === 1 ? 'light' : 'lights'} · all off`;
-}
-function tileSub(t) {
-  const ds = targetDevices(t);
-  if (t.startsWith('d:')) { const d = dev(t.slice(2)); if (!d) return ''; if (d.domain === 'fan') return fanName((S.states[d.device_id] || {}).fan_speed || 'Off'); const v = level(d.device_id); return v == null ? '' : v === 0 ? 'Off' : `${v}%`; }
-  const on = ds.filter(isOn).length; return on ? `${on} on` : 'Off';
-}
+const roomSummary = DATA.roomSummary;
+const tileSub = DATA.tileSub;
 function statusLine() {
   if (connLost()) return `<span class="faint">Last known state</span>`;
   const on = controllable().filter(d => d.domain !== 'cover' && isOn(d.device_id));

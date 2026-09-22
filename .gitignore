@@ -1,5 +1,7 @@
 node_modules/
-data/
+# the hub's local store (hub/store.js DATA_DIR defaults to <repo>/data). Anchored: unanchored, it also
+# swallowed web/data (the app's data layer) and test/data, and the app would have deployed without them.
+/data/
 agent/data/
 agent/.venv/
 agent/__pycache__/

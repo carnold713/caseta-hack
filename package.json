@@ -8,7 +8,7 @@
     "start": "node hub/server.js",
     "dev": "APP_PASSWORD=dev AGENT_TOKEN=dev node hub/server.js",
     "icons": "node scripts/make-icons.js",
-    "test": "node --test \"hub/**/*.test.js\" \"scripts/**/*.test.js\"",
+    "test": "node --test \"hub/**/*.test.js\" \"scripts/**/*.test.js\" \"test/data/**/*.test.js\"",
     "tint-check": "node scripts/tint-check.js",
     "test:browser": "node test/browser/run.js",
     "test:ui": "node scripts/ui-parity.js"
