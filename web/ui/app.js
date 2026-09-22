@@ -4,19 +4,21 @@
 // Nothing here decides anything about the home: that is web/data/. This file only asks it and draws the answer.
 // It is served at /ui/ beside the old app until cutover (docs/design-spec-v6.md, the handoff's phase 5).
 import '/js/kinds.js';
-import { create, CasetaHome, CasetaDaylight, RECONNECT_GRACE, esc } from '/data/index.js';
+import { create, CasetaHome, CasetaDaylight, CasetaEdit, RECONNECT_GRACE, esc } from '/data/index.js';
 import { icon } from '/ui/icons.js';
-import { deviceArt, roomArt, artSrc } from '/ui/art.js';
+import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
 import * as homeScreen from '/ui/screens/home.js';
 import * as roomsScreen from '/ui/screens/rooms.js';
 import * as roomScreen from '/ui/screens/room.js';
 import * as deviceScreen from '/ui/screens/device.js';
 import * as soonScreen from '/ui/screens/soon.js';
+import * as scenesScreen from '/ui/screens/scenes.js';
 
 const data = create({ storage: localStorage });
 const H = CasetaHome.create(data);
 const DAY = CasetaDaylight.create(data);
+const EDIT = CasetaEdit.create(data, H);
 const S = data.S;
 const $ = s => document.querySelector(s);
 
@@ -38,6 +40,9 @@ async function save(msg, opts = {}) {
   }
   render();
 }
+// Many small edits in a row (a slider in a scene, typing a name) save once, quietly, after they stop.
+let saveTimer = null;
+function saveSoon(ms = 700) { clearTimeout(saveTimer); saveTimer = setTimeout(() => save('', { quiet: true }), ms); }
 // Show a light's new level before the bridge confirms it, so a tap feels like it landed.
 function assume(ids, level) { for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; }
 
@@ -57,11 +62,17 @@ function toast(msg, opts = {}) {
 // Opening the sheet that is already open (the same key) only redraws its body, so a state change never replays
 // its rise. `onClose` runs when it is dismissed (the scrim, the X); a sheet that is a page's sub route uses it to
 // step the address back to the page.
-function openSheet({ over = '', title, body, key = '', onClose = null }) {
+function openSheet({ over = '', title, body, key = '', onClose = null, back = false, head = '' }) {
   const root = $('#sheet-root');
+  const headHTML = `<div class="sheet-head ${back ? 'has-back' : ''}">${back ? `<button class="sheet-back" data-act="picker-back" aria-label="Back">${icon('back', 18, 1.8)}</button>` : ''}${over ? `<div class="t-over">${esc(over)}</div>` : ''}<h2 class="t-sheet">${esc(title)}</h2>
+        ${head}<button class="sheet-close" data-act="sheet-close" aria-label="Close">${icon('x', 18, 1.8)}</button></div>`;
   if (key && root.dataset.key === key && !root.hidden) {
-    const b = root.querySelector('.sheet-body'); if (b) b.innerHTML = body;
     root._onClose = onClose;
+    // someone typing in the sheet (a name) is never redrawn out from under
+    const a = document.activeElement;
+    if (a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return root;
+    const h = root.querySelector('.sheet-head'); if (h) h.outerHTML = headHTML;
+    const b = root.querySelector('.sheet-body'); if (b) b.innerHTML = body;
     return root;
   }
   // one sheet replacing another (White to Colour) swaps in place rather than rising again
@@ -70,8 +81,7 @@ function openSheet({ over = '', title, body, key = '', onClose = null }) {
   root._onClose = onClose;
   root.innerHTML = `<button class="scrim ${still ? 'still' : ''}" data-act="sheet-close" aria-label="Close"></button>
     <div class="sheet ${still ? 'still' : ''}" role="dialog" aria-label="${esc(title)}"><div class="grab"></div>
-      <div class="sheet-head">${over ? `<div class="t-over">${esc(over)}</div>` : ''}<h2 class="t-sheet">${esc(title)}</h2>
-        <button class="sheet-close" data-act="sheet-close" aria-label="Close">${icon('x', 18, 1.8)}</button></div>
+      ${headHTML}
       <div class="sheet-body">${body}</div></div>`;
   root.hidden = false;
   return root;
@@ -91,22 +101,23 @@ function route() {
   // #light/<id>/white: the id, then the page under it
   return { name, id: parts[1] || null, sub: parts.slice(2).join('/') || null };
 }
-const SCREENS = { home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen };
+const SCREENS = { home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen, scenes: scenesScreen };
 const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', routines: 'routines', settings: 'home', activity: 'home' };
 const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines']];
 // A screen draws the pages under it that it declares (screen.subs); any other sub page is not built yet.
 function screenFor(r) {
   const screen = SCREENS[r.name];
   if (!screen) return soonScreen;
-  if (r.sub && !(screen.subs || []).includes(r.sub) && !(screen.sheets && screen.sheets[r.sub])) return soonScreen;
+  if (r.sub && !screen.sheetFor && !(screen.subs || []).includes(r.sub) && !(screen.sheets && screen.sheets[r.sub])) return soonScreen;
   return screen;
 }
 function go(hash) { if (location.hash === '#' + hash) render(); else location.hash = hash; }
 
 // ---------- what every screen is handed ----------
 const ctx = {
-  data, H, DAY, S, esc, icon, deviceArt, roomArt, artSrc, lampTint,
-  run, gate, save, assume, toast, go, openSheet, closeSheet, render: () => render(),
+  data, H, DAY, EDIT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
+  openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
+  run, gate, save, saveSoon, assume, toast, go, openSheet, closeSheet, render: () => render(),
   // swap the page's sub route in place (White to Colour on the same sheet): no new step for the back button
   swap: hash => { history.replaceState(null, '', '#' + hash); render(); },
   conn: () => data.connState(),
@@ -141,14 +152,29 @@ function render() {
 }
 // A sheet that is a page's sub route (#light/<id>/white): drawn over the page, redrawn with it, and dismissing it
 // puts the address back to the page without adding a step to the back button.
-function routedSheet(screen, r) {
+// A screen can instead decide its own sheet from the route (screen.sheetFor), for a sheet that is not a sub page:
+// #scenes/<id> is the scene list with that scene's editor over it.
+//
+// A picker (which room, which light to add) opens inside whatever sheet is up, with a back arrow to it: it is
+// state, not an address, and closing either returns to the page.
+function sheetOf(screen, r) {
+  if (screen.sheetFor) return screen.sheetFor(ctx, r);
   const make = r.sub && screen.sheets && screen.sheets[r.sub];
-  if (!make) return;
-  const spec = make(ctx, r); if (!spec) return;
-  const parent = `${r.name}/${r.id}`;
-  const root = openSheet({ ...spec, key: `${parent}/${r.sub}`, onClose: () => { history.replaceState(null, '', '#' + parent); render(); } });
+  return make ? { spec: make(ctx, r), parent: `${r.name}/${r.id}` } : null;
+}
+function routedSheet(screen, r) {
+  const got = sheetOf(screen, r);
+  if (!got || !got.spec) { ctx.ui.picker = null; return; }
+  const key = location.hash.replace(/^#/, '');
+  const close = () => { ctx.ui.picker = null; history.replaceState(null, '', '#' + got.parent); render(); };
+  const pk = ctx.ui.picker && ctx.ui.picker.key === key ? ctx.ui.picker : null;
+  const spec = pk ? { ...pk.spec(ctx, r), back: true } : got.spec;
+  const root = openSheet({ ...spec, key: pk ? `${key}#${pk.name}` : key, onClose: close });
   if (spec.after) spec.after(ctx, r, root);
 }
+// Open a picker inside the current sheet. `spec(ctx, r)` draws it; its taps are the screen's actions as usual.
+function openPicker(name, spec) { ctx.ui.picker = { key: location.hash.replace(/^#/, ''), name, spec }; render(); }
+function closePicker() { ctx.ui.picker = null; render(); }
 let frame = 0;
 function soon() { if (frame) return; frame = requestAnimationFrame(() => { frame = 0; render(); }); }
 ctx.soon = soon;
@@ -202,11 +228,14 @@ data.hooks.signedOut = () => render();
 
 // ---------- taps ----------
 document.addEventListener('click', e => {
+  // the tap that ends a press and hold is not a tap as well
+  if (Date.now() - heldAt < 700) { e.preventDefault(); return; }
   // the innermost target wins: a tile navigates, the power circle inside it toggles
   const el = e.target.closest('[data-act], [data-go]'); if (!el) return;
   if (!el.dataset.act) { e.preventDefault(); closeSheet(); go(el.dataset.go); return; }
   const act = el.dataset.act;
   if (act === 'sheet-close') { dismissSheet(); return; }
+  if (act === 'picker-back') { closePicker(); return; }
   if (act === 'toast-undo') { const root = $('#toast-root'); const u = root._undo; root.innerHTML = ''; root._undo = null; if (u) u(); return; }
   if (act === 'back') { if (history.length > 1) history.back(); else go('home'); return; }
   const r = route();
@@ -214,6 +243,18 @@ document.addEventListener('click', e => {
   const fn = (screen.actions && screen.actions[act]) || SHARED[act];
   if (fn) fn(ctx, el, r);
 });
+// A name field in a sheet (a room's, a scene's) saves as it is typed; Done or Enter closes it.
+document.addEventListener('input', e => {
+  const form = e.target.closest && e.target.closest('form[data-form="name"]'); if (!form) return;
+  const r = route(); const screen = screenFor(r);
+  const fn = screen.actions && screen.actions[form.dataset.act];
+  if (fn) fn(ctx, form, r, e.target.value);
+});
+document.addEventListener('submit', e => {
+  if (e.target.dataset.form !== 'name') return;
+  e.preventDefault();
+  closePicker();
+}, true);
 document.addEventListener('submit', async e => {
   if (e.target.dataset.form !== 'login') return;
   e.preventDefault();
@@ -255,23 +296,39 @@ const SHARED = {
 };
 
 // ---------- press and hold ----------
+let heldAt = 0;
 // An element with data-hold runs its screen's hold action after that many milliseconds held, and the press is
-// forgotten if the finger lifts or leaves first. The ring on it closes over the same time (CSS, data-holding).
-document.addEventListener('pointerdown', e => {
-  const el = e.target.closest('[data-hold]'); if (!el) return;
-  const ms = Number(el.dataset.ms) || 1000;
-  el.dataset.holding = '1';
-  el._hold = setTimeout(() => {
-    el.dataset.holding = '0'; el._held = true;
+// forgotten if the finger lifts, slides more than a few pixels, or leaves the element first. The ring on it closes
+// over the same time (CSS, data-holding). Nothing is redrawn while a press is held, so a state update arriving
+// meanwhile cannot pull the element out from under the finger; the redraw it missed happens when the press ends.
+let hold = null;
+function endHold(fire) {
+  const h = hold; if (!h) return;
+  hold = null;
+  clearTimeout(h.timer);
+  h.el.dataset.holding = '0';
+  ctx.endDrag();
+  if (fire) {
+    heldAt = Date.now();
     if (navigator.vibrate) navigator.vibrate(30);
     const r = route(); const screen = screenFor(r);
-    const fn = screen.actions && screen.actions[el.dataset.hold];
-    if (fn) fn(ctx, el, r);
-  }, ms);
-});
-for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
-  document.addEventListener(ev, e => { const el = e.target.closest && e.target.closest('[data-hold]'); if (el) { clearTimeout(el._hold); el.dataset.holding = '0'; } }, true);
+    const fn = screen.actions && screen.actions[h.el.dataset.hold];
+    if (fn) fn(ctx, h.el, r);
+  }
 }
+document.addEventListener('pointerdown', e => {
+  const el = e.target.closest('[data-hold]'); if (!el) return;
+  // a press on something inside it that is its own button (a chevron) is that button's
+  const inner = e.target.closest('[data-act], [data-go]');
+  if (inner && inner !== el && el.contains(inner)) return;
+  endHold(false);
+  el.dataset.holding = '1';
+  ctx.ui.dragging = true;
+  hold = { el, x: e.clientX, y: e.clientY, timer: setTimeout(() => endHold(true), Number(el.dataset.ms) || 1000) };
+});
+document.addEventListener('pointermove', e => { if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) endHold(false); }, true);
+for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => endHold(false), true);
+document.addEventListener('pointerleave', e => { if (hold && e.target === hold.el) endHold(false); }, true);
 
 // ---------- start ----------
 // The Home greeting and the whole house rely on the home's own time zone; nothing else needs doing before the first

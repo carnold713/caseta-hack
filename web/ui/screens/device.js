@@ -4,10 +4,19 @@
 import { CasetaDaylight } from '/data/index.js';
 import { endsMs } from '/ui/screens/parts.js';
 import { sheets as lookSheets, actions as lookActions } from '/ui/screens/looks.js';
+import { about, actions as aboutActions } from '/ui/screens/about.js';
+import { view as followView, alsoSheet, actions as followActions } from '/ui/screens/follow.js';
 
 export const noTabs = true;
-// White, Colour and the sleep timer are sheets over this page (looks.js); the rest are pages of their own.
-export const sheets = lookSheets;
+// White, Colour, the sleep timer and About are sheets over this page (looks.js, about.js); Follow the day is a
+// page of its own (follow.js), with "Also for" as a sheet over it.
+export const sheets = { ...lookSheets, about };
+export const subs = ['follow'];
+export function sheetFor(c, r) {
+  if (r.sub === 'follow/also') { const d = c.data.dev(r.id); return d ? { spec: alsoSheet(c, d), parent: `light/${r.id}/follow` } : null; }
+  const make = r.sub && sheets[r.sub];
+  return make ? { spec: make(c, r), parent: `light/${r.id}` } : null;
+}
 
 const FAN = [['Off', 'Off'], ['Low', 'Low'], ['Medium', 'Medium'], ['MediumHigh', 'Med-high'], ['High', 'High']];
 const FAN_WORD = { Off: 'Off', Low: 'Low', Medium: 'Medium', MediumHigh: 'Medium high', High: 'High' };
@@ -69,6 +78,7 @@ export function view(c, r) {
   const d = c.data.dev(r.id);
   if (!d) return `<div class="dev"><header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${c.icon('back', 22, 1.7)}</button></header>
     <h1 class="t-h1 page-h1">That light is gone</h1><p class="t-body muted soon">It is no longer in your home.</p></div>`;
+  if (r.sub === 'follow' || r.sub === 'follow/also') return followView(c, r, d);
   if (d.domain === 'fan') return fanView(c, d);
   if (d.domain === 'cover') return shadeView(c, d);
   return lightView(c, d);
@@ -241,6 +251,8 @@ function wireShade(c, id, el) {
 // ---------- taps ----------
 export const actions = {
   ...lookActions,
+  ...aboutActions,
+  ...followActions,
   'dev-on'(c, el, r) {
     const d = c.data.dev(r.id); if (!d || c.data.isOn(r.id)) return;
     if (d.domain === 'fan') { fanTo(c, r.id, 'Medium'); return; }

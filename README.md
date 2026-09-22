@@ -415,8 +415,9 @@ dark design in Figma, on top of the same hub, connector and data. Its build spec
 is `docs/design-spec-v6.md`, read from the Figma file itself; its foundations
 (tokens, components, the icon and art sets) are in `web/ui/`, and
 `/ui/gallery.html` shows every component. The new app itself is at **`/ui/`**:
-Home, Rooms, a room, a light (with its white, colour and sleep timer sheets), a
-fan and a shade so far; anything not rebuilt yet links back to the current app.
+Home, Rooms, a room and its setup, a light (white, colour, sleep timer, Follow
+the day, About), a fan, a shade, and every scene; Remotes, Routines and Settings
+are next, and until then they link back to the current app.
 `docs/data-layer.md` covers the data layer both UIs run on. Until cutover the
 app you open at `/` is still the one below.
 

@@ -52,15 +52,7 @@ const reopenEditor = id => openSceneEditor(id, false, { back: SCENE_BACK });
 const sceneSub = p => `${plural(Object.keys(p.levels).length, 'light')}${
   p.fade === 0 ? ' · at once' : p.fade > SUGGESTED_FADE ? ` · fades over ${fmtDur(p.fade)}` : ''}`;
 // What a light is doing now, as a scene entry: a fan speed, a level, or {level, kelvin | hex} for a Hue lamp showing a colour.
-function sceneEntryNow(d, dflt) {
-  const id = d.device_id;
-  if (d.domain === 'fan') return (S.states[id] || {}).fan_speed || 'Off';
-  const lv = level(id) ?? dflt;
-  const c = colorState(id);
-  if (c && c.mode === 'ct' && c.kelvin && d.ct) return { level: lv, kelvin: Math.round(c.kelvin) };
-  if (c && c.mode === 'xy' && c.hex && d.color) return { level: lv, hex: c.hex.toLowerCase() };
-  return lv;
-}
+const sceneEntryNow = HOME.sceneEntryNow;
 // A scene entry with a new brightness, keeping its colour when it has one.
 function withLevel(v, lv) { return v && typeof v === 'object' ? { ...v, level: lv } : lv; }
 
@@ -188,7 +180,7 @@ function sceneMoreSheet() {
   const p = presets().find(x => x.id === S.sceneEdit); if (!p) return;
   const t = 'p:' + p.id;
   const body = `<div class="card pad0 list"><div class="item"><div class="grow"><div class="t">Show it first on Home</div><div class="d">A starred scene leads the row on Home</div></div><button class="iconbtn plain fav ${S.config.favorites.includes(t) ? 'on' : ''}" data-act="fav" data-t="${t}" aria-label="Show it first on Home">${ICON('star', 'sm')}</button></div></div>
-    <label class="field" style="margin-top:16px"><span>Change gradually over</span><select class="input" id="scene-fade">${[['', 'Default'], [0, 'Instantly'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [30, '30 seconds'], [300, '5 minutes'], [900, '15 minutes'], [1800, '30 minutes']].map(([v, l]) => `<option value="${v}" ${String(p.fade == null ? '' : p.fade) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="field" style="margin-top:16px"><span>Change gradually over</span><select class="input" id="scene-fade">${[['', 'Default'], [0, 'Instantly'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [15, '15 seconds'], [30, '30 seconds'], [60, '1 minute']].map(([v, l]) => `<option value="${v}" ${String(p.fade == null ? '' : p.fade) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <div class="spacer"></div><button class="btn danger block" data-act="scene-delete" data-id="${p.id}">Delete this scene</button>`;
   showSheet('scene-more', 'More', body, { detent: 'medium', sub: esc(p.name), back: true, onBack: () => openSceneEditor(p.id, false, { back: SCENE_BACK }) });
 }
@@ -228,8 +220,6 @@ function sceneSuggest(id) {
   save({ msg: 'Back to the suggestion', render: S.view === 'scenes' }); reopenEditor(id);
 }
 function sceneDelete(id) {
-  S.config.presets = presets().filter(x => x.id !== id);
-  for (const b of bindings()) { b.actions = b.actions.filter(a => !(a.type === 'preset' && a.preset_id === id)); if (b.night) b.night.actions = b.night.actions.filter(a => !(a.type === 'preset' && a.preset_id === id)); }
-  S.config.favorites = S.config.favorites.filter(f => f !== 'p:' + id);
+  EDIT.deleteScene(id);
   closeSheet(); save({ msg: 'Scene deleted' });
 }

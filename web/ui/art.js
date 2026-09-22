@@ -9,6 +9,9 @@ const BY_FIXTURE = {
   track: 'light-track-light', tape: 'light-tape-light', puck: 'light-puck-lights', fan: 'light-ceiling-fan',
   reading: 'light-reading-lamp', torchiere: 'light-torchiere', uplight: 'light-torchiere', accent: 'light-table-lamp',
   headboard: 'light-bedside-lamp', task: 'light-desk-lamp', monitor: 'light-desk-lamp', string: 'light-tree-lamp',
+  // the kinds the Caseta set draws no picture of get the nearest one it does
+  mirror: 'light-wall-sconce', panels: 'light-tape-light', porch: 'light-porch-lantern', path: 'light-porch-lantern',
+  flood: 'light-downlight', landscape: 'light-downlight', step: 'light-puck-lights',
 };
 const LAMP_BY_PLACE = { desk: 'light-desk-lamp', table: 'light-table-lamp', floor: 'light-floor-lamp', bed: 'light-bedside-lamp' };
 
@@ -26,6 +29,15 @@ export function deviceArt(ctx, d) {
   }
   // a light nobody has said the kind of: the Lutron lamp the Home frame draws for exactly that case
   return 'lutron-lamps';
+}
+
+// The picture for a kind of light, from the kinds table's id (`floor-lamp`): the same rule as a device's.
+export function kindArt(k) {
+  if (!k) return 'lutron-lamps';
+  const [place, ...rest] = String(k).split('-'); const fixture = rest.join('-');
+  if (place === 'outside' && (fixture === 'porch' || fixture === 'lamp')) return 'light-porch-lantern';
+  if (fixture === 'lamp') return LAMP_BY_PLACE[place] || 'light-table-lamp';
+  return BY_FIXTURE[fixture] || 'lutron-lamps';
 }
 
 // A room's picture for the card that has no photograph yet, from its name. Null when nothing fits: the card is then

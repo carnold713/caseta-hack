@@ -299,6 +299,7 @@
     }
 
     const HOME = {
+      moodById,
       lightKind, lightRole, kindLabel,
       roomLights, roomDimmers, meanLevel, roomMean, litLights, houseLevel, timerOn, rowLights,
       shortenSuggestedFades, moodLevels, levelsMatch, roomScenes, roomHasScenes, roomSuggested, roomHasSuggested,

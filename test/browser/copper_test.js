@@ -178,7 +178,7 @@ const FAN = [
   check('Off turns it off', (await lv('5')) === 0, await lv('5'));
   await page.click('[data-act="dev-on"]'); await wait(1400);
   check('On turns it on', (await lv('5')) > 0, await lv('5'));
-  await page.click('[data-go="light/5/about"]'); await wait(600);
+  await page.evaluate(() => { location.hash = 'remotes'; }); await wait(700);
   check('a page not built yet says so and links to the current app', !!(await page.$('.soon-page a[href="/"]')));
   await page.click('[data-act="back"]'); await wait(800);
   check('back returns to the light', /#light\/5$/.test(page.url()), page.url());

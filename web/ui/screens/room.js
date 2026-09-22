@@ -2,6 +2,10 @@
 // Read from the Figma frame (12733:20).
 import { tile, roomPicture } from '/ui/screens/parts.js';
 import { roomTone, roomPower } from '/ui/screens/rooms.js';
+import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
+
+// Room setup and the room's sleep timer are sheets over it (setup.js).
+export const sheets = setupSheets;
 
 // Fans and shades after the lights: a grid is never re-sorted by state, so a tile never moves under the thumb that
 // just turned it on.
@@ -63,6 +67,7 @@ function gone(c) {
 }
 
 export const actions = {
+  ...setupActions,
   'room-on'(c, el) { roomPower(c, el.dataset.id, true); },
   'room-off'(c, el) { roomPower(c, el.dataset.id, false); },
   'save-look'(c, el) {

@@ -131,12 +131,7 @@ function roomDeviceRow(d, fromRoom) {
 // and if the first one's (stale) response lands after the second's, it silently undoes the second's change.
 function roomsCreateQuiet(name, opts = {}) {
   ensureRooms();
-  const names = new Set(appRooms().map(r => r.name.toLowerCase()));
-  let n = String(name || '').trim().slice(0, 40);
-  if (!n) { n = 'New room'; let i = 2; while (names.has(n.toLowerCase())) n = `New room ${i++}`; }
-  else if (names.has(n.toLowerCase())) { let i = 2; while (names.has(`${n} ${i}`.toLowerCase())) i++; n = `${n} ${i}`; }
-  const room = { id: uid(), name: n, device_ids: [], bridge_area: null, hue_room: null };
-  S.config.settings.rooms = [...appRooms(), room];
+  const room = EDIT.createRoom(name);
   if (opts.save !== false) save({ quiet: true, render: false });
   bridgeMakeRoom(room.id);
   return room;
@@ -157,7 +152,7 @@ function roomsDelete(id) {
   const r = roomById(id); if (!r) return;
   const before = JSON.stringify(S.config);
   const hadPhoto = !!r.photo;
-  S.config.settings.rooms = appRooms().filter(x => x.id !== id);
+  EDIT.deleteRoom(id);
   S.roomsEdit = null;
   save({ quiet: true, render: false }).then(() => {
     render();
@@ -196,9 +191,7 @@ async function roomsMoveTo(deviceId, roomId) {
   const d = dev(deviceId); if (!d) return;
   ensureRooms();
   const before = JSON.stringify(S.config);
-  const target = roomById(roomId);
-  for (const r of appRooms()) r.device_ids = (r.device_ids || []).filter(x => x !== deviceId);
-  if (target) target.device_ids = [...(target.device_ids || []), deviceId];
+  const target = EDIT.moveDevice(deviceId, roomId);
   sheet.close();
   await save({ quiet: true, render: false });
   if (S.roomsEdit && !roomById(S.roomsEdit)) S.roomsEdit = null;

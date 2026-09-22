@@ -17,6 +17,8 @@ DATA.hooks.signedOut = () => render();
 const HOME = CasetaHome.create(DATA);
 // Follow the day: the same curve the connector runs (web/data/daylight.js).
 const DAY = CasetaDaylight.create(DATA);
+// Changing the home (rooms, scenes, kinds, hiding and removing): the layer's too, shared with Copper Night.
+const EDIT = CasetaEdit.create(DATA, HOME);
 
 // ---------- the connection ----------
 const RECONNECT_GRACE = CasetaData.RECONNECT_GRACE;

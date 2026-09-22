@@ -125,9 +125,7 @@ function sortStep(id, skipped) {
 function pickPlace(id, p) { if (KP && KP.id === id && KIND_DEF.placeOf(p)) { KP.place = p; kindRender(); } }
 function pickKind(id, k) {
   if (!KIND_ROLE[k]) return;
-  const s = S.config.settings; s.light_kinds = s.light_kinds || {}; s.roles = s.roles || {};
-  if (lightKind(id) === k) { delete s.light_kinds[id]; delete s.roles[id]; }
-  else { s.light_kinds[id] = k; s.roles[id] = KIND_ROLE[k]; }
+  EDIT.setKind(id, k);
   saveSoon();
   if (KP && KP.id === id) kindRender();
   const d = dev(id); if (!d) return;

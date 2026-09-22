@@ -170,12 +170,12 @@ function wireWheel(c, d, root) {
 // ---------- 06b Sleep timer ----------
 const DURATIONS = [5, 15, 30, 60];
 const MORE = [10, 20, 45, 90, 120];
-// The timers running over this light, and which of the three reaches ("This lamp", its room, everything on) it is.
-function timerFor(c, id) {
+// The timer running over any of these devices, if there is one.
+function timerFor(c, ids) {
   for (const [t, v] of Object.entries(c.S.timers || {})) {
     if (!v || !v.ends_at) continue;
     const target = t.includes('|') ? t.split('|') : t;
-    if (c.data.targetDevices(target).includes(id)) return { key: t, target, ends: endsMs(v.ends_at) };
+    if (c.data.targetDevices(target).some(x => ids.includes(x))) return { key: t, target, ends: endsMs(v.ends_at) };
   }
   return null;
 }
@@ -190,11 +190,18 @@ function reaches(c, d) {
 const fmtLeft = ms => { const s = Math.max(0, Math.round(ms / 1000)); const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}`; };
 function timer(c, r) {
   const d = c.data.dev(r.id); if (!d) return null;
-  const id = d.device_id;
-  const t = timerFor(c, id);
+  return timerSheet(c, { over: d.name, opts: reaches(c, d), covers: [d.device_id] });
+}
+// The same sheet for a room (Room setup's "Sleep timer for this room").
+export function roomTimer(c, aid) {
+  return timerSheet(c, { over: c.data.areaName(aid), opts: [['room', 'This room', `a:${aid}`]], covers: c.H.roomLights(aid).map(x => x.device_id) });
+}
+// `opts` are the reaches offered ([key, label, target]); `covers` the devices whose running timer it shows.
+function timerSheet(c, { over, opts, covers }) {
+  const t = timerFor(c, covers);
   const ui = c.ui.timer = c.ui.timer || { reach: 'lamp', more: false };
-  const opts = reaches(c, d);
-  if (!opts.some(o => o[0] === ui.reach)) ui.reach = 'lamp';
+  c.ui.timerReaches = opts;
+  if (!opts.some(o => o[0] === ui.reach)) ui.reach = opts[0][0];
   const cur = opts.find(o => o[0] === ui.reach);
   const total = t && c.ui.timerTotal && c.ui.timerTotal[t.key];
   const left = t ? t.ends - Date.now() : 0;
@@ -205,7 +212,7 @@ function timer(c, r) {
   const offAt = t ? new Date(t.ends).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '';
   const C = 2 * Math.PI * 54;
   return {
-    over: d.name, title: 'Sleep timer',
+    over, title: 'Sleep timer',
     body: `<div class="sheet-abs ts">
       <div class="durs">${DURATIONS.map(chip).join('')}<button class="dur more ${ui.more ? 'open' : ''}" data-act="timer-more">${c.icon('plus', 18, 1.8)}<span>Custom</span></button></div>
       ${ui.more ? `<div class="chip-row durs-more">${MORE.map(m => `<button class="chip ${sel === m ? 'current' : ''}" data-act="timer-set" data-m="${m}">${m} min</button>`).join('')}</div>` : ''}
@@ -256,10 +263,10 @@ export const actions = {
   },
   'timer-more'(c) { c.ui.timer = { ...(c.ui.timer || {}), more: !(c.ui.timer && c.ui.timer.more) }; c.render(); },
   'timer-reach'(c, el) { c.ui.timer = { ...(c.ui.timer || {}), reach: el.dataset.k }; c.render(); },
-  async 'timer-set'(c, el, r) {
-    const d = c.data.dev(r.id); if (!d) return;
+  async 'timer-set'(c, el) {
     const m = Number(el.dataset.m);
-    const reach = reaches(c, d).find(o => o[0] === ((c.ui.timer || {}).reach || 'lamp')) || reaches(c, d)[0];
+    const opts = c.ui.timerReaches || []; if (!opts.length) return;
+    const reach = opts.find(o => o[0] === ((c.ui.timer || {}).reach)) || opts[0];
     const target = reach[2];
     const key = Array.isArray(target) ? target.join('|') : target;
     c.ui.timerTotal = { ...(c.ui.timerTotal || {}), [key]: m };

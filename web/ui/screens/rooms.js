@@ -26,7 +26,7 @@ export function view(c) {
   return `<div class="rooms">
     <header class="rooms-head">
       <h1 class="t-h1">Rooms</h1>
-      <button class="hdr-btn a1" data-go="rooms-add" aria-label="Add a room">${icon('plus', 22, 1.7)}</button>
+      <button class="hdr-btn a1" data-act="room-new" aria-label="Add a room">${icon('plus', 22, 1.7)}</button>
     </header>
     <div class="rooms-list">
       <button class="scenes-card" data-go="scenes">
@@ -47,6 +47,14 @@ export function after(c) {
 
 export const actions = {
   'room-toggle'(c, el) { roomPower(c, el.dataset.id); },
+  // A new room, straight into its setup with its name ready to type. The Lutron bridge is asked for a room to match.
+  async 'room-new'(c) {
+    const room = c.EDIT.createRoom();
+    await c.save('', { quiet: true });
+    c.ui.nameNew = room.id;
+    c.go(`room/${room.id}/setup`);
+    c.EDIT.bridgeMakeRoom(room.id).then(changed => { if (changed) c.save('', { quiet: true }); }).catch(() => { /* the room works here either way */ });
+  },
 };
 
 // A room's power circle: anything on turns the room off, nothing on brings it up.

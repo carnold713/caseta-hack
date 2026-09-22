@@ -194,31 +194,10 @@ function openRemoveDevice(id, opts = {}) {
     <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="${AD.removeBack ? 'sheet-back' : 'sheet-close'}">Keep it</button></div>`,
     { detent: 'compact', sub: `${esc(devAreaName(d))} · ${isPico ? 'remote' : d.domain}`, back: !!AD.removeBack, onBack: AD.removeBack });
 }
-function forgetDevice(id) {
-  const t = 'd:' + id; const cfg = S.config;
-  cfg.bindings = bindings().filter(b => b.device_id !== id);
-  for (const b of cfg.bindings) { const strip = list => list.map(a => { if (!a.target) return a; const rest = tlist(a.target).filter(x => x !== t); return rest.length === tlist(a.target).length ? a : (rest.length ? { ...a, target: packTarget(rest) } : null); }).filter(Boolean); b.actions = strip(b.actions); if (b.night) b.night.actions = strip(b.night.actions); }
-  cfg.bindings = cfg.bindings.filter(b => b.actions.length || (b.night && b.night.actions.length));
-  for (const sc of cfg.schedules || []) sc.actions = sc.actions.map(a => { if (!a.target) return a; const rest = tlist(a.target).filter(x => x !== t); return rest.length ? { ...a, target: packTarget(rest) } : null; }).filter(Boolean);
-  cfg.schedules = (cfg.schedules || []).filter(sc => sc.actions.length);
-  for (const p of cfg.presets) delete p.levels[id];
-  for (const g of cfg.groups) g.device_ids = g.device_ids.filter(x => x !== id);
-  cfg.favorites = cfg.favorites.filter(f => f !== t);
-  if (cfg.settings.light_kinds) delete cfg.settings.light_kinds[id];
-  if (cfg.settings.roles) delete cfg.settings.roles[id];
-  if (cfg.settings.remote_looks) delete cfg.settings.remote_looks[id];
-  for (const r of cfg.settings.rooms || []) r.device_ids = (r.device_ids || []).filter(x => x !== id);
-}
-// Some bridges keep a deleted device in their own list, and the next refresh would put it back on the
-// Remotes page. So a device that reappears shortly after a removal is hidden here for good.
-function hideDevice(id) {
-  const s = S.config.settings; const list = s.hidden_devices || (s.hidden_devices = []);
-  if (!list.includes(id)) list.push(id);
-}
-function unhideDevice(id) {
-  const s = S.config.settings; if (!s.hidden_devices) return;
-  s.hidden_devices = s.hidden_devices.filter(x => x !== id);
-}
+// What a removed device was part of, and hiding one a bridge keeps listing: the data layer's (web/data/edit.js).
+const forgetDevice = EDIT.forgetDevice;
+const hideDevice = EDIT.hideDevice;
+const unhideDevice = EDIT.unhideDevice;
 async function removeDevice(id, btn) {
   const d = dev(id); if (!d) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Removing...'; }

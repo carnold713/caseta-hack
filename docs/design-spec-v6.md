@@ -386,9 +386,10 @@ keeping:
 `web/ui/index.html` and `app.js` are the new app, running on the data layer
 (`docs/data-layer.md`) beside the old one at `/`. Built so far: **02 Home**,
 **13 Rooms**, **03 Room**, **04 Light**, **05 Colour**, **05b White**,
-**06b Sleep timer**, **17 Fan** and **18 Shade**, laid out in `screens.css`
-from each frame's own numbers. Pages not built yet (Follow the day, about this
-light, room setup, scenes, remotes, routines, settings, activity) land on a
+**06 Follow the day**, **06b Sleep timer**, **13 Rooms**, **14 All scenes**,
+**15 a scene**, **16 Room setup**, **17 Fan**, **18 Shade** and **19 About
+this light**: all of phase 3, laid out in `screens.css` from each frame's own
+numbers. Pages not built yet (remotes, routines, settings, activity) land on a
 plain "still being rebuilt" page that links to the current app, so nothing is
 out of reach meanwhile.
 
@@ -400,9 +401,11 @@ step to Back; White and Colour swap in place without the sheet rising again.
 `test/browser/copper_test.js` drives these screens against the hub and the fake
 connector (the dial, the house bar, Goodnight's hold, All on and off, Save this
 look, a fan's steps, stars, the white bar, the wheel, a timer) and measures
-them against frames 03, 04, 05, 05b, 06b, 13 and 17.
+them against frames 03, 04, 05, 05b, 06b, 13 and 17. `test/browser/copper_edit_test.js`
+covers the rest: About this light, Follow the day, Room setup, a new room, and
+making, editing, running and deleting a scene.
 
-What reading frames 03 to 06b, 13, 17 and 18 settled:
+What reading frames 03 to 19 settled:
 
 - **The brightness arc on the light page is not the component above.** It is
   340 x 190 at (36, 640), radius 150, stroke **40**, track **`#2E2E2E`**, fill
@@ -439,6 +442,26 @@ What reading frames 03 to 06b, 13, 17 and 18 settled:
 - The sleep timer's "Custom" opens a second row (10, 20, 45, 90, 120 min),
   the steps the old dial offered past the four the file shows. "Applies to"
   is this lamp, its room, or everything that is on.
+- **A scene's fade stops at a minute.** Frame 15 offers "5 min" and "30 min";
+  the hub keeps a scene's fade only up to 60 seconds and drops a longer one
+  silently, so those chips are 15 s, 30 s and 1 min instead. A longer fade needs
+  a hub change, which this rebuild does not make.
+- **Scenes and a scene's lights.** Frame 14 runs a scene on a tap and edits it
+  on a press and hold (500 ms), and the chevron on a row edits it too. Running
+  one says so with Undo, which puts back every light it touched. Frame 15 shows
+  each light's level and colour but no control for them; tapping a light opens
+  its level (a slider, a fan's speeds, a switch's on and off) and, for a lamp,
+  "As it is", Follow the day, the five whites and the twelve colours, so nothing
+  the old scene editor did is lost. Name, "Try it" and "Use the lights as they
+  are now" are kept for the same reason.
+- **About this light (19)** sets what a light is for and what it is on the same
+  sheet; picking a kind sets the role its fixture plays, as it always has, and
+  the kinds offered are `web/js/kinds.js`'s (the file draws an arc lamp and a
+  tree lamp under Floor, which that table does not have). Changing a role
+  refreshes the room's suggested scenes, leaving any the person changed.
+- **Pickers inside a sheet** (which room, which light to add, a name, "are you
+  sure") are the app's addition: the file draws none of them. Each opens in
+  place with a back arrow and closes back to the sheet.
 - The connector reports a timer's end as **epoch seconds**. (The browser
   suite's fake connector also used to send a `timers` message the hub does not
   handle; it now sends `timer` as the real one does, so timers show in tests.)
