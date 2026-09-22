@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.19.0"
+VERSION = "0.20.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -519,10 +519,42 @@ class Agent:
         elif event == "Release":
             self.gestures.release(key)
 
+    def _hold_from_step(self, key: str, gesture: str) -> list:
+        """What a hold does on a button that has nothing set for it.
+
+        An arrow whose press nudges the brightness should ramp while it is held. That is what the arrows
+        on every dimmer in the world do, and making somebody set it by hand on both arrows is four rows
+        of work to arrive at the obvious. So when the press is a single step and there is nothing at all
+        on the hold, the hold follows the press: up ramps up, down ramps down, letting go stops it.
+
+        Only when nothing is set, so anything chosen by hand still wins, and never on a fan, where a step
+        is a speed and a ramp means nothing.
+        """
+        if gesture not in ("hold_start", "hold_end"):
+            return []
+        bound = self._bindings.get(key, {})
+        if any(g in bound for g in ("hold", "hold_start", "hold_end")):
+            return []
+        acts = self._actions_for(bound["single"]) if "single" in bound else []
+        if len(acts) != 1 or acts[0].get("type") != "step":
+            return []
+        target = acts[0].get("target")
+        ids = self.runner._resolve(target) if target is not None else []   # noqa: SLF001
+        if not ids or all(self.runner._is_fan(d) for d in ids):            # noqa: SLF001
+            return []
+        if gesture == "hold_end":
+            return [{"type": "stop", "target": target}]
+        # dimming by hold stops at a glow, never at off: off is only ever a tap, the same rule the
+        # hold-to-dim row follows when somebody sets it by hand
+        return ([{"type": "raise", "target": target}] if int(acts[0].get("delta") or 0) > 0
+                else [{"type": "lower", "target": target, "floor": 1}])
+
     def _on_gesture(self, key: str, gesture: str) -> None:
         device_id, _, num = key.partition("/")
         binding = self._bindings.get(key, {}).get(gesture)
         actions = self._actions_for(binding) if binding else []
+        if not actions:
+            actions = self._hold_from_step(key, gesture)
         LOG.info("gesture %s on pico %s button %s (%s)", gesture, device_id, num, "bound" if actions else "unbound")
         self.send({"type": "gesture", "device_id": device_id, "button_number": int(num), "gesture": gesture,
                    "bound": bool(actions), "binding_id": binding.get("id") if binding else None})

@@ -30,6 +30,12 @@ LOG = logging.getLogger("agent.engine")
 
 GESTURES = ("single", "double", "hold_start", "hold_end", "hold")
 
+# The software ramp a hold runs on a lamp the bridge cannot ramp for us: how much per tick and how long
+# a tick is. Six steps a second at four per cent is a little under four seconds end to end, which is
+# about what a Lutron dimmer's own ramp feels like.
+RAMP_STEP = 4
+RAMP_MS = 160
+
 
 class ButtonState:
     __slots__ = ("pressed_at", "held", "double_armed", "hold_task", "single_task")
@@ -149,6 +155,10 @@ class ActionRunner:
         self.local_time: Optional[Callable[[], Any]] = None  # set by the agent: returns an aware datetime in the home's zone
         self.sunset_hm: Optional[Callable[[], Optional[str]]] = None  # set by the agent: today's sunset as HH:MM, or None
         self._floors: Dict[str, dict] = {}  # device_id -> {"floor": n} while a hold-to-dim ramp is running
+        # A hold on a Hue or Nanoleaf lamp. The Lutron bridge runs a raise/lower ramp itself on its own
+        # dimmers and there is nothing to ask a lamp on another system, so the connector runs it: a step
+        # on a tick until the button is let go, which is what a hold feels like from the far side.
+        self._ramps: Dict[str, Any] = {}    # device_id -> the task stepping it
         # Hue and Nanoleaf lights live in the same device dict under "hue_"/"nanoleaf_" ids; the agent sets
         # these to a small dispatcher that routes each call to whichever backend the id actually belongs to
         # (see BRIDGE_PREFIXES above and agent.py's _level_set_bridge/_color_set/_scene_recall). The names
@@ -383,6 +393,29 @@ class ActionRunner:
             await bridge.set_value(device_id, int(level))
 
     # ----- hold-to-dim floor -----
+    def _stop_ramp(self, device_id: str) -> None:
+        task = self._ramps.pop(device_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+
+    async def _ramp(self, device_id: str, step: int, edge: int) -> None:
+        """Step a lamp towards `edge` until somebody stops it. The fade on each step is the tick itself,
+        so the lamp is always moving rather than arriving in jumps, and the loop ends on its own at the
+        edge so a button held past the end costs nothing."""
+        try:
+            while True:
+                await asyncio.sleep(RAMP_MS / 1000)
+                now = self._level_of(device_id)
+                nxt = max(0, min(100, now + step))
+                nxt = max(edge, nxt) if step < 0 else min(edge, nxt)
+                if nxt == now:
+                    return
+                await self._set_level(device_id, nxt, RAMP_MS / 1000)
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("hold on %s stopped: %s", device_id, exc)
+
     def _clear_floors(self, device_ids: List[str]) -> None:
         for d in device_ids:
             self._floors.pop(d, None)
@@ -701,7 +734,18 @@ class ActionRunner:
             return None
 
         if t in ("raise", "lower", "stop"):
-            targets = [d for d in targets if not d.startswith(BRIDGE_PREFIXES)]  # neither Hue nor Nanoleaf has a raise/lower ramp
+            # Hue and Nanoleaf have no raise/lower of their own, so the connector steps them itself.
+            # They used to be dropped here, which made a hold-to-dim do nothing at all on a house whose
+            # lamps are not Lutron's.
+            lamps = [d for d in targets if d.startswith(BRIDGE_PREFIXES)]
+            targets = [d for d in targets if not d.startswith(BRIDGE_PREFIXES)]
+            for d in lamps:
+                self._stop_ramp(d)
+            if t != "stop":
+                step = RAMP_STEP if t == "raise" else -RAMP_STEP
+                edge = int(a.get("ceiling", 100)) if t == "raise" else int(a.get("floor", 0) or 0)
+                for d in lamps:
+                    self._ramps[d] = asyncio.create_task(self._ramp(d, step, edge))
             fn = {"raise": bridge.raise_cover, "lower": bridge.lower_cover, "stop": bridge.stop_cover}[t]
             # raise_cover/lower_cover/stop_cover send the generic Raise/Lower/Stop zone commands,
             # which dimmers honour too (that is how a Pico's own raise/lower works).

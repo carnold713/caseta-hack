@@ -262,6 +262,13 @@ arrow, so one press moves on and the other undoes it.
 **Gradual.** Brighten while holding, dim while holding, stopping when released. Dimming by hold
 stops at a glow rather than going to off, because off should always be a deliberate tap.
 
+A button whose press steps the brightness gets this for free on its hold: with nothing chosen for
+the hold, holding it ramps the same direction the press nudges, and letting go stops. That is what
+an arrow on a wall dimmer does, and making somebody set it by hand on both arrows is work to arrive
+at the obvious. Anything chosen by hand wins, and the app says on the button that the hold already
+does something rather than reading as unset. It does not apply to a fan, where a step is a speed and
+a ramp means nothing.
+
 **Scenes.** Run any scene. Offer to create the five suggested scenes for a room that has none.
 
 **Timers.** Start a sleep timer over the target. "Light the way", which puts lights on very dim

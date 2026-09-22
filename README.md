@@ -370,6 +370,13 @@ A worked example, a 3-button Pico in the kitchen:
 | Raise | hold ends | Group Kitchen → stop |
 | Raise | single | Group Kitchen → step +10 |
 
+A button whose single press is a brightness step and that has nothing set on
+its hold gets the hold for free: holding it ramps the same way the press
+nudges, and letting go stops. Set anything on that hold and the fallback
+steps aside. `raise`, `lower` and `stop` are bridge commands on a Lutron
+zone; on a Hue or Nanoleaf lamp the connector runs the ramp itself, four
+points every 160ms, so a held arrow moves those lamps too.
+
 Action types (`hub/validate.js` is the schema): `level`, `step`, `raise`,
 `lower`, `stop`, `cap`, `fan`, `scene`, `preset`, `cycle`, `cycle_presets`,
 `timer`, `cancel_timer`, `delay`, `restore` (what was on before the house went dark, or plain on) and `color`. `color` is

@@ -163,7 +163,11 @@ function openButtonSheet(n) {
     const acts = gestureActions(pid, n, g); const night = gestureActions(pid, n, g, true);
     const b = g === 'hold' ? (binding(pid, n, 'hold_start') || binding(pid, n, 'hold')) : binding(pid, n, g);
     const broken = b && bindingBroken(b);
-    return `<button class="item" data-act="gesture-open" data-g="${g}" data-grow="${n}/${g}"><div class="ic ${acts.length ? 'on' : ''}">${ICON(g === 'single' ? 'bolt' : g === 'double' ? 'copy' : 'clock', 'sm')}</div><div class="grow"><div class="t">${GESTURE_LABEL[g]}</div><div class="d ${acts.length ? '' : 'none'}">${acts.length ? esc(shortDescribe(acts)) : 'Nothing yet'}</div>${night.length ? `<div class="d">At night: ${esc(shortDescribe(night))}</div>` : ''}${broken ? `<div class="d"><span class="odot"></span>Points at something that is gone. Pick again.</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
+    const inh = g === 'hold' && !acts.length ? inheritedHold(pid, n) : null;
+    const line = acts.length ? esc(shortDescribe(acts))
+      : inh ? `${inh.dir === 'up' ? 'Brightens' : 'Dims'} while holding · follows the press`
+      : 'Nothing yet';
+    return `<button class="item" data-act="gesture-open" data-g="${g}" data-grow="${n}/${g}"><div class="ic ${acts.length || inh ? 'on' : ''}">${ICON(g === 'single' ? 'bolt' : g === 'double' ? 'copy' : 'clock', 'sm')}</div><div class="grow"><div class="t">${GESTURE_LABEL[g]}</div><div class="d ${acts.length || inh ? '' : 'none'}">${line}</div>${night.length ? `<div class="d">At night: ${esc(shortDescribe(night))}</div>` : ''}${broken ? `<div class="d"><span class="odot"></span>Points at something that is gone. Pick again.</div>` : ''}</div><span class="chev">${ICON('chev', 'sm')}</span></button>`;
   }).join('');
   showSheet('button', title, `<div class="card pad0 list gestures">${body}</div>`, { detent: 'compact', sub: `${esc((dev(pid) || {}).name || 'Remote')} · pick a kind of press.`, top: true, back: true, onBack: renderRemoteSheet });
 }
@@ -204,6 +208,18 @@ const RECIPES = [
   { id: 'fan_down', t: 'Fan: slower', fan: true, mk: T => [{ type: 'step', target: T, delta: -1 }] },
 ];
 function houseExtras() { const f = hasFans(), sh = hasShades(); return f && sh ? ' Fans stop and shades close.' : f ? ' Fans stop.' : sh ? ' Shades close.' : ''; }
+// A hold nobody has set on a button whose press nudges the brightness: the connector ramps while it is
+// held (agent.py _hold_from_step). Nothing is stored for it, so the app has to work out the same answer
+// to avoid telling somebody a button does nothing while it is busy dimming their room.
+function inheritedHold(pid, n) {
+  if (gestureActions(pid, n, 'hold').length) return null;
+  const acts = gestureActions(pid, n, 'single');
+  if (acts.length !== 1 || acts[0].type !== 'step') return null;
+  const ds = targetDevices(acts[0].target).map(dev).filter(Boolean);
+  if (!ds.length || ds.every(d => d.domain === 'fan')) return null;
+  // the target is the press's own, not whatever the hold sheet happens to have picked
+  return { dir: acts[0].delta > 0 ? 'up' : 'down', target: acts[0].target };
+}
 function recipeOf(actions) {
   if (!actions || !actions.length) return 'nothing';
   const a = actions[0];
@@ -265,6 +281,10 @@ function renderRecipeSheet() {
   const seg = night ? `<div class="seg" style="margin:8px 0 4px"><button class="${night ? '' : 'on'}" data-act="recipe-mode" data-night="0">${ICON('sun', 'sm')} Normally</button><button class="${night ? 'on' : ''}" data-act="recipe-mode" data-night="1">${ICON('moon', 'sm')} At night</button></div>` : '';
   const nightNote = night ? `<div class="tip" style="margin-top:12px"><div class="grow"><span class="cap">At night</span><div class="d" style="margin-top:0;color:var(--text-2)">Between ${fmtTime(S.config.settings.night_start)} and ${fmtTime(S.config.settings.night_end)} this button does this instead. <a data-act="nav" data-view="settings" href="#settings">Change the hours</a></div></div></div>` : '';
   const twiceNote = g === 'double' && !binding(pid, n, 'double') ? `<p class="d" style="margin:4px 0 12px">Once it has a press-twice, a single press waits a moment so the two can be told apart.</p>` : '';
+  // Nothing is stored for a hold that follows the press, so without a word here the sheet reads as if
+  // holding does nothing while it is in fact dimming the room.
+  const inh = g === 'hold' && !acts.length ? inheritedHold(pid, n) : null;
+  const inhNote = inh ? `<div class="tip" style="margin-top:12px"><div class="grow"><span class="cap">Already works</span><div class="d" style="margin-top:0;color:var(--text-2)">With nothing set here, holding this button ${inh.dir === 'up' ? 'brightens' : 'dims'} ${esc(targetName(inh.target))} until you let go, because a press nudges it ${inh.dir === 'up' ? 'up' : 'down'}. Pick something below to do that instead.</div></div></div>` : '';
   const sel = S.pickTargets;
   const chipsT = [defaultTarget(pid), ...sel, 'h:all', ...areas().map(a => `a:${a.id}`)].filter((v, i, arr) => arr.indexOf(v) === i && targetExists(v));
   const chips = `<div class="chips scroll">${chipsT.map(t => `<button class="chip ${sel.includes(t) ? 'sel' : ''}" data-act="pick-target" data-t="${esc(t)}">${sel.includes(t) ? ICON('check', 'sm') : ''}${esc(cap(targetName(t)))}</button>`).join('')}<button class="chip" data-act="pick-target-more">${ICON('dots', 'sm')}Specific lights…</button></div>${sel.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Controls ${esc(targetName(T))} · ${plural(targetDevices(T).length, 'light')}</p>` : ''}`;
@@ -292,7 +312,7 @@ function renderRecipeSheet() {
   const test = acts.length ? `<button class="btn block" data-act="try-actions" style="margin-top:16px">${ICON('play', 'sm')} Try it now</button>` : '';
   const more = night ? '' : `<div style="margin-top:16px">${moreRow('At night, fine-tune, clear', 'recipe-more')}</div>`;
   // the same key on every redraw: a tick appears where you tapped and the list keeps its scroll
-  showSheet('recipe', GESTURE_LABEL[g], `${seg}${nightNote}${twiceNote}${which}<div class="h2">What should happen?</div><div class="card pad0 list">${list}</div>${custom}${test}${more}`, { detent: 'large', back: true, sub: buttonTitleCap(pid, n), onBack: () => openButtonSheet(n) });
+  showSheet('recipe', GESTURE_LABEL[g], `${seg}${nightNote}${twiceNote}${inhNote}${which}<div class="h2">What should happen?</div><div class="card pad0 list">${list}</div>${custom}${test}${more}`, { detent: 'large', back: true, sub: buttonTitleCap(pid, n), onBack: () => openButtonSheet(n) });
 }
 // "Show all ways": a pushed sheet with a back arrow, grouped, in place of twenty two rows appearing under the finger
 // (docs/ia-v5.md 2, 6 stage 5). Picking a way here ticks it here; Back is the way to the press sheet.
