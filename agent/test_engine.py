@@ -57,18 +57,24 @@ async def runner_cases():
         await r.run_one({"type": "color", "target": "d:5", "hex": "#2864ff"}); check("color on a Caseta dimmer is refused", False, "no error")
     except RuntimeError as exc:
         check("color on a Caseta dimmer is refused", "colour" in str(exc), str(exc))
-    # the power button: what was lit before the house went dark comes back at the same levels
+    # back the way it was: each light remembers how it was the moment it went off
     bridge.devices["6"] = {"device_id": "6", "type": "WallSwitch", "zone": "3", "current_state": 100}
     bridge.devices["5"]["current_state"] = 40
     bridge.calls.clear(); hue.clear()
     r.zone_changed("5", 40); r.zone_changed("6", 100)
-    bridge.devices["6"]["current_state"] = 0; r.zone_changed("6", 0)     # one off, the house is still lit: nothing remembered yet
-    check("memory waits for the last light", r.last_on == {}, r.last_on)
-    bridge.devices["5"]["current_state"] = 0; r.zone_changed("5", 0)     # the house goes dark
-    check("memory holds both lights at their levels", r.last_on == {"5": 40, "6": 100}, r.last_on)
+    check("a lit light has nothing to go back to yet", r._last_lit["5"]["off_at"] is None, r._last_lit["5"])
+    bridge.devices["6"]["current_state"] = 0; r.zone_changed("6", 0)
+    bridge.devices["5"]["current_state"] = 0; r.zone_changed("5", 0)
+    check("each one remembers its own level", {d: st["level"] for d, st in r._last_lit.items()} == {"5": 40, "6": 100}, r._last_lit)
     await r.run_one({"type": "restore", "target": "h:all", "fade": 0})
     check("restore brings them back", sorted(bridge.calls) == [("value", "5", 40), ("value", "6", 100)] and hue == [], (bridge.calls, hue))
-    bridge.calls.clear(); r.last_on = {}
+    # the sweep: what went dark together comes back together, and a light nobody has wanted since
+    # Tuesday is not part of tonight's press
+    bridge.calls.clear()
+    r._last_lit["6"]["off_at"] -= 4000
+    await r.run_one({"type": "restore", "target": "h:all", "fade": 0})
+    check("a light off long before the others stays off", bridge.calls == [("value", "5", 40)], bridge.calls)
+    bridge.calls.clear(); r._last_lit.clear()
     await r.run_one({"type": "restore", "target": ["d:5", "d:6"], "fade": 0})
     check("restore with nothing remembered is plain on", sorted(bridge.calls) == [("value", "5", 100), ("value", "6", 100)], bridge.calls)
     await room_cases(check)    # check() counts into `bad` itself

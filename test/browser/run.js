@@ -25,7 +25,7 @@ const ROOT = path.join(HERE, '..', '..');
 const ORDER = [
   'hue_test', 'hue_color_test', 'nanoleaf_test', 'daylight_test',
   'polish_test', 'ia_test', 'ui_test2', 'kinds_test', 'height_test', 'hscroll_test', 'swipe_test',
-  'slide_test', 'night_test', 'onescene_test', 'cycle_test', 'fade_test',
+  'slide_test', 'night_test', 'onescene_test', 'cycle_test', 'fade_test', 'back_test',
   'power_test', 'now_test', 'dimoff_test', 'lag_test', 'add_test', 'bugs_test', 'quiet_test',
   'health_test', 'huearea_test', 'err_test', 'remove_test', 'rooms_test', 'reconnect_test',
 ];

@@ -26,7 +26,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 import aiohttp
 
-from color import GAMUT_C, gamut_from_hue, hex_to_xy, kelvin_to_hex, kelvin_to_mirek, mirek_to_kelvin, xy_from_hue, xy_to_hex
+from color import (GAMUT_C, color_state, gamut_from_hue, hex_to_xy, kelvin_to_hex, kelvin_to_mirek,
+                   mirek_to_kelvin, xy_from_hue, xy_to_hex)
+
+__all__ = ["Hue", "color_state", "hid"]   # color_state lives in color.py now; re-exported for its old callers
 
 LOG = logging.getLogger("hue")
 DISCOVERY_URL = "https://discovery.meethue.com/"
@@ -500,22 +503,3 @@ def _mode_of(d: dict, ct_valid: bool) -> Optional[str]:
     if d.get("color") and d["color"].get("xy"):
         return "xy"
     return None
-
-
-def color_state(d: dict) -> Optional[dict]:
-    """What the app shows for a lamp: {"mode", "kelvin", "xy", "hex"}, or None for a lamp with neither."""
-    ct, color = d.get("ct"), d.get("color")
-    if not ct and not color:
-        return None
-    mode = d.get("color_mode")
-    kelvin = mirek_to_kelvin(ct["mirek"]) if ct and ct.get("mirek") else None
-    xy = list(color["xy"]) if color and color.get("xy") else None
-    if mode == "xy" and xy:
-        hex_str: Optional[str] = xy_to_hex(xy[0], xy[1], 1.0, color.get("gamut") or GAMUT_C)
-    elif kelvin:
-        hex_str = kelvin_to_hex(kelvin)
-    elif xy:
-        hex_str = xy_to_hex(xy[0], xy[1], 1.0, color.get("gamut") or GAMUT_C)
-    else:
-        hex_str = None
-    return {"mode": mode, "kelvin": kelvin, "xy": xy, "hex": hex_str}

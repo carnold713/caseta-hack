@@ -171,6 +171,9 @@ function openButtonSheet(n) {
 // ----- recipe sheet -----
 const RECIPES = [
   { id: 'toggle', t: 'Turn on or off', d: 'On if any light is off, otherwise off', mk: T => [{ type: 'level', target: T, level: 'toggle' }] },
+  // The connector keeps how each light was the moment it went dark, its colour included, so this puts a
+  // room back exactly as it was left rather than on at some level somebody has to fix.
+  { id: 'back', t: 'Back to how it was', d: 'The brightness and colour these lights were on when they went off', mk: T => [{ type: 'restore', target: T }] },
   { id: 'on', t: 'Turn on', mk: T => [{ type: 'level', target: T, level: 'on' }] },
   { id: 'off', t: 'Turn off', mk: T => [{ type: 'level', target: T, level: 'off' }] },
   { id: 'full', t: 'Full brightness', mk: T => [{ type: 'level', target: T, level: 100 }] },
@@ -211,6 +214,7 @@ function recipeOf(actions) {
     if (a.type === 'level') { if (a.level === 'toggle') return 'toggle'; if (a.level === 'on') return 'on'; if (a.level === 'off') return 'off'; if (a.level === 100 && !a.fade) return 'full'; if (a.level === 50 && !a.fade) return 'half'; if (a.level === 10) return 'night'; if (a.level === 20 && a.fade === 8) return 'movie'; }
     if (a.type === 'cycle') return 'cycle';
     if (a.type === 'step') { const f = dev((a.target || '').slice(2)); if (f && f.domain === 'fan') return a.delta > 0 ? 'fan_up' : 'fan_down'; return a.delta > 0 ? 'up' : 'down'; }
+    if (a.type === 'restore') return 'back';
     if (a.type === 'raise') return 'hold_up'; if (a.type === 'lower') return 'hold_down';
     if (a.type === 'timer') return 'sleep';
     if (a.type === 'preset') return 'scene';
@@ -236,9 +240,9 @@ function defaultTarget(pid) { const d = dev(pid); const aid = devArea(d); return
 const packTarget = list => (list.length === 1 ? list[0] : list.slice());
 
 // The usual ways for each kind of press (2.7); `mood` stands for whichever scene row fits the room.
-const USUAL = { single: ['on', 'off', 'toggle', 'scene', 'mood'], double: ['full', 'night', 'alloff', 'scene', 'mood'], hold: ['hold_up', 'hold_down', 'sleep', 'goodnight', 'alloff'], fan: ['fan_up', 'fan_down', 'toggle', 'off'] };
+const USUAL = { single: ['on', 'back', 'off', 'toggle', 'scene', 'mood'], double: ['full', 'night', 'alloff', 'scene', 'mood'], hold: ['hold_up', 'hold_down', 'sleep', 'goodnight', 'alloff'], fan: ['fan_up', 'fan_down', 'toggle', 'off'] };
 // Every way, grouped, for "Show all ways".
-const RECIPE_GROUPS = [['Brightness', ['on', 'off', 'toggle', 'full', 'half', 'night', 'movie', 'cycle', 'up', 'down', 'hold_up', 'hold_down']], ['Scenes', ['scene', 'scenecycle', 'moodsfirst']], ['Timers and going out', ['sleep', 'lightway', 'goodnight', 'leaving', 'alloff']], ['Fans', ['fan_up', 'fan_down']]];
+const RECIPE_GROUPS = [['Brightness', ['on', 'back', 'off', 'toggle', 'full', 'half', 'night', 'movie', 'cycle', 'up', 'down', 'hold_up', 'hold_down']], ['Scenes', ['scene', 'scenecycle', 'moodsfirst']], ['Timers and going out', ['sleep', 'lightway', 'goodnight', 'leaving', 'alloff']], ['Fans', ['fan_up', 'fan_down']]];
 function openRecipeSheet(g, night = false) {
   const pid = S.remote, n = S.button; S.gesture = g; S.night = night; S.advCustom = null;
   const acts = gestureActions(pid, n, g, night);

@@ -123,6 +123,16 @@ Pico bindings from its cached config.
   them. What each light is for, the room's scenes and the kind of each
   light live on the room's **Room setup** page; back is the nav bar, so no
   row on it can dead end.
+- **Back to how it was.** A press that puts the lights back exactly as they
+  were when they went off: the brightness each one was at and the colour it
+  was showing, so whichever scene was running comes back without the scene
+  needing to be named. The connector keeps that for every light, frozen the
+  moment the light goes dark and kept across a restart. What comes back is
+  the sweep, not the archive: whatever went off most recently and everything
+  that went dark within two minutes of it, so a room turned off on Tuesday
+  and not wanted since is not part of tonight's press. It works on any
+  target, so it can be a room's remote or the whole house, and with nothing
+  remembered it is an ordinary "on".
 - **Arrows that step through scenes:** "Step through scenes" asks which
   scenes, in the order you want them walked. Tap a room's row to take all
   the scenes in a room at once, or tick them one at a time from any room;
@@ -465,4 +475,5 @@ python3 test_nanoleaf.py    the Nanoleaf client against two fake controllers (ne
 python3 test_followscene.py a scene that says "follow the day" (needs aiohttp)
 python3 test_followfade.py  how fast the white arrives, and why it is not one answer
 python3 test_beforeon.py    a lamp comes on already the colour it is going to be (needs aiohttp)
+python3 test_restore.py     back the way it was: levels, colours, and which lights belong to the press
 ```

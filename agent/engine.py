@@ -24,6 +24,8 @@ import time
 from datetime import timedelta
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from color import color_state
+
 LOG = logging.getLogger("agent.engine")
 
 GESTURES = ("single", "double", "hold_start", "hold_end", "hold")
@@ -162,8 +164,11 @@ class ActionRunner:
         self.follow_start: Optional[Callable[[str], Awaitable[None]]] = None
         # What the house looked like just before it went dark: every light lit within the two minutes
         # before the last one went off, at its level then. The power button brings it back.
-        self._last_lit: Dict[str, tuple] = {}   # device_id -> (level, when)
-        self.last_on: Dict[str, int] = {}
+        # How each light was the last time it was on: the level it was at, the colour it was showing, and
+        # when it went off. Refreshed while a light is lit and frozen the moment it goes dark, so an
+        # entry always reads "this is how it was when you turned it off". off_at is what lets a restore
+        # tell one sweep of turning things off from a light somebody switched off days ago.
+        self._last_lit: Dict[str, dict] = {}   # device_id -> {level, kelvin?, hex?, off_at}
         self.memory_file: Optional[Any] = None  # a Path the agent sets so last_on survives a restart
         # "this lamp is about to be turned on": agent.py uses it to give a lamp that follows the day
         # today's white while the lamp is still dark. Nothing else is allowed to light a lamp from here.
@@ -304,6 +309,22 @@ class ActionRunner:
         dev = bridge.devices.get(device_id) if bridge else None
         return bool(dev and dev.get(what))
 
+    async def _restore_one(self, device_id: str, state: dict, fade: Optional[float]) -> None:
+        """One light, back the way it was. A lamp that was showing a colour gets it in the same request as
+        its level, so it arrives the right colour rather than travelling there afterwards, which is the
+        same rule turning a lamp on follows. That also pauses it from following the day, through the
+        colour path's own watcher: putting a light back the way it was is somebody asking for that
+        colour, not the connector drifting it."""
+        level = int(state.get("level") or 0)
+        if level <= 0:
+            return
+        kelvin, hex_str = state.get("kelvin"), state.get("hex")
+        want = "ct" if kelvin else "color" if hex_str else None
+        if want and self._color_can(device_id, want):
+            await self._set_color(device_id, kelvin, hex_str, level, fade)
+            return
+        await self._set_level(device_id, level, fade)
+
     async def _set_color(self, device_id: str, kelvin: Optional[float], hex_str: Optional[str], level: Optional[int], fade: Optional[float]) -> None:
         if self.hue_color is None:
             raise RuntimeError("no light backend connected")
@@ -370,37 +391,56 @@ class ActionRunner:
     # ----- what was on before the house went dark -----
     def load_memory(self) -> None:
         try:
-            if self.memory_file and self.memory_file.exists():
-                data = json.loads(self.memory_file.read_text())
-                self.last_on = {str(k): int(v) for k, v in data.items() if isinstance(v, (int, float)) and v > 0}
+            if not (self.memory_file and self.memory_file.exists()):
+                return
+            data = json.loads(self.memory_file.read_text())
+            for k, v in (data or {}).items():
+                # the file used to be {device_id: level}, from when only the level was remembered
+                if isinstance(v, (int, float)) and v > 0:
+                    self._last_lit[str(k)] = {"level": int(v), "off_at": 0.0}
+                elif isinstance(v, dict) and int(v.get("level") or 0) > 0:
+                    self._last_lit[str(k)] = {"level": int(v["level"]), "off_at": float(v.get("off_at") or 0.0),
+                                              **({"kelvin": float(v["kelvin"])} if v.get("kelvin") else {}),
+                                              **({"hex": str(v["hex"])} if v.get("hex") else {})}
         except Exception:  # noqa: BLE001
-            self.last_on = {}
+            self._last_lit = {}
+
+    def _save_memory(self) -> None:
+        if not self.memory_file:
+            return
+        try:
+            self.memory_file.write_text(json.dumps(self._last_lit))
+        except Exception:  # noqa: BLE001
+            pass
+
+    @staticmethod
+    def _colour_of(dev: dict) -> dict:
+        """The colour a lamp is showing, in the shape a colour command takes. A light with neither a
+        colour nor a white temperature contributes nothing, which is right: a Caseta dimmer has a level
+        and that is the whole of what there is to put back."""
+        if dev.get("color") is None and dev.get("ct") is None:
+            return {}
+        c = color_state(dev) or {}
+        if c.get("mode") == "ct" and c.get("kelvin"):
+            return {"kelvin": float(c["kelvin"])}
+        if c.get("hex"):
+            return {"hex": str(c["hex"])}
+        return {}
 
     def _remember(self, device_id: str, level: Optional[int]) -> None:
         bridge = self._bridge()
         dev = bridge.devices.get(device_id) if bridge else None
         if not dev or dev.get("type") not in _LIGHT_TYPES | _SWITCH_TYPES or level is None:
             return
-        now = time.time()
         if level > 0:
-            self._last_lit[device_id] = (int(level), now)
+            # lit: this is how it is, and it has not gone off, so it has no off time yet
+            self._last_lit[device_id] = {**self._colour_of(dev), "level": int(level), "off_at": None}
             return
-        any_lit = any(
-            d.get("type") in _LIGHT_TYPES | _SWITCH_TYPES and self._level_of(did) > 0
-            for did, d in bridge.devices.items() if did != device_id
-        )
-        if any_lit:
-            return
-        recent = {d: lv for d, (lv, t) in self._last_lit.items() if now - t <= 120}
-        if not recent:
-            return
-        self.last_on = recent
-        self._last_lit = {}
-        if self.memory_file:
-            try:
-                self.memory_file.write_text(json.dumps(self.last_on))
-            except Exception:  # noqa: BLE001
-                pass
+        was = self._last_lit.get(device_id)
+        if not was or was.get("off_at") is not None:
+            return    # never seen lit, or already off and already remembered
+        was["off_at"] = time.time()
+        self._save_memory()
 
     def zone_changed(self, device_id: str, level: Optional[int]) -> Optional[Any]:
         """Called by the agent on every zone update; stops a ramp at its floor or ceiling. Returns a coroutine to await or None."""
@@ -593,16 +633,25 @@ class ActionRunner:
             return None
 
         if t == "restore":
-            # the power button with nothing on: the lights that were on before the house went dark, at
-            # their levels then; with nothing remembered, everything comes on at its usual level
+            # Back the way it was: every light in the target that is off and remembers being on, at the
+            # level and the colour it had then.
+            #
+            # Not every light that ever was on, though. What comes back is the sweep: whatever went off
+            # most recently and everything that went dark within two minutes of it, which is one person
+            # turning a room or a house off in one go. A light switched off on Tuesday and never wanted
+            # since is not part of tonight's press, and this is what keeps the house power button from
+            # lighting a room nobody has been in for days.
             targets = [d for d in self._resolve(a["target"]) if bridge.devices.get(d, {}).get("type") in _LIGHT_TYPES | _SWITCH_TYPES]
             fade = a.get("fade")
-            picks = {d: self.last_on[d] for d in targets if d in self.last_on}
+            off = [(d, self._last_lit[d]) for d in targets
+                   if self._level_of(d) <= 0 and (self._last_lit.get(d) or {}).get("off_at") is not None]
+            newest = max((st["off_at"] for _, st in off), default=None)
+            picks = [(d, st) for d, st in off if newest is not None and newest - st["off_at"] <= 120]
             if picks:
-                await asyncio.gather(*(self._set_level(d, lv, fade) for d, lv in picks.items()))
+                await asyncio.gather(*(self._restore_one(d, st, fade) for d, st in picks))
             else:
                 await asyncio.gather(*(self._set_level(d, self.on_level_for(d, a["target"]), fade) for d in targets))
-            return {"restored": sorted(picks)} if picks else {"restored": []}
+            return {"restored": sorted(d for d, _ in picks)}
 
         if t == "color":
             # white temperature or a colour, only for the Hue lamps in the target that can do it; the rest are left alone

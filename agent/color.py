@@ -222,3 +222,25 @@ def xy_from_hue(color: Optional[dict]) -> Optional[List[float]]:
         return [float(xy["x"]), float(xy["y"])]
     except (KeyError, TypeError, ValueError):
         return None
+
+
+# What a lamp is showing, from the dict any backend keeps for it. It reads the shape and nothing else,
+# so it answers for a Hue bulb, a Nanoleaf panel or anything later that keeps `ct` and `color` the same
+# way, and both the app and the connector's own memory of "how was this light" go through it.
+def color_state(d: dict) -> Optional[dict]:
+    """What the app shows for a lamp: {"mode", "kelvin", "xy", "hex"}, or None for a lamp with neither."""
+    ct, color = d.get("ct"), d.get("color")
+    if not ct and not color:
+        return None
+    mode = d.get("color_mode")
+    kelvin = mirek_to_kelvin(ct["mirek"]) if ct and ct.get("mirek") else None
+    xy = list(color["xy"]) if color and color.get("xy") else None
+    if mode == "xy" and xy:
+        hex_str: Optional[str] = xy_to_hex(xy[0], xy[1], 1.0, color.get("gamut") or GAMUT_C)
+    elif kelvin:
+        hex_str = kelvin_to_hex(kelvin)
+    elif xy:
+        hex_str = xy_to_hex(xy[0], xy[1], 1.0, color.get("gamut") or GAMUT_C)
+    else:
+        hex_str = None
+    return {"mode": mode, "kelvin": kelvin, "xy": xy, "hex": hex_str}
