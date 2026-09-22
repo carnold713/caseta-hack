@@ -12,8 +12,11 @@ Object.assign(S, {
   remote: null, room: null, roomPage: null, settingsPage: null,
 });
 DATA.hooks.signedOut = () => render();
-// A loop of scenes is named for its room only when it holds all of that room's scenes (js/light.js knows which).
-DATA.hooks.roomScenes = aid => (typeof roomScenes === 'function' ? roomScenes(aid) : null);
+// The home's own rules (roles, the five scenes, room seeding): web/data/home.js. The kinds table it reads loads
+// after this file, so it is looked up when a role is asked for.
+const HOME = CasetaHome.create(DATA);
+// Follow the day: the same curve the connector runs (web/data/daylight.js).
+const DAY = CasetaDaylight.create(DATA);
 
 // ---------- the connection ----------
 const RECONNECT_GRACE = CasetaData.RECONNECT_GRACE;

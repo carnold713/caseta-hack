@@ -837,53 +837,19 @@ function openCurveSheet() {
 }
 
 // ---------- roles and moods (7) ----------
-const MOOD_ORDER = ['bright', 'relax', 'dinner', 'movie', 'night'];
-const ROLE_CHIPS = [['ambient', 'Main'], ['task', 'Task'], ['accent', 'Lamps'], ['decor', 'Decor']];
-function guessRole(name) {
-  const n = (name || '').toLowerCase();
-  if (/under|cabinet|vanity|desk|island|counter/.test(n)) return 'task';
-  if (/lamp|sconce|picture|cove|toe/.test(n)) return 'accent';
-  if (/shelf|string|display/.test(n)) return 'decor';
-  return 'ambient';
-}
-// A room's scenes: every scene filed under that room, whoever made it. The five suggested ones lead, in
-// the order they are suggested in, and anything made by hand follows in the order it was made.
-//
-// `mood` on a scene is not a kind of thing any more. A scene is a scene; the field only notes which of
-// the five suggestions this one came from, so "back to the suggestion" and a later refresh know what to
-// put back. A scene without one is an ordinary scene that happens to live in a room, and everything in
-// the app treats the two the same.
-function roomScenes(aid) {
-  const rank = p => { const i = MOOD_ORDER.indexOf(p.mood); return i < 0 ? MOOD_ORDER.length : i; };
-  return presets().filter(p => p.area === aid).map((p, i) => ({ p, i }))
-    .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(x => x.p);
-}
-const roomHasScenes = aid => roomScenes(aid).length > 0;
-// The five a room is offered, specifically: what "make them again" refreshes and what the walk counts.
-const roomSuggested = aid => MOOD_ORDER.map(m => presets().find(p => p.area === aid && p.mood === m)).filter(Boolean);
-const roomHasSuggested = aid => roomSuggested(aid).length > 0;
-// A scene filed under a room carries the room in its name ("Kitchen · Relax"), which is right in a list
-// of every scene and repetition on the room's own page. Strip it there, and leave a name that never had
-// it alone.
-function sceneShortName(p) {
-  const room = p && p.area ? areaName(p.area) : null;
-  const n = (p && p.name) || '';
-  return room && n.startsWith(`${room} · `) ? n.slice(room.length + 3) : n;
-}
-const presetMax = p => Math.max(0, ...Object.values(p.levels || {}).map(levelOf));
+// Roles, a room's scenes, the five it is offered, and a scene's name on its room's own page are the data layer's
+// (web/data/home.js), so the new UI orders, names and suggests them exactly the same. The names stay for this UI.
+const MOOD_ORDER = CasetaHome.MOOD_ORDER;
+const ROLE_CHIPS = CasetaHome.ROLE_CHIPS;
+const guessRole = CasetaHome.guessRole;
+const roomScenes = HOME.roomScenes;
+const roomHasScenes = HOME.roomHasScenes;
+const roomSuggested = HOME.roomSuggested;
+const roomHasSuggested = HOME.roomHasSuggested;
+const sceneShortName = HOME.sceneShortName;
+const presetMax = HOME.presetMax;
 // Write (or refresh) the five scenes a room is offered. One the person changed is left alone.
-function suggestScenes(aid) {
-  let made = 0, kept = 0;
-  for (const m of MOODS) {
-    const p = presets().find(x => x.area === aid && x.mood === m.id);
-    if (p && p.edited) { kept++; continue; }
-    const name = `${areaName(aid)} · ${m.name}`.slice(0, 60);
-    if (p) { p.levels = moodLevels(aid, m); p.fade = m.fade; p.name = name; }
-    else S.config.presets.push({ id: uid(), name, levels: moodLevels(aid, m), fade: m.fade, area: aid, mood: m.id, edited: false });
-    made++;
-  }
-  return { made, kept };
-}
+const suggestScenes = HOME.suggestScenes;
 let RS = null;
 function openRolesSheet(aid, opts = {}) {
   const ds = roomLights(aid); if (!ds.length) return;

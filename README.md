@@ -410,6 +410,13 @@ binding fires instantly.
 
 ## Look and feel
 
+**A rebuild is under way.** The phone UI is being replaced by "Copper Night", a
+dark design in Figma, on top of the same hub, connector and data. Its build spec
+is `docs/design-spec-v6.md`, read from the Figma file itself; its foundations
+(tokens, components, the icon and art sets) are in `web/ui/`, and
+`/ui/gallery.html` shows every component. `docs/data-layer.md` covers the data
+layer both UIs run on. Until cutover the app you open is still the one below.
+
 `docs/design-spec-v3.md` is the visual spec the interface follows, derived
 from the Sonos iOS app: a light grey sheet with grouped grey cards, black
 pills and chips, Inter, big left-aligned titles, a dark slate "Light now"
@@ -429,6 +436,10 @@ hub/server.js     Express + ws: static PWA, /api/*, /ws/app (phones), /ws/agent 
 hub/validate.js   config schema, shared truth for bindings and actions
 hub/store.js      JSON files in DATA_DIR
 web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,room,rooms,remotes,scenes,settings,automations,cities,color,daylight,boot,slide,motion,lightfield}.js, sw.js, icons/
+web/data/         the data layer, no DOM: state, socket, api and command gate, save and undo, inventory and
+                  targets (caseta-data.js), roles and suggested scenes (home.js), Follow the day (daylight.js).
+                  One file for every host: a script tag, a require, or an import through index.js
+web/ui/           Copper Night: tokens.css, components.css, icons.js, art/ (exported from Figma), gallery.html
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
 agent/adddevice.py  add a device from the app: association mode, device heard, create, and the
@@ -459,8 +470,12 @@ browser suite starts it for you.
 ### Tests
 
 ```
-npm test               the hub's contracts, and a check that no two app scripts declare
-                       the same top-level name (they share one global scope)
+npm test               the hub's contracts, the data layer's rules (test/data), and a check
+                       that no two app scripts declare the same top-level name (they share
+                       one global scope). The Follow the day test runs agent/daylight.py
+                       with python3 and requires the same kelvin; without python3 it skips
+npm run test:ui        the Copper Night components, measured in Chromium against numbers
+                       read out of the Figma file
 npm run tint-check     every colour the tinted surface can make, measured for contrast
 npm run test:browser   the app itself in Chromium, against a hub and a fake connector
                        the runner starts on a port it picks. test/browser/README.md

@@ -45,59 +45,19 @@ VIEWS.rooms = {
   },
 };
 
-const roomById = id => (id ? appRooms().find(r => r.id === id) || null : null);
+// The rules are the data layer's (web/data/home.js); the names stay here for every caller.
+const roomById = HOME.roomById;
 // A short "· Hue" / "· Nanoleaf" suffix for a device row, or nothing for a plain Lutron device.
-function bridgeTag(deviceId) {
-  const id = String(deviceId);
-  if (id.startsWith('hue_')) return ' · Hue';
-  if (id.startsWith('nanoleaf_')) return ' · Nanoleaf';
-  return '';
-}
+const bridgeTag = HOME.bridgeTag;
 // Every device the app can file in a room: the lights, switches, fans, shades and the remotes.
-const fileable = () => [...controllable(), ...remotes()];
+const fileable = () => HOME.fileable();
+const pruneRooms = HOME.pruneRooms;
 
-// ----- seeding: the bridges' rooms become the app's, ids and all -----
-// Keeping each bridge room's own id is what makes this free: `a:20` still means the Kitchen, the Kitchen's scenes
-// are still the Kitchen's. This runs once, ever, per home (settings.rooms_seeded marks it done): after that, a
-// room here comes only from this app. A room made since in the Lutron app or the Hue app is never imported on
-// its own; its devices are simply unfiled until you put them in one of your own rooms, which is easy from
-// wherever you would think to (a "New room" chip right in the room pickers, not only the Rooms page).
+// ----- seeding: the bridges' rooms become the app's, ids and all, once ever per home -----
+// The layer changes the config and says so; saving it is this UI's job, quietly, the way it always was.
 function ensureRooms() {
-  const s = S.config && S.config.settings; if (!s) return false;
-  let changed = false;
-  if (!s.rooms_seeded) {
-    if ((s.rooms || []).length) {
-      // a home from before this flag existed: it has already been seeded, once, in the past. Mark it done
-      // without importing anything more, rather than treating "the flag is missing" as "seed once again",
-      // which would be one more of exactly the re-adds this flag exists to stop.
-      s.rooms_seeded = true;
-      changed = true;
-    } else {
-      const fresh = Object.values(S.inv.areas || {})
-        .filter(a => a && a.id && a.name)
-        .sort((a, b) => String(a.name).localeCompare(String(b.name)))
-        .map(a => ({ id: String(a.id), name: String(a.name).slice(0, 40), device_ids: [], bridge_area: String(a.id).startsWith('hue_') ? null : String(a.id), hue_room: String(a.id).startsWith('hue_') ? String(a.id) : null }));
-      if (!fresh.length) return false;   // no bridge has answered with a room yet: try again once one does
-      s.rooms = fresh;
-      s.rooms_seeded = true;
-      changed = true;
-    }
-  }
-  if (pruneRooms()) changed = true;
+  const changed = HOME.ensureRooms();
   if (changed) save({ quiet: true, render: false });
-  return changed;
-}
-// A device the bridges have stopped reporting leaves its room quietly. Never while the home is not answering:
-// an empty inventory is a connector that is still coming back, not a house with no lights in it.
-function pruneRooms() {
-  const s = S.config && S.config.settings; if (!s || !(s.rooms || []).length) return false;
-  const known = S.inv.devices || {};
-  if (!Object.keys(known).length) return false;
-  let changed = false;
-  for (const r of s.rooms) {
-    const keep = (r.device_ids || []).filter(id => known[id]);
-    if (keep.length !== (r.device_ids || []).length) { r.device_ids = keep; changed = true; }
-  }
   return changed;
 }
 

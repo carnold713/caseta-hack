@@ -46,19 +46,20 @@ function elFrom(html) { const t = document.createElement('template'); t.innerHTM
 const KINDS = Object.values(KIND_DEF.KINDS).map(k => [k.id, k.label, k.role]);
 const KIND_ROLE = KIND_DEF.ROLES;
 // One vocabulary everywhere (the roles sheet, the kind picker, the light page): Main, Task, Lamps, Decor.
-const ROLE_LABEL = { ambient: 'Main', task: 'Task', accent: 'Lamps', decor: 'Decor' };
-const ROLE_CAP = { ambient: 'Main · fills the room', task: 'Task · light for your hands', accent: 'Lamps · for atmosphere', decor: 'Decor · lit to be looked at' };
+const ROLE_LABEL = CasetaHome.ROLE_LABEL;
+const ROLE_CAP = CasetaHome.ROLE_CAP;
 // "Kitchen · Ceiling pendant · Task": the one caption for a light, used by its page and its More sheet.
 function lightCaption(id) { const d = dev(id); if (!d) return ''; const k = lightKind(id), r = lightRole(id); return [devAreaName(d), k ? kindLabel(k) : null, r ? ROLE_LABEL[r] : null].filter(Boolean).map(esc).join(' · '); }
-function kindLabel(k) { const x = KIND_DEF.KINDS[KIND_DEF.normalize(k)]; return x ? x.label : null; }
+// Moved to the data layer (web/data/home.js); the name stays here so every caller keeps working.
+const kindLabel = HOME.kindLabel;
 // The stored id, read as the id in the table: the nine old one-word ids ("pendant") still resolve ("ceiling-pendant").
-function lightKind(id) { return KIND_DEF.normalize(((S.config && S.config.settings.light_kinds) || {})[id]); }
-function lightRole(id) { const r = ((S.config && S.config.settings.roles) || {})[id]; if (r) return r; const k = lightKind(id); return k ? KIND_ROLE[k] : null; }
+const lightKind = HOME.lightKind;
+const lightRole = HOME.lightRole;
 function lightIcon(d) { const k = lightKind(d.device_id); return k ? KIND_DEF.KINDS[k].icon : domainIcon(d.domain); }
-const roomLights = aid => controllable().filter(d => devArea(d) === aid && (d.domain === 'light' || d.domain === 'switch'));
-const roomDimmers = aid => roomLights(aid).filter(d => d.domain === 'light');
-function meanLevel(ids) { const xs = ids.map(id => level(id) || 0); return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0; }
-const roomMean = aid => meanLevel(roomLights(aid).map(d => d.device_id));
+const roomLights = HOME.roomLights;
+const roomDimmers = HOME.roomDimmers;
+const meanLevel = HOME.meanLevel;
+const roomMean = HOME.roomMean;
 
 // The kind picker (docs/ux-progressive.md 5): two questions in one sheet, "Where is this light?" then "What is it?".
 // On its own, or as a step of the sort walk (SORT set: a "Light n of N" caption, Next / Done and Skip in the footer).
@@ -158,73 +159,17 @@ function paintTiles() {
 }
 
 // ---------- the five a room is offered (D): computed from roles, never stored ----------
-const SUGGESTED_FADE = 1;
-const MOODS = [
-  { id: 'bright', name: 'Bright', icon: 'sun', head: 100, fade: SUGGESTED_FADE, roles: { ambient: 100, task: 100, accent: 60, decor: 50 }, sw: true },
-  { id: 'relax', name: 'Relax', icon: 'sofa', head: 40, fade: SUGGESTED_FADE, roles: { ambient: 35, task: 0, accent: 60, decor: 40 } },
-  { id: 'dinner', name: 'Dinner', icon: 'kitchen', head: 60, fade: SUGGESTED_FADE, roles: { ambient: 20, task: 0, accent: 50, decor: 40 } },
-  { id: 'movie', name: 'Movie', icon: 'film', head: 20, fade: SUGGESTED_FADE, roles: { ambient: 0, task: 0, accent: 15, decor: 0 } },
-  { id: 'night', name: 'Night', icon: 'moon', head: 5, fade: SUGGESTED_FADE, night: true },
-];
-// What each of the five used to fade over, so a scene still carrying one can be brought forward. Once
-// nothing matches, this does nothing, which is what makes it safe to leave in place.
-const OLD_SUGGESTED_FADE = { bright: 1, relax: 3, dinner: 3, movie: 8, night: 2 };
-const moodById = id => MOODS.find(m => m.id === id);
-// The five used to fade over as much as eight seconds, and a scene keeps whatever fade it was made
-// with, so shortening the table alone would have left every scene already in a home still crawling.
-// A scene is brought forward only when it still holds exactly the number the app gave it and the
-// person has not been into it: anything they chose, at any length, is theirs. Idempotent by
-// construction, because after one pass nothing matches any more.
-function shortenSuggestedFades() {
-  let n = 0;
-  for (const p of presets()) {
-    if (!p.mood || p.edited) continue;
-    if (p.fade === OLD_SUGGESTED_FADE[p.mood] && p.fade !== SUGGESTED_FADE) { p.fade = SUGGESTED_FADE; n++; }
-  }
-  return n;
-}
-// Levels per light for one of the five in a room. Switches are on only in Bright; fans and shades are left alone.
-function moodLevels(aid, mood) {
-  const ds = roomLights(aid);
-  const tagged = ds.some(d => lightRole(d.device_id));
-  const out = {};
-  if (mood.night) {
-    for (const d of ds) out[d.device_id] = d.domain === 'switch' ? 0 : (tagged ? 0 : mood.head);
-    if (tagged) {
-      const dim = roomDimmers(aid);
-      const acc = dim.find(d => lightRole(d.device_id) === 'accent');
-      if (acc) out[acc.device_id] = 10;
-      else { const amb = dim.find(d => (lightRole(d.device_id) || 'ambient') === 'ambient'); if (amb) out[amb.device_id] = 5; }
-    }
-    return out;
-  }
-  for (const d of ds) {
-    if (d.domain === 'switch') out[d.device_id] = mood.sw ? 100 : 0;
-    else if (!tagged) out[d.device_id] = mood.head;
-    else out[d.device_id] = mood.roles[lightRole(d.device_id) || 'ambient'];
-  }
-  // one that would leave the room dark is not a look: the main light keeps a floor
-  if (!Object.values(out).some(v => levelOf(v) > 0)) { const dim = roomDimmers(aid)[0]; if (dim) out[dim.device_id] = 15; }
-  return out;
-}
-// Which of a room's scenes the lights are showing right now, if any (within a couple of percent).
-function levelsMatch(lv) {
-  const ids = Object.keys(lv).filter(dev); if (!ids.length) return false;
-  // a look that leaves every light off is not a look: a dark room is dark, not "in Movie"
-  if (!ids.some(id => levelOf(lv[id]) > 0)) return false;
-  return ids.every(id => { const cur = level(id) || 0, want = levelOf(lv[id]); return dev(id).domain === 'switch' || dev(id).domain === 'fan' ? (cur > 0) === (want > 0) : Math.abs(cur - want) <= 2; });
-}
-// The scene the room is in, by id. A room with no scenes of its own is still matched against the five
-// it would be offered, so the row that offers them can say which one the lights are already showing.
-function sceneMatch(aid) {
-  const ps = typeof roomScenes === 'function' ? roomScenes(aid) : [];
-  const p = ps.find(x => levelsMatch(x.levels));
-  return p ? p.id : null;
-}
-function suggestedMatch(aid) {
-  for (const m of MOODS) if (levelsMatch(moodLevels(aid, m))) return m.id;
-  return null;
-}
+// The table and the rules are the data layer's now (web/data/home.js), so the new UI suggests exactly the same
+// five with exactly the same levels. These names stay for every caller in this UI.
+const SUGGESTED_FADE = CasetaHome.SUGGESTED_FADE;
+const MOODS = CasetaHome.MOODS;
+const OLD_SUGGESTED_FADE = CasetaHome.OLD_SUGGESTED_FADE;
+const moodById = CasetaHome.moodById;
+const shortenSuggestedFades = HOME.shortenSuggestedFades;
+const moodLevels = HOME.moodLevels;
+const levelsMatch = HOME.levelsMatch;
+const sceneMatch = HOME.sceneMatch;
+const suggestedMatch = HOME.suggestedMatch;
 // The room's own row of scenes (docs/ux-flows.md 7). Every scene filed under the room, whether it came
 // from the five it was offered or was made by hand: a scene with a room is a scene with a room, and this
 // row is the one place that difference used to show.
@@ -260,11 +205,7 @@ function openMoodSave(aid) {
   sheet.open('Which one?', `<div class="card pad0 list">${rows}</div>`, { detent: 'compact', sub: `It becomes a scene for ${esc(areaName(aid))} that a remote button can run.` });
 }
 function saveMoodScene(aid, mid) {
-  const m = moodById(mid); if (!m) return;
-  const name = `${areaName(aid)} · ${m.name}`.slice(0, 60);
-  let p = presets().find(x => x.area === aid && x.mood === mid && !x.edited);
-  if (p) { p.levels = moodLevels(aid, m); p.fade = m.fade; p.name = name; }
-  else { p = { id: uid(), name, levels: moodLevels(aid, m), fade: m.fade, area: aid, mood: mid, edited: false }; S.config.presets.push(p); }
+  const p = HOME.keepMoodScene(aid, mid); if (!p) return;
   sheet.close();
   save({ msg: `${cap(p.name)} is now a scene` });
 }
@@ -290,13 +231,9 @@ function lightNowHeadline(rooms, short = false) {
 // The row under the house card on Home: the starred lights only, lit in their own colour and 56px, grey and 44px
 // when off. Tap toggles one, hold a lit one for a sleep timer. A home with nothing starred shows no row at all and
 // Home starts with the scenes (docs/ia-v5.md 3). "Show first on Home" is the star on the light's own page.
-function rowLights() {
-  const order = new Map(areas().map((a, i) => [a.id, i])); const f = S.config.favorites;
-  return controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && f.includes('d:' + d.device_id))
-    .sort((a, b) => ((order.get(devArea(a)) ?? 999) - (order.get(devArea(b)) ?? 999)) || a.name.localeCompare(b.name));
-}
+const rowLights = HOME.rowLights;
 // Is a sleep timer running over this light?
-function timerOn(id) { return Object.entries(S.timers || {}).some(([t, v]) => v && v.ends_at && targetDevices(tsplit(t)).includes(id)); }
+const timerOn = HOME.timerOn;
 function lampItemHTML(d) {
   const lv = isOn(d.device_id) ? (level(d.device_id) || 100) : 0;
   const ring = typeof ringClass === 'function' ? ringClass(d) : '';
@@ -442,8 +379,8 @@ function paintMoodRows() {
 
 // ---------- the house: every light that is on, its mean level, and one slider for all of them ----------
 let POWEROFF = null;   // set while the "some lights are automated" sheet is open; read by its two buttons, in boot.js
-function litLights() { return controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && (level(d.device_id) || 0) > 0); }
-function houseLevel() { const ls = litLights(); return ls.length ? meanLevel(ls.map(d => d.device_id)) : 0; }
+const litLights = HOME.litLights;
+const houseLevel = HOME.houseLevel;
 // Of the given lights, the ones an enabled automation turns on (never one whose action turns them off; that
 // automation already wants them dark, so the power button is not fighting it). A preset an automation runs is
 // not unpacked here, only a plain level or "back on" action, which covers the ordinary case.

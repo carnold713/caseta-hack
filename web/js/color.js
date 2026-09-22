@@ -9,8 +9,9 @@
 'use strict';
 
 // ---------- names and tints ----------
-const WARMTH_NAMES = [[2300, 'Candle'], [3000, 'Warm'], [3700, 'Soft white'], [4500, 'Neutral'], [5500, 'Cool']];
-function warmthName(k) { for (const [top, n] of WARMTH_NAMES) if (k <= top) return n; return 'Daylight'; }
+// What a white is called: the data layer's (web/data/daylight.js), since every white it names is on that scale.
+const WARMTH_NAMES = CasetaDaylight.WARMTH_NAMES;
+const warmthName = CasetaDaylight.warmthName;
 // The tint a white tone is painted in: the lamp ramp's orange at the warm end, peach in the middle, a pale blue when
 // cool. A true black-body white is nearly white on a white sheet, so a cool lamp would look off; this keeps it lit.
 const KELVIN_TINTS = [[2000, '#FF8A1F'], [2700, '#FFB25C'], [3500, '#FFD59B'], [4500, '#FFEBCF'], [5500, '#EEF3FF'], [6500, '#D6E4FF'], [10000, '#B9D2FF']];

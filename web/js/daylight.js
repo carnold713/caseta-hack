@@ -9,140 +9,38 @@
    Loaded after color.js (warmthName, kelvinHex) and before light.js, room.js and scenes.js, which draw its rows. */
 'use strict';
 
-// (moment, minutes from it, kelvin). "midnight" is solar midnight, twelve hours before that day's noon.
-const FOLLOW_ANCHORS = [
-  ['midnight', 0, 2000],
-  ['sunrise', -60, 2200],
-  ['sunrise', 0, 2700],
-  ['sunrise', 90, 4000],
-  ['noon', 0, 5200],
-  ['sunset', -120, 4000],
-  ['sunset', 0, 2900],
-  ['sunset', 60, 2400],
-];
-const toMirek = k => 1e6 / Math.max(1, Number(k) || 1);
-const toKelvin = m => Math.round(1e6 / Math.max(1, Number(m) || 1));
-
-// ---------- the home's clock and the home's sun ----------
-// The connector's own clock, kept as an offset from this phone's, so a home in another zone (or a rig driven at a
-// chosen time of day) reads right here.
-function homeNow() { return new Date(Date.now() - (S.sunSkew || 0)); }
-// Today's three moments as Dates, or null when the app has not been told where the home is.
-function followDay(when) {
-  const s = S.sun || {};
-  if (!s.sunrise || !s.sunset) return null;
-  const rise = new Date(s.sunrise), set = new Date(s.sunset);
-  if (isNaN(rise) || isNaN(set)) return null;
-  const noon = s.noon && !isNaN(new Date(s.noon)) ? new Date(s.noon) : new Date((rise.getTime() + set.getTime()) / 2);
-  // the connector sends today's sun; another day of the year is a minute or two out, which no eye can see
-  const shift = when ? Math.round((when - noon) / 86400000) : 0;
-  const move = d => new Date(d.getTime() + shift * 86400000);
-  return { sunrise: move(rise), sunset: move(set), noon: move(noon) };
-}
-const followReady = () => !!followDay();
-// Yesterday, today and tomorrow's anchors in time order: that is what makes 3am and the hour after dusk sit
-// between two anchors like any other moment.
-function followPoints(when) {
-  const base = followDay(when); if (!base) return [];
-  const out = [];
-  for (const delta of [-1, 0, 1]) {
-    const day = { sunrise: new Date(+base.sunrise + delta * 86400000), sunset: new Date(+base.sunset + delta * 86400000), noon: new Date(+base.noon + delta * 86400000) };
-    day.midnight = new Date(+day.noon - 12 * 3600000);
-    for (const [moment, offset, kelvin] of FOLLOW_ANCHORS) out.push([new Date(+day[moment] + offset * 60000), toMirek(kelvin)]);
-  }
-  out.sort((a, b) => a[0] - b[0]);
-  return out.filter((p, i) => i === 0 || p[0] - out[i - 1][0] >= 60000);
-}
-// The white at a moment, in mireds (a million over kelvin): a step in mireds looks like an even step to the eye,
-// a step in kelvin does not, so the curve is drawn and interpolated in them.
-function followMirek(when) {
-  const pts = followPoints(when); if (!pts.length) return null;
-  const t = +when;
-  if (t <= +pts[0][0]) return pts[0][1];
-  if (t >= +pts[pts.length - 1][0]) return pts[pts.length - 1][1];
-  for (let i = 1; i < pts.length; i++) {
-    if (t <= +pts[i][0]) {
-      const [t0, m0] = pts[i - 1], [t1, m1] = pts[i];
-      const span = t1 - t0;
-      return m0 + (m1 - m0) * (span <= 0 ? 0 : (t - t0) / span);
-    }
-  }
-  return pts[pts.length - 1][1];
-}
-function followKelvin(when) { const m = followMirek(when || homeNow()); return m == null ? null : toKelvin(m); }
-// Clamped to what this lamp can show: every Hue lamp reports its own range, and nothing is ever asked of it
-// that it cannot do.
-function followKelvinFor(id, when) {
-  const m = followMirek(when || homeNow()); if (m == null) return null;
-  const d = dev(id) || {};
-  const [kmin, kmax] = d.ct && d.ct_range ? d.ct_range : [2000, 6500];
-  return toKelvin(clamp(m, toMirek(kmax), toMirek(kmin)));
-}
-
-// ---------- who follows ----------
-const followSettings = () => (S.config && S.config.settings && S.config.settings.follow_day) || { device_ids: [], brightness: false };
-const followIds = () => followSettings().device_ids || [];
-const followBright = () => !!followSettings().brightness;
-// The connector's own word on it: the lamps it is following and the ones it has stopped for.
-const followLive = () => (S.follow || {});
-const isFollowing = id => followIds().includes(id) || ((followLive().ids || []).includes(id));
-const followPaused = id => isFollowing(id) && (followLive().paused || []).includes(id);
-// A lamp can follow the day when it can change its white. A Caseta dimmer has no colour at all, so it is never offered it.
-const canFollow = d => !!(d && d.ct);
-const roomFollowLamps = aid => controllable().filter(d => devArea(d) === aid && canFollow(d));
-
+// The curve, who follows it and the words for it are the data layer's now (web/data/daylight.js), with a test that
+// holds its anchor table and its kelvin at every moment to agent/daylight.py. The names stay for this UI.
+const FOLLOW_ANCHORS = CasetaDaylight.FOLLOW_ANCHORS;
+const toMirek = CasetaDaylight.toMirek;
+const toKelvin = CasetaDaylight.toKelvin;
+const homeNow = DAY.homeNow;
+const followDay = DAY.followDay;
+const followReady = DAY.followReady;
+const followPoints = DAY.followPoints;
+const followMirek = DAY.followMirek;
+const followKelvin = DAY.followKelvin;
+const followKelvinFor = DAY.followKelvinFor;
+const followSettings = DAY.followSettings;
+const followIds = DAY.followIds;
+const followBright = DAY.followBright;
+const followLive = DAY.followLive;
+const isFollowing = DAY.isFollowing;
+const followPaused = DAY.followPaused;
+const canFollow = DAY.canFollow;
+const roomFollowLamps = DAY.roomFollowLamps;
+// The layer changes the config; saving it, and saying so, is this UI's.
 function setFollow(ids, on, opts = {}) {
-  const list = Array.isArray(ids) ? ids : [ids];
-  const s = S.config.settings;
-  const fd = s.follow_day || (s.follow_day = { device_ids: [], brightness: false });
-  fd.device_ids = fd.device_ids || [];
-  for (const id of list) {
-    const i = fd.device_ids.indexOf(id);
-    if (on && i < 0) fd.device_ids.push(id);
-    if (!on && i >= 0) fd.device_ids.splice(i, 1);
-  }
+  DAY.setFollowIds(ids, on);
   save({ msg: opts.msg || (on ? 'Following the day' : 'No longer following the day'), render: opts.render !== false });
 }
 function setFollowBright(on) {
-  const s = S.config.settings;
-  const fd = s.follow_day || (s.follow_day = { device_ids: [], brightness: false });
-  fd.brightness = !!on;
+  DAY.setFollowBrightness(on);
   save({ msg: on ? 'It will dim towards the evening too' : 'It will leave brightness alone', render: false });
 }
-
-// ---------- what it is doing, in words ----------
-// "because it is mid-afternoon": where in the day this moment sits, said the way a person would.
-function followWhen(when) {
-  const d = followDay(when || homeNow()); if (!d) return '';
-  const t = +(when || homeNow());
-  const rise = +d.sunrise, set = +d.sunset, noon = +d.noon, M = 60000;
-  if (t < rise - 60 * M) return 'because it is the middle of the night';
-  if (t < rise) return 'because the sun is about to come up';
-  if (t < rise + 90 * M) return 'because the sun is coming up';
-  if (t < noon - 120 * M) return 'because it is mid-morning';
-  if (t <= noon + 120 * M) return 'because it is the middle of the day';
-  if (t < set - 120 * M) return 'because it is mid-afternoon';
-  if (t < set) return 'because the afternoon is turning';
-  if (t < set + 60 * M) return 'because the sun is going down';
-  return 'because the evening has come';
-}
-// "Soft white, 3450 K, because it is mid-afternoon". The white the lamp is really showing when it is following and
-// the connector has already set it; otherwise the one the curve asks for, which is what it would be given.
-function followNowText(id) {
-  const st = (S.states[id] || {}).color;
-  const lit = (level(id) || 0) > 0;
-  const live = lit && isFollowing(id) && !followPaused(id) && st && st.mode === 'ct' && st.kelvin ? Math.round(st.kelvin) : null;
-  const k = live || followKelvinFor(id);
-  if (k == null) return '';
-  const what = `${warmthName(k)}, ${k} K, ${followWhen()}`;
-  // a lamp that is off is left alone, so the honest line is what it will be when it comes on
-  return lit ? what : `Off just now. When you turn it on: ${what}`;
-}
-// What the day asks for at this moment, whatever the lamp is doing: the line the pane shows before it is switched on.
-function followWouldText(id) {
-  const k = followKelvinFor(id); if (k == null) return '';
-  return `${warmthName(k)}, ${k} K, ${followWhen()}`;
-}
+const followWhen = DAY.followWhen;
+const followNowText = DAY.followNowText;
+const followWouldText = DAY.followWouldText;
 // The small tag that used to sit on the Colour row. The light sheet's Colour value row retired into its swatch
 // row (docs/design-spec-v5.md 4.9) and the tag went with it, so nothing calls this at the moment: the Follow the
 // day row's own value ("On", "Paused", "Off") is the one place the state is said. Kept because it is the phrase
