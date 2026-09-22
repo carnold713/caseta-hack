@@ -70,6 +70,11 @@ recorded so nobody copies them.
   in the colour of what it sits on. The chip behind it was rebound to `#262626`
   and the ring was not, so in the file the ring is a shade darker than the chip
   it is cutting. Built to match the chip.
+- **One off tile on the draft palette.** Room detail's "Ceiling pendant · Off"
+  tile is `#1C1C1C` with a `#333333` circle, `#9E9E9E` glyph and value and
+  `#F5F4F2` name: the off tile as it was before the rebind. The off tiles on Home
+  are bound. (It escaped the first count because that count skipped layers named
+  like art, and "Pendant" is one of those names.) Built from the tokens.
 - **The foundations board**, above.
 
 ## Colour
@@ -103,6 +108,28 @@ means "this light is on" and Hypatia has no equivalent.
 Copper family: tile gradient `#E6A06A` to `#D98A4E` at 50% to `#B86C35`; arc and
 brightness-fill gradient `#F3D9C3` to `#E6A06A` at 45% to `#D98A4E`; pale
 `#F3D9C3`; deep `#B86C35`.
+
+### Lamp colours and whites
+
+Read from the foundations board (00). These are Copper Night's own and replace
+the old app's ten swatches, so a colour's name (it comes from the nearest
+swatch) changes with them.
+
+- **Lamp colours, twelve, in this order:** `#FF5A4E` `#FF8A3D` `#FFC24A`
+  `#F5E15B` `#9EE06A` `#4FD39A` `#3CC6D6` `#4C8DFF` `#6E6BFF` `#A66BFF`
+  `#F06BD2` `#FF7AA0`. The Colour tile on Light detail previews five of them
+  (`#FF5A4E` `#FFC24A` `#4FD39A` `#4C8DFF` `#A66BFF`) as 20px discs 14 apart.
+- **White, candle to daylight:** one bar of eight even stops, `#FF8A1F` `#FF9A3C`
+  `#FFAE5E` `#FFBB78` `#FFCB98` `#FFD7B0` `#FFE7D2` `#FFF6F0`, which the handoff
+  puts at 1900 K to 6500 K. The board does not say whether the stops are even in
+  kelvin or in mireds; the connector works in mireds, so that is the reading to
+  confirm with the designer.
+
+The board is out of date in three places, so read it for colour values only:
+its rules still say off is "swipe, or hold" (the design has no swipe), its type
+labels are the weights before the clean-up (Extralight, Book), and its palette is
+the draft one. One thing on it is not stale and answers an open question in the
+handoff: its map puts **"one suggestion"** on Home, after the rooms.
 
 **Rules.** Copper only ever means a light is on, or the current light look. Blue
 means a control or a selection. Red appears only for a real fault: offline after
@@ -200,10 +227,13 @@ rows, height is the sum of its rows.
 off. Knob 24px at x 4 (off) or x 24 (on), white when on.
 
 **Chips come in three kinds, and they are not one component with states.**
-All are 40 tall and fully round.
+All are 40 tall and fully round. A choice chip can carry a 16px glyph (drawn at
+1.8 on the 24 grid) after a 12 left pad.
 - *Choice chip* (the controls sheet, filters): no fill, 1px `#787878` outline,
   `#D1D1D1` label, 16 each side, 8 gap. Selected: 1.5px `#52AEFF` outline,
-  white label.
+  white label. **Current**, for the scene a room is in right now: filled copper
+  `#D98A4E`, no outline, white label and glyph. Copper, not blue, because it is
+  the look the lights are showing, not a choice being made.
 - *Scene chip*: filled `#262626`, 1px `#3C3C3C` border, **white** label, 12 left
   and 16 right, **10** gap, a 28 x 12 row of colour dots before the name. The
   dots are three 12px discs 8 apart, each overlapping the last by 4, each with a
@@ -218,8 +248,12 @@ Medium white label, 10 apart, centred. The inactive one has no fill, a secondary
 glyph and label. **Tap only. There is no swipe or drag control anywhere in this
 design.**
 
-**Device tile.** **168 x 150**, radius 28. Power circle 44px at 16, 16 from the
-frame edge. Device art 48px at 108, 12, so 12 from the top and right edges.
+**Device tile.** Two widths, one per place: **168 x 150** in Home's starred strip
+(it scrolls sideways, so a third tile peeks in), **180 x 150** in a room's two
+column grid (180 + 12 + 180 = 372). Radius 28. Power circle 44px at 16, 16 from
+the frame edge. Device art 48px, 12 from the top and right edges (108, 12 on a
+168 tile; 120, 12 on a 180). Name and value at 16, 94 and 16, 116; the name box
+is the tile width less 32.
 Name 16 Medium at x 16, y 94, width 136. Value line 14 Regular at y 116.
 - On: gradient `#E6A06A` to `#D98A4E` to `#B86C35` top to bottom, 1px white 14%
   border, shadow 0 10 28 rgba(217,138,78,.28), white power circle with a
@@ -227,7 +261,17 @@ Name 16 Medium at x 16, y 94, width 136. Value line 14 Regular at y 116.
   corner.
 - Colour lamp: the same shape tinted to the lamp's own colour. The blue lamp in
   the file is `#5B7FE0` to `#3C5DB8` at 55% to `#2A3F82`, border
-  rgba(157,182,255,.45), shadow rgba(91,127,224,.35).
+  rgba(157,182,255,.45), shadow rgba(91,127,224,.35), power glyph `#2F4A99`. In
+  the room grid its glow is tinted too (`#CFE0FF`); on Home it was left warm
+  (`#FFF1DC`). A blue lamp should glow blue, so the room grid is the one to follow.
+- A running timer: a 28-tall chip at 16, 66 on the tile, `#121212` at 35%, a 14px
+  timer glyph and "12 min" in 12 Medium.
+- Fan: the power circle becomes an icon circle (Caseta override, fan glyph), and
+  five 8px speed dots 3 apart sit at 112, 34, white for each speed up to the
+  current one and white at 25% after it.
+- Shade: an icon circle with the shade glyph, and a 10 x 44 bar at the top right
+  (radius 5, Caseta override) whose `#9E9E9E` fill, hanging from the top, is how
+  much of the window the shade covers: 60% at "40% open".
 - Off: fill `Surfaces/primary-onDark`, 1px border, power circle on the Caseta
   override, glyph at 20% opacity, secondary value text.
 - Unreachable: as off, dimmed.
@@ -299,12 +343,15 @@ The handoff doc says the file wins. It does. These are the three that matter:
 
 | | Handoff doc | File | Ships as |
 |---|---|---|---|
-| Device tile | 180 x 150 | 168 x 150 | **168 x 150** |
+| Device tile | 180 x 150 | 168 x 150 on Home, 180 x 150 in a room | **both**: see Device tile |
 | Tile power circle | at 16 / 16 | `left: 15` in the export | **16 / 16** (the export is inside the 1px border) |
 | Tab bar active circle | inset 8 | `left: 7` in the export | **inset 8** (same reason) |
 
-The second and third are not really disagreements, they are trap 1. Recorded so
-nobody re-derives them from the export and builds everything a pixel tight.
+None of the three is a real disagreement. The tile row was one when only Home
+had been read: an earlier version of this spec said the handoff had the tile
+width wrong, and it did not, the room grid uses exactly its 180. The other two
+are trap 1. Recorded so nobody re-derives them from the export and builds
+everything a pixel tight.
 
 ## Checking the build against the file
 

@@ -119,6 +119,8 @@
 }
 .chip.lead { padding-left: 12px; }
 .chip[aria-pressed='true'] { border: 1.5px solid var(--chip-line-sel); color: var(--text-1); }
+/* The scene a room is in right now: copper, because it is the look the lights are showing, not a choice. */
+.chip.current { background: var(--copper); border-color: transparent; color: var(--text-1); }
 /* Three kinds of chip, and they are not one component with states. The outline chip above is a
    choice (the controls sheet, filters). A scene chip is filled, bordered, white-labelled and carries
    the scene's colours. "All scenes" and its like are filled with no border and a grey label. */
@@ -185,10 +187,10 @@
 }
 .tile-strip::-webkit-scrollbar { display: none; }
 
-/* 168 x 150. The handoff doc says 180 wide; the file says 168 and the file wins. */
+/* Two widths, one per place: 168 in Home's sideways strip, 180 in a room's two column grid. */
 .tile {
   position: relative; flex: none; scroll-snap-align: start;
-  width: 168px; height: 150px; padding: 0; border: 0; display: block;
+  width: var(--tile-w, 168px); height: 150px; padding: 0; border: 0; display: block;
   border-radius: var(--r-card);
   background: var(--surface-1); color: inherit; text-align: left;
   overflow: hidden;
@@ -207,7 +209,10 @@
 /* Device art is the file's own SVG (web/ui/art), white line on a 64 grid, shown at 48. At 20% on an
    off tile, full on a lit one. */
 .tile .art { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; opacity: .2; display: block; }
-.tile .nm { position: absolute; left: 16px; top: 94px; width: 136px; font-size: 16px; font-weight: 500; }
+.tile .nm { position: absolute; left: 16px; top: 94px; width: calc(var(--tile-w, 168px) - 32px); font-size: 16px; font-weight: 500; }
+.tile-grid { display: grid; grid-template-columns: 180px 180px; gap: var(--gap); padding: 0 var(--gutter); --tile-w: 180px; }
+/* hand placed in the file, not a rule of the width: 104, -7 on the room grid's 180 tile */
+.tile-grid .tile .glow { left: 104px; top: -7px; }
 .tile .vl { position: absolute; left: 16px; top: 116px; font-size: 14px; color: var(--text-2); }
 /* The glow is a soft disc bleeding off the top right corner, not a box shadow. 89,-9 from the tile's
    outer edge: the export says 88,-10, which is the border trap again. */
