@@ -17,3 +17,6 @@ test/browser/*.png
 test/browser/*.log
 test/browser/*.pid
 test/browser/*token*.txt
+
+# the component gallery's rendered check shot, regenerated on demand
+web/ui/gallery.png

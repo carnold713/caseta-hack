@@ -1,0 +1,128 @@
+/* Copper Night tokens. The values are the ones bound to the Hypatia "Color Tokens" collection in
+   Figma, not the draft constants in the file's hidden helpers frame. docs/design-spec-v6.md records
+   the mapping between the two and why they differ.
+
+   Copper is deliberately unbound: it means "this light is on" and Hypatia has no equivalent. */
+
+:root {
+  /* surfaces */
+  --bg: #121212;
+  --surface-1: #262626;        /* Surfaces/primary-onDark: cards, tiles, sheet body */
+  --surface-2: #2B2B2B;        /* Surfaces/secondary-onDark · Caseta: grouped lists, toasts, tracks */
+  --surface-3: #3C3C3C;        /* Surfaces/secondary-onDark: raised on a group, icon circles */
+  --line: #3C3C3C;             /* Border/primary-onDark */
+  --hairline: rgba(255, 255, 255, .06);   /* the divider between rows inside a group */
+
+  /* ink */
+  --text-1: #FFFFFF;
+  --text-2: #D1D1D1;
+  --text-3: #9E9E9E;
+  --icon-1: #FFFFFF;
+  --icon-2: #D1D1D1;
+
+  /* controls and selection: blue never means a light */
+  --blue: #006DCC;
+  --blue-hi: #52AEFF;
+  --chip-line: #787878;
+  --chip-line-sel: #52AEFF;
+  --ghost-line: rgba(250, 250, 250, .9);
+  --solid-fill: #F8F8F8;
+  --solid-ink: #262626;
+
+  /* a light that is on */
+  --copper: #D98A4E;
+  --copper-hi: #E6A06A;
+  --copper-lo: #B86C35;
+  --copper-pale: #F3D9C3;
+  --tile-on: linear-gradient(180deg, #E6A06A 0%, #D98A4E 50%, #B86C35 100%);
+  --arc-fill: linear-gradient(90deg, #F3D9C3 0%, #E6A06A 45%, #D98A4E 100%);
+  --arc-track: #2A2724;
+  --tile-on-line: rgba(255, 255, 255, .14);
+  --tile-on-shadow: 0 10px 28px rgba(217, 138, 78, .28);
+
+  /* state */
+  --ok: #3A7934;
+  --warn: #DB6900;
+  --err: #CC0000;
+  --scrim: rgba(38, 38, 38, .5);   /* Overlay/overlay-50 */
+
+  /* geometry */
+  --gutter: 20px;
+  --gap: 12px;
+  --r-card: 28px;
+  --r-group: 20px;
+  --shadow-lift: 0 16px 40px rgba(0, 0, 0, .5);
+  --shadow-bar: 0 16px 20px rgba(0, 0, 0, .5);
+  --shadow-sheet: 0 -8px 40px rgba(0, 0, 0, .5);
+
+  /* motion */
+  --tap: 120ms;
+  --standard: 240ms;
+  --enter: 320ms;
+  --exit: 200ms;
+  --stagger: 40ms;
+  --sheet-in: 420ms;
+  --sheet-out: 280ms;
+  --push: 300ms;
+  --dimmer: 400ms;
+  --scene: 1000ms;
+  --breathe: 1600ms;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --ease-both: cubic-bezier(.4, 0, .2, 1);
+  --spring: linear(0, .3 8%, .72 17%, .94 25%, 1.04 32%, 1.06 40%, 1.02 55%, 1);
+}
+
+/* The face the whole app is set in. Three weights ship, not eight: the file's generator drew in
+   Extralight/Light/Book/Regular/Medium and a later pass folded them down to these. */
+@font-face {
+  font-family: 'Lutron Sans Screen';
+  src: url('/ui/font/LutronSansScreen-Light.woff2') format('woff2');
+  font-weight: 300; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Lutron Sans Screen';
+  src: url('/ui/font/LutronSansScreen-Regular.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Lutron Sans Screen';
+  src: url('/ui/font/LutronSansScreen-Medium.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: 'Lutron Sans Screen', 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The type ramp. Sizes and tracking are the file's; tracking is stated in per cent there and
+   converted here, so -2% at 40px is -0.8px. */
+.t-numeral { font-size: 88px; font-weight: 300; letter-spacing: -.03em; line-height: 1; }
+.t-hero    { font-size: 44px; font-weight: 300; line-height: 1.1; text-align: center; }
+.t-h1      { font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.02em; }
+.t-sheet   { font-size: 32px; font-weight: 300; line-height: 34px; letter-spacing: -.015em; }
+.t-title   { font-size: 20px; font-weight: 500; }
+.t-body    { font-size: 16px; font-weight: 400; line-height: 22px; }
+.t-row     { font-size: 16px; font-weight: 500; line-height: 22px; }
+.t-cap     { font-size: 14px; font-weight: 400; line-height: 18px; }
+.t-over    { font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+
+.muted  { color: var(--text-2); }
+.dimmer { color: var(--text-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--standard) !important;
+    transition-property: opacity, background-color, color, border-color !important;
+  }
+}

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Copper Night · components</title>
+<link rel="stylesheet" href="/ui/tokens.css">
+<link rel="stylesheet" href="/ui/components.css">
+<style>
+  /* Gallery chrome only. Nothing here is part of the design system. */
+  body { padding: 24px 0 80px; }
+  .g { max-width: 412px; margin: 0 auto; }
+  .g h1 { font-size: 28px; font-weight: 300; margin: 0 20px 4px; }
+  .g > p { margin: 0 20px 32px; color: var(--text-2); font-size: 14px; line-height: 20px; }
+  .sec { margin: 0 0 36px; }
+  .sec > h2 {
+    font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text-3); margin: 0 20px 12px;
+  }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .inline { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px; align-items: center; }
+  .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 20px; }
+  .sw { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .sw i { display: block; height: 44px; }
+  .sw span { display: block; font-size: 10px; padding: 6px; color: var(--text-2); word-break: break-all; }
+  .icons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; padding: 0 20px; }
+  .icons figure { margin: 0; display: grid; place-items: center; gap: 4px; }
+  .icons figcaption { font-size: 9px; color: var(--text-3); }
+  .ramp > * { margin: 0 20px 10px; }
+  .note { margin: 8px 20px 0; font-size: 12px; color: var(--text-3); line-height: 16px; }
+  .relative-host { position: relative; height: 96px; }
+  .relative-host .toast, .relative-host .tabbar { position: static; transform: none; margin: 0 auto; animation: none; }
+  .relative-host .toast::after { animation: none; width: 60%; }
+  .stage {
+    position: relative; height: 360px; margin: 0 20px; border-radius: 20px;
+    overflow: hidden; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .stage .scrim, .stage .sheet { position: absolute; animation: none; }
+  .hdr-host { position: relative; height: 180px; }
+</style>
+</head>
+<body>
+<div class="g">
+  <h1>Copper Night</h1>
+  <p>Every component and every state, built from <code>docs/design-spec-v6.md</code>. This page is the
+     phase 2 check: if something here is wrong, it is wrong everywhere.</p>
+
+  <section class="sec"><h2>Colour</h2><div class="swatches" id="swatches"></div>
+    <p class="note">Copper only ever means a light is on. Blue only ever means a control or a selection.
+       Red only ever means a real fault.</p></section>
+
+  <section class="sec"><h2>Type</h2><div class="ramp">
+    <div class="t-numeral">75%</div>
+    <div class="t-hero">Floor lamp</div>
+    <div class="t-h1">Collin&rsquo;s Home</div>
+    <div class="t-sheet">Choose a colour</div>
+    <div class="t-title">Living room</div>
+    <div class="t-body">Every change applies straight away.</div>
+    <div class="t-cap muted">3 of 5 on &middot; 62%</div>
+    <div class="t-over">Whole house</div>
+  </div></section>
+
+  <section class="sec"><h2>Icons</h2><div class="icons" id="icons"></div></section>
+
+  <section class="sec"><h2>Page header</h2>
+    <div class="hdr-host" id="hdr"></div></section>
+
+  <section class="sec"><h2>Rows and groups</h2>
+    <div class="group" id="rows"></div>
+  </section>
+
+  <section class="sec"><h2>Controls</h2>
+    <div class="inline" id="chips"></div>
+    <div style="height:12px"></div>
+    <div class="onoff"><button aria-pressed="true"></button><button aria-pressed="false"></button></div>
+    <div style="height:12px"></div>
+    <div class="inline">
+      <button class="pill" id="p1">All on</button>
+      <button class="pill ghost" id="p2">All off</button>
+      <button class="pill solid">Get started</button>
+      <button class="link">Skip tonight</button>
+    </div>
+  </section>
+
+  <section class="sec"><h2>Tiles</h2><div class="tile-strip" id="tiles"></div>
+    <p class="note">168 &times; 150. The lit tile carries the copper gradient, a white power circle and a
+       glow off the top right corner; a colour lamp keeps the shape and takes its own hue.</p></section>
+
+  <section class="sec"><h2>Rooms</h2><div class="tile-strip" id="rooms"></div></section>
+
+  <section class="sec"><h2>Whole house</h2>
+    <div class="card">
+      <div class="t-over">Whole house</div>
+      <div class="t-h1" style="margin:4px 0 16px">7 on &middot; 52%</div>
+      <div class="hbar" id="hbar"></div>
+      <p class="t-cap muted" style="margin:12px 0 16px">Adjusts lights that are on</p>
+      <div style="display:flex;gap:12px">
+        <button class="pill" style="flex:1" id="p3">All on</button>
+        <button class="pill ghost" style="flex:1" id="p4">All off</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
+        <button class="hold" id="hold"></button>
+        <div><div class="t-row">Goodnight house</div><div class="t-cap muted">Hold to turn everything off</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec"><h2>Brightness</h2><div id="arc"></div></section>
+
+  <section class="sec"><h2>Sheet</h2>
+    <div class="stage" id="stage"></div>
+    <p class="note">A one-choice interaction is a sheet over its parent. Anything with several steps
+       or a back stack is a full page instead.</p></section>
+
+  <section class="sec"><h2>Undo toast</h2><div class="relative-host" id="toast"></div>
+    <p class="note">There are no save buttons anywhere. Every change applies at once and offers this.</p></section>
+
+  <section class="sec"><h2>Tab bar</h2><div class="relative-host" id="tabs"></div></section>
+
+  <section class="sec"><h2>Connection</h2>
+    <div style="padding:0 20px">
+      <div class="t-cap muted">Connected<span style="color:var(--text-3)"> &middot; nothing shows</span></div>
+      <div class="t-cap muted" style="margin-top:10px">Reconnecting<span class="conn-dot"></span></div>
+      <div class="t-cap" style="margin-top:10px;color:var(--err)"><span class="conn-dot lost"></span>
+        Offline &middot; showing last known state</div>
+    </div>
+    <p class="note">The dot alone for the first 10 s of a drop. After that the red line and an
+       explainer card, and the content dims to 80% but stays usable. The known home is never blanked.</p>
+  </section>
+</div>
+
+<script type="module">
+import { icon, NAMES } from '/ui/icons.js';
+
+const el = id => document.getElementById(id);
+const html = (id, s) => { el(id).innerHTML = s; };
+
+/* colour */
+const SWATCHES = [
+  ['--bg', 'bg'], ['--surface-1', 'surface-1'], ['--surface-2', 'surface-2'], ['--surface-3', 'surface-3'],
+  ['--text-1', 'text-1'], ['--text-2', 'text-2'], ['--text-3', 'text-3'], ['--line', 'line'],
+  ['--blue', 'blue'], ['--blue-hi', 'blue-hi'], ['--chip-line', 'chip-line'], ['--ghost-line', 'ghost-line'],
+  ['--copper', 'copper'], ['--copper-hi', 'copper-hi'], ['--copper-lo', 'copper-lo'], ['--copper-pale', 'copper-pale'],
+  ['--ok', 'ok'], ['--warn', 'warn'], ['--err', 'err'], ['--scrim', 'scrim']
+];
+html('swatches', SWATCHES.map(([v, n]) =>
+  `<div class="sw"><i style="background:var(${v})"></i><span>${n}</span></div>`).join(''));
+
+/* icons */
+html('icons', NAMES.map(n =>
+  `<figure>${icon(n, 24)}<figcaption>${n}</figcaption></figure>`).join(''));
+
+/* rows: the four shapes a row comes in */
+html('rows', [
+  `<button class="row has-ic sub"><span class="row-ic">${icon('bulb', 20)}</span>
+    <span class="row-txt"><span class="t">Follow the day</span><span class="d">Warm at night, bright at noon</span></span>
+    <span class="row-val">On</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`,
+  `<button class="row has-ic"><span class="row-ic">${icon('timer', 20)}</span>
+    <span class="row-txt"><span class="t">Sleep timer</span></span>
+    <span class="row-val">30 min</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`,
+  `<div class="row has-ic"><span class="row-ic">${icon('moon', 20)}</span>
+    <span class="row-txt"><span class="t">Night look</span></span>
+    <button class="toggle" role="switch" aria-checked="true"></button></div>`,
+  `<button class="row"><span class="row-txt"><span class="t">About this light</span></span>
+    <span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`
+].join(''));
+
+/* chips */
+const dots = cs => `<span class="chip-dots">${cs.map(c => `<i style="background:${c}"></i>`).join('')}</span>`;
+html('chips', [
+  `<button class="chip lead">${dots(['#D98A4E', '#B86C35', '#5A351B'])}Relax</button>`,
+  `<button class="chip lead" aria-pressed="true">${dots(['#5B7FE0', '#3C5DB8', '#2A3F82'])}Movie</button>`,
+  `<button class="chip">All scenes</button>`,
+  `<button class="chip lead">${icon('plus', 16, 1.8)}New scene</button>`
+].join(''));
+
+for (const [id, n, t] of [['p1', 'power', 'All on'], ['p2', 'power', 'All off'], ['p3', 'power', 'All on'], ['p4', 'power', 'All off']])
+  el(id).innerHTML = icon(n, 20, 1.8) + t;
+
+document.querySelectorAll('.onoff button').forEach((b, i) => {
+  b.innerHTML = icon('power', 22, 2) + (i ? 'Off' : 'On');
+});
+
+/* tiles: on, colour, off, unreachable */
+const glow = '<span class="glow"></span>';
+const tile = (cls, name, val, glyph, style = '') =>
+  `<button class="tile ${cls}" ${style && `style="${style}"`}>${cls.includes('on') || cls.includes('tinted') ? glow : ''}
+    <span class="pwr">${icon('power', 22, 1.8)}</span>
+    <span class="art">${icon(glyph, 48, 1.4)}</span>
+    <span class="nm">${name}</span><span class="vl">${val}</span></button>`;
+html('tiles', [
+  tile('on', 'Floor lamp', '75% &middot; Warm', 'bulb'),
+  tile('tinted on', 'Accent lamp', '40% &middot; Blue', 'bulb',
+    '--lamp:#3C5DB8;--lamp-hi:#5B7FE0;--lamp-lo:#2A3F82;--lamp-line:rgba(157,182,255,.45);--lamp-shadow:rgba(91,127,224,.35)'),
+  tile('', 'Kitchen island', 'Off', 'bulb'),
+  tile('gone', 'Garage', 'Not answering', 'bulb')
+].join(''));
+
+/* rooms: photograph and the generated fallback */
+html('rooms', [
+  `<button class="room-card"><span class="nm">Living room</span><span class="vl">3 of 5 on &middot; 62%</span></button>`,
+  `<button class="room-card" style="background:linear-gradient(180deg,#8A7460 0%,#33291F 100%)">
+     <span class="nm">Kitchen</span><span class="vl">All off</span></button>`,
+  `<button class="room-card" style="background:linear-gradient(180deg,#4A4038 0%,#1E1914 100%)">
+     <span class="nm">Office</span><span class="vl">Off</span></button>`
+].join(''));
+
+/* whole-house bar at 52%, the knob centred on the fill edge */
+const PCT = 52;
+html('hbar', `<span class="fill" style="width:${PCT}%"></span>
+  <span class="lo">${icon('sun', 22, 1.8)}</span>
+  <span class="hi">${icon('sun', 26, 1.8)}</span>
+  <span class="knob" style="left:${PCT}%"></span>`);
+
+el('hold').innerHTML =
+  `<svg class="ring" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20.5"/></svg>`
+  + icon('moon', 20, 1.8);
+const hold = el('hold');
+hold.addEventListener('pointerdown', () => hold.dataset.holding = '1');
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel'])
+  hold.addEventListener(ev, () => hold.dataset.holding = '0');
+
+/* the arc: a half circle 380 wide with a 56 stroke, 75% along */
+function arc(pct) {
+  const W = 380, sw = 56, r = (W - sw) / 2, cx = W / 2, cy = r + sw / 2, H = cy + sw / 2;
+  const a = Math.PI * (1 - pct / 100), ex = cx + r * Math.cos(a), ey = cy - r * Math.sin(a);
+  // large-arc-flag stays 0 at every percentage: the whole dial is a half circle, so no sweep it can
+  // draw is more than 180 degrees. Setting it from the percentage sends the fill the long way round.
+  return `<svg class="arc" viewBox="0 0 ${W} ${H}">
+    <defs><linearGradient id="arcgrad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#F6E3CF"/><stop offset=".45" stop-color="#E8A774"/>
+      <stop offset="1" stop-color="#D98A4E"/></linearGradient></defs>
+    <path class="track" d="M ${sw / 2} ${cy} A ${r} ${r} 0 0 1 ${W - sw / 2} ${cy}"/>
+    <path class="fill" d="M ${sw / 2} ${cy} A ${r} ${r} 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}"/>
+    <circle class="knob" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="${sw / 2 - 8}"/>
+  </svg>
+  <div class="t-numeral" style="text-align:center;margin-top:-24px">${pct}%</div>`;
+}
+html('arc', arc(75));
+
+html('hdr', `<header class="hdr">
+  <button class="hdr-btn back">${icon('back', 22, 1.8)}</button>
+  <button class="hdr-btn a1">${icon('gear', 22, 1.8)}</button>
+  <button class="hdr-btn a2">${icon('clock', 22, 1.8)}</button>
+</header><h1 class="t-h1 page-title" style="padding-top:0">Living room</h1>`);
+
+html('stage', `<div class="scrim"></div>
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <div class="t-over">Floor lamp</div>
+      <h2 class="t-sheet">Choose a colour</h2>
+      <button class="sheet-close">${icon('x', 18, 1.8)}</button>
+    </div>
+    <div style="padding:20px">
+      <div class="group" style="margin:0">
+        <button class="row has-ic"><span class="row-ic">${icon('palette', 20)}</span>
+          <span class="row-txt"><span class="t">Colour</span></span>
+          <span class="row-val">Blue</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+        <button class="row has-ic"><span class="row-ic">${icon('sun', 20)}</span>
+          <span class="row-txt"><span class="t">White</span></span>
+          <span class="row-val">2700 K</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      </div>
+    </div>
+  </div>`);
+
+html('toast', `<div class="toast">${icon('check', 20, 1.8)}
+  <span class="msg">Living room to Relax</span><button class="act">Undo</button></div>`);
+
+html('tabs', `<nav class="tabbar">
+  <button aria-current="page">${icon('home')}</button>
+  <button>${icon('grid')}</button>
+  <button>${icon('remote')}</button>
+  <button>${icon('clock')}</button></nav>`);
+</script>
+</body>
+</html>

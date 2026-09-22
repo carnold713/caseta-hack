@@ -1,0 +1,327 @@
+/* Copper Night components. Geometry is the Figma file's, read from the generator source in the
+   hidden helpers frame and checked against the rendered frames.
+
+   One measurement trap worth knowing before changing anything here: Figma exports a bordered
+   frame's children relative to the padding box, so the tab bar's active circle reads left:7 in the
+   export and is 8 from the frame edge. Everything below is written in frame-edge terms.
+
+   Which is why the 1px hairlines on cards, tiles and the tab bar are inset box-shadows rather than
+   `border`. A real border shifts the padding box in by one and quietly costs a pixel on every
+   child, so the whole-house bar comes out 330 wide instead of 332 and nobody can see why. With an
+   inset shadow the padding box is the frame box and the file's numbers go in as written. */
+
+.ic { display: block; flex: none; }
+
+/* ---- page chrome ---------------------------------------------------------------------------- */
+
+.screen {
+  position: relative;
+  width: 100%; max-width: 412px; min-height: 100dvh;
+  margin: 0 auto;
+  padding: 0 0 calc(92px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+}
+
+/* Header: a 56 circle at x 20, actions ending at x 336, each further one 64 to the left. */
+.hdr { position: relative; height: 108px; }
+.hdr-btn {
+  position: absolute; top: 52px;
+  width: 56px; height: 56px; border-radius: 28px; border: 0;
+  display: grid; place-items: center;
+  background: var(--surface-1); color: var(--icon-1);
+  transition: transform var(--tap) var(--spring);
+}
+.hdr-btn:active { transform: scale(.96); }
+.hdr-btn.back { left: var(--gutter); }
+.hdr-btn.a1 { right: var(--gutter); }
+.hdr-btn.a2 { right: calc(var(--gutter) + 64px); }
+.page-title { margin: 0; padding: 20px var(--gutter) 0; }
+
+/* Tab bar: floats 20 from each edge, 372 x 72. The active tab is a white circle inset 8 all round,
+   which is the same rule every circle-in-a-track follows here. */
+.tabbar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(40px + env(safe-area-inset-bottom));
+  width: min(372px, calc(100vw - 40px)); height: 72px;
+  border-radius: 36px;
+  background: rgba(18, 18, 18, .72);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-bar), inset 0 0 0 1px var(--line);
+  /* space-between, not space-around: with four 56 circles in a 372 bar and an 8 inset, this puts
+     their centres at 36 / 136 / 236 / 336, which is where the file has them. */
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 8px;
+}
+.tabbar button {
+  width: 56px; height: 56px; border-radius: 28px; border: 0; background: none;
+  display: grid; place-items: center;
+  color: var(--icon-2);
+  transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease);
+}
+.tabbar button[aria-current='page'] { background: var(--text-1); color: var(--bg); }
+
+/* ---- rows and groups ------------------------------------------------------------------------ */
+
+.group {
+  border-radius: var(--r-group);
+  background: var(--surface-2);
+  overflow: hidden;
+  margin: 0 var(--gutter);
+}
+.row {
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 64px; padding: 0 16px;
+  border: 0; background: none; color: inherit; text-align: left;
+  font: inherit;
+}
+.row.sub { min-height: 72px; }
+.row + .row::before {
+  content: ''; position: absolute; top: 0; left: 16px; right: 0;
+  height: 1px; background: var(--hairline);
+}
+.row.has-ic + .row::before { left: 68px; }
+/* A circle sitting on a group stays on the lighter surface so it reads as lifted. That is the one
+   place surface-3 shows up next to surface-2, and it is deliberate. */
+.row-ic {
+  width: 40px; height: 40px; border-radius: 20px; flex: none;
+  display: grid; place-items: center;
+  background: var(--surface-3); color: var(--icon-1);
+}
+.row-txt { flex: 1 1 auto; min-width: 0; }
+.row-txt .t { display: block; font-size: 16px; font-weight: 500; line-height: 22px; }
+.row-txt .d { display: block; font-size: 14px; line-height: 18px; color: var(--text-2); }
+.row-val { font-size: 14px; color: var(--text-2); flex: none; }
+.row-chev { color: var(--text-3); flex: none; }
+
+/* ---- controls ------------------------------------------------------------------------------- */
+
+.toggle {
+  width: 52px; height: 32px; border-radius: 16px; border: 0; padding: 0;
+  background: var(--surface-3); position: relative; flex: none;
+  transition: background-color var(--standard) var(--ease);
+}
+.toggle::after {
+  content: ''; position: absolute; top: 4px; left: 4px;
+  width: 24px; height: 24px; border-radius: 12px; background: var(--text-2);
+  transition: transform var(--standard) var(--ease), background-color var(--standard) var(--ease);
+}
+.toggle[aria-checked='true'] { background: var(--blue); }
+.toggle[aria-checked='true']::after { transform: translateX(20px); background: #fff; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 16px; border-radius: 20px;
+  border: 1px solid var(--chip-line); background: none;
+  color: var(--text-2); font-size: 14px; font-weight: 500;
+  white-space: nowrap;
+  transition: border-color var(--standard) var(--ease), color var(--standard) var(--ease);
+}
+.chip.lead { padding-left: 12px; }
+.chip[aria-pressed='true'] { border: 1.5px solid var(--chip-line-sel); color: var(--text-1); }
+/* A scene's colour dots: three 12px discs overlapping across 28px. */
+.chip-dots { display: flex; flex: none; width: 28px; height: 12px; }
+.chip-dots i { width: 12px; height: 12px; border-radius: 6px; margin-right: -4px; display: block; }
+
+/* On / Off. Tap only: this design has no swipe or drag control anywhere. */
+.onoff {
+  display: flex; gap: 6px; padding: 6px;
+  height: 72px; border-radius: 36px; background: var(--surface-2);
+  margin: 0 var(--gutter);
+}
+.onoff button {
+  flex: 1 1 0; height: 60px; border-radius: 30px; border: 0; background: none;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: var(--text-2); font-size: 18px; font-weight: 500;
+  transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease);
+}
+.onoff button[aria-pressed='true'] { background: var(--copper); color: #fff; }
+.onoff.blue button[aria-pressed='true'] { background: var(--blue); }
+
+.pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; padding: 0 20px; border-radius: 24px; border: 0;
+  font-size: 16px; font-weight: 500;
+  background: var(--copper); color: #fff;
+  transition: transform var(--tap) var(--spring);
+}
+.pill:active { transform: scale(.96); }
+.pill.ghost { background: none; border: 1px solid var(--ghost-line); color: var(--text-1); }
+.pill.solid { background: var(--solid-fill); color: var(--solid-ink); }
+.link {
+  background: none; border: 0; padding: 0;
+  color: var(--text-1); font-size: 14px; font-weight: 500;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* ---- tiles and cards ------------------------------------------------------------------------ */
+
+.card {
+  margin: 0 var(--gutter); padding: 20px;
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.tile-strip {
+  display: flex; gap: var(--gap);
+  padding: 0 var(--gutter); overflow-x: auto;
+  scroll-snap-type: x mandatory; scrollbar-width: none;
+}
+.tile-strip::-webkit-scrollbar { display: none; }
+
+/* 168 x 150. The handoff doc says 180 wide; the file says 168 and the file wins. */
+.tile {
+  position: relative; flex: none; scroll-snap-align: start;
+  width: 168px; height: 150px; padding: 16px;
+  border-radius: var(--r-card);
+  background: var(--surface-1); color: inherit; text-align: left;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: transform var(--tap) var(--spring);
+}
+.tile:active { transform: scale(.96); }
+.tile .pwr {
+  width: 44px; height: 44px; border-radius: 22px;
+  display: grid; place-items: center;
+  background: var(--surface-2); color: var(--icon-1);
+}
+.tile .art { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; opacity: .2; }
+.tile .nm { position: absolute; left: 16px; top: 94px; width: 136px; font-size: 16px; font-weight: 500; }
+.tile .vl { position: absolute; left: 16px; top: 116px; font-size: 14px; color: var(--text-2); }
+/* The glow is a soft disc bleeding off the top right corner, not a box shadow. */
+.tile .glow {
+  position: absolute; top: -10px; left: 88px; width: 86px; height: 86px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 244, 226, .55) 0%, rgba(255, 244, 226, 0) 70%);
+  pointer-events: none;
+}
+.tile.on {
+  background: var(--tile-on);
+  box-shadow: var(--tile-on-shadow), inset 0 0 0 1px var(--tile-on-line);
+}
+.tile.on .pwr { background: #fff; color: var(--bg); }
+.tile.on .art { opacity: 1; }
+.tile.on .vl { color: var(--text-1); }
+/* A colour lamp keeps the shape and takes its own hue. The three values are set per lamp. */
+.tile.tinted {
+  background: linear-gradient(180deg, var(--lamp-hi) 0%, var(--lamp) 55%, var(--lamp-lo) 100%);
+  box-shadow: 0 10px 28px var(--lamp-shadow, rgba(0, 0, 0, .35)),
+              inset 0 0 0 1px var(--lamp-line, rgba(255, 255, 255, .3));
+}
+.tile.gone { opacity: .45; }
+
+.room-card {
+  position: relative; flex: none;
+  width: 200px; height: 132px; border-radius: var(--r-card);
+  overflow: hidden; border: 0; padding: 0; color: #fff; text-align: left;
+  background: linear-gradient(180deg, #7A6452 0%, #2E231C 100%);
+}
+.room-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.room-card::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 72px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .6) 100%);
+}
+.room-card .nm { position: absolute; left: 16px; top: 84px; font-size: 16px; font-weight: 500; z-index: 1; }
+.room-card .vl { position: absolute; left: 16px; top: 106px; font-size: 13px; z-index: 1; }
+
+/* ---- sheets and toasts ----------------------------------------------------------------------- */
+
+.scrim {
+  position: fixed; inset: 0; background: var(--scrim); border: 0;
+  animation: fade var(--standard) var(--ease);
+}
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  max-width: 412px; margin: 0 auto;
+  border-radius: var(--r-card) var(--r-card) 0 0;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sheet);
+  padding: 0 0 calc(24px + env(safe-area-inset-bottom));
+  animation: rise var(--sheet-in) var(--spring);
+}
+.sheet .grab {
+  width: 40px; height: 4px; border-radius: 2px; margin: 8px auto 0;
+  background: rgba(255, 255, 255, .24);
+}
+.sheet-head { position: relative; padding: 20px var(--gutter) 0; }
+.sheet-head .t-over { margin: 0 0 4px; }
+.sheet-head h2 { margin: 0; }
+.sheet-close {
+  position: absolute; top: 20px; right: var(--gutter);
+  width: 40px; height: 40px; border-radius: 20px; border: 0;
+  display: grid; place-items: center;
+  background: var(--surface-2); color: var(--icon-1);
+}
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(124px + env(safe-area-inset-bottom));
+  width: min(372px, calc(100vw - 40px)); height: 56px;
+  border-radius: var(--r-group); background: var(--surface-2);
+  box-shadow: var(--shadow-lift);
+  display: flex; align-items: center; gap: 12px; padding: 0 20px;
+  overflow: hidden;
+  animation: rise var(--enter) var(--ease);
+}
+.toast .msg { flex: 1 1 auto; font-size: 15px; }
+.toast .act { color: var(--copper-hi); font-size: 15px; font-weight: 500; background: none; border: 0; }
+.toast::after {
+  content: ''; position: absolute; left: 20px; bottom: 0; height: 2px;
+  background: rgba(217, 138, 78, .6);
+  animation: drain 5s linear forwards;
+}
+
+/* ---- light controls -------------------------------------------------------------------------- */
+
+/* The arc is a half circle, 380 wide with a 56 stroke, drawn as SVG so the cap rounds properly.
+   The knob is a 40 white circle with a 4 dark ring, centred on the arc end. */
+.arc { display: block; width: 380px; max-width: 100%; margin: 0 auto; }
+.arc .track { stroke: var(--arc-track); }
+.arc .fill { stroke: url(#arcgrad); }
+.arc .track, .arc .fill { fill: none; stroke-width: 56; stroke-linecap: round; }
+.arc .knob { fill: #fff; stroke: #0E0D0C; stroke-width: 4; }
+
+.hbar {
+  position: relative; height: 56px; border-radius: 28px;
+  background: var(--surface-2); overflow: hidden;
+}
+.hbar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 28px; background: var(--arc-fill); }
+.hbar .lo { position: absolute; left: 17px; top: 17px; color: #fff; }
+.hbar .hi { position: absolute; right: 15px; top: 15px; color: var(--icon-2); }
+.hbar .knob {
+  position: absolute; top: 8px; width: 40px; height: 40px; border-radius: 20px;
+  background: #fff; transform: translateX(-20px);
+}
+
+/* Hold to turn the house off: 1000 ms, drawn as a ring closing around the moon. */
+.hold {
+  position: relative; width: 44px; height: 44px; border-radius: 22px; flex: none;
+  display: grid; place-items: center;
+  background: var(--surface-2); color: var(--icon-1); border: 0;
+}
+.hold svg.ring { position: absolute; inset: 0; transform: rotate(-90deg); }
+.hold svg.ring circle {
+  fill: none; stroke: var(--copper); stroke-width: 3; stroke-linecap: round;
+  stroke-dasharray: 128; stroke-dashoffset: 128;
+}
+.hold[data-holding='1'] svg.ring circle { transition: stroke-dashoffset 1000ms linear; stroke-dashoffset: 0; }
+
+/* ---- connection ------------------------------------------------------------------------------ */
+
+/* Nothing shows while connected. The first 10 s of a drop is this dot and nothing else. */
+.conn-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 4px;
+  background: var(--text-3); margin-left: 8px;
+  animation: breathe var(--breathe) var(--ease-both) infinite;
+}
+.conn-dot.lost { background: var(--err); animation: none; }
+.offline .screen > *:not(.conn-line):not(.conn-card) { opacity: .8; }
+
+@keyframes breathe { 0%, 100% { opacity: .3; } 50% { opacity: .8; } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 12px); } }
+@keyframes drain { from { width: calc(100% - 40px); } to { width: 0; } }
+
+/* The sheet is centred by margin, not by transform, so it needs its own rise. */
+.sheet { animation-name: sheetrise; }
+@keyframes sheetrise { from { transform: translateY(100%); } }
