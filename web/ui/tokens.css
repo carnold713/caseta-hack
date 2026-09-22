@@ -17,6 +17,10 @@
   --text-1: #FFFFFF;
   --text-2: #D1D1D1;
   --text-3: #9E9E9E;
+  /* A fourth, quietest tone the Hypatia set has no token for: empty states ("Nothing yet"),
+     timestamps in Activity, the connector version line. The file uses it the same way on twelve
+     frames, so it is deliberate, but it is unbound there. A question for the designer. */
+  --text-4: #6E6E6E;
   --icon-1: #FFFFFF;
   --icon-2: #D1D1D1;
 
@@ -25,7 +29,7 @@
   --blue-hi: #52AEFF;
   --chip-line: #787878;
   --chip-line-sel: #52AEFF;
-  --ghost-line: rgba(250, 250, 250, .9);
+  --ghost-line: rgba(250, 250, 250, .81);   /* the token's 90% under a 90% paint, as drawn */
   --solid-fill: #F8F8F8;
   --solid-ink: #262626;
 
@@ -52,7 +56,6 @@
   --r-card: 28px;
   --r-group: 20px;
   --shadow-lift: 0 16px 40px rgba(0, 0, 0, .5);
-  --shadow-bar: 0 16px 20px rgba(0, 0, 0, .5);
   --shadow-sheet: 0 -8px 40px rgba(0, 0, 0, .5);
 
   /* motion */

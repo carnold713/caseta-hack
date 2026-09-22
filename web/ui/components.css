@@ -46,7 +46,7 @@
   border-radius: 36px;
   background: rgba(18, 18, 18, .72);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-bar), inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-lift), inset 0 0 0 1px var(--line);
   /* space-between, not space-around: with four 56 circles in a 372 bar and an 8 inset, this puts
      their centres at 36 / 136 / 236 / 336, which is where the file has them. */
   display: flex; align-items: center; justify-content: space-between;
@@ -119,9 +119,23 @@
 }
 .chip.lead { padding-left: 12px; }
 .chip[aria-pressed='true'] { border: 1.5px solid var(--chip-line-sel); color: var(--text-1); }
-/* A scene's colour dots: three 12px discs overlapping across 28px. */
+/* Three kinds of chip, and they are not one component with states. The outline chip above is a
+   choice (the controls sheet, filters). A scene chip is filled, bordered, white-labelled and carries
+   the scene's colours. "All scenes" and its like are filled with no border and a grey label. */
+.chip.scene {
+  background: var(--surface-1); border-color: var(--line); color: var(--text-1);
+  gap: 10px; padding: 0 16px 0 12px;
+}
+.chip.more { background: var(--surface-1); border: 0; color: var(--text-2); padding: 0 14px; }
+/* A scene's colour dots: three 12px discs 8 apart, so each overlaps the last by 4, each ringed 2px in
+   the colour of whatever the chip sits on so the overlap reads as a cut. The file draws that ring in
+   the old #1C1C1C, a shade darker than the chip it is cutting; the ring is meant to match. */
 .chip-dots { display: flex; flex: none; width: 28px; height: 12px; }
-.chip-dots i { width: 12px; height: 12px; border-radius: 6px; margin-right: -4px; display: block; }
+.chip-dots i {
+  width: 12px; height: 12px; border-radius: 6px; margin-right: -4px; display: block; flex: none;
+  box-shadow: 0 0 0 2px var(--ring, var(--surface-1));
+}
+.chip-dots i:last-child { margin-right: 0; }
 
 /* On / Off. Tap only: this design has no swipe or drag control anywhere. */
 .onoff {
@@ -147,6 +161,7 @@
 }
 .pill:active { transform: scale(.96); }
 .pill.ghost { background: none; border: 1px solid var(--ghost-line); color: var(--text-1); }
+.pill.ghost .ic { color: var(--icon-2); }   /* the glyph is grey even though the label is white */
 .pill.solid { background: var(--solid-fill); color: var(--solid-ink); }
 .link {
   background: none; border: 0; padding: 0;
@@ -173,7 +188,7 @@
 /* 168 x 150. The handoff doc says 180 wide; the file says 168 and the file wins. */
 .tile {
   position: relative; flex: none; scroll-snap-align: start;
-  width: 168px; height: 150px; padding: 16px;
+  width: 168px; height: 150px; padding: 0; border: 0; display: block;
   border-radius: var(--r-card);
   background: var(--surface-1); color: inherit; text-align: left;
   overflow: hidden;
@@ -181,25 +196,32 @@
   transition: transform var(--tap) var(--spring);
 }
 .tile:active { transform: scale(.96); }
+/* Everything in a tile is placed from its outer edge. A <button> centres its content vertically, so
+   nothing here is left in flow. */
 .tile .pwr {
+  position: absolute; left: 16px; top: 16px;
   width: 44px; height: 44px; border-radius: 22px;
   display: grid; place-items: center;
-  background: var(--surface-2); color: var(--icon-1);
+  background: var(--surface-2); color: var(--icon-2);
 }
-.tile .art { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; opacity: .2; }
+/* Device art is the file's own SVG (web/ui/art), white line on a 64 grid, shown at 48. At 20% on an
+   off tile, full on a lit one. */
+.tile .art { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; opacity: .2; display: block; }
 .tile .nm { position: absolute; left: 16px; top: 94px; width: 136px; font-size: 16px; font-weight: 500; }
 .tile .vl { position: absolute; left: 16px; top: 116px; font-size: 14px; color: var(--text-2); }
-/* The glow is a soft disc bleeding off the top right corner, not a box shadow. */
+/* The glow is a soft disc bleeding off the top right corner, not a box shadow. 89,-9 from the tile's
+   outer edge: the export says 88,-10, which is the border trap again. */
 .tile .glow {
-  position: absolute; top: -10px; left: 88px; width: 86px; height: 86px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 244, 226, .55) 0%, rgba(255, 244, 226, 0) 70%);
+  position: absolute; top: -9px; left: 89px; width: 86px; height: 86px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 241, 220, .55), rgba(255, 241, 220, 0));
   pointer-events: none;
 }
 .tile.on {
   background: var(--tile-on);
   box-shadow: var(--tile-on-shadow), inset 0 0 0 1px var(--tile-on-line);
 }
-.tile.on .pwr { background: #fff; color: var(--bg); }
+.tile.on .pwr { background: #fff; color: var(--copper-lo); }
+.tile.tinted .pwr { color: var(--lamp-ink, var(--lamp-lo)); }
 .tile.on .art { opacity: 1; }
 .tile.on .vl { color: var(--text-1); }
 /* A colour lamp keeps the shape and takes its own hue. The three values are set per lamp. */
@@ -223,6 +245,33 @@
 }
 .room-card .nm { position: absolute; left: 16px; top: 84px; font-size: 16px; font-weight: 500; z-index: 1; }
 .room-card .vl { position: absolute; left: 16px; top: 106px; font-size: 13px; z-index: 1; }
+
+/* A card holding one row's worth: the "Coming up" card on Home. 68 tall, radius 20 rather than the
+   28 of a full card, a 40 circle 14 in, title and caption at 66, a trailing action. */
+.card-row {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  margin: 0 var(--gutter); height: 68px; padding: 0 18px 0 14px;
+  border-radius: var(--r-group); background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.card-row .row-ic { background: var(--surface-2); }
+.card-row .row-txt .t { line-height: 19px; }
+.card-row .row-txt .d { line-height: 17px; margin-top: 3px; }
+
+/* The fade above the floating tab bar, so content scrolling under it goes dark before it meets it. */
+.scroll-fade {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 129px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(18, 18, 18, 0) 0%, rgba(18, 18, 18, .85) 35%, #121212 100%);
+}
+
+/* The whole-house card carries a copper glow in its top right while anything is on. */
+.card.lit { position: relative; overflow: hidden; }
+.card.lit::before {
+  content: ''; position: absolute; left: 170px; top: -190px; width: 380px; height: 380px;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(217, 138, 78, .22), rgba(217, 138, 78, 0));
+}
+.card.lit > * { position: relative; }
 
 /* ---- sheets and toasts ----------------------------------------------------------------------- */
 
@@ -285,26 +334,39 @@
   position: relative; height: 56px; border-radius: 28px;
   background: var(--surface-2); overflow: hidden;
 }
-.hbar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 28px; background: var(--arc-fill); }
-.hbar .lo { position: absolute; left: 17px; top: 17px; color: #fff; }
+.hbar .fill {
+  position: absolute; inset: 0 auto 0 0; border-radius: 28px; background: var(--arc-fill);
+  width: max(56px, var(--pct));
+}
+.hbar .lo { position: absolute; left: 17px; top: 17px; color: var(--bg); }
 .hbar .hi { position: absolute; right: 15px; top: 15px; color: var(--icon-2); }
+/* The knob sits inside the end of the fill, 8 from it on every side, the same rule as every other
+   circle in a track. It is not centred on the fill's edge: at 52% the fill ends at 173 and the knob's
+   left edge is at 125. Hence the fill's 56 minimum, so the knob always has its 8 all round. */
 .hbar .knob {
   position: absolute; top: 8px; width: 40px; height: 40px; border-radius: 20px;
-  background: #fff; transform: translateX(-20px);
+  left: calc(max(56px, var(--pct)) - 48px);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
 }
 
-/* Hold to turn the house off: 1000 ms, drawn as a ring closing around the moon. */
+/* Hold to turn the house off: 1000 ms. A white 8% track with a white 2px arc on it, and at rest the
+   arc is already an eighth of the way round, as the hint that this is held rather than tapped. Not
+   copper: nothing here is a light that is on. r 20.5 so the 2px stroke sits inside the 44 circle. */
 .hold {
   position: relative; width: 44px; height: 44px; border-radius: 22px; flex: none;
   display: grid; place-items: center;
-  background: var(--surface-2); color: var(--icon-1); border: 0;
+  background: var(--surface-2); color: var(--icon-1); border: 0; padding: 0;
 }
 .hold svg.ring { position: absolute; inset: 0; transform: rotate(-90deg); }
-.hold svg.ring circle {
-  fill: none; stroke: var(--copper); stroke-width: 3; stroke-linecap: round;
-  stroke-dasharray: 128; stroke-dashoffset: 128;
+.hold svg.ring circle { fill: none; stroke-width: 2; }
+.hold svg.ring .trk { stroke: rgba(255, 255, 255, .08); }
+.hold svg.ring .arc {
+  stroke: var(--icon-1); stroke-linecap: round;
+  stroke-dasharray: 128.8; stroke-dashoffset: 112.7;   /* 2 pi r, and seven eighths of it hidden */
+  transition: stroke-dashoffset var(--exit) var(--ease-in);
 }
-.hold[data-holding='1'] svg.ring circle { transition: stroke-dashoffset 1000ms linear; stroke-dashoffset: 0; }
+.hold[data-holding='1'] svg.ring .arc { transition: stroke-dashoffset 1000ms linear; stroke-dashoffset: 0; }
 
 /* ---- connection ------------------------------------------------------------------------------ */
 

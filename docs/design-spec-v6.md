@@ -7,6 +7,14 @@ This document is the file digested for building: it repeats only what an
 implementer needs, and records every place the file and the dev handoff doc
 disagree.
 
+**How it was read.** From the file itself, with read-only `use_figma` scripts
+running against the Plugin API: `absoluteBoundingBox` for geometry, bound
+variables resolved per node for colour, `exportAsync` for the art. Not from
+screenshots, and not from `get_design_context`'s React rendering, which is a
+translation of the file and turned out to lose things (see trap 1). Every
+number in the components section was measured that way, and
+`scripts/ui-parity.js` checks the built components against those numbers.
+
 v6 replaces `design-spec-v5.md` (the light "Lantern" theme) as the look of the
 app. It says nothing about behaviour: `what-the-app-does.md` remains the
 functional source of truth and nothing it lists may disappear.
@@ -16,22 +24,26 @@ unless it is marked scroll.
 
 ## Read this first: four traps
 
-**1. Child coordinates in the exported code sit inside the 1px border.**
-Frames with a border export their children relative to the padding box. The tab
-bar's active circle reads `left: 7px` in the export and is 8px from the frame
-edge. The device tile's power circle reads `left: 15px` and is 16px from the
-edge. Add 1 wherever the parent has a border, or every measurement in the app
-lands a pixel tight.
+**1. The code export puts children inside the 1px border; the file does not.**
+`get_design_context` renders a bordered frame's children relative to the padding
+box, so the tab bar's active circle reads `left: 7px` there. Measured in the
+file it is 8 from the frame edge, and the tile's power circle is at 16,16, not
+the export's 15,15. The export also turns Figma drop shadows into CSS
+`drop-shadow()` filters, which halve the blur, so a shadow copied from it into a
+`box-shadow` comes out half as soft. Take geometry and effects from the file.
 
-**2. The helpers frame's palette is a draft, not the shipping palette.**
+**2. The helpers frame's palette is a draft, and so is the foundations board.**
 The file contains a hidden frame, `_design-helpers (source for builders)`
 ([12731:20](https://www.figma.com/design/jhFLTG342sNF9LyGll8LDf/Collin-s-Sandbox?node-id=12731-20)),
-holding the generator source every frame was built with. It is the best record
-of geometry and component recipes in the file and this spec leans on it. But its
-colour constants (`C`) were the first pass. A later pass (`__finish`) rebound
-every fill to the Hypatia library and changed the values. **The shipping values
-are in the token table below**, not in `C`. The mapping is recorded so the
-generator source stays readable.
+holding the generator source the frames were built with: a good record of
+recipes, but its colour constants (`C`) were the first pass. A later pass
+(`__finish`) rebound the screens to the Hypatia library and changed the values.
+**The shipping values are in the token table below.**
+
+Counted across the page, the screens are overwhelmingly on the bound tokens.
+What is left unbound is three specific things, listed under "Loose ends in the
+file". But the **foundations board (00) was never rebound**: its 75 text and
+swatch fills are all on the draft palette. Do not read colours off board 00.
 
 **3. Layer names go stale; geometry does not.** The whole-house brightness bar
 is named "Brightness bar · 58%" and is drawn at 52%, matching the "7 on · 52%"
@@ -42,6 +54,23 @@ used Extralight, Light, Book, Regular, Medium. `__finish` folded them: Extraligh
 to Light, Book at 28 to 32 to Light 32, Regular at 18 to 22 to Medium, Book at 18
 and under to Regular. What survives is **Light, Regular, Medium**. Ship those
 three weights and no others.
+
+## Loose ends in the file
+
+Found by counting every solid fill and stroke on the page and resolving the
+bound ones. None of these is a reason to deviate from the tokens; they are
+recorded so nobody copies them.
+
+- **A fourth text tone, `#6E6E6E`, unbound.** Used the same way on twelve
+  frames for the quietest information: "Nothing yet", Activity timestamps, "Off
+  at 9:56 pm", the connector version line, the little "Any colour" and "Off"
+  hints on the colour tiles. Consistent enough to be deliberate, so it ships as
+  `--text-4`. Hypatia has no token for it. **Question for the designer.**
+- **The scene-chip dot rings are `#1C1C1C`.** Each colour dot has a 2px ring cut
+  in the colour of what it sits on. The chip behind it was rebound to `#262626`
+  and the ring was not, so in the file the ring is a shade darker than the chip
+  it is cutting. Built to match the chip.
+- **The foundations board**, above.
 
 ## Colour
 
@@ -142,6 +171,20 @@ whole-house knob is 40px in a 56px track, so 8 all round. The active tab is 56 i
 Geometry taken from the generator source and confirmed against the rendered
 frames.
 
+**Icon stroke is per placement, not one weight.** The glyphs are drawn at 1.7
+on the 24 grid and the file then scales and adjusts them, so the weight you pass
+depends on where the glyph sits. Measured:
+
+| Placement | Size | Weight (24 grid) | Colour |
+|---|---|---|---|
+| Header button | 20 | 1.7 | white |
+| Tab bar | 24 | 1.7 | active `#121212` on the white circle, idle `#D1D1D1` |
+| Tile power | 22 | 2.0 | lit tile `#B86C35`; colour lamp its own deep tone (`#2F4A99` for the blue); off tile `#D1D1D1` |
+| Pill power | 20 | 1.9 | "All on" white; "All off" `#D1D1D1` though its label is white |
+| Brightness bar, small sun | 22 | 1.8 | `#121212`, since it sits in the copper fill |
+| Brightness bar, large sun | 26 | 1.6 | `#D1D1D1` |
+| Row circle, hold ring | 20 | 1.7 | white |
+
 **Row.** Height 64, or 72 with a subtitle. Optional 40px icon circle at x 16
 (fill `secondary-onDark`, 20px glyph). Title at x 68 when there is a circle,
 x 16 when not: 16 Medium, line 22, at y 14 with a subtitle or vertically centred
@@ -156,10 +199,17 @@ rows, height is the sum of its rows.
 **Toggle.** 52 x 32, radius 16. Track `#006DCC` when on, `secondary-onDark` when
 off. Knob 24px at x 4 (off) or x 24 (on), white when on.
 
-**Chip.** Height 40, radius 20, 16 left padding (12 with a leading dot or icon),
-16 right, 8 gap, label 14 Medium. Unselected: 1px `#787878` outline, `#D1D1D1`
-label. Selected: 1.5px `#52AEFF` outline, white label. A scene chip carries a
-28 x 12 row of colour dots before its name.
+**Chips come in three kinds, and they are not one component with states.**
+All are 40 tall and fully round.
+- *Choice chip* (the controls sheet, filters): no fill, 1px `#787878` outline,
+  `#D1D1D1` label, 16 each side, 8 gap. Selected: 1.5px `#52AEFF` outline,
+  white label.
+- *Scene chip*: filled `#262626`, 1px `#3C3C3C` border, **white** label, 12 left
+  and 16 right, **10** gap, a 28 x 12 row of colour dots before the name. The
+  dots are three 12px discs 8 apart, each overlapping the last by 4, each with a
+  2px ring in the chip's own colour.
+- *More chip* ("All scenes"): filled `#262626`, no border, `#D1D1D1` label, 14
+  each side.
 
 **On / Off segmented control.** Track height 72, radius 36, fill
 `secondary-onDark`, 6 inset. Two segments each `(w - 18) / 2` wide and 60 tall,
@@ -169,11 +219,12 @@ glyph and label. **Tap only. There is no swipe or drag control anywhere in this
 design.**
 
 **Device tile.** **168 x 150**, radius 28. Power circle 44px at 16, 16 from the
-frame edge. Device glyph 48px in the top right, 12 from the top and right edges.
+frame edge. Device art 48px at 108, 12, so 12 from the top and right edges.
 Name 16 Medium at x 16, y 94, width 136. Value line 14 Regular at y 116.
 - On: gradient `#E6A06A` to `#D98A4E` to `#B86C35` top to bottom, 1px white 14%
-  border, shadow 0 10 28 rgba(217,138,78,.28), white power circle with a dark
-  glyph, an 86px warm glow bleeding off the top right corner.
+  border, shadow 0 10 28 rgba(217,138,78,.28), white power circle with a
+  copper-deep glyph, an 86px `#FFF1DC` glow at 89, -9 bleeding off the top right
+  corner.
 - Colour lamp: the same shape tinted to the lamp's own colour. The blue lamp in
   the file is `#5B7FE0` to `#3C5DB8` at 55% to `#2A3F82`, border
   rgba(157,182,255,.45), shadow rgba(91,127,224,.35).
@@ -200,13 +251,28 @@ gradient. Knob a 40px white circle with a 4px `#0E0D0C` ring, centred on the arc
 end. Sweeps a half circle, 0% at the left.
 
 **Whole-house brightness bar.** 332 x 56, radius 28, track the Caseta override,
-fill the copper arc gradient to the current percentage. Small sun glyph 22px at
-(17, 17) inside the fill, large sun glyph 26px at (291, 15). Knob 40px, 8 from
-the top, centred on the fill edge.
+fill the copper arc gradient to the current percentage. Small sun 22px at
+(17, 17) inside the fill, large sun 26px at (291, 15). Knob 40px white with a
+0 2 8 rgba(0,0,0,.28) shadow, **sitting inside the end of the fill with 8 on
+every side**, not centred on the fill edge: at 52% the fill ends at 173 and the
+knob's left edge is at 125. So the fill never goes below 56.
 
-**Hold ring.** A 44px circle on the Caseta override with a progress ring drawn
-around it as the hold advances. Used by "Goodnight house" on Home. The house-off
-hold is 1000 ms.
+**Hold ring.** A 44px circle on the Caseta override with the moon (20) at 12,12.
+Around it a white 8% track and a white 2px round-capped arc, r 20.5. At rest the
+arc is already about an eighth of the way round from twelve o'clock, as the hint
+that this is held, and it closes over the 1000 ms hold. White, not copper:
+nothing here is a light that is on. Used by "Goodnight house" on Home.
+
+**Coming-up card.** 372 x 68, radius 20 (a row's worth, so the group radius, not
+the card's 28), `#262626` with a 1px `#3C3C3C` line. A 40 circle on the Caseta
+override at 14, 14; title 16 Medium at 66, 13; caption 14 Regular secondary at
+66, 35; a trailing text link.
+
+**Whole-house card glow.** While anything is on, a 380px radial copper glow
+(`#D98A4E` at 22% to nothing) sits at 170, -190 inside the card, clipped by it.
+
+**Scroll fade.** A 129px fade above the floating tab bar, `#121212` from 0% to
+85% at 35% to solid.
 
 ## The icon set
 
@@ -217,10 +283,15 @@ wifi bulb fan shade undo bolt drop sunrise door bed search hand pulse dots
 palette camera`. They are extracted verbatim into `web/js/icons.js`; do not
 redraw them.
 
-Device and room art is separate: the Lutron **Illustrative IconWrapper** library
-(white line art on a 64 grid, 2.75 stroke) plus the custom **Caseta Icon** set on
-board 00b for the 17 light types and 10 room types. Those export as SVG from
-Figma.
+Device and room art is separate. The custom **Caseta Icon** set on board 00b,
+17 light types and 10 room types, is exported straight from the file with
+`exportAsync` into `web/ui/art/`, byte for byte. White line on a 64 grid at
+2.75, so 2.06 at the 48 a tile shows it at.
+
+Some screens also use the Lutron **Illustrative IconWrapper** library (Home's
+Floor lamp and Accent lamp tiles use its "Lamps" and "LampSolutions"). Those are
+remote library components and are not exported yet; the helpers frame lists the
+32 the design draws on. Until they are, the nearest Caseta icon stands in.
 
 ## Where the file and the handoff doc disagree
 
@@ -234,6 +305,14 @@ The handoff doc says the file wins. It does. These are the three that matter:
 
 The second and third are not really disagreements, they are trap 1. Recorded so
 nobody re-derives them from the export and builds everything a pixel tight.
+
+## Checking the build against the file
+
+`scripts/ui-parity.js` (`npm run test:ui`) opens the gallery in Chromium and
+measures 31 things inside the components: offsets from each component's outer
+edge, sizes, and the computed colours of the glyphs. The expected values are the
+ones read out of frame 02 Home. It currently passes all 31. When a screen is
+built, its numbers go in there the same way.
 
 ## Built so far
 

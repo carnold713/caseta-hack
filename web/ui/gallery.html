@@ -27,6 +27,7 @@
   .icons figure { margin: 0; display: grid; place-items: center; gap: 4px; }
   .icons figcaption { font-size: 9px; color: var(--text-3); }
   .ramp > * { margin: 0 20px 10px; }
+  .art-grid { grid-template-columns: repeat(5, 1fr); row-gap: 14px; }
   .note { margin: 8px 20px 0; font-size: 12px; color: var(--text-3); line-height: 16px; }
   .relative-host { position: relative; height: 96px; }
   .relative-host .toast, .relative-host .tabbar { position: static; transform: none; margin: 0 auto; animation: none; }
@@ -62,6 +63,10 @@
 
   <section class="sec"><h2>Icons</h2><div class="icons" id="icons"></div></section>
 
+  <section class="sec"><h2>Device and room art</h2><div class="icons art-grid" id="art"></div>
+    <p class="note">Exported from the Caseta Icon board (00b) with <code>exportAsync</code>, not redrawn. White line on a
+       64 grid at 2.75, so 2.06 at the 48px a tile shows it at.</p></section>
+
   <section class="sec"><h2>Page header</h2>
     <div class="hdr-host" id="hdr"></div></section>
 
@@ -89,7 +94,7 @@
   <section class="sec"><h2>Rooms</h2><div class="tile-strip" id="rooms"></div></section>
 
   <section class="sec"><h2>Whole house</h2>
-    <div class="card">
+    <div class="card lit">
       <div class="t-over">Whole house</div>
       <div class="t-h1" style="margin:4px 0 16px">7 on &middot; 52%</div>
       <div class="hbar" id="hbar"></div>
@@ -104,6 +109,8 @@
       </div>
     </div>
   </section>
+
+  <section class="sec"><h2>Coming up</h2><div id="coming"></div></section>
 
   <section class="sec"><h2>Brightness</h2><div id="arc"></div></section>
 
@@ -138,13 +145,21 @@ const html = (id, s) => { el(id).innerHTML = s; };
 /* colour */
 const SWATCHES = [
   ['--bg', 'bg'], ['--surface-1', 'surface-1'], ['--surface-2', 'surface-2'], ['--surface-3', 'surface-3'],
-  ['--text-1', 'text-1'], ['--text-2', 'text-2'], ['--text-3', 'text-3'], ['--line', 'line'],
+  ['--text-1', 'text-1'], ['--text-2', 'text-2'], ['--text-3', 'text-3'], ['--text-4', 'text-4'],
+  ['--line', 'line'],
   ['--blue', 'blue'], ['--blue-hi', 'blue-hi'], ['--chip-line', 'chip-line'], ['--ghost-line', 'ghost-line'],
   ['--copper', 'copper'], ['--copper-hi', 'copper-hi'], ['--copper-lo', 'copper-lo'], ['--copper-pale', 'copper-pale'],
   ['--ok', 'ok'], ['--warn', 'warn'], ['--err', 'err'], ['--scrim', 'scrim']
 ];
 html('swatches', SWATCHES.map(([v, n]) =>
   `<div class="sw"><i style="background:var(${v})"></i><span>${n}</span></div>`).join(''));
+
+const ART = ['light-floor-lamp', 'light-arc-lamp', 'light-table-lamp', 'light-bedside-lamp', 'light-desk-lamp',
+  'light-reading-lamp', 'light-torchiere', 'light-tree-lamp', 'light-pendant', 'light-chandelier', 'light-wall-sconce',
+  'light-porch-lantern', 'light-downlight', 'light-track-light', 'light-puck-lights', 'light-tape-light',
+  'light-ceiling-fan', 'room-living-room', 'room-kitchen', 'room-bedroom', 'room-office', 'room-dining-room',
+  'room-entry', 'room-porch', 'room-bathroom', 'room-garage', 'room-garden'];
+html('art', ART.map(a => `<figure><img src="/ui/art/${a}.svg" width="40" height="40" alt=""><figcaption>${a.replace(/^(light|room)-/, '')}</figcaption></figure>`).join(''));
 
 /* icons */
 html('icons', NAMES.map(n =>
@@ -161,6 +176,8 @@ html('rows', [
   `<div class="row has-ic"><span class="row-ic">${icon('moon', 20)}</span>
     <span class="row-txt"><span class="t">Night look</span></span>
     <button class="toggle" role="switch" aria-checked="true"></button></div>`,
+  `<button class="row"><span class="row-txt"><span class="t">Press twice</span><span class="d" style="color:var(--text-4)">Nothing yet</span></span>
+    <span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`,
   `<button class="row"><span class="row-txt"><span class="t">About this light</span></span>
     <span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`
 ].join(''));
@@ -168,14 +185,14 @@ html('rows', [
 /* chips */
 const dots = cs => `<span class="chip-dots">${cs.map(c => `<i style="background:${c}"></i>`).join('')}</span>`;
 html('chips', [
-  `<button class="chip lead">${dots(['#D98A4E', '#B86C35', '#5A351B'])}Relax</button>`,
-  `<button class="chip lead" aria-pressed="true">${dots(['#5B7FE0', '#3C5DB8', '#2A3F82'])}Movie</button>`,
-  `<button class="chip">All scenes</button>`,
-  `<button class="chip lead">${icon('plus', 16, 1.8)}New scene</button>`
+  `<button class="chip scene">${dots(['#E6A06A', '#C7703D', '#F3D9C3'])}Relax</button>`,
+  `<button class="chip more">All scenes</button>`,
+  `<button class="chip">Kitchen</button>`,
+  `<button class="chip" aria-pressed="true">Whole house</button>`
 ].join(''));
 
-for (const [id, n, t] of [['p1', 'power', 'All on'], ['p2', 'power', 'All off'], ['p3', 'power', 'All on'], ['p4', 'power', 'All off']])
-  el(id).innerHTML = icon(n, 20, 1.8) + t;
+for (const [id, t] of [['p1', 'All on'], ['p2', 'All off'], ['p3', 'All on'], ['p4', 'All off']])
+  el(id).innerHTML = icon('power', 20, 1.9) + t;
 
 document.querySelectorAll('.onoff button').forEach((b, i) => {
   b.innerHTML = icon('power', 22, 2) + (i ? 'Off' : 'On');
@@ -183,17 +200,18 @@ document.querySelectorAll('.onoff button').forEach((b, i) => {
 
 /* tiles: on, colour, off, unreachable */
 const glow = '<span class="glow"></span>';
-const tile = (cls, name, val, glyph, style = '') =>
+const tile = (cls, name, val, art, style = '') =>
   `<button class="tile ${cls}" ${style && `style="${style}"`}>${cls.includes('on') || cls.includes('tinted') ? glow : ''}
-    <span class="pwr">${icon('power', 22, 1.8)}</span>
-    <span class="art">${icon(glyph, 48, 1.4)}</span>
+    <span class="pwr">${icon('power', 22, 2)}</span>
+    <img class="art" src="/ui/art/${art}.svg" alt="">
     <span class="nm">${name}</span><span class="vl">${val}</span></button>`;
 html('tiles', [
-  tile('on', 'Floor lamp', '75% &middot; Warm', 'bulb'),
-  tile('tinted on', 'Accent lamp', '40% &middot; Blue', 'bulb',
-    '--lamp:#3C5DB8;--lamp-hi:#5B7FE0;--lamp-lo:#2A3F82;--lamp-line:rgba(157,182,255,.45);--lamp-shadow:rgba(91,127,224,.35)'),
-  tile('', 'Kitchen island', 'Off', 'bulb'),
-  tile('gone', 'Garage', 'Not answering', 'bulb')
+  tile('on', 'Floor lamp', '75% &middot; Warm', 'light-floor-lamp'),
+  tile('tinted on', 'Accent lamp', '40% &middot; Blue', 'light-table-lamp',
+    '--lamp:#3C5DB8;--lamp-hi:#5B7FE0;--lamp-lo:#2A3F82;--lamp-ink:#2F4A99;--lamp-line:rgba(157,182,255,.45);--lamp-shadow:rgba(91,127,224,.35)'),
+  tile('on', 'Porch light', '100%', 'light-porch-lantern'),
+  tile('', 'Kitchen island', 'Off', 'light-pendant'),
+  tile('gone', 'Garage', 'Not answering', 'light-downlight')
 ].join(''));
 
 /* rooms: photograph and the generated fallback */
@@ -207,14 +225,15 @@ html('rooms', [
 
 /* whole-house bar at 52%, the knob centred on the fill edge */
 const PCT = 52;
-html('hbar', `<span class="fill" style="width:${PCT}%"></span>
+el('hbar').style.setProperty('--pct', PCT + '%');
+html('hbar', `<span class="fill"></span>
   <span class="lo">${icon('sun', 22, 1.8)}</span>
-  <span class="hi">${icon('sun', 26, 1.8)}</span>
-  <span class="knob" style="left:${PCT}%"></span>`);
+  <span class="hi">${icon('sun', 26, 1.6)}</span>
+  <span class="knob"></span>`);
 
 el('hold').innerHTML =
-  `<svg class="ring" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20.5"/></svg>`
-  + icon('moon', 20, 1.8);
+  `<svg class="ring" width="44" height="44" viewBox="0 0 44 44"><circle class="trk" cx="22" cy="22" r="20.5"/><circle class="arc" cx="22" cy="22" r="20.5"/></svg>`
+  + icon('moon', 20);
 const hold = el('hold');
 hold.addEventListener('pointerdown', () => hold.dataset.holding = '1');
 for (const ev of ['pointerup', 'pointerleave', 'pointercancel'])
@@ -239,9 +258,9 @@ function arc(pct) {
 html('arc', arc(75));
 
 html('hdr', `<header class="hdr">
-  <button class="hdr-btn back">${icon('back', 22, 1.8)}</button>
-  <button class="hdr-btn a1">${icon('gear', 22, 1.8)}</button>
-  <button class="hdr-btn a2">${icon('clock', 22, 1.8)}</button>
+  <button class="hdr-btn back">${icon('back', 20)}</button>
+  <button class="hdr-btn a1">${icon('gear', 20)}</button>
+  <button class="hdr-btn a2">${icon('clock', 20)}</button>
 </header><h1 class="t-h1 page-title" style="padding-top:0">Living room</h1>`);
 
 html('stage', `<div class="scrim"></div>
@@ -263,6 +282,10 @@ html('stage', `<div class="scrim"></div>
       </div>
     </div>
   </div>`);
+
+html('coming', `<div class="card-row"><span class="row-ic">${icon('clock', 20)}</span>
+  <span class="row-txt"><span class="t">Porch at dusk</span><span class="d">Off at 11:00 pm</span></span>
+  <button class="link">Skip tonight</button></div>`);
 
 html('toast', `<div class="toast">${icon('check', 20, 1.8)}
   <span class="msg">Living room to Relax</span><button class="act">Undo</button></div>`);
