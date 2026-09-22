@@ -4,7 +4,8 @@
 // Nothing here decides anything about the home: that is web/data/. This file only asks it and draws the answer.
 // It is served at /ui/ beside the old app until cutover (docs/design-spec-v6.md, the handoff's phase 5).
 import '/js/kinds.js';
-import { create, CasetaHome, CasetaDaylight, CasetaEdit, RECONNECT_GRACE, esc } from '/data/index.js';
+import '/js/cities.js';
+import { create, CasetaHome, CasetaDaylight, CasetaEdit, CasetaRemotes, CasetaRoutines, RECONNECT_GRACE, esc } from '/data/index.js';
 import { icon } from '/ui/icons.js';
 import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
@@ -14,11 +15,20 @@ import * as roomScreen from '/ui/screens/room.js';
 import * as deviceScreen from '/ui/screens/device.js';
 import * as soonScreen from '/ui/screens/soon.js';
 import * as scenesScreen from '/ui/screens/scenes.js';
+import * as remotesScreen from '/ui/screens/remotes.js';
+import * as remoteScreen from '/ui/screens/remote.js';
+import * as timingScreen from '/ui/screens/timing.js';
+import * as routinesScreen from '/ui/screens/routines.js';
+import * as routineScreen from '/ui/screens/routine.js';
+import * as guidedScreen from '/ui/screens/guided.js';
+import * as activityScreen from '/ui/screens/activity.js';
 
 const data = create({ storage: localStorage });
 const H = CasetaHome.create(data);
 const DAY = CasetaDaylight.create(data);
 const EDIT = CasetaEdit.create(data, H);
+const REM = CasetaRemotes.create(data, H);
+const RT = CasetaRoutines.create(data, H, REM);
 const S = data.S;
 const $ = s => document.querySelector(s);
 
@@ -101,8 +111,12 @@ function route() {
   // #light/<id>/white: the id, then the page under it
   return { name, id: parts[1] || null, sub: parts.slice(2).join('/') || null };
 }
-const SCREENS = { home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen, scenes: scenesScreen };
-const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', routines: 'routines', settings: 'home', activity: 'home' };
+const SCREENS = {
+  home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen, scenes: scenesScreen,
+  remotes: remotesScreen, remote: remoteScreen, timing: timingScreen,
+  routines: routinesScreen, routine: routineScreen, setup: guidedScreen, activity: activityScreen,
+};
+const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'home', activity: 'home' };
 const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines']];
 // A screen draws the pages under it that it declares (screen.subs); any other sub page is not built yet.
 function screenFor(r) {
@@ -115,7 +129,7 @@ function go(hash) { if (location.hash === '#' + hash) render(); else location.ha
 
 // ---------- what every screen is handed ----------
 const ctx = {
-  data, H, DAY, EDIT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
+  data, H, DAY, EDIT, REM, RT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
   openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
   run, gate, save, saveSoon, assume, toast, go, openSheet, closeSheet, render: () => render(),
   // swap the page's sub route in place (White to Colour on the same sheet): no new step for the back button
@@ -218,6 +232,7 @@ function connect() {
         if (H.shortenSuggestedFades()) save('', { quiet: true });
       }
       if (m.type === 'toast') toast(m.msg, { err: m.level === 'error' });
+      if (m.type === 'button' || m.type === 'gesture') onLive(m);
       if (r.conn) onConn(r.conn);
       if (r.changed || m.type === 'snapshot') soon();
     },
@@ -245,10 +260,21 @@ document.addEventListener('click', e => {
 });
 // A name field in a sheet (a room's, a scene's) saves as it is typed; Done or Enter closes it.
 document.addEventListener('input', e => {
+  // a field that answers as it is typed (the city search): data-input names the screen's action
+  const inp = e.target.closest && e.target.closest('[data-input]');
+  if (inp) { const r = route(); const screen = screenFor(r); const fn = screen.actions && screen.actions[inp.dataset.input]; if (fn) fn(ctx, inp, r, inp.value); return; }
   const form = e.target.closest && e.target.closest('form[data-form="name"]'); if (!form) return;
   const r = route(); const screen = screenFor(r);
   const fn = screen.actions && screen.actions[form.dataset.act];
   if (fn) fn(ctx, form, r, e.target.value);
+});
+// A select, a time field or a checkbox that changes something: data-change names the screen's action, which gets the
+// element and its value.
+document.addEventListener('change', e => {
+  const el = e.target.closest && e.target.closest('[data-change]'); if (!el) return;
+  const r = route(); const screen = screenFor(r);
+  const fn = screen.actions && screen.actions[el.dataset.change];
+  if (fn) fn(ctx, el, r, el.type === 'checkbox' ? el.checked : el.value);
 });
 document.addEventListener('submit', e => {
   if (e.target.dataset.form !== 'name') return;
@@ -329,6 +355,21 @@ document.addEventListener('pointerdown', e => {
 document.addEventListener('pointermove', e => { if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) endHold(false); }, true);
 for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => endHold(false), true);
 document.addEventListener('pointerleave', e => { if (hold && e.target === hold.el) endHold(false); }, true);
+
+// ---------- a real remote pressed ----------
+// The data layer has written the press down (S.live). A remote the bridge lists without its buttons learns its own
+// numbering from the keys; then the screen on show decides what a press means to it (the Remotes list jumps to the
+// remote, a remote's page picks the key, Press timing says what it heard). Anything showing a key lit redraws, and
+// once more when the light goes out.
+let liveTimer = null;
+function onLive(m) {
+  if (REM.rememberPress(m.device_id, m.button_number)) save('', { quiet: true });
+  const r = route(); const screen = screenFor(r);
+  if (screen.live) screen.live(ctx, m, r);
+  soon();
+  clearTimeout(liveTimer); liveTimer = setTimeout(soon, 1300);
+}
+ctx.live = onLive;
 
 // ---------- start ----------
 // The Home greeting and the whole house rely on the home's own time zone; nothing else needs doing before the first

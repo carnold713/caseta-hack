@@ -389,7 +389,7 @@ keeping:
 **06 Follow the day**, **06b Sleep timer**, **13 Rooms**, **14 All scenes**,
 **15 a scene**, **16 Room setup**, **17 Fan**, **18 Shade** and **19 About
 this light**: all of phase 3, laid out in `screens.css` from each frame's own
-numbers. Pages not built yet (remotes, routines, settings, activity) land on a
+numbers. Pages not built yet land on a
 plain "still being rebuilt" page that links to the current app, so nothing is
 out of reach meanwhile.
 
@@ -465,6 +465,78 @@ What reading frames 03 to 19 settled:
 - The connector reports a timer's end as **epoch seconds**. (The browser
   suite's fake connector also used to send a `timers` message the hub does not
   handle; it now sends `timer` as the real one does, so timers show in tests.)
+
+### Phase 4: remotes and routines
+
+Built: **21 Remotes**, **07 a remote**, **08 what a press does**, **09 what it
+controls**, **25 Press timing**, **10 Routines**, **23 a routine**, **22 the
+guided setups** (Welcome lights, Wake-up light, Goodnight button, Leaving
+button), the **evening wind-down** sheets and **24 Activity**. Their rules are
+two more data layer files, `web/data/remotes.js` and `web/data/routines.js`
+(`docs/data-layer.md`), with unit tests.
+
+Routes: `#remotes`, `#remote/<id>` with `/k<key>-<single|double|hold>` (one
+press) and `/more` as sheets, `#timing`, `#routines` with `/winddown`,
+`/winddown-levels`, `/winddown-curve` and `/night` as sheets, `#routine/<id>`
+with `/when`, `/days`, `/what`, `/lights`, `/off`, `/onlyif`, `/more`,
+`#setup/<welcome|wakeup|goodnight|leaving>`, `#activity`. The old app's
+`#automations` still lands on Routines.
+
+`test/browser/copper_remotes_test.js` drives all of it (a press on a real
+remote jumping to it, every way a press can be set, Controls, night versions,
+steps, the usual layout, timing, a routine made and changed through its
+sentence, skip, delete and Undo, both kinds of guided setup, the wind-down,
+Activity's filters) and measures frames 21, 07, 25, 10, 23, 22 and 24.
+
+What reading frames 07 to 25 settled:
+
+- **The remote on the stage is Lutron's product photograph** in the file
+  (`pj2-3brl-gwh-ph-fr-8`, white only). It could not be exported into the repo
+  from here (the asset host is outside this environment's network), so the
+  remote is drawn in SVG key for key, in all four finishes and every model the
+  bridge reports, which the one photograph could not do anyway. A photograph
+  dropped into `web/img/picos/` as `<model>-<finish>.png` or `<model>.png` is
+  used instead, with the keys laid over it unseen so they still light and tap.
+- **Keys are named by where they sit**: Top button, Up arrow, Middle button,
+  Down arrow, Bottom button (the file's "TOP BUTTON"), not by the bridge's
+  labels. A four-button remote's keys are Button 1 to 4.
+- **Leaders spread.** The file's five leaders sit beside their keys; on the
+  3-button-with-arrows the middle three keys are closer together than two lines
+  of words, so a label moves down when it would crowd the one above and its
+  leader bends to reach it.
+- **The suggested five** are the file's for a press (Turn on, Turn on or off,
+  Bring back how it was, Run a scene, Goodnight); a press twice and a hold get
+  their own five, an arrow leads with a nudge and a walk through scenes, and a
+  fan with its speeds. Everything else the old recipe list had is under More
+  choices, grouped, so no way of setting a press is lost.
+- **Different at night** turns on with the same lights at a nightlight glow (a
+  hold: dimming), and the sentence under it opens the night version's own ways,
+  including building it step by step. The hours are the house's night, shown as
+  "10:30 pm to 6:30 am" where the file uses an en dash.
+- **Controls (09) applies as you pick** and moves the night version with the
+  press. "New set" makes a saved set from the lights picked now; renaming sets
+  stays in Settings.
+- **Build it step by step** is the old fine-tune editor on the new surface: a
+  card of plain fields per step, for a press, its night version, or a routine.
+- **Press timing's sliders are the hub's ranges**: a double press 0.15 to
+  1.5 s, a hold 0.25 to 3 s. The tester draws two taps only when it heard both;
+  a double press it was only told about is named, not drawn.
+- **A routine is a sentence.** The blue words open the sheet that changes them;
+  the day circles toggle in place. A routine with no condition reads "and run
+  every time"; one that leaves nothing on has no "then off" clause.
+- **"+" makes the routine at once** (the first room on at sunset, or 6 pm
+  without a location) and opens it as "New routine" with the file's "Routine
+  created" toast and Undo; the title becomes its name once it is left.
+- **Welcome lights asks when you get home** (the file's 5:30, 6:00, 6:30, a
+  time, or sunset), then the days with "only if the house is dark", then when
+  they go off, then how bright and which shades. The old sunset-only setup is
+  the "Or at sunset" answer.
+- **The time zone banner** keeps both answers: "Use Mountain" (the home's
+  clock) as the file draws it, and "Use this phone's".
+- **Activity's filters**: Buttons are remote presses, Routines are routines
+  that ran or did not, Changes are commands from the app and the house computer
+  coming and going. The hub records no author, so a change reads "From the
+  app" where the file writes a person's name.
 
 **Open: the webfont.** `tokens.css` declares Lutron Sans Screen at
 `/ui/font/LutronSansScreen-{Light,Regular,Medium}.woff2`. Those three files are

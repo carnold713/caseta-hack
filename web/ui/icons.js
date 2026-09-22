@@ -42,6 +42,11 @@ export const PATHS = {
   pulse:   '<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>',
   dots:    '<circle cx="5.5" cy="12" r=".9"/><circle cx="12" cy="12" r=".9"/><circle cx="18.5" cy="12" r=".9"/>',
   palette: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.2-1-1.6-1-2.6 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7C20.5 6.8 16.7 3.5 12 3.5z"/><circle cx="7.8" cy="11" r=".9"/><circle cx="10.5" cy="7.5" r=".9"/><circle cx="15" cy="7.8" r=".9"/>',
+  // four more, exported from the frames that use them (21, 10, 09, 07) and put on the same 24 grid
+  sunset:  '<path d="M3 18h18M6.5 18a5.5 5.5 0 0 1 11 0M12 4v5M14.5 6.5L12 9 9.5 6.5M4.2 12.5l1.4 1M19.8 12.5l-1.4 1"/>',
+  globe:   '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.5 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.5-3.5-8.5s1-5.9 3.5-8.5z"/>',
+  info:    '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r=".5"/>',
+  lamp:    '<path d="M8.5 3.5h7l3 7.5h-13z"/><path d="M12 11v7.5M8 20.5h8"/>',
   camera:  '<path d="M4 8.5a2 2 0 0 1 2-2h1.8L9.5 4h5l1.7 2.5H18a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>'
 };
 

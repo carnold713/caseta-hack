@@ -12,6 +12,8 @@ be tested without a browser.
 | `home.js` | `CasetaHome` | Light roles, the five suggested scenes and their levels, which scene a room is showing, a room's scenes in order, what is lit, the starred row, the one-time seeding of the app's rooms |
 | `daylight.js` | `CasetaDaylight` | Follow the day: the curve, who follows it, the words for what a lamp is doing, and the names of whites |
 | `edit.js` | `CasetaEdit` | Changing the home: making, renaming, deleting rooms and moving things between them (and asking the bridges to follow); making and editing scenes; a light's kind and role; hiding and removing a device |
+| `remotes.js` | `CasetaRemotes` | Picos: which key is which on each model, learning a remote's numbering from its presses, what a press does and how that is said, the ready-made ways a press can go, night versions, walks through scenes, Leaving, the usual layout, the step editor's fields |
+| `routines.js` | `CasetaRoutines` | Routines: time in the home's own zone, on-and-off pairs folded into one, the sentence a routine is said in, the next run and skipping it, the three guided setups, the evening wind-down's numbers, running timers |
 | `index.js` | | The ES-module entry for the new UI |
 
 Each file is one file for every host, the same as `web/js/kinds.js`: a plain `<script>` gets the global, a test
@@ -20,11 +22,13 @@ Each file is one file for every host, the same as `web/js/kinds.js`: a plain `<s
 hand in a fake: `fetch`, `WebSocket`, `storage`, `location`, a clock, `setTimeout`.
 
 ```js
-import { create, CasetaHome, CasetaDaylight, CasetaEdit } from '/data/index.js';
+import { create, CasetaHome, CasetaDaylight, CasetaEdit, CasetaRemotes, CasetaRoutines } from '/data/index.js';
 const data = create({ storage: localStorage });
 const home = CasetaHome.create(data);
 const day = CasetaDaylight.create(data);
 const edit = CasetaEdit.create(data, home);
+const remotes = CasetaRemotes.create(data, home);
+const routines = CasetaRoutines.create(data, home, remotes);
 data.connectWS({ message: (m, r) => { if (r.changed) redraw(r.type); } });
 ```
 
