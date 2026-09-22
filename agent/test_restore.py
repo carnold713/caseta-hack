@@ -37,6 +37,9 @@ class FakeBridge:
                       "ct": {"min": 153, "max": 500, "mirek": None}},
             "hue_b": {"device_id": "hue_b", "type": "HueLight", "zone": "b", "area": "21", "current_state": 0,
                       "color_mode": "ct", "color": None, "ct": {"min": 153, "max": 500, "mirek": 250}},
+            "nanoleaf_A": {"device_id": "nanoleaf_A", "type": "NanoleafLight", "zone": "AAAA", "area": "20",
+                           "current_state": 0, "color_mode": "hs", "color": {"gamut": None, "xy": [0.4, 0.5]},
+                           "ct": {"min": 153, "max": 833, "mirek": None}},
         }
         self.calls = []
 
@@ -63,6 +66,18 @@ def light(bridge, r, did, level):
 
 
 async def main():
+    # 0. A panel is a light. Its type is not one of the Lutron model names the house used to be counted
+    #    from, so it was not in "everything", it was never remembered, and a restore skipped it.
+    bridge, r, sent = make()
+    check("a panel is part of the house", "nanoleaf_A" in r._resolve("h:all"), True)
+    check("and part of its room", "nanoleaf_A" in r._resolve("a:20"), True)
+    light(bridge, r, "nanoleaf_A", 65)
+    was_n = color_state(bridge.devices["nanoleaf_A"])["hex"]
+    light(bridge, r, "nanoleaf_A", 0)
+    check("a panel remembers how it was", (r._last_lit.get("nanoleaf_A") or {}).get("level"), 65)
+    await r.run_one({"type": "restore", "target": "a:20", "fade": 0})
+    check("and comes back on its colour", sent, [("color", "nanoleaf_A", None, was_n, 65)])
+
     # 1. a room on a colour, turned off, then put back: the colour comes with the level
     bridge, r, sent = make()
     light(bridge, r, "5", 40)

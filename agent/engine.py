@@ -244,8 +244,7 @@ class ActionRunner:
             return [d["device_id"] for d in bridge.devices.values()
                     if d.get("zone") and d.get("area") == ident and d.get("type") not in _COVER_TYPES]
         if kind == "h" and ident == "all" and bridge:   # every light and switch in the house
-            return [d["device_id"] for d in bridge.devices.values()
-                    if d.get("zone") and d.get("type") in _LIGHT_TYPES | _SWITCH_TYPES]
+            return [did for did, d in bridge.devices.items() if d.get("zone") and _is_lamp(did, d)]
         if kind == "h" and ident == "shades" and bridge:
             return [d["device_id"] for d in bridge.devices.values() if d.get("zone") and d.get("type") in _COVER_TYPES]
         if kind == "h" and ident == "fans" and bridge:
@@ -430,7 +429,7 @@ class ActionRunner:
     def _remember(self, device_id: str, level: Optional[int]) -> None:
         bridge = self._bridge()
         dev = bridge.devices.get(device_id) if bridge else None
-        if not dev or dev.get("type") not in _LIGHT_TYPES | _SWITCH_TYPES or level is None:
+        if not dev or level is None or not _is_lamp(device_id, dev):
             return
         if level > 0:
             # lit: this is how it is, and it has not gone off, so it has no off time yet
@@ -641,7 +640,7 @@ class ActionRunner:
             # turning a room or a house off in one go. A light switched off on Tuesday and never wanted
             # since is not part of tonight's press, and this is what keeps the house power button from
             # lighting a room nobody has been in for days.
-            targets = [d for d in self._resolve(a["target"]) if bridge.devices.get(d, {}).get("type") in _LIGHT_TYPES | _SWITCH_TYPES]
+            targets = [d for d in self._resolve(a["target"]) if _is_lamp(d, bridge.devices.get(d, {}))]
             fade = a.get("fade")
             off = [(d, self._last_lit[d]) for d in targets
                    if self._level_of(d) <= 0 and (self._last_lit.get(d) or {}).get("off_at") is not None]
@@ -744,6 +743,19 @@ _SWITCH_TYPES = {
     "SunnataSwitch", "TempInWallPaddleSwitch", "Switched", "DivaSmartSwitch",
 }
 _FAN_TYPES = {"CasetaFanSpeedController", "MaestroFanSpeedController", "FanSpeed"}
+
+
+def _is_lamp(device_id: str, dev: dict) -> bool:
+    """Is this a light or a switch, whichever backend it came from?
+
+    _LIGHT_TYPES and _SWITCH_TYPES are Lutron model names with Hue's two bolted on, and that is how a
+    Nanoleaf panel came to be missing from "everything in the house" and from what a restore remembers:
+    nobody added its name to a list. A lamp on a backend is known by its id instead, so ask that, and a
+    backend added later cannot quietly fall out of the house for want of an entry.
+    """
+    if str(device_id).startswith(BRIDGE_PREFIXES):
+        return dev.get("zone") is not None and dev.get("type") not in _FAN_TYPES | _COVER_TYPES
+    return dev.get("type") in _LIGHT_TYPES | _SWITCH_TYPES
 _COVER_TYPES = {
     "SerenaHoneycombShade", "SerenaRollerShade", "TriathlonHoneycombShade", "TriathlonEssentialsRollerShade",
     "TriathlonRollerShade", "TriathlonTiltOnlyWoodBlind", "QsWirelessShade", "QsWirelessHorizontalSheerBlind",
