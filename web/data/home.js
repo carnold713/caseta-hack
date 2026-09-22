@@ -167,6 +167,83 @@
       return p;
     }
 
+    // What a device is doing now, as a scene entry: a fan speed, a level, or {level, kelvin | hex} for a lamp
+    // showing a white or a colour.
+    function sceneEntryNow(d, dflt) {
+      const id = d.device_id;
+      if (d.domain === 'fan') return (S.states[id] || {}).fan_speed || 'Off';
+      const lv = D.level(id) ?? dflt;
+      const c = (S.states[id] || {}).color;
+      if (c && c.mode === 'ct' && c.kelvin && d.ct) return { level: lv, kelvin: Math.round(c.kelvin) };
+      if (c && c.mode === 'xy' && c.hex && d.color) return { level: lv, hex: String(c.hex).toLowerCase() };
+      return lv;
+    }
+    // "Save this look": the room as it is lit right now becomes one of its scenes, every light in it included so
+    // the ones that are off stay off when it runs. Named "My look", then "My look 2" and on, so it never takes the
+    // name of one already there. Returns the new scene; the caller saves.
+    function saveRoomLook(aid) {
+      const ds = D.controllable().filter(d => D.devArea(d) === aid && d.domain !== 'cover');
+      if (!ds.length) return null;
+      const levels = {};
+      for (const d of ds) levels[d.device_id] = sceneEntryNow(d, 0);
+      const room = D.areaName(aid);
+      const taken = new Set(D.presets().map(p => p.name));
+      let n = 1, name;
+      do { name = `${room} · My look${n > 1 ? ` ${n}` : ''}`.slice(0, 60); n++; } while (taken.has(name) && n < 100);
+      const p = { id: uid(), name, levels, fade: SUGGESTED_FADE, area: aid, edited: true };
+      S.config.presets.push(p);
+      return p;
+    }
+
+    // ---------- the whole house ----------
+    const schedules = () => (S.config && S.config.schedules) || [];
+    // Of the given lights, the ones an enabled automation turns on (never one whose action turns them off; that
+    // automation already wants them dark, so the power button is not fighting it). A preset an automation runs is
+    // not unpacked here, only a plain level or "back on" action, which covers the ordinary case.
+    function autoOnLights(ids) {
+      const set = new Set(ids); const hit = new Set();
+      for (const sc of schedules()) {
+        if (sc.enabled === false) continue;
+        for (const a of sc.actions || []) {
+          if (!((a.type === 'level' && a.level !== 'off' && a.level !== 0) || a.type === 'restore')) continue;
+          for (const id of D.targetDevices(a.target)) if (set.has(id)) hit.add(id);
+        }
+      }
+      return [...hit];
+    }
+    // Turning the house on: the lights that were on before (the connector remembers them) or every light, as the
+    // Settings choice says.
+    const powerOnAll = () => ((S.config && S.config.settings.power_on) || 'restore') === 'all';
+    const powerOnAction = () => (powerOnAll() ? { type: 'level', target: 'h:all', level: 'on' } : { type: 'restore', target: 'h:all' });
+    // The one house control's word for what a tap does now.
+    const powerLabel = () => (litLights().length ? 'All off' : (powerOnAll() ? 'All on' : 'Lights back on'));
+    // Home's house card has its own On beside All off. With something already on it means every light; with the
+    // house dark it is the power button's choice, what was on before or everything.
+    const houseOnLabel = () => (litLights().length || powerOnAll() ? 'All on' : 'Lights back on');
+    const houseOnAction = () => (litLights().length ? { type: 'level', target: 'h:all', level: 'on' } : powerOnAction());
+    // Which lights the house brightness moves: what is on, or with nothing on, every light, which is how sliding the
+    // house brings it up.
+    function houseLevelTargets() {
+      const lit = litLights().map(d => d.device_id);
+      return lit.length ? lit : D.controllable().filter(d => d.domain === 'light' || d.domain === 'switch').map(d => d.device_id);
+    }
+    // Everything off, the shades closed and the fans stopped: the long hold. In the order they go out.
+    function goodnightActions() {
+      const out = [{ type: 'level', target: 'h:all', level: 'off' }];
+      for (const d of D.controllable()) {
+        if (d.domain === 'cover') out.push({ type: 'lower', target: `d:${d.device_id}` });
+        if (d.domain === 'fan') out.push({ type: 'fan', target: `d:${d.device_id}`, speed: 'Off' });
+      }
+      return out;
+    }
+    // A room's photograph, when it has one: served by the hub under the room's id, the version in the query so a new
+    // photo is never an old one from the cache.
+    function roomPhotoURL(aid) {
+      const r = D.appRoom(aid);
+      if (!r || !r.photo) return null;
+      return `/api/roomphoto/${encodeURIComponent(aid)}?token=${encodeURIComponent(S.token)}&v=${encodeURIComponent(r.photo)}`;
+    }
+
     // ---------- rooms ----------
     // Every device the app can file in a room: the lights, switches, fans, shades and the remotes.
     const fileable = () => [...D.controllable(), ...D.remotes()];
@@ -225,8 +302,9 @@
       lightKind, lightRole, kindLabel,
       roomLights, roomDimmers, meanLevel, roomMean, litLights, houseLevel, timerOn, rowLights,
       shortenSuggestedFades, moodLevels, levelsMatch, roomScenes, roomHasScenes, roomSuggested, roomHasSuggested,
-      sceneMatch, suggestedMatch, sceneShortName, presetMax, suggestScenes, keepMoodScene,
+      sceneMatch, suggestedMatch, sceneShortName, presetMax, suggestScenes, keepMoodScene, sceneEntryNow, saveRoomLook,
       fileable, roomById, bridgeTag, ensureRooms, pruneRooms,
+      autoOnLights, powerOnAll, powerOnAction, powerLabel, houseOnLabel, houseOnAction, houseLevelTargets, goodnightActions, roomPhotoURL,
     };
     // describe() names a loop of scenes for its room only when it holds all of that room's scenes.
     D.hooks.roomScenes = roomScenes;

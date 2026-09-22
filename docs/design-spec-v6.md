@@ -358,8 +358,8 @@ everything a pixel tight.
 `scripts/ui-parity.js` (`npm run test:ui`) opens the gallery in Chromium and
 measures 31 things inside the components: offsets from each component's outer
 edge, sizes, and the computed colours of the glyphs. The expected values are the
-ones read out of frame 02 Home. It currently passes all 31. When a screen is
-built, its numbers go in there the same way.
+ones read out of frame 02 Home. It currently passes all 31. The screens' own
+numbers are checked by `test/browser/copper_test.js`, which needs the hub.
 
 ## Built so far
 
@@ -380,6 +380,68 @@ keeping:
 - The tab bar spaces its four circles with `space-between` and an 8 inset, which
   puts their centres at 36 / 136 / 236 / 336. `space-around` looks similar and is
   wrong by 16 at each end.
+
+### Phase 3: the app at `/ui/`
+
+`web/ui/index.html` and `app.js` are the new app, running on the data layer
+(`docs/data-layer.md`) beside the old one at `/`. Built so far: **02 Home**,
+**13 Rooms**, **03 Room**, **04 Light**, **05 Colour**, **05b White**,
+**06b Sleep timer**, **17 Fan** and **18 Shade**, laid out in `screens.css`
+from each frame's own numbers. Pages not built yet (Follow the day, about this
+light, room setup, scenes, remotes, routines, settings, activity) land on a
+plain "still being rebuilt" page that links to the current app, so nothing is
+out of reach meanwhile.
+
+White, Colour and the sleep timer are **sheets over the light's page**, as the
+file draws them, and each is a sub route (`#light/<id>/white`) so Back and a
+shared link land on it. Dismissing one puts the address back without adding a
+step to Back; White and Colour swap in place without the sheet rising again.
+
+`test/browser/copper_test.js` drives these screens against the hub and the fake
+connector (the dial, the house bar, Goodnight's hold, All on and off, Save this
+look, a fan's steps, stars, the white bar, the wheel, a timer) and measures
+them against frames 03, 04, 05, 05b, 06b, 13 and 17.
+
+What reading frames 03 to 06b, 13, 17 and 18 settled:
+
+- **The brightness arc on the light page is not the component above.** It is
+  340 x 190 at (36, 640), radius 150, stroke **40**, track **`#2E2E2E`**, fill
+  `#F6E3CF` to `#E8A774` at 45% to `#D98A4E`, knob a 24px white disc with a 4px
+  `#121212` ring. "Brightness" at 718, the 88 numeral at 736, the minus and
+  plus circles (48) at y 836, moon and sun (22) at y 849.
+- **A fan has five steps, Off included**, so the tile's five dots were right
+  and the question about Caseta's four speeds is closed: Medium lights three.
+  The fan page's On is **blue**, not copper: a fan is not a light.
+- **"Stops with Goodnight" and "Closes with Goodnight" are toggles in the file
+  with nothing behind them.** Goodnight stops every fan and closes every shade,
+  and the config has no per-device exception. The pages say "Stops with it" and
+  "Always" rather than draw a switch that does nothing; making them real is a
+  config schema change, which this rebuild does not make.
+- **The house card's pill says "All on" while anything is on** and turns every
+  light on; from a dark house it is the power setting's "Lights back on" or
+  "All on".
+- **"Save this look"** makes the room's current levels (whites and colours
+  included, off lights as off) into a scene called "My look", then "My look 2".
+  It shows only while the room matches none of its scenes.
+- A light with neither white nor colour closes the page up by 144: the pills
+  sit at 414 and the dial moves up with them.
+- **The white bar is in mireds.** It runs 1900K to 6500K; the file puts 2700K
+  at 41.9% of it and a 5000K lamp limit at 87.6%, which is exactly 1,000,000/K
+  and nowhere near a kelvin scale. That answers the open question. The part of
+  the bar a lamp cannot reach is hatched, with "Beyond this lamp · max 5000K"
+  above it, and a named white past the limit is dimmed and clamps.
+- The five named whites are Candle 2200, Warm 2700, Neutral 4000, Cool 5000,
+  Daylight 6500: the names `warmthName` already gives those values.
+- **The colour wheel's hue runs clockwise from three o'clock**, red at the
+  right, as the file's 36 wedges do; distance from the middle is saturation.
+  The file names one of its twelve lamp colours ("Blue" for `#4C8DFF`); the
+  other eleven are named in `web/ui/colour.js` the same plain way.
+- The sleep timer's "Custom" opens a second row (10, 20, 45, 90, 120 min),
+  the steps the old dial offered past the four the file shows. "Applies to"
+  is this lamp, its room, or everything that is on.
+- The connector reports a timer's end as **epoch seconds**. (The browser
+  suite's fake connector also used to send a `timers` message the hub does not
+  handle; it now sends `timer` as the real one does, so timers show in tests.)
 
 **Open: the webfont.** `tokens.css` declares Lutron Sans Screen at
 `/ui/font/LutronSansScreen-{Light,Regular,Medium}.woff2`. Those three files are

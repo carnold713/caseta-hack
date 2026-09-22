@@ -414,8 +414,11 @@ binding fires instantly.
 dark design in Figma, on top of the same hub, connector and data. Its build spec
 is `docs/design-spec-v6.md`, read from the Figma file itself; its foundations
 (tokens, components, the icon and art sets) are in `web/ui/`, and
-`/ui/gallery.html` shows every component. `docs/data-layer.md` covers the data
-layer both UIs run on. Until cutover the app you open is still the one below.
+`/ui/gallery.html` shows every component. The new app itself is at **`/ui/`**:
+Home, Rooms, a room, a light (with its white, colour and sleep timer sheets), a
+fan and a shade so far; anything not rebuilt yet links back to the current app.
+`docs/data-layer.md` covers the data layer both UIs run on. Until cutover the
+app you open at `/` is still the one below.
 
 `docs/design-spec-v3.md` is the visual spec the interface follows, derived
 from the Sonos iOS app: a light grey sheet with grouped grey cards, black
@@ -439,7 +442,8 @@ web/              the PWA: index.html, styles.css, light.css, motion.css, js/{co
 web/data/         the data layer, no DOM: state, socket, api and command gate, save and undo, inventory and
                   targets (caseta-data.js), roles and suggested scenes (home.js), Follow the day (daylight.js).
                   One file for every host: a script tag, a require, or an import through index.js
-web/ui/           Copper Night: tokens.css, components.css, icons.js, art/ (exported from Figma), gallery.html
+web/ui/           Copper Night: index.html + app.js (the new app at /ui/), screens/, screens.css, tokens.css,
+                  components.css, icons.js, colour.js, art/ (exported from Figma), gallery.html
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)
 agent/adddevice.py  add a device from the app: association mode, device heard, create, and the

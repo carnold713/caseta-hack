@@ -206,8 +206,10 @@ ws.on('message', raw => {
       send({ type: 'state', states: upd });
       for (const id of Object.keys(upd)) FOLLOW.lit[id] = (upd[id].level || 0) > 0;
       if (follows.length) { followApply(follows); sendFollow(); } } }
-    if (a.type === 'timer') { const ends = Math.floor(Date.now() / 1000) + a.minutes * 60; send({ type: 'timers', timers: { [Array.isArray(a.target) ? a.target.join('|') : a.target]: { ends_at: ends, level: a.level || 0 } } }); }
-    if (a.type === 'cancel_timer') send({ type: 'timers', timers: {} });
+    // what the real connector sends (agent/agent.py _on_timer): one "timer" per target, ends_at null when it is gone
+    const tkey = t => (Array.isArray(t) ? t.join('|') : t);
+    if (a.type === 'timer') send({ type: 'timer', target: tkey(a.target), ends_at: Math.floor(Date.now() / 1000) + a.minutes * 60, level: a.level || 0 });
+    if (a.type === 'cancel_timer') send({ type: 'timer', target: tkey(a.target), ends_at: null, level: 0 });
   }
 });
 // a rough black-body tint for a white tone, the same fit the connector paints

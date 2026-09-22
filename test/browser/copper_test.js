@@ -1,0 +1,240 @@
+// Copper Night (/ui/): the core flows against the hub and the fake connector, and the screens' geometry against
+// numbers read out of the Figma file with read-only use_figma scripts (absoluteBoundingBox against the frame's
+// outer edge): 03 Room 12733:20, 04 Light 12731:22, 05 Colour 12732:48591, 05b White 12732:49220, 06b Sleep timer
+// 12733:49235, 13 Rooms 12744:38, 17 Fan 12744:111211.
+//
+// Runs after nanoleaf_test so the Office has a colour lamp. It stars a light, saves a look and moves levels, and
+// puts the stars and the scenes back on the way out.
+const { chromium } = require('playwright-core');
+const PORT = process.env.PORT || 4400;
+let bad = 0;
+const check = (name, ok, got) => { bad += ok ? 0 : 1; console.log((ok ? 'PASS' : 'FAIL'), name, ok ? '' : `| got: ${JSON.stringify(got)}`); };
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+// [what, selector, x, y, w, h] in page coordinates, the frame's top left being the page's (null = not checked)
+const ROOM = [
+  ['room H1', '.room-title h1', 20, 128, null, 44],
+  ['room photo card', '.room-photo-card', 20, 188, 372, 300],
+  ['All on', '.room-acts .glass:first-child', 32, 412, 168, 64],
+  ['All off', '.room-acts .glass:last-child', 212, 412, 168, 64],
+  ['scene chips', '.room-chips', 0, 504, null, 40],
+  ['first tile', '.room-grid .tile:nth-child(1)', 20, 560, 180, 150],
+  ['second tile', '.room-grid .tile:nth-child(2)', 212, 560, 180, 150],
+  ['header dots', '.hdr .a1', 336, 52, 56, 56],
+];
+const LIGHT = [
+  ['hero art', '.hero-art', 116, 46, 180, 180],
+  ['star', '.hdr .a2', 272, 52, 56, 56],
+  ['room line', '.where', null, 240, null, 17],
+  ['name', '.t-hero', null, 260, null, 48],
+  ['on / off', '.onoff', 20, 326, 372, 72],
+  ['on segment', '.onoff button:first-child', 26, 332, 177, 60],
+  ['White', '.looks .look:nth-child(1)', 20, 414, 180, 132],
+  ['Colour', '.looks .look:nth-child(2)', 212, 414, 180, 132],
+  ['White circle', '.looks .look:nth-child(1) .c', 34, 428, 44, 44],
+  ['first pill', '.feats .feat:nth-child(1)', 20, 558, 180, 64],
+  ['pill circle', '.feats .feat:nth-child(1) .c', 28, 566, 48, 48],
+  ['arc', '.dial > svg', 36, 640, 340, 190],
+  ['minus', '.dial .minus', 32, 836, 48, 48],
+  ['plus', '.dial .plus', 332, 836, 48, 48],
+  ['moon', '.dial .lo', 102, 849, 22, 22],
+  ['sun', '.dial .hi', 288, 849, 22, 22],
+  ['Brightness', '.dial .lbl', null, 718, null, 17],
+];
+const ROOMS = [
+  ['Rooms H1', '.rooms-head h1', 20, 58, null, 44],
+  ['add', '.rooms-head .a1', 336, 52, 56, 56],
+  ['All scenes', '.scenes-card', 20, 132, 372, 88],
+  ['All scenes circle', '.scenes-card .ib', 36, 148, 56, 56],
+  ['first room', '.room-big:nth-of-type(1)', 20, 232, 372, 180],
+  ['second room', '.room-big:nth-of-type(2)', 20, 424, 372, 180],
+  ['room power', '.room-big:nth-of-type(1) .pwr', 332, 352, 44, 44],
+  ['room name', '.room-big:nth-of-type(1) .nm', 40, 340, null, 30],
+];
+const FAN = [
+  ['on / off', '.onoff', 20, 326, 372, 72],
+  ['first pill', '.feats .feat:nth-child(1)', 20, 414, 180, 64],
+  ['Off step', '.speeds .step:nth-of-type(1)', 60, 740, 44, 40],
+  ['High step', '.speeds .step:nth-of-type(5)', 308, 612, 44, 168],
+  ['minus', '.speeds .minus', 20, 826, 56, 56],
+  ['plus', '.speeds .plus', 336, 826, 56, 56],
+];
+
+(async () => {
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 412, height: 915 } });
+  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, process.env.APP_TOKEN);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/net::ERR|502|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  const base = `http://127.0.0.1:${PORT}/ui/`;
+  const go = async hash => { await page.goto(base + '#' + hash); await page.waitForSelector('#screen > div', { timeout: 10000 }); await wait(900); };
+  const C = (fn, arg) => page.evaluate(fn, arg);
+  const lv = id => C(id => window.__copper.data.level(id), id);
+
+  await page.goto(base);
+  if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('.login-form button'); }
+  await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 }); await wait(800);
+  // start clean: no look saved by an earlier run, and the stars as they were
+  const favs0 = await C(() => window.__copper.S.config.favorites.slice());
+  await C(async () => { const c = window.__copper; const n = c.S.config.presets.length; c.S.config.presets = c.S.config.presets.filter(p => !/ · My look/.test(p.name)); if (c.S.config.presets.length !== n) await c.data.saveConfig(); });
+
+  const measure = async (what, list) => {
+    const got = await C(L => L.map(([n, s]) => { const e = document.querySelector(s); if (!e) return [n, null]; const r = e.getBoundingClientRect(); return [n, [r.left, r.top + scrollY, r.width, r.height].map(v => Math.round(v * 10) / 10)]; }), list);
+    for (let i = 0; i < list.length; i++) {
+      const [n, , ...exp] = list[i]; const v = got[i][1];
+      if (!v) { check(`${what}: ${n} is there`, false, 'missing'); continue; }
+      const off = exp.map((x, j) => (x == null || Math.abs(v[j] - x) <= 0.6 ? null : `${'xywh'[j]} ${v[j]} not ${x}`)).filter(Boolean);
+      check(`${what}: ${n} where the file has it`, !off.length, off.join(', '));
+    }
+  };
+
+  // ---- 13 Rooms
+  await go('rooms');
+  await measure('13 Rooms', ROOMS);
+  check('tab bar shows, Rooms current', await C(() => !document.querySelector('#tabs').hidden && document.querySelector('#tabs [aria-current]').dataset.go === 'rooms'));
+
+  // ---- 04 Light: a colour lamp
+  const lamp = await C(() => (window.__copper.data.controllable().find(d => d.color && d.ct) || {}).device_id);
+  check('a colour lamp to test with', !!lamp, lamp);
+  if (lamp) {
+    await go(`light/${lamp}`);
+    if (!(await lv(lamp))) { await page.click('[data-act="dev-on"]'); await wait(1500); }
+    await measure('04 Light', LIGHT);
+    check('no tab bar on a light', await C(() => document.querySelector('#tabs').hidden));
+
+    // ---- 05b White, 05 Colour: sheets over the light, measured from the sheet's own top
+    const inSheet = list => C(L => { const sh = document.querySelector('#sheet-root .sheet').getBoundingClientRect(); return L.map(([n, s]) => { const e = document.querySelector(s); if (!e) return [n, null]; const b = e.getBoundingClientRect(); return [n, [b.left, b.top - sh.top, b.width, b.height].map(v => Math.round(v))]; }); }, list);
+    const sheetAt = async (what, list) => {
+      const got = await inSheet(list);
+      for (let i = 0; i < list.length; i++) {
+        const [n, , ...exp] = list[i]; const v = got[i][1];
+        const off = !v ? ['missing'] : exp.map((x, j) => (x == null || Math.abs(v[j] - x) <= 1 ? null : `${'xywh'[j]} ${v[j]} not ${x}`)).filter(Boolean);
+        check(`${what}: ${n} where the file has it`, !off.length, off.join(', '));
+      }
+    };
+    await page.click('.looks .look:nth-child(1)'); await wait(900);
+    check('White opens as a sheet at #light/<id>/white', /\/white$/.test(page.url()) && !!(await page.$('#sheet-root .ws')), page.url());
+    await sheetAt('05b White', [
+      ['overline', '.sheet-head .t-over', 20, 28, null, 14], ['title', '.sheet-head h2', 20, 48, null, 34], ['close', '.sheet-close', 352, 28, 40, 40],
+      ['White / Colour', '.seg2', 20, 100, 372, 44], ['value', '.ws-val b', 20, 164, null, 64], ['warmth bar', '.ws-track', 20, 280, 372, 40],
+      ['thumb', '.ws-thumb', null, 276, 48, 48], ['end labels', '.ws-ends', 20, 332, 372, null], ['named whites', '.ws-chips', 20, 372, null, 40],
+    ]);
+    const tr = await page.locator('.ws-track').boundingBox();
+    const at = k => tr.x + tr.width * (1e6 / 1900 - 1e6 / k) / (1e6 / 1900 - 1e6 / 6500);
+    check('the bar is in mireds: 2700K sits at 41.9%', Math.abs((at(2700) - tr.x) / tr.width - 0.419) < 0.002);
+    await page.mouse.move(at(3000), tr.y + 20); await page.mouse.down(); await page.mouse.move(at(4000), tr.y + 20, { steps: 6 }); await page.mouse.up(); await wait(1500);
+    const k = await C(id => (window.__copper.S.states[id].color || {}).kelvin, lamp);
+    check('dragging the bar to 4000K sets it', k >= 3900 && k <= 4100, k);
+    await page.click('.ws-chips .chip:nth-child(2)'); await wait(1400);
+    check('Warm sets 2700K and turns copper', (await C(id => (window.__copper.S.states[id].color || {}).kelvin, lamp)) === 2700 && (await page.textContent('.ws-chips .chip.current')) === 'Warm');
+    await page.click('.seg2 button:nth-of-type(2)'); await wait(900);
+    check('the segmented control swaps to Colour in place', /\/colour$/.test(page.url()) && !!(await page.$('#sheet-root .wheel')), page.url());
+    await sheetAt('05 Colour', [['wheel', '.wheel', 76, 164, 260, 260], ['value row', '.cs-val', 20, 448, 372, 28], ['first swatch', '.cs-sw .sw:first-child', 24, 506, 32, 32]]);
+    await page.click('.cs-sw .sw[data-hex="#4C8DFF"]'); await wait(1400);
+    check('a swatch sets the colour and names it', String(await C(id => (window.__copper.S.states[id].color || {}).hex, lamp)).toUpperCase() === '#4C8DFF' && (await page.textContent('[data-cval] b')) === 'Blue');
+    const wh = await page.locator('.wheel').boundingBox();
+    await page.mouse.move(wh.x + 230, wh.y + 130); await page.mouse.down(); await page.mouse.move(wh.x + 240, wh.y + 131, { steps: 3 }); await page.mouse.up(); await wait(1400);
+    const red = await C(id => (window.__copper.S.states[id].color || {}).hex, lamp);
+    check('three o’clock on the wheel is red', /^#ff[0-3]/i.test(red), red);
+    await page.click('.sheet-close'); await wait(800);
+    check('closing goes back to the light', /#light\/[^/]+$/.test(page.url()) && !(await page.$('#sheet-root .sheet')), page.url());
+
+    // ---- 06b Sleep timer
+    await page.click('.feats .feat:last-child'); await wait(900);
+    await sheetAt('06b Sleep timer', [['first duration', '.dur:first-child', 20, 98, 68, 64], ['Custom', '.dur.more', 324, 98, 68, 64]]);
+    await page.click('.dur[data-m="15"]'); await wait(1600);
+    check('15 min starts a timer and the ring shows', !!(await page.$('.ts-run')) && /Timer set · 15 min/.test(await page.textContent('#toast-root')));
+    await sheetAt('06b running', [['ring', '.ts-run .ring', 20, 182, 116, 116]]);
+    const t1 = await page.textContent('[data-left]'); await wait(2100);
+    check('the countdown ticks', t1 !== (await page.textContent('[data-left]')));
+    await page.click('[data-act="timer-cancel"]'); await wait(1400);
+    check('Cancel timer stops it', !(await page.$('.ts-run')));
+    await page.click('#sheet-root .scrim', { position: { x: 200, y: 40 } }); await wait(700);
+    check('the scrim closes it', !/\/timer$/.test(page.url()));
+  }
+
+  // ---- behaviour on a Caseta dimmer (5, Kitchen Cans)
+  await go('light/5');
+  check('a dimmer has no White or Colour', !(await page.$('.looks')));
+  check('and its pills close up under the switch', await C(() => Math.round(document.querySelector('.feats').getBoundingClientRect().top)) === 414);
+  const starred0 = await C(() => window.__copper.S.config.favorites.includes('d:5'));
+  await page.click('[data-act="star"]'); await wait(1200);
+  check('star saves', await C(w => window.__copper.S.config.favorites.includes('d:5') !== w, starred0));
+  check('with an Undo toast', /Undo/.test(await page.textContent('#toast-root').catch(() => '')));
+  if (starred0) { await page.click('[data-act="star"]'); await wait(1200); }
+  const svg = await page.locator('.dial > svg').boundingBox();
+  const s = svg.width / 340; const pt = p => { const a = Math.PI * (1 - p / 100); return [svg.x + (170 + 150 * Math.cos(a)) * s, svg.y + (170 - 150 * Math.sin(a)) * s]; };
+  await page.mouse.move(...pt(2)); await page.mouse.down();
+  for (let p = 10; p <= 80; p += 10) { await page.mouse.move(...pt(p)); await wait(50); }
+  await page.mouse.up(); await wait(1500);
+  const v = await lv('5');
+  check('dragging the arc to 80 sets 80', v >= 78 && v <= 82, v);
+  check('the numeral says it', (await page.textContent('.dial .num b')) === String(v), await page.textContent('.dial .num b'));
+  await page.click('.dial .plus'); await wait(1200);
+  check('plus is 5 brighter', (await lv('5')) === Math.min(100, v + 5), await lv('5'));
+  await page.click('[data-act="dev-off"]'); await wait(1400);
+  check('Off turns it off', (await lv('5')) === 0, await lv('5'));
+  await page.click('[data-act="dev-on"]'); await wait(1400);
+  check('On turns it on', (await lv('5')) > 0, await lv('5'));
+  await page.click('[data-go="light/5/about"]'); await wait(600);
+  check('a page not built yet says so and links to the current app', !!(await page.$('.soon-page a[href="/"]')));
+  await page.click('[data-act="back"]'); await wait(800);
+  check('back returns to the light', /#light\/5$/.test(page.url()), page.url());
+
+  // ---- Home: the starred strip, a tile's power circle
+  await go('home');
+  check('starred strip shows the starred light', !!(await page.$('.tile-strip[data-keep="starred"] .tile[data-go="light/5"]')));
+  const was = await lv('5');
+  await page.click('.tile[data-go="light/5"] .pwr'); await wait(1400);
+  check('the power circle toggles in place', /#home$/.test(page.url()) && ((await lv('5')) > 0) !== (was > 0), [page.url(), await lv('5')]);
+  await page.click('.tile[data-go="light/5"] .nm'); await wait(700);
+  check('the tile opens the light', /#light\/5$/.test(page.url()), page.url());
+
+  // ---- 03 Room: the Kitchen
+  await go('room/20');
+  await page.click('[data-act="room-on"]'); await wait(1600);
+  check('All on', (await C(() => window.__copper.H.roomLights('20').every(d => window.__copper.data.level(d.device_id) > 0))));
+  await measure('03 Room', ROOM);
+  const n0 = await C(() => window.__copper.data.presets().length);
+  await page.click('[data-act="save-look"]'); await wait(1400);
+  check('Save this look makes a scene', (await C(() => window.__copper.data.presets().length)) === n0 + 1);
+  check('and it is the current one, in copper', (await page.textContent('.chip.current').catch(() => '')).trim() === 'My look');
+  await page.click('[data-act="room-off"]'); await wait(1600);
+  check('All off', (await C(() => window.__copper.H.roomLights('20').every(d => !window.__copper.data.level(d.device_id)))));
+  check('nothing current once it changes', !(await page.$('.chip.current')));
+  await page.click('.chip[data-t^="p:"]'); await wait(1600);
+  check('the saved look runs', (await C(() => window.__copper.H.roomLights('20').every(d => window.__copper.data.level(d.device_id) > 0))));
+
+  // ---- 17 Fan
+  await go('light/8');
+  await measure('17 Fan', FAN);
+  await page.click('[data-speed="High"]'); await wait(800);
+  check('a speed bar sets the fan', (await page.textContent('.speeds .big')) === 'High', await page.textContent('.speeds .big'));
+  await page.click('.speeds .minus'); await wait(800);
+  check('minus steps down', (await page.textContent('.speeds .big')) === 'Medium high', await page.textContent('.speeds .big'));
+
+  // ---- the house
+  await go('home');
+  await page.click('[data-act="house-on"]'); await wait(1600);
+  check('house on', (await C(() => window.__copper.H.litLights().length)) > 0);
+  check('the pill says All on while anything is', (await page.textContent('[data-act="house-on"]')).trim() === 'All on');
+  const bar = await page.locator('.hbar').boundingBox();
+  await page.mouse.move(bar.x + bar.width * 0.6, bar.y + 28); await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width * 0.3, bar.y + 28, { steps: 6 }); await page.mouse.up(); await wait(1600);
+  const hl = await C(() => window.__copper.H.houseLevel());
+  check('the house bar moves what is on', hl >= 27 && hl <= 33, hl);
+  const hold = await page.locator('[data-hold="goodnight"]').boundingBox();
+  await page.mouse.move(hold.x + 22, hold.y + 22); await page.mouse.down(); await wait(400); await page.mouse.up(); await wait(900);
+  check('a short press of Goodnight does nothing', (await C(() => window.__copper.H.litLights().length)) > 0);
+  await page.mouse.down(); await wait(1250); await page.mouse.up(); await wait(1600);
+  check('held for a second, everything goes off', (await C(() => window.__copper.H.litLights().length)) === 0);
+
+  // put back what this test changed
+  await C(async favs => { const c = window.__copper; c.S.config.favorites = favs; c.S.config.presets = c.S.config.presets.filter(p => !/ · My look/.test(p.name)); await c.data.saveConfig(); }, favs0);
+  check('no page errors', !errors.length, errors);
+  await browser.close();
+  console.log(bad ? `${bad} FAILED` : 'ALL PASS');
+  process.exit(bad ? 1 : 0);
+})().catch(e => { console.error('FAILED', e); process.exit(1); });

@@ -155,3 +155,44 @@ test('a loop of scenes is named for its room only when it is all of them', () =>
   assert.equal(d.describe([{ type: 'cycle_presets', preset_ids: ids }]), "Steps through Living room's scenes");
   assert.equal(d.describe([{ type: 'cycle_presets', preset_ids: ids.slice(0, 3) }]), 'Steps through 3 scenes');
 });
+
+test('the house: what a tap does, what the slider moves, and the long hold', () => {
+  const { d, h } = setup({}, { 1: { level: 60 } }, { schedules: [
+    { id: 's1', enabled: true, actions: [{ type: 'level', target: 'd:1', level: 80 }] },
+    { id: 's2', enabled: false, actions: [{ type: 'level', target: 'd:2', level: 80 }] },
+    { id: 's3', enabled: true, actions: [{ type: 'level', target: 'd:5', level: 'off' }] },
+  ] });
+  assert.deepEqual(h.autoOnLights(['1', '2', '5']), ['1'], 'only an enabled automation that turns a light on counts');
+  assert.equal(h.powerLabel(), 'All off');
+  assert.deepEqual(h.houseLevelTargets(), ['1'], 'with something on, the slider moves what is on');
+  assert.equal(h.houseOnLabel(), 'All on', 'with something on, the house card offers every light');
+  assert.deepEqual(h.houseOnAction(), { type: 'level', target: 'h:all', level: 'on' });
+  d.S.states[1].level = 0;
+  assert.equal(h.powerLabel(), 'Lights back on');
+  assert.equal(h.houseOnLabel(), 'Lights back on');
+  assert.deepEqual(h.houseOnAction(), { type: 'restore', target: 'h:all' });
+  assert.deepEqual(h.powerOnAction(), { type: 'restore', target: 'h:all' });
+  assert.deepEqual(h.houseLevelTargets().sort(), ['1', '2', '3', '5', 'hue_l1'], 'with nothing on, every light');
+  d.S.config.settings.power_on = 'all';
+  assert.equal(h.powerLabel(), 'All on');
+  assert.deepEqual(h.powerOnAction(), { type: 'level', target: 'h:all', level: 'on' });
+  assert.deepEqual(h.goodnightActions(), [{ type: 'level', target: 'h:all', level: 'off' }, { type: 'fan', target: 'd:4', speed: 'Off' }]);
+});
+
+test('Save this look: the room as lit, every light in it, a name that is not taken', () => {
+  const { d, h } = setup({}, { 1: { level: 60 } });
+  const aid = d.devArea(d.dev('1'));
+  const p = h.saveRoomLook(aid);
+  assert.ok(p && p.area === aid && p.edited === true);
+  assert.equal(p.levels['1'], 60);
+  for (const x of h.roomLights(aid)) assert.ok(x.device_id in p.levels, `${x.device_id} is in it`);
+  assert.equal(p.name, `${d.areaName(aid)} · My look`);
+  assert.equal(h.saveRoomLook(aid).name, `${d.areaName(aid)} · My look 2`);
+});
+
+test("a room's photograph, only when it has one", () => {
+  const { d, h } = setup({ rooms: [{ id: 'r1', name: 'A', photo: 'v2' }, { id: 'r2', name: 'B' }] });
+  d.S.token = 't k';
+  assert.equal(h.roomPhotoURL('r1'), '/api/roomphoto/r1?token=t%20k&v=v2');
+  assert.equal(h.roomPhotoURL('r2'), null);
+});

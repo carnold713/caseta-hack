@@ -202,7 +202,7 @@
    nothing here is left in flow. */
 .tile .pwr {
   position: absolute; left: 16px; top: 16px;
-  width: 44px; height: 44px; border-radius: 22px;
+  width: 44px; height: 44px; border-radius: 22px; border: 0; padding: 0;
   display: grid; place-items: center;
   background: var(--surface-2); color: var(--icon-2);
 }
@@ -236,6 +236,22 @@
               inset 0 0 0 1px var(--lamp-line, rgba(255, 255, 255, .3));
 }
 .tile.gone { opacity: .45; }
+/* A fan or a shade: the power circle becomes an icon circle with a white glyph. */
+.tile .pwr.ic-circle { color: var(--icon-1); }
+/* A fan's speed: five 8px dots 3 apart, 16 in from the right at 34 (112, 34 on the room grid's 180). Off is the
+   first step, so Medium lights three. */
+.tile .speed { position: absolute; right: 16px; top: 34px; display: flex; gap: 3px; }
+.tile .speed i { width: 8px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .25); display: block; }
+.tile .speed i.on { background: #fff; }
+/* A shade: a 10 x 44 bar at the top right whose fill, hanging from the top, is how much of the window it covers. */
+.tile .shade-bar { position: absolute; right: 16px; top: 16px; width: 10px; height: 44px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.tile .shade-bar i { display: block; width: 10px; border-radius: 5px; background: var(--text-3); }
+/* A running sleep timer: a 28 tall chip at 16, 66. */
+.tile-timer {
+  position: absolute; left: 16px; top: 66px; height: 28px; padding: 0 10px 0 8px; border-radius: 14px;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(18, 18, 18, .35); font-size: 12px; font-weight: 500; color: var(--text-1);
+}
 
 .room-card {
   position: relative; flex: none;
@@ -297,11 +313,12 @@
   width: 40px; height: 4px; border-radius: 2px; margin: 8px auto 0;
   background: rgba(255, 255, 255, .24);
 }
-.sheet-head { position: relative; padding: 20px var(--gutter) 0; }
-.sheet-head .t-over { margin: 0 0 4px; }
+/* Overline at 28, title at 48, close circle at 28: the grabber takes the first 12. */
+.sheet-head { position: relative; padding: 16px var(--gutter) 0; }
+.sheet-head .t-over { margin: 0 0 6px; line-height: 14px; }
 .sheet-head h2 { margin: 0; }
 .sheet-close {
-  position: absolute; top: 20px; right: var(--gutter);
+  position: absolute; top: 16px; right: var(--gutter);
   width: 40px; height: 40px; border-radius: 20px; border: 0;
   display: grid; place-items: center;
   background: var(--surface-2); color: var(--icon-1);
@@ -389,6 +406,8 @@
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 12px); } }
 @keyframes drain { from { width: calc(100% - 40px); } to { width: 0; } }
 
-/* The sheet is centred by margin, not by transform, so it needs its own rise. */
+/* The sheet is centred by margin, not by transform, so it needs its own rise. One sheet swapped for another
+   (White to Colour) does not rise again. */
+.sheet.still, .scrim.still { animation: none; }
 .sheet { animation-name: sheetrise; }
 @keyframes sheetrise { from { transform: translateY(100%); } }
