@@ -133,10 +133,13 @@
 .sc-play { display: flex; align-items: center; gap: 14px; margin: 16px var(--gutter) 20px; }
 .sc-play .t { flex: 1 1 auto; font-size: 16px; font-weight: 500; }
 .sc-play .sc-try { flex: none; width: 120px; height: 48px; }
-/* The hold on a scene chip (0.5 s to change it) fills it with light from the left, as every hold does. */
+/* The hold on a scene chip (0.5 s to change it) fills it with copper from the left, LINEAR, as the house shows a
+   hold (M12); let go early and it empties in 0.2 s EASE_IN. Held to the end, the copper is where the scene's editor
+   grows from (chipopen.js). */
 .room-chips .chip { isolation: isolate; }
-.room-chips .chip::before { content: ''; position: absolute; inset: 0; z-index: -1; background: rgba(230, 160, 106, .28); transform: scaleX(0); transform-origin: left center; }
+.room-chips .chip::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--copper); transform: scaleX(0); transform-origin: left center; transition: transform var(--exit) var(--ease-in); }
 .room-chips .chip[data-holding='1']::before { transform: scaleX(1); transition: transform 500ms linear; }
+.room-chips .chip[data-holding='1'] { color: #fff; }
 
 /* ==== 8 · Follow the day: the sky dial ========================================================= */
 

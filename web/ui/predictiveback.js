@@ -49,6 +49,7 @@
 // catch them itself. Nothing is drawn while the phone asks for reduced motion; the step back still happens.
 import { reduced, holdFor } from '/ui/motion.js';
 import * as opening from '/ui/opening.js';
+import * as chipOpen from '/ui/chipopen.js';
 import { icon } from '/ui/icons.js';
 import * as native from '/ui/native.js';
 
@@ -436,6 +437,8 @@ register({
   commit(g) {
     app.ctx.ui.dragging = false;
     if (!g.dy) { app.dismissSheet(); return true; }
+    // a scene's editor opened from its chip goes back into the chip from where the finger left it (M12)
+    if (chipOpen.close($('#sheet-root'), { dy: g.dy })) { app.dismissSheet({ dropped: true }); return true; }
     // the rest of the way down, as fast as a sheet leaves (0.28 s for the whole height), then the app's own close
     const ms = Math.max(120, 280 * (1 - g.dy / g.h));
     const o = { duration: ms, easing: 'ease-in', fill: 'forwards' };
