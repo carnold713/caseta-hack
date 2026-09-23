@@ -1,1 +1,232 @@
-/* Copper Night v7 · scenes. Owned by one builder; see docs/design-v7-ui.md for the light and the motion. */
+/* Copper Night v7 · scenes. Owned by one builder; see docs/design-v7-ui.md for the light and the motion.
+   6 A scene arriving (room.js), 7 the scene editor's stage (scenes.js), 8 Follow the day's sky dial (follow.js),
+   9 the evening wind-down's timeline (routines.js). Times are the Figma frames' keyframes on the house tokens. */
+
+/* ==== 6 · A scene arriving ===================================================================== */
+
+.room { position: relative; }
+/* The chip lights at once: the copper crossfades in over the standard 0.24 s, and the press is the tap token. */
+.room-chips .chip {
+  position: relative; overflow: hidden;
+  transition: background-color var(--standard) var(--ease), border-color var(--standard) var(--ease), color var(--standard) var(--ease), transform var(--tap) var(--spring-quick);
+}
+.room-chips .chip:active { transform: scale(.96); }
+/* A long fade: the chip says so, and a thin line under it runs for the fade's length. */
+.room-chips .chip .ch-sub { font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, .78); margin-left: -2px; }
+.room-chips .chip .wv-prog {
+  position: absolute; left: 14px; right: 14px; bottom: 5px; height: 2px; border-radius: 1px;
+  background: rgba(255, 255, 255, .55); transform-origin: left center; transform: scaleX(1);
+  animation-name: wv-prog; animation-timing-function: linear; animation-fill-mode: both;
+}
+@keyframes wv-prog { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* The ring of light: an ellipse 1200 across centred on the chip, a soft band near its edge in the scene's warmest
+   light, blended screen so it only ever adds light. It grows linearly at the wave token (0.36 s to reach 600 px)
+   and fades on EASE_IN over its second half. The spark is the chip's own glow, lit on the press and gone as the
+   ring leaves. */
+.wv-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 4; }
+.wv-wave {
+  position: absolute; width: 1200px; height: 1200px; margin: -600px 0 0 -600px; border-radius: 50%;
+  background: radial-gradient(closest-side, transparent 0 78%, var(--wv-tone) 88%, transparent 100%);
+  mix-blend-mode: screen; opacity: 0; transform: scale(.03);
+  animation: wv-grow 360ms linear forwards, wv-ring-fade 360ms linear forwards;
+}
+@keyframes wv-grow { from { transform: scale(.03); } to { transform: scale(1); } }
+@keyframes wv-ring-fade { 0% { opacity: 1; } 50% { opacity: 1; animation-timing-function: ease-in; } 100% { opacity: 0; } }
+.wv-spark { position: absolute; width: 0; height: 0; opacity: 0; animation: wv-spark 700ms linear forwards; }
+@keyframes wv-spark {
+  0% { opacity: 0; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+  17% { opacity: 1; animation-timing-function: ease-in-out; }
+  100% { opacity: 0; }
+}
+/* Already showing this scene: one soft ring from the chip, nothing else. */
+.wv-soft {
+  position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%;
+  box-shadow: 0 0 0 1.5px rgba(230, 160, 106, .7), 0 0 18px rgba(230, 160, 106, .35);
+  opacity: 0; animation: wv-soft 600ms ease-out forwards;
+}
+@keyframes wv-soft { from { opacity: .8; transform: scale(.5); } to { opacity: 0; transform: scale(1.6); } }
+
+/* The count and the badge hold what they said and settle to what is true: the old words go and the new come in over
+   the standard 0.24 s, together, when after() says (the delay is set from the tap). */
+.wv-two { display: grid; }
+.wv-two > .wv-was, .wv-two > .wv-now { grid-area: 1 / 1; }
+.room-title .count.wv-two { justify-items: end; }
+.badge.wv-two { place-items: center; }
+.wv-was { opacity: 0; animation: wv-out var(--standard) cubic-bezier(.2, .8, .2, 1) both; }
+.wv-now { animation: wv-in var(--standard) cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes wv-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes wv-in { from { opacity: 0; } to { opacity: 1; } }
+/* The badge's ring closes (1.0 s EASE_IN_AND_OUT) as the ring of light reaches it, then goes with the count. */
+.badge .wv-ring { position: absolute; left: -2px; top: -2px; width: 60px; height: 60px; transform: rotate(-90deg); overflow: visible; opacity: 0; pointer-events: none;
+  animation: wv-bring 1240ms linear forwards; }
+.badge .wv-ring circle { fill: none; stroke: var(--copper-hi); stroke-width: 2; stroke-dasharray: 1; stroke-dashoffset: 1; stroke-linecap: round;
+  animation: wv-trim 1000ms ease-in-out forwards; animation-delay: inherit; }
+@keyframes wv-bring { 0% { opacity: 1; } 80.6% { opacity: 1; animation-timing-function: cubic-bezier(.2, .8, .2, 1); } 100% { opacity: 0; } }
+@keyframes wv-trim { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* The photograph's own light: a pool of the room's warmest white on it, as bright as the room; a grey veil when
+   everything is off. It crossfades with the scene when the ring reaches it. */
+.room-photo-card .rp-light { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(217, 138, 78, calc(var(--rl, 0) * .0008)) 0%, rgba(217, 138, 78, 0) 70%); }
+.room-photo-card .rp-light.dark { background: rgba(12, 11, 10, .34); -webkit-backdrop-filter: saturate(.35); backdrop-filter: saturate(.35); }
+.room-photo-card .rp-light .glow > i { mix-blend-mode: screen; }
+
+/* ==== 7 · The scene editor's stage ============================================================= */
+
+.sc-cap { margin: -4px var(--gutter) 14px; font-size: 14px; line-height: 17px; color: var(--text-2); }
+.sc-stage {
+  position: relative; margin: 0 var(--gutter); height: 356px; border-radius: var(--r-card); overflow: hidden;
+  background: #1A1715; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+/* The floor under the lights, and one wash over the stage as bright as the scene is on average. */
+.sc-stage::after { content: ''; position: absolute; left: 0; right: 0; top: 290px; bottom: 0; background: linear-gradient(180deg, #221D19, #161311); }
+.sc-floor { position: absolute; left: 12px; right: 12px; top: 290px; height: 1px; background: rgba(255, 255, 255, .08); z-index: 1; }
+.sc-wash { position: absolute; left: 50%; top: 120px; width: 520px; height: 300px; margin: -150px 0 0 -260px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(217, 138, 78, .22), rgba(217, 138, 78, 0)); opacity: var(--wash, .4);
+  transition: opacity var(--dimmer) var(--ease-both); pointer-events: none; }
+.sc-lanes { position: absolute; inset: 0 12px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(56px, 1fr);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; z-index: 2; touch-action: pan-x pan-y; }
+.sc-lanes::-webkit-scrollbar { display: none; }
+.sc-lane { position: relative; height: 356px; }
+/* The wire from the orb down to the floor, and the pool its light lands in. */
+.sc-stem { position: absolute; left: 50%; width: 1px; margin-left: -.5px; top: var(--y); height: calc(290px - var(--y)); background: rgba(255, 255, 255, .08);
+  transition: top var(--standard) var(--ease), height var(--standard) var(--ease); }
+.sc-pool { position: absolute; left: 50%; top: 283px; width: var(--pw, 40px); height: 14px; margin-left: calc(var(--pw, 40px) / -2); border-radius: 50%;
+  background: radial-gradient(closest-side, var(--pool), transparent); filter: blur(4px); opacity: var(--pa, 1); mix-blend-mode: screen;
+  transition: width var(--standard) var(--ease), margin-left var(--standard) var(--ease), opacity var(--dimmer) var(--ease-both); }
+/* The orb: a 44 bead of the light itself with its three-layer glow, a grip that takes the finger at once. */
+.sc-orb { position: absolute; left: 50%; top: calc(var(--y) - 22px); width: 44px; height: 44px; margin-left: -22px; border-radius: 50%;
+  touch-action: none; cursor: grab; outline: none; transition: top var(--standard) var(--ease); }
+.sc-orb .sc-glow { left: 22px; top: 22px; }
+.sc-ball { position: absolute; inset: 0; border-radius: 50%; background: var(--ball); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+  display: grid; place-items: center; color: rgba(60, 40, 20, .75); transition: opacity var(--dimmer) var(--ease-both); }
+.sc-orb:focus-visible .sc-ball { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 0 0 2px var(--copper-hi); }
+/* Off in this scene: under the floor line, a hollow ring and no light at all. */
+.sc-orb.off .sc-ball { background: none; box-shadow: inset 0 0 0 1px #6E6E6E; }
+.sc-lv { position: absolute; left: calc(50% + 30px); top: calc(var(--y) - 9px); font-size: 14px; font-weight: 500; line-height: 18px; color: var(--text-1);
+  white-space: nowrap; pointer-events: none; transition: top var(--standard) var(--ease); }
+.sc-orb.off + .sc-lv { color: var(--text-3); }
+.sc-lane:last-child:not(:first-child) .sc-lv { left: auto; right: calc(50% + 30px); }
+.sc-nm { position: absolute; left: 2px; right: 2px; top: 326px; font-size: 13px; line-height: 16px; color: var(--text-2); text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.sc-lane.leaving .sc-orb { opacity: .45; }
+.sc-lane.leaving .sc-lv { color: var(--text-3); }
+/* Under a finger the light is locked to it: nothing eases (M6, and the frame's LINEAR keyframes). */
+.sc-stage.dragging .sc-orb, .sc-stage.dragging .sc-stem, .sc-stage.dragging .sc-pool, .sc-stage.dragging .sc-lv,
+.sc-stage.dragging .sc-wash, .sc-stage.dragging .glow > i { transition: none !important; }
+.sc-empty { position: absolute; left: 0; right: 0; top: 150px; margin: 0; text-align: center; font-size: 15px; color: var(--text-3); z-index: 2; }
+/* Out of reach: the stage greys and stops taking a finger, and one line says why. */
+.sc-stage.offline .sc-lanes { filter: grayscale(1); opacity: .5; }
+.sc-stage.offline .sc-orb { cursor: default; }
+.sc-off { margin: 10px var(--gutter) 0; font-size: 14px; line-height: 20px; color: var(--text-2); }
+/* Lights in the room but not in the scene: hollow rings on a shelf; a tap adds one. */
+.sc-shelf { display: flex; align-items: center; gap: 16px; margin: 14px 0 0; padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; }
+.sc-shelf::-webkit-scrollbar { display: none; }
+.sc-shelf-t { flex: none; font-size: 14px; color: var(--text-3); }
+.sc-ring { flex: none; display: inline-flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; color: var(--text-1); font-size: 14px; }
+.sc-ring i { width: 36px; height: 36px; border-radius: 50%; box-shadow: inset 0 0 0 1px #6E6E6E; }
+/* The light last tapped on the stage: its choices, as the list's rows have them. */
+.sc-edit { margin: 14px var(--gutter) 0; padding: 14px 0 0 16px; border-radius: var(--r-group); background: var(--surface-2); }
+.sc-edit-h { display: flex; justify-content: space-between; align-items: center; padding-right: 16px; margin-bottom: 10px; font-size: 16px; font-weight: 500; }
+.sc-edit .sl-edit { padding-left: 0; }
+.sc-play { display: flex; align-items: center; gap: 14px; margin: 16px var(--gutter) 20px; }
+.sc-play .t { flex: 1 1 auto; font-size: 16px; font-weight: 500; }
+.sc-play .sc-try { flex: none; width: 120px; height: 48px; }
+/* The hold on a scene chip (0.5 s to change it) fills it with light from the left, as every hold does. */
+.room-chips .chip { isolation: isolate; }
+.room-chips .chip::before { content: ''; position: absolute; inset: 0; z-index: -1; background: rgba(230, 160, 106, .28); transform: scaleX(0); transform-origin: left center; }
+.room-chips .chip[data-holding='1']::before { transform: scaleX(1); transition: transform 500ms linear; }
+
+/* ==== 8 · Follow the day: the sky dial ========================================================= */
+
+.follow-page .fd-glow { position: absolute; left: 50%; top: 0; width: 0; height: 0; pointer-events: none; }
+.follow-page .fd-glow > span { position: absolute; inset: 0; transition: opacity var(--dimmer) var(--ease-both); }
+.follow-page .fd-glow .g-pick { opacity: 0; }
+.follow-page .fd-glow.paused .g-pick { opacity: 1; }
+.follow-page .fd-glow.paused .g-white { opacity: 0; }
+.fd-card { height: auto; padding: 44px 0 16px; overflow: hidden; }
+.fd-dial { position: relative; width: min(340px, calc(100% - 24px)); aspect-ratio: 1; margin: 0 auto; touch-action: pan-y; }
+.fd-dial .dc-chart { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
+/* The sky and today's curve dim to a trace while a picked colour is kept (0.4 s, as the frame resumes it). */
+.fd-sky { transition: opacity var(--dimmer) var(--ease-both); }
+.fd-dial.paused .fd-sky, .fd-dial.idle .fd-sky { opacity: .4; }
+.fd-future { fill: none; stroke: rgba(255, 255, 255, .16); stroke-width: 1; stroke-dasharray: 3 4; }
+.fd-curve-glow { opacity: .5; }
+.fd-bright { fill: none; stroke: rgba(217, 138, 78, .45); stroke-width: 2; }
+.fd-moon { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; color: rgba(209, 209, 209, .6); }
+.fd-sun { position: absolute; width: 0; height: 0; transition: opacity var(--dimmer) var(--ease-both); }
+.fd-sun > i { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .25); }
+.fd-dial.paused .fd-sun { opacity: .4; }
+/* The lamp: a bead on today's curve beside the sun; kept on a picked colour it leaves the curve for the middle and
+   grows, the two colours crossfading (never sliding), all on the dimmer's 0.4 s EASE_IN_AND_OUT. */
+.fd-bead { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; transform: scale(.35);
+  transition: left var(--dimmer) var(--ease-both), top var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both); }
+.fd-bead > i { position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .9); transition: opacity var(--dimmer) var(--ease-both); }
+.fd-bead .b-glow { position: absolute; left: 22px; top: 22px; width: 0; height: 0; transition: opacity var(--dimmer) var(--ease-both); }
+.fd-bead .b-pick, .fd-bead .b-pick-glow { opacity: 0; }
+.fd-dial.paused .fd-bead { transform: scale(1); }
+.fd-dial.paused .fd-bead .b-pick, .fd-dial.paused .fd-bead .b-pick-glow { opacity: 1; }
+.fd-dial.paused .fd-bead .b-white, .fd-dial.paused .fd-bead .b-white-glow { opacity: 0; }
+.fd-dial.idle .fd-bead { opacity: 0; }
+/* Off, it is a hollow ring: it will come on at the curve's white. */
+.fd-dial.following.dark:not(.paused) .fd-bead .b-white, .fd-dial.following.dark:not(.paused) .fd-bead .b-glow { opacity: 0; }
+.fd-dial.offline .fd-bead { filter: grayscale(1); opacity: .6; }
+.fd-scrub { position: absolute; width: 0; height: 0; opacity: 0; transition: opacity var(--standard) var(--ease); }
+.fd-scrub > i { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 0 18px rgba(255, 200, 150, .5); }
+.fd-dial.scrubbing .fd-scrub { opacity: 1; transition: none; }
+.fd-dial.scrubbing .fd-sun { opacity: .35; }
+.fd-centre { position: absolute; left: 50%; top: 50%; width: 180px; height: 120px; margin: -60px 0 0 -90px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; }
+.fd-centre .fd-o { color: var(--text-3); line-height: 14px; }
+.fd-centre .fd-k { font-size: 44px; font-weight: 300; line-height: 52px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.fd-centre .fd-sub { font-size: 14px; line-height: 18px; color: var(--text-2); }
+.fd-dial.paused .fd-centre .fd-o { position: absolute; top: 0; left: 0; right: 0; }
+.fd-dial.paused .fd-centre .fd-below { position: absolute; bottom: 8px; left: 0; right: 0; }
+.fd-dial.nohome .fd-centre p { margin: 0; font-size: 15px; line-height: 21px; color: var(--text-2); }
+.fd-locate { display: flex; margin: 8px auto 0; }
+.fd-sunline { display: flex; justify-content: space-between; margin: 4px 20px 0; font-size: 12px; line-height: 14px; color: var(--text-3); }
+
+/* ==== 9 · The evening wind-down ================================================================ */
+
+.wd-page { padding-bottom: 32px; }
+.wd-card { position: relative; margin: 17px var(--gutter) 0; padding: 22px 20px 16px; border-radius: var(--r-card); background: var(--surface-1); overflow: hidden; }
+.wd-head { margin: 0 0 22px; max-width: 250px; font-size: 20px; font-weight: 500; line-height: 26px; }
+.wd-band { position: relative; height: 120px; touch-action: pan-y; }
+.wd-band::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(255, 255, 255, .08); }
+/* A step of the glow band: its light top to bottom, warming as it dims, and its own glow over it, blended so the
+   band's light visibly draws in with it. Past steps rest, the one now is lit, those to come wait a little dimmer. */
+.wd-step { position: absolute; bottom: 0; border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 85%, transparent), rgba(217, 138, 78, .30));
+  transition: height var(--dimmer) var(--ease-both), left var(--standard) var(--ease), width var(--standard) var(--ease), opacity var(--dimmer) var(--ease-both); }
+.wd-step::after { content: ''; position: absolute; inset: -4px; border-radius: inherit; background: var(--c); filter: blur(12px); opacity: .35; mix-blend-mode: screen; }
+.wd-step.ahead { opacity: .75; }
+.wd-step.past { opacity: .35; }
+.wd-step.now { opacity: 1; }
+.wd-step.night { border-radius: 4px 4px 0 0; }
+.wd-band.flat .wd-step { opacity: .6; }
+.wd-band.dragging .wd-step { transition: none; }
+/* The quiet hours' moon: a grip that moves the quiet time; the faintest light in the app hangs round it. */
+.wd-moon { position: absolute; top: -6px; width: 56px; height: 52px; margin-left: -28px; display: flex; flex-direction: column; align-items: center;
+  color: rgba(209, 209, 209, .8); touch-action: none; cursor: grab; outline: none; z-index: 2; animation: wd-moonrise 1000ms ease-in-out both; }
+.wd-moon .wd-moon-glow { position: absolute; left: 50%; top: 30px; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(244, 241, 234, .10), rgba(244, 241, 234, 0)); pointer-events: none; }
+.wd-moon .wd-moon-t { margin: -4px 0 4px; font-size: 12px; line-height: 14px; color: var(--text-3); white-space: nowrap; }
+.wd-moon:focus-visible { color: var(--copper-hi); }
+@keyframes wd-moonrise { from { opacity: .3; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* The handle on the evening's lowest step: drag it up or down for the level it gets down to. */
+.wd-knob { position: absolute; width: 44px; height: 44px; margin: 0 0 -22px -22px; display: grid; place-items: center; touch-action: none; cursor: ns-resize; z-index: 2; outline: none;
+  transition: bottom var(--dimmer) var(--ease-both); }
+.wd-knob i { width: 20px; height: 20px; border-radius: 50%; background: var(--solid-fill); box-shadow: 0 0 0 4px rgba(18, 18, 18, .6), 0 2px 8px rgba(0, 0, 0, .4); }
+.wd-band.dragging .wd-knob { transition: none; }
+.wd-now { position: absolute; top: 28px; bottom: 0; width: 1px; background: rgba(255, 255, 255, .6); pointer-events: none; animation: fade var(--enter) var(--ease) both; }
+.wd-now i { position: absolute; left: -4px; bottom: -4px; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+.wd-tip { position: absolute; top: -6px; transform: translateX(-50%); padding: 4px 10px; border-radius: 12px; background: var(--surface-3); font-size: 12px; font-weight: 500; white-space: nowrap; pointer-events: none; z-index: 3; }
+.wd-hours { position: relative; height: 30px; }
+.wd-h { position: absolute; top: 12px; transform: translateX(-50%); font-size: 12px; line-height: 14px; color: var(--text-3); white-space: nowrap; }
+.wd-h.first { transform: none; }
+.wd-h.last { transform: translateX(-100%); }
+.wd-say { margin: 20px var(--gutter) 0; font-size: 16px; line-height: 22px; }
+.wd-honest { margin: 8px var(--gutter) 0; font-size: 14px; line-height: 20px; color: var(--text-3); }
+.wd-loc { margin-top: 16px; }
+.wd-rows { margin-top: 20px; }
+.wd-foot { margin-top: 16px; }

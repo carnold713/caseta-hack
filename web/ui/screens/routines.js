@@ -1,7 +1,16 @@
 // 10 · Routines (12732:48782). What the house does on its own: the next thing due, any timer running, each routine
 // as a card with its days and a switch, the four guided setups, and the two house-wide habits (the evening wind-down
-// and Follow the day). #routines/winddown, /winddown-levels, /winddown-curve and /night are sheets over it.
+// and Follow the day). #routines/winddown is the wind-down's page; /winddown-levels, /winddown-curve and
+// /winddown-night are sheets over it, and /night and /where are sheets over the list.
 import { whereBlock, whereActions, whereSheet } from '/ui/screens/where.js';
+import { CasetaRoutines } from '/data/index.js';
+import { whiteStops } from '/ui/glow.js';
+import { track } from '/ui/gesture.js';
+
+// The wind-down is a page of its own under Routines (#routines/winddown), with no tab bar, as the frame has it; its
+// levels, its curve and the night hours are sheets over it. The flag is read by the app after each draw.
+const WD_PAGES = ['winddown', 'winddown-levels', 'winddown-curve', 'winddown-night'];
+export let noTabs = false;
 
 const tzKept = (home, phone) => { try { return localStorage.getItem('tzKeep') === `${home}|${phone}`; } catch (_) { return false; } };
 
@@ -37,7 +46,9 @@ function card(c, sc) {
     <button class="toggle" role="switch" aria-checked="${!paused}" data-act="rt-toggle" data-id="${esc(sc.id)}" aria-label="${esc(sc.name || 'Routine')} on or off"></button></div>`;
 }
 
-export function view(c) {
+export function view(c, r) {
+  noTabs = !!(r && WD_PAGES.includes(r.id));
+  if (noTabs) return windDownPage(c);
   const { esc, icon, RT, DAY, data } = c;
   const s = c.S.config.settings;
   const list = RT.list();
@@ -76,21 +87,220 @@ export function view(c) {
 }
 
 // ---------- the evening wind-down ----------
-function windDown(c) {
-  const { esc, icon, RT } = c;
-  const s = c.S.config.settings;
-  const on = RT.windDownOn();
-  const caption = !s.location
-    ? `Without your home's location, dimming starts at ${RT.fmtTime((s.adaptive && s.adaptive.winddown && s.adaptive.winddown.earliest) || '18:00')}.`
-    : `Dimming starts after sunset and reaches its lowest at the quiet time. From then until ${RT.fmtTime(s.night_end)}, on means ${s.night_level}%. Early mornings are soft too. This is also when night starts for your remotes.`;
-  return { over: 'Routines', title: 'Evening wind-down', body: `<div class="wd">
-    <div class="group"><div class="row"><span class="row-txt"><span class="t">${on ? 'On' : 'Off'}</span></span><button class="toggle" role="switch" aria-checked="${on}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div></div>
-    <p class="t-body muted sheet-p">As the evening goes on, lights you turn on come on a little dimmer, so the house feels calmer late. Set a level yourself and it stays.</p>
-    ${on ? `<div class="group"><button class="row" data-act="night-hours"><span class="row-txt"><span class="t">When does the house go quiet?</span></span><span class="row-val">${esc(RT.fmtTime(s.night_start))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>
-      <p class="t-cap muted sheet-p">${esc(caption)}</p>${s.location ? '' : `<div class="loc-card in-sheet">${whereBlock(c, { compact: true })}</div>`}
-      <div class="group"><button class="row" data-go="routines/winddown-levels"><span class="row-txt"><span class="t">Advanced: change the levels</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>` : ''}
-  </div>` };
+// v7 · 9 (12816:580): the evening as one timeline, from an hour before sunset to the next morning. A glow band shows
+// the level "on" gives at each moment, stepping down and warming as it goes; the quiet hours are a flat low band
+// with a moon over their start. It is honest about what it does: it sets the level lights come on at, and never
+// dims a light that is already on.
+//
+// The moon is a grip (drag it sideways to move the quiet time, in 15 minute steps), and so is the handle on the
+// evening's lowest step (drag it up or down for the level it gets down to). Both apply when the finger lifts, with
+// Undo. A tap on the band only says what on means then. Everything the sheets had (the levels, the curve by the
+// hour, the night hours) is a row away.
+const pad2 = n => String(n).padStart(2, '0');
+const hmMin = hm => { const [h, m] = String(hm || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const minHm = m => { const t = ((Math.round(m) % 1440) + 1440) % 1440; return `${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`; };
+// "11 pm", "11:30 pm": the headline's way of saying a time
+const shortTime = hm => { const [h, m] = hm.split(':').map(Number); return `${h % 12 || 12}${m ? `:${pad2(m)}` : ''} ${h >= 12 ? 'pm' : 'am'}`; };
+
+// What "on" means at a moment, the way the connector decides it: the wind-down's curve (or the by-the-hour points),
+// with the quiet time or the evening level swapped for what a finger is trying.
+export function windDownLevelAt(c, hm, over = {}) {
+  const s = c.S.config.settings, ad = s.adaptive || {}, w = ad.winddown || {};
+  if (!ad.enabled) return 100;
+  const pts = (ad.points || []).slice().sort((a, b) => a.time.localeCompare(b.time));
+  if (ad.mode === 'points' && pts.length >= 2) {
+    const t = hmMin(hm);
+    // between two times it slides; after the last it holds until the first
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (!b) return a.level;
+      if (t >= hmMin(a.time) && t < hmMin(b.time)) return Math.round(a.level + (b.level - a.level) * (t - hmMin(a.time)) / Math.max(1, hmMin(b.time) - hmMin(a.time)));
+    }
+    return pts[pts.length - 1].level;
+  }
+  return CasetaRoutines.winddownLevel(hm, c.RT.curveStart(), over.night_start || s.night_start, s.night_end, w.from_level || 100,
+    over.to_level != null ? over.to_level : (w.to_level || 50), s.night_level || 30, w.morning_level == null ? 100 : w.morning_level, w.morning_until || '07:30');
 }
+
+// The timeline's span and its steps. An hour a step through the evening; the quiet hours one flat band; the soft
+// early morning its own step. Each step carries the level at its middle, and the kelvin that level warms to.
+function windDownModel(c, over = {}) {
+  const s = c.S.config.settings, w = (s.adaptive && s.adaptive.winddown) || {};
+  const on = c.RT.windDownOn();
+  const quiet = over.night_start || s.night_start;
+  const sunset = c.RT.sunAt('sunset') || c.RT.curveStart();
+  const start = Math.floor((hmMin(sunset) - 60) / 60) * 60;
+  const morning = w.morning_level != null && w.morning_level < 100 ? hmMin(w.morning_until || '07:30') : hmMin(s.night_end);
+  const endAbs = Math.ceil((Math.max(hmMin(s.night_end), morning) + 30) / 60) * 60;
+  const span = ((endAbs - start) % 1440 + 1440) % 1440 || 1440;
+  const rel = hm => ((hmMin(hm) - start) % 1440 + 1440) % 1440;
+  const cuts = new Set([0, span]);
+  for (let m = 60; m < span; m += 60) cuts.add(m);
+  for (const hm of [quiet, s.night_end, w.morning_until || '07:30']) { const m = rel(hm); if (m > 0 && m < span) cuts.add(m); }
+  const xs = [...cuts].sort((a, b) => a - b);
+  const steps = [];
+  for (let i = 0; i < xs.length - 1; i++) {
+    const a = xs[i], b = xs[i + 1];
+    const lv = on ? windDownLevelAt(c, minHm(start + (a + b) / 2), over) : 100;
+    const night = on && ((rel(quiet) <= (a + b) / 2) && ((a + b) / 2 < rel(s.night_end)));
+    const last = steps[steps.length - 1];
+    if (last && last.lv === lv && last.night === night) last.b = b;
+    else steps.push({ a, b, lv, night });
+  }
+  const nowRel = rel(c.RT.nowHm());
+  return { on, start, span, steps, quiet, rel, nowRel: nowRel <= span ? nowRel : null, s, w };
+}
+// A step warms as it dims: 3000K at full, down to 1900K from the white bar at the night's level.
+const stepTone = lv => whiteStops(1900 + 1100 * Math.max(0, Math.min(1, (lv - 30) / 70))).body;
+
+// What a tap on the band said, kept for its 2 s so a redraw in the meantime does not take it away.
+let tipNow = null;
+function bandHTML(c, md) {
+  const P = m => `${(m / md.span * 100).toFixed(3)}%`;
+  const inNow = md.nowRel != null;
+  const steps = md.steps.map((st, i) => {
+    const when = !inNow ? 'ahead' : st.b <= md.nowRel ? 'past' : st.a <= md.nowRel ? 'now' : 'ahead';
+    const col = st.night ? '#D98A4E' : stepTone(st.lv);
+    return `<span class="wd-step ${when} ${st.night ? 'night' : ''}" data-i="${i}" style="left:${P(st.a)};width:calc(${P(st.b - st.a)} - 2px);height:${Math.max(4, Math.round(96 * st.lv / 100))}px;--c:${col}"></span>`;
+  }).join('');
+  // the evening's lowest step, just before the quiet time, carries the handle for the level it gets down to
+  const qi = md.steps.findIndex(st => st.night);
+  const low = qi > 0 ? md.steps[qi - 1] : null;
+  const pointsMode = (md.s.adaptive || {}).mode === 'points';
+  const knob = md.on && low && !pointsMode ? `<span class="wd-knob" data-grip="low" style="left:${P((low.a + low.b) / 2)};bottom:${Math.max(4, Math.round(96 * low.lv / 100))}px" role="slider" aria-label="The level it gets down to" aria-valuenow="${md.w.to_level || 50}" tabindex="0"><i></i></span>` : '';
+  const qx = md.rel(md.quiet);
+  const moon = `<span class="wd-moon" data-grip="moon" style="left:${P(qx)}" role="slider" aria-label="When the house goes quiet" aria-valuetext="${c.esc(c.RT.fmtTime(md.quiet))}" tabindex="0"><span class="wd-moon-t">${c.esc(shortTime(md.quiet))}</span><span class="wd-moon-glow"></span>${c.icon('moon', 24, 1.6)}</span>`;
+  const now = inNow ? `<span class="wd-now" style="left:${P(md.nowRel)}" aria-hidden="true"><i></i></span>` : '';
+  // hour labels: the start, every other hour through the evening, the quiet time and the end
+  const lab = [];
+  for (let m = 0; m <= md.span; m += 120) lab.push(m);
+  if (lab[lab.length - 1] < md.span) { if (md.span - lab[lab.length - 1] < 90) lab.pop(); lab.push(md.span); }
+  const labels = lab.map((m, i) => {
+    const t = minHm(md.start + m), ends = i === 0 || i === lab.length - 1;
+    const h = Number(t.slice(0, 2));
+    return `<span class="wd-h ${i === 0 ? 'first' : i === lab.length - 1 ? 'last' : ''}" style="left:${P(m)}">${ends ? shortTime(t) : h % 12 || 12}</span>`;
+  }).join('');
+  const tipOn = tipNow && performance.now() < tipNow.until;
+  return `<div class="wd-band ${md.on ? '' : 'flat'}" data-drag>${steps}${now}${md.on ? moon : ''}${knob}<span class="wd-tip" ${tipOn ? `style="left:${tipNow.left}"` : 'hidden'}>${tipOn ? c.esc(tipNow.text) : ''}</span></div>
+    <div class="wd-hours">${labels}</div>`;
+}
+
+function windDownPage(c) {
+  const { esc, icon, RT } = c;
+  const md = windDownModel(c);
+  const s = md.s, w = md.w;
+  const quiet = shortTime(s.night_start);
+  const head = md.on ? `Tonight at ${quiet} the house goes quiet.` : 'Off · lights come on as bright late as early';
+  const pointsMode = (s.adaptive || {}).mode === 'points';
+  const under = !md.on ? ''
+    : pointsMode ? `Lights you turn on follow your curve by the hour, then ${s.night_level}% from ${esc(RT.fmtTime(s.night_start))} until ${esc(RT.fmtTime(s.night_end))}.`
+      : `Lights you turn on after ${esc(RT.fmtTime(RT.curveStart()))} come on softer, down to ${w.to_level || 50}% by ${esc(quiet)}, then ${s.night_level}% until ${esc(RT.fmtTime(s.night_end))}.`;
+  return `<div class="wd-page">
+    <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
+    <h1 class="t-h1 page-h1">Evening wind-down</h1>
+    <p class="t-cap muted fd-sub">${md.on ? 'On · every evening' : 'Off'}</p>
+    <section class="wd-card ${md.on ? '' : 'off'}">
+      <p class="wd-head" data-xf="standard">${esc(head)}</p>
+      ${bandHTML(c, md)}
+    </section>
+    ${md.on ? `<p class="wd-say" data-xf="standard">${under}</p><p class="wd-honest">Lights that are already on stay as they are.</p>` : `<p class="wd-say">As the evening goes on, lights you turn on come on a little dimmer, so the house feels calmer late. Set a level yourself and it stays.</p>`}
+    ${s.location ? '' : `<div class="loc-card wd-loc">${whereBlock(c, { compact: true })}</div>`}
+    <div class="group wd-rows">
+      <div class="row has-ic"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Evening wind-down</span></span><button class="toggle" role="switch" aria-checked="${md.on}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div>
+      ${md.on ? `<button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic sunrise">${icon('sunset', 20, 1.4)}</span><span class="row-txt"><span class="t">Starts dimming</span></span><span class="row-val">${pointsMode ? 'By the hour' : esc(RT.fmtTime(RT.curveStart()))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row has-ic" data-go="routines/winddown-night"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Quiet from</span></span><span class="row-val">${esc(RT.fmtTime(s.night_start))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic">${icon('bulb', 20, 1.4)}</span><span class="row-txt"><span class="t">Night level</span></span><span class="row-val">${s.night_level}% until ${esc(RT.fmtTime(s.night_end))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic">${icon('tune', 20, 1.4)}</span><span class="row-txt"><span class="t">The levels and the curve</span><span class="d">Early morning, how low it goes, by the hour</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
+    </div>
+    <p class="fd-drift wd-foot">${icon('clock', 16, 1.7)}Buttons with a night version use these hours too</p>
+  </div>`;
+}
+
+// The grips and the tap on the band. Nothing is redrawn under the finger; the band is drawn again in place as the
+// moon or the handle moves, and the change is saved when it lifts.
+function wireWindDown(c, root) {
+  const band = root.querySelector('.wd-band'); if (!band || band.classList.contains('flat')) return;
+  const card = band.closest('.wd-card');
+  const minsAt = e => { const b = band.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - b.left) / b.width)); };
+  const redraw = over => {
+    const md = windDownModel(c, over);
+    const tmp = document.createElement('div'); tmp.innerHTML = bandHTML(c, md);
+    // the steps and the labels are drawn again; the grip under the finger keeps its element
+    band.querySelectorAll('.wd-step, .wd-now').forEach(n => n.remove());
+    const first = band.firstChild;
+    tmp.querySelectorAll('.wd-step, .wd-now').forEach(n => band.insertBefore(n, first));
+    const head = card.querySelector('.wd-head');
+    if (head && over.night_start) head.textContent = `Tonight at ${shortTime(over.night_start)} the house goes quiet.`;
+    return md;
+  };
+  const moon = band.querySelector('[data-grip="moon"]');
+  if (moon) {
+    let g = null;
+    track(moon, {
+      c, axis: 'x', grab: () => true,
+      start() { const md = windDownModel(c); g = { md, hm: c.S.config.settings.night_start }; band.classList.add('dragging'); },
+      move(e) {
+        const md = g.md;
+        // 15 minute steps, kept inside the evening: after dimming starts, and an hour before the night ends
+        let m = Math.round(minsAt(e) * md.span / 15) * 15;
+        const lo = md.rel(c.RT.curveStart()) + 15, hi = md.rel(md.s.night_end) - 60;
+        m = Math.max(lo, Math.min(hi, m));
+        const hm = minHm(md.start + m);
+        if (hm === g.hm) return; g.hm = hm;
+        moon.style.left = `${(m / md.span * 100).toFixed(3)}%`;
+        moon.querySelector('.wd-moon-t').textContent = shortTime(hm);
+        redraw({ night_start: hm });
+      },
+      end() {
+        band.classList.remove('dragging');
+        const hm = g && g.hm; g = null;
+        if (!hm || hm === c.S.config.settings.night_start) { c.render(); return; }
+        const msg = c.RT.setNight('night_start', hm);
+        c.save(msg || 'Saved');
+      },
+    });
+  }
+  const knob = band.querySelector('[data-grip="low"]');
+  if (knob) {
+    let g = null;
+    track(knob, {
+      c, axis: 'y', grab: () => true,
+      start(e) { const w = (c.S.config.settings.adaptive || {}).winddown || {}; g = { y0: e.clientY, from: w.to_level || 50, lv: w.to_level || 50 }; band.classList.add('dragging'); },
+      move(e) {
+        // 96 px of band is 100%; 5% steps between 10% and 90%
+        const lv = Math.max(10, Math.min(90, Math.round((g.from + (g.y0 - e.clientY) / 96 * 100) / 5) * 5));
+        if (lv === g.lv) return; g.lv = lv;
+        const md = redraw({ to_level: lv });
+        const qi = md.steps.findIndex(st => st.night); const low = qi > 0 ? md.steps[qi - 1] : null;
+        if (low) knob.style.bottom = `${Math.max(4, Math.round(96 * low.lv / 100))}px`;
+        knob.setAttribute('aria-valuenow', String(lv));
+        const say = root.querySelector('.wd-say');
+        if (say) say.textContent = say.textContent.replace(/down to \d+%/, `down to ${lv}%`);
+      },
+      end() {
+        band.classList.remove('dragging');
+        const was = g; g = null;
+        if (!was || was.lv === was.from) { c.render(); return; }
+        c.save(c.RT.setWindDown('to_level', was.lv));
+      },
+    });
+  }
+  // a tap anywhere else on the band: what on means then, under the finger, for 2 s; nothing changes
+  const tip = band.querySelector('.wd-tip');
+  let tipTimer = 0;
+  track(band, {
+    c, accept: e => !e.target.closest('[data-grip]'), move() {},
+    tap(e) {
+      const md = windDownModel(c);
+      const m = Math.round(minsAt(e) * md.span / 15) * 15;
+      const hm = minHm(md.start + m);
+      tipNow = { text: `At ${shortTime(hm)}: ${windDownLevelAt(c, hm)}%`, left: `${(m / md.span * 100).toFixed(3)}%`, until: performance.now() + 2000 };
+      tip.textContent = tipNow.text; tip.style.left = tipNow.left; tip.hidden = false;
+      clearTimeout(tipTimer); tipTimer = setTimeout(() => { const t = document.querySelector('.wd-tip'); if (t) t.hidden = true; }, 2000);
+    },
+  });
+}
+
 function levels(c) {
   const { esc, icon, RT } = c;
   const s = c.S.config.settings; const wd = (s.adaptive && s.adaptive.winddown) || {};
@@ -133,13 +343,14 @@ export function nightHours(c) {
   </div>` };
 }
 
-const SHEETS = { winddown: windDown, 'winddown-levels': levels, 'winddown-curve': curve, night: nightHours, where: whereSheet };
+const SHEETS = { 'winddown-levels': levels, 'winddown-curve': curve, 'winddown-night': nightHours, night: nightHours, where: whereSheet };
 export function sheetFor(c, r) {
   const make = r.id && SHEETS[r.id];
   if (!make) return null;
-  const parent = r.id === 'winddown-levels' ? 'routines/winddown' : r.id === 'winddown-curve' ? 'routines/winddown-levels' : 'routines';
+  const parent = r.id === 'winddown-levels' || r.id === 'winddown-night' ? 'routines/winddown' : r.id === 'winddown-curve' ? 'routines/winddown-levels' : 'routines';
   return { spec: make(c, r), parent };
 }
+export function after(c, r, root) { if (r && WD_PAGES.includes(r.id)) wireWindDown(c, root); }
 
 // ---------- taps shared by the pages that change a routine's run ----------
 export const runActions = {
