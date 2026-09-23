@@ -5,11 +5,12 @@
 //       and colour, locked to the finger on the dial (no easing under it); the dial bottoms out at 1%, never 0; off
 //       greys the dial at the level On brings back; holding minus dims steadily and stops at 1%.
 //   4   Colour: the sheet is washed by the lamp's colour and crossfades to a new one (never slides); the swatches are
-//       lit glass beads; a pick on a lamp that is off brings it on at the level On gives, not 100%; Undo puts it back.
+//       lit glass beads; a pick on a lamp that is off brings it on at the level On gives, not 100%; a pick shows no
+//       toast and no Undo (2ca8d0a: the lamp changing is the answer).
 //   5   White: the bar is a sky, the lamp's white a sun on a path in mireds; dragging the sun moves the white live.
 //   15  the sleep timer's candle: its height is the time left over the time set (the hub records the minutes, so a
-//       timer this phone did not set is whole too); Add 15 min grows it back; Stop the timer and Off now each offer
-//       Undo; at the end the flame gutters and the choices come back.
+//       timer this phone did not set is whole too); Add 15 min grows it back; Stop the timer and Off now each act with
+//       no toast and no Undo; at the end the flame gutters and the choices come back.
 //
 // Runs after hue_test and hue_color_test, which pair the fake Hue bridge: that is where the colour lamp comes from.
 // It puts the lamp's colour, the dimmer's level and any timer back the way it found them.
@@ -34,14 +35,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 });
   await wait(900);
   await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
-  // every level and colour this phone sends, and the toasts it shows
+  // every level and colour this phone sends
   await C(() => {
     const c = window.__copper; window.__lv = []; window.__col = [];
     const l = c.gate.sendLevel, k = c.gate.sendColor;
     c.gate.sendLevel = (...a) => { window.__lv.push(a); return l(...a); };
     c.gate.sendColor = (...a) => { window.__col.push(a); return k(...a); };
   });
-  const toast = () => C(() => (document.querySelector('#toast-root .msg') || {}).textContent || '');
   const level = id => C(x => window.__copper.data.level(x) || 0, id);
   const glowD = () => C(() => { const g = document.querySelector('.dev [data-glow="lamp"]'); return g ? parseFloat(g.style.getPropertyValue('--g-d')) : null; });
   const heroD = lv => Math.round(260 + 300 * Math.sqrt(lv / 100));
@@ -133,27 +133,28 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const hand = await C(() => getComputedStyle(document.querySelector('.wheel .handle')).boxShadow);
     check('4: the wheel\'s handle glows with the colour under it', /76, 141, 255, 0\.35/.test(hand), hand);
     await page.screenshot({ path: 'v7-colour-blue.png' });
-    // Amber: the wash crossfades (an old copy fading over the new), the ring and its light slide, a toast with Undo
-    await C(() => { window.__col = []; });
+    // Amber: the wash crossfades (an old copy fading over the new), the ring and its light slide; no toast
+    await C(() => { window.__col = []; document.querySelector('#toast-root').innerHTML = ''; });
     await page.click('.cs-sw .sw[data-hex="#FFC24A"]');
     await wait(150);
     const xf = await C(() => { const w = document.querySelector('.lk-wash'); const old = w.querySelector('.xf-old'); const a = old && old.getAnimations()[0]; return { copy: !!old, dur: a && a.effect.getTiming().duration, ease: a && a.effect.getTiming().easing, now: getComputedStyle(w).getPropertyValue('--wash') }; });
     check('4: the wash crossfades to amber over the dimmer, 0.4 s EASE_IN_AND_OUT (colour never slides)', xf.copy && xf.dur === 400 && xf.ease === 'ease-in-out' && /255, ?194, ?74/.test(xf.now), xf);
-    check('4: a pick says so, with Undo', (await toast()) === `${name} · Amber` && !!(await page.$('#toast-root [data-act="toast-undo"]')), await toast());
     await wait(1300);
+    const amber = await C(id => ({ hex: String((window.__copper.S.states[id].color || {}).hex).toUpperCase(), toast: document.querySelector('#toast-root').textContent }), lamp);
+    check('4: a pick shows no toast and no Undo; the lamp is amber', amber.hex === '#FFC24A' && amber.toast === '', amber);
     check('4: the sub names the new colour', (await C(() => document.querySelector('.sheet-head .t-over').textContent)) === `${name} · Amber`);
     await page.screenshot({ path: 'v7-colour-amber.png' });
-    await page.click('#toast-root [data-act="toast-undo"]'); await wait(1400);
-    check('4: Undo puts the colour back', String(await C(id => (window.__copper.S.states[id].color || {}).hex, lamp)).toUpperCase() === '#4C8DFF');
+    // put it back to blue directly (there is no Undo now)
+    await C(id => window.__copper.run({ type: 'color', target: `d:${id}`, hex: '#4C8DFF' }), lamp); await wait(1400);
+    check('4: set back to blue directly', String(await C(id => (window.__copper.S.states[id].color || {}).hex, lamp)).toUpperCase() === '#4C8DFF');
     // a pick on a lamp that is off brings it on at the level On gives it, in the colour from the first moment
     await C(id => { const c = window.__copper; c.assume([id], 0); c.soon(); return c.run({ type: 'level', target: `d:${id}`, level: 'off' }); }, lamp); await wait(1400);
-    await C(() => { window.__col = []; });
+    await C(() => { window.__col = []; document.querySelector('#toast-root').innerHTML = ''; });
     const want = await C(id => Math.round(window.__copper.onLevel(id, `d:${id}`)), lamp);
     await page.click('.cs-sw .sw[data-hex="#FF5A4E"]'); await wait(1400);
     const sentCol = await C(() => window.__col.map(a => a[1]));
     check(`4: an off lamp given a colour comes on at the level On gives (${want}%), not 100%`, sentCol.length && sentCol[0].level === want && (await level(lamp)) === want, { sentCol, level: await level(lamp) });
-    await page.click('#toast-root [data-act="toast-undo"]').catch(() => {}); await wait(1400);
-    check('4: and Undo turns it back off', (await level(lamp)) === 0, await level(lamp));
+    check('4: and says nothing about it (no toast, no Undo)', (await C(() => document.querySelector('#toast-root').textContent)) === '', await C(() => document.querySelector('#toast-root').textContent));
     await C(id => window.__copper.run({ type: 'level', target: `d:${id}`, level: 'on' }), lamp); await wait(1200);
 
     // ================= 5 · White, the time of day =================
@@ -170,6 +171,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     // drag the sun (a grip: it takes the finger at once) to 4000K; the readout steps, the sky's noon brightens
     const tr = await C(() => { const b = document.querySelector('.ws-track').getBoundingClientRect(); const t = document.querySelector('.ws-thumb').getBoundingClientRect(); return { x: b.left, w: b.width, sx: t.left, sy: t.top }; });
     const xAt = k => tr.x + tr.w * (1e6 / 1900 - 1e6 / k) / (1e6 / 1900 - 1e6 / 6500);
+    await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
     const drag = await C(async ([sx, sy, to]) => {
       const target = document.elementFromPoint(sx, sy);
       const fire = (type, x, y) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 13, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, button: 0 }));
@@ -183,7 +185,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const k4 = await C(id => (window.__copper.S.states[id].color || {}).kelvin, lamp);
     check('5: the sun is a grip; dragging it sets the white live (the readout steps as it goes)', drag.grabbed && new Set(drag.seen).size >= 4 && k4 >= 3900 && k4 <= 4100, { drag, k4 });
     check('5: noon brightens as the sun climbs', drag.noon[drag.noon.length - 1] > drag.noon[0], drag.noon);
-    check('5: the drag ends with a toast naming the white, with Undo', /· (Soft white|Neutral white)$/.test(await toast()), await toast());
+    // the sheet names the white where it was set; no toast and no Undo (2ca8d0a)
+    const named = await C(() => ({ over: document.querySelector('.sheet-head .t-over').textContent, toast: document.querySelector('#toast-root').textContent }));
+    check('5: the drag ends with no toast; the sheet names the white it set', named.toast === '' && named.over === `${name} · ${k4}K · ${await C(k => CasetaDaylight.warmthName(k), k4)}` && /· (Soft|Neutral)( white)?$/.test(named.over), named);
     const now = await C(() => !!document.querySelector('.ws-now') || !!document.querySelector('.ws-loc'));
     check('5: the day\'s white now is on the sky, or the sky asks where home is', now);
     await page.screenshot({ path: 'v7-white-4000.png' });
@@ -214,17 +218,25 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await page.click('[data-act="timer-add"]'); await wait(1600);
     const grown = await C(() => ({ total: Number(document.querySelector('[data-left]').dataset.total), left: document.querySelector('[data-left]').textContent, f: Number(document.querySelector('.tc-stage').style.getPropertyValue('--f')) }));
     check('15: Add 15 min grows the candle back', grown.total === 45 && grown.left === '30 min left' && grown.f > half.f, grown);
-    // Stop the timer: the light stays as it is; Undo lets it burn on
+    // Stop the timer: the light stays as it is, the candle goes and nothing else is said (no toast, no Undo)
     const lvBefore = await level(lamp);
+    await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
     await page.click('[data-act="timer-cancel"]'); await wait(1400);
-    check('15: Stop the timer ends it and leaves the light as it is', !(await page.$('.tc-stage')) && (await level(lamp)) === lvBefore && /Timer stopped/.test(await toast()), { lv: await level(lamp), toast: await toast() });
-    await page.click('#toast-root [data-act="toast-undo"]'); await wait(1600);
-    check('15: Undo lets it burn on', !!(await page.$('.tc-stage')) && /^(29|30) min left$/.test(await C(() => document.querySelector('[data-left]').textContent)), await C(() => (document.querySelector('[data-left]') || {}).textContent));
-    // Off now: off at once, Undo brings it back and the candle with it
+    const stopped = await C(k => ({ candle: !!document.querySelector('.tc-stage'), hub: !!(window.__copper.S.timers || {})[k], durs: document.querySelectorAll('.durs .dur').length, toast: document.querySelector('#toast-root').textContent }), key);
+    check('15: Stop the timer ends it on the hub and leaves the light as it is, with no toast', !stopped.candle && !stopped.hub && (await level(lamp)) === lvBefore && stopped.toast === '', { lv: await level(lamp), lvBefore, ...stopped });
+    check('15: and the sheet offers the choices again', stopped.durs >= 1, stopped);
+    // a timer again, for Off now
+    await page.click('.dur[data-m="30"]'); await wait(1600);
+    check('15: a new timer starts from the choices', !!(await page.$('.tc-stage')) && /^(29|30) min left$/.test(await C(() => (document.querySelector('[data-left]') || {}).textContent)), await C(() => (document.querySelector('[data-left]') || {}).textContent));
+    // Off now: off at once, the timer ended, no toast and no Undo
+    await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
     await page.click('[data-act="timer-offnow"]'); await wait(1500);
-    check('15: Off now turns it off and ends the timer', (await level(lamp)) === 0 && !(await page.$('.tc-stage')), await level(lamp));
-    await page.click('#toast-root [data-act="toast-undo"]'); await wait(2000);
-    check('15: Undo puts the light back and the candle with it', (await level(lamp)) === lvBefore && !!(await page.$('.tc-stage')), { lv: await level(lamp), want: lvBefore });
+    const offNow = await C(k => ({ candle: !!document.querySelector('.tc-stage'), hub: !!(window.__copper.S.timers || {})[k], toast: document.querySelector('#toast-root').textContent }), key);
+    check('15: Off now turns it off and ends the timer, with no toast', (await level(lamp)) === 0 && !offNow.candle && !offNow.hub && offNow.toast === '', { lv: await level(lamp), ...offNow });
+    // put the light back directly and set a timer again for the end
+    await C(([id, v]) => window.__copper.run({ type: 'level', target: `d:${id}`, level: v }), [lamp, lvBefore]); await wait(1400);
+    await page.click('.dur[data-m="15"]'); await wait(1600);
+    check('15: the light back and a timer running again', (await level(lamp)) === lvBefore && !!(await page.$('.tc-stage')), { lv: await level(lamp), want: lvBefore });
     // the end: the timer runs out and the flame gutters (1.6 s), then the choices come back
     const gut = await C(async k => {
       const c = window.__copper;

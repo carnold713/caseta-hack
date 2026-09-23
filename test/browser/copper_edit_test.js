@@ -1,6 +1,6 @@
 // Copper Night (/ui/): changing the home. About this light (what it is for, what it is, its room, hiding it), Follow
 // the day, room setup (renaming, a new room, deleting one with Undo) and scenes (making one, editing it, starring,
-// running with Undo, the press and hold, deleting it, the five suggestions). Puts the config back as it found it.
+// running it, the press and hold, deleting it with Undo, the five suggestions). Puts the config back as it found it.
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -49,10 +49,20 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('Move to room opens a room picker inside the sheet', !!(await page.$('#sheet-root [data-act="about-move-to"][data-room="22"]')) && !!(await page.$('#sheet-root .sheet-back')));
   const area = () => C(() => window.__copper.data.devArea(window.__copper.data.dev('5')));
   const from = await area(), to = from === '22' ? '20' : '22';
+  const bridgeArea = () => C(() => (window.__copper.data.dev('5') || {}).area);
+  const bridge0 = await bridgeArea();
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await page.click(`[data-act="about-move-to"][data-room="${to}"]`); await wait(1400);
   check('moved to another room', (await area()) === to, await area());
-  await page.click('#toast-root [data-act="toast-undo"]'); await wait(1800);
-  check('Undo puts it back, on the bridge too', (await area()) === from, [await area(), from]);
+  // a move is not a deletion: no toast and no Undo (2ca8d0a); the About sheet's own room line is the answer
+  check('and no toast, no Undo', !(await C(() => document.querySelector('#toast-root').textContent)), await C(() => document.querySelector('#toast-root').textContent));
+  await page.waitForFunction(b => (window.__copper.data.dev('5') || {}).area !== b, bridge0, { timeout: 5000 }).catch(() => {});
+  check('the bridge moved it too', (await bridgeArea()) !== bridge0, [await bridgeArea(), bridge0]);
+  // moved back the same way a person would, through Move to room
+  await page.click('[data-act="about-move"]'); await wait(500);
+  await page.click(`[data-act="about-move-to"][data-room="${from}"]`); await wait(1400);
+  await page.waitForFunction(b => (window.__copper.data.dev('5') || {}).area === b, bridge0, { timeout: 5000 }).catch(() => {});
+  check('moving it back puts it back, on the bridge too', (await area()) === from && (await bridgeArea()) === bridge0, [await area(), from, await bridgeArea(), bridge0]);
   await page.click('[data-act="about-hide"]'); await wait(1000);
   check('Hide from the app', (await cfg()).settings.hidden_devices.includes('5'));
   await page.click('[data-act="about-hide"]'); await wait(1000);
@@ -142,9 +152,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.click('.sheet-close'); await wait(700);
   check('closing goes back to the list', /#scenes$/.test(page.url()), page.url());
   check('a starred scene is a tile', !!(await page.$(`.scene-tile[data-id="${pid}"]`)));
+  await C(() => { const c = window.__copper; document.querySelector('#toast-root').innerHTML = ''; window.__sent = []; if (!c.__run0) { c.__run0 = c.run; c.run = a => { window.__sent.push(a); return c.__run0(a); }; } });
   await page.click(`.scene-tile[data-id="${pid}"]`); await wait(1400);
-  check('a tap runs it and says so, with Undo', /Reading is on/.test(await page.textContent('#toast-root')) && !!(await page.$('#toast-root [data-act="toast-undo"]')));
-  await page.evaluate(() => { document.querySelector('#toast-root').innerHTML = ''; });
+  // running a scene is shown by its lights: no toast and no Put back (2ca8d0a)
+  const ran = await C(id => ({ sent: window.__sent.filter(a => a.type === 'preset' && a.preset_id === id).length, toast: document.querySelector('#toast-root').textContent }), pid);
+  check('a tap runs it (one preset sent) with no toast and no Put back', ran.sent === 1 && !ran.toast, ran);
+  await C(() => { const c = window.__copper; if (c.__run0) { c.run = c.__run0; delete c.__run0; } });
   await page.locator(`.scene-row[data-id="${pid}"]`).scrollIntoViewIfNeeded();
   await page.evaluate(id => document.querySelector(`.scene-row[data-id="${id}"]`).scrollIntoView({ block: 'center' }), pid); await wait(300);
   const row = await page.locator(`.scene-row[data-id="${pid}"]`).boundingBox();

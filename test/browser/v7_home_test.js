@@ -91,6 +91,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // the Bedroom (22) off: turn it on with its power circle
   await cmd({ type: 'level', target: 'a:22', level: 'off' }); await wait(900);
   const bsel = '.room-big[data-go="room/22"]';
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await tap(`${bsel} .pwr`); await wait(50);
   const bloom = await anims(bsel);
   const g = bloom.filter(a => /glow/.test(a.cls));
@@ -100,11 +101,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const veil = bloom.find(a => /rm-veil/.test(a.cls));
   check('the veil lifts on the dimmer, 0.08 s behind the glow', veil && veil.dur === 400 && veil.delay === 200 && Number(veil.to.opacity) === 0, veil);
   check('the status line crossfades, 0.24 s standard', bloom.some(a => /xf-old/.test(a.cls) && a.dur === 240), bloom.filter(a => /xf/.test(a.cls)).map(a => [a.cls, a.dur]));
-  check('and the toast says so, with Undo', /Bedroom on/.test(await page.textContent('#toast-root')) && /Undo/.test(await page.textContent('#toast-root')), await page.textContent('#toast-root'));
   await wait(900);
+  // the card lighting is the answer: no toast and no Undo (2ca8d0a)
+  const bOn = await C(s => ({ lit: document.querySelector(s).classList.contains('lit'), on: window.__copper.H.roomLights('22').some(d => window.__copper.data.level(d.device_id) > 0), toast: document.querySelector('#toast-root').textContent }), bsel);
+  check('the Bedroom is on, its card lit, and no toast or Undo', bOn.lit && bOn.on && bOn.toast === '', bOn);
   await page.screenshot({ path: 'v7-rooms.png' });
-  await tap('#toast-root [data-act="toast-undo"]'); await wait(1200);
-  check('Undo puts the room back off', (await C(() => window.__copper.H.roomLights('22').every(d => !window.__copper.data.level(d.device_id)))));
+  await cmd({ type: 'level', target: 'a:22', level: 'off' }); await wait(1200);
+  check('set back off directly', (await C(() => window.__copper.H.roomLights('22').every(d => !window.__copper.data.level(d.device_id)))));
   // off: it draws back into the button
   await cmd({ type: 'level', target: 'a:22', level: 60 }); await wait(1200);
   await tap(`${bsel} .pwr`); await wait(50);
@@ -151,9 +154,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await C(async id => { const c = window.__copper; c.S.config.schedules = c.S.config.schedules.filter(s => s.id !== id); c.S.activity = (c.S.activity || []).filter(e => e.id !== id); await c.data.saveConfig(); }, sid);
   await C(() => window.scrollTo(0, 0));
 
-  // ---- 10 · Goodnight: the page goes dark room by room, then "Sleep well" on a moon, then Put back
+  // ---- 10 · Goodnight: the page goes dark room by room, then "Sleep well" on a moon; no toast, no Put back
   await cmd({ type: 'level', target: 'a:20', level: 60 }); await cmd({ type: 'level', target: 'a:23', level: 40 }); await wait(1400);
   await go('home');
+  const litBefore = await C(() => window.__copper.H.litLights().map(d => [d.device_id, window.__copper.data.level(d.device_id)]));
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   const before = await C(() => document.querySelectorAll('.house-light .glow:not(.off)').length);
   const gb = await page.locator('[data-hold="goodnight"]').boundingBox();
   await page.mouse.move(gb.x + 22, gb.y + 22); await page.mouse.down(); await wait(1150); await page.mouse.up();
@@ -170,15 +175,16 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('"Sleep well" on a faint moon', moon && moon.sleep === 'Sleep well' && moon.sleepOp > 0.9 && moon.moon > 0.5, moon);
   check('the fans and shades said as they finish', moon && /Fans stopped|Shades closed|^$/.test(moon.extras), moon && moon.extras);
   const toastTxt = await page.textContent('#toast-root');
-  check('the toast: "Goodnight · Put back"', /Goodnight/.test(toastTxt) && /Put back/.test(toastTxt), toastTxt);
+  check('no toast and no Put back: the dark page is the answer', toastTxt === '', toastTxt);
   await page.screenshot({ path: 'v7-goodnight.png' });
   await wait(3300);
   const after = await C(() => ({ gone: !document.querySelector('.gn-night'), hash: location.hash }));
   check('3 s on, the page settles: into Nightstand at night, else back to Home', after.gone && /^#(home|nightstand)$/.test(after.hash), after);
-  const putback = await page.$('#toast-root [data-act="toast-undo"]');
-  check('Put back is still there', !!putback);
-  if (putback) { await tap('#toast-root [data-act="toast-undo"]'); await wait(1500); }
-  check('Put back brings back what was on', (await C(() => window.__copper.H.litLights().length)) > 0, await C(() => window.__copper.H.litLights().map(d => d.name)));
+  check('and still no Put back', !(await page.$('#toast-root [data-act="toast-undo"]')));
+  // put back what was on, directly
+  await C(async l => { for (const [id, lv] of l) await window.__copper.run({ type: 'level', target: `d:${id}`, level: lv }); }, litBefore); await wait(1500);
+  const litAgain = await C(() => window.__copper.H.litLights().map(d => d.device_id).sort());
+  check('set back directly, what was on is on again', litBefore.length > 0 && JSON.stringify(litAgain) === JSON.stringify(litBefore.map(x => x[0]).sort()), { litAgain, litBefore });
   await go('home');
 
   // ---- 10 · a tap during the dark-out skips to the end; it never cancels Goodnight

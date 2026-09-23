@@ -122,10 +122,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await goto('settings/restore');
     const good = await C(() => JSON.stringify({ ...window.__copper.S.config, settings: { ...window.__copper.S.config.settings, home_name: 'Restored' } }));
     await C(t => { const a = document.querySelector('#sheet-root textarea'); a.value = t; a.dispatchEvent(new Event('input', { bubbles: true })); }, good);
+    await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
     await tap('#sheet-root [data-act="restore-go"]'); await wait(800);
     check('a backup restores', (await cfg()).settings.home_name === 'Restored');
-    await tap('#toast-root [data-act="toast-undo"]'); await wait(900);
-    check('and Undo takes it back', (await cfg()).settings.home_name === 'Test Home');
+    // restoring is a change, not a deletion: no toast and no Undo (2ca8d0a)
+    const rtoast = await C(() => document.querySelector('#toast-root').textContent);
+    check('with no toast and no Undo', rtoast === '', rtoast);
+    // put the name back directly, as the rest of this test expects it
+    await C(async () => { const c = window.__copper; c.S.config.settings.home_name = 'Test Home'; await c.data.saveConfig(); });
+    check('the name is put back for what follows', (await cfg()).settings.home_name === 'Test Home');
 
     // ---- 20 Add a device: the fake bridge hears a Pico 2.5 s after listening starts
     await goto('add');

@@ -1,5 +1,5 @@
 // Copper Night v7 · scenes: 6 a scene arriving (the ring of light from the chip, tiles following it, the count
-// settling, Put back), 7 the scene editor's stage (orbs as grips, a preview that never touches the house unless
+// settling, no toast), 7 the scene editor's stage (orbs as grips, a preview that never touches the house unless
 // asked, Try it), 8 Follow the day's sky dial (the paused state as built, resuming, scrubbing without touching the
 // lamp) and 9 the evening wind-down's timeline (the moon and the handle as grips, a tap only saying). Puts the config
 // back as it found it.
@@ -63,6 +63,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const sceneId = await C(s => document.querySelector(s).dataset.id, chip);
   const countBefore = await C(() => document.querySelector('.room-title .count').textContent.trim());
   await clearCmds();
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await page.tap(chip); await wait(60);
   const early = await C(() => {
     const ch = document.querySelector('.room-chips .chip[data-act="scene"]');
@@ -90,13 +91,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await wait(1700);
   const settled = await C(sid => ({ lv: window.__copper.H.sceneMatch(location.hash.split('/')[1]), sid, count: document.querySelector('.room-title .count').textContent.trim(), plain: !document.querySelector('.wv-two') }), sceneId);
   check('6: the lights arrive and the count settles to the truth', settled.lv === sceneId && settled.count !== countBefore, settled);
-  const t1 = await toastText();
-  check('6: the toast names the scene and offers Put back', /Put back$/.test(t1) && !/Undo/.test(t1), t1);
+  // the lights arriving are the answer: no toast and no Put back (2ca8d0a)
+  const t1 = await C(() => document.querySelector('#toast-root').textContent);
+  check('6: no toast and no Put back once it has arrived', t1 === '', t1);
+  // put every light it touched back directly
   const lit0 = await C(() => window.__lit0);
-  await clearCmds();
-  await page.tap('#toast-root [data-act="toast-undo"]'); await wait(1500);
+  await C(async l => { for (const [id, lv] of l) await window.__copper.run({ type: 'level', target: `d:${id}`, level: lv || 'off' }); }, lit0); await wait(1500);
   const back = await C(a => window.__copper.H.roomLights(a).map(d => [d.device_id, window.__copper.data.level(d.device_id) || 0]), aid);
-  check('6: Put back returns every light it touched', JSON.stringify(back) === JSON.stringify(lit0), { back, lit0, cmds: await cmds() });
+  check('6: set back directly, every light it touched is as it was', JSON.stringify(back) === JSON.stringify(lit0), { back, lit0 });
   // already showing: one soft ring, nothing sent
   await page.tap(chip); await wait(2600);
   await clearCmds();
@@ -120,6 +122,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const orb = '#sheet-root .sc-lane:first-child .sc-orb';
   const oid = await C(s => document.querySelector(s).dataset.orb, orb);
   const lv0 = await C(([id, o]) => { const v = window.__copper.data.presets().find(p => p.id === id).levels[o]; return typeof v === 'object' && v ? v.level : v; }, [sceneId, oid]);
+  // each change below is saved at once with no toast and no Undo (2ca8d0a); the test puts the scene back itself
+  const snap = () => C(() => JSON.stringify(window.__copper.S.config));
+  const putBack = cfg => C(async x => { const c = window.__copper; c.data.restoreConfig(x); await c.data.saveConfig(); c.render(); }, cfg);
+  const noToast = () => C(() => document.querySelector('#toast-root').textContent);
+  const lvOf = () => C(([id, o]) => { const v = window.__copper.data.presets().find(p => p.id === id).levels[o]; return typeof v === 'object' && v ? v.level : v; }, [sceneId, oid]);
+  let cfg7 = await snap();
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await clearCmds();
   await finger(orb, [[22, 22], [22, 34], [22, 60], [22, 80]], { up: false });
   const mid = await C(s => ({ now: document.querySelector(s).getAttribute('aria-valuenow'), lab: document.querySelector(s).parentElement.querySelector('.sc-lv').textContent, dragging: document.querySelector('.sc-stage').classList.contains('dragging') }), orb);
@@ -127,35 +136,44 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('7: and the house is not touched while it is only a preview', !(await cmds()).length, await cmds());
   await C(s => { const el = document.querySelector(s); const b = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 11, pointerType: 'touch', clientX: b.left + 22, clientY: b.top + 22 })); }, orb);
   await wait(1200);
-  const lv1 = await C(([id, o]) => { const v = window.__copper.data.presets().find(p => p.id === id).levels[o]; return typeof v === 'object' && v ? v.level : v; }, [sceneId, oid]);
-  check('7: lifting the finger keeps it in the scene, with Undo', lv1 === Number(mid.now) && / in .*Undo$/.test(await toastText()), { lv1, toast: await toastText() });
-  await page.tap('#toast-root [data-act="toast-undo"]'); await wait(1200);
-  const lv2 = await C(([id, o]) => { const v = window.__copper.data.presets().find(p => p.id === id).levels[o]; return typeof v === 'object' && v ? v.level : v; }, [sceneId, oid]);
-  check('7: Undo puts the orb back', lv2 === lv0, { lv0, lv2 });
+  const lv1 = await lvOf();
+  check('7: lifting the finger keeps it in the scene, with no toast and no Undo', lv1 === Number(mid.now) && (await noToast()) === '', { lv1, toast: await noToast() });
+  await putBack(cfg7); await wait(900);
+  const lv2 = await lvOf();
+  check('7: the scene put back directly, the orb is where it was', lv2 === lv0, { lv0, lv2 });
   // shown on the room, the same drag moves the real light too
   await page.tap('[data-act="stage-show"]'); await wait(700);
+  const real0 = await C(o => window.__copper.data.level(o) || 0, oid);
+  cfg7 = await snap();
   await clearCmds();
   await finger(orb, [[22, 22], [22, 34], [22, 70]]); await wait(1200);
   check('7: with "Show it on the room" on, the real light moves too', (await cmds()).some(a => a.type === 'gated'), await cmds());
-  await page.tap('#toast-root [data-act="toast-undo"]'); await wait(1200);
+  check('7: and still no toast', (await noToast()) === '', await noToast());
+  await putBack(cfg7);
+  await C(([o, v]) => window.__copper.run({ type: 'level', target: `d:${o}`, level: v || 'off' }), [oid, real0]); await wait(1200);
   // under the floor: off in this scene; past the stage onto the shelf: left out
   await page.tap('[data-act="stage-show"]'); await wait(600);
+  cfg7 = await snap();
   await finger(orb, [[22, 22], [22, 40], [22, 280]]); await wait(1200);
-  const off = await C(([id, o]) => { const v = window.__copper.data.presets().find(p => p.id === id).levels[o]; return typeof v === 'object' && v ? v.level : v; }, [sceneId, oid]);
-  check('7: dropped under the floor line it is off in the scene, a hollow ring', off === 0 && !!(await page.$('#sheet-root .sc-lane:first-child .sc-orb.off')), { off, toast: await toastText() });
-  await page.tap('#toast-root [data-act="toast-undo"]'); await wait(1200);
+  const off = await lvOf();
+  check('7: dropped under the floor line it is off in the scene, a hollow ring', off === 0 && !!(await page.$('#sheet-root .sc-lane:first-child .sc-orb.off')), { off, toast: await noToast() });
+  await putBack(cfg7); await wait(900);
   const stageH = await C(() => document.querySelector('.sc-stage').getBoundingClientRect().height);
   await finger(orb, [[22, 22], [22, 60], [22, stageH]]); await wait(1200);
-  check('7: carried onto the shelf it is left out, with Undo', !(oid in (await P()).levels) && /left out of/.test(await toastText()), await toastText());
+  check('7: carried onto the shelf it is left out, with no toast and no Undo', !(oid in (await P()).levels) && (await noToast()) === '', await noToast());
   await page.screenshot({ path: 'v7-scene-stage.png' });
-  await page.tap('#toast-root [data-act="toast-undo"]'); await wait(1200);
-  check('7: and Undo brings it back', oid in (await P()).levels);
+  await putBack(cfg7); await wait(900);
+  check('7: the scene put back directly, the light is in it again', oid in (await P()).levels);
   // a tap on an orb opens its choices under the stage
   await finger(orb, [[22, 22], [22, 22]]); await wait(900);
   check('7: a tap on an orb opens its choices under the stage', !!(await page.$('#sheet-root .sc-edit .sl-edit')));
   await clearCmds();
+  const tried0 = await C(a => window.__copper.H.roomLights(a).map(d => [d.device_id, window.__copper.data.level(d.device_id) || 0]), aid);
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await page.tap('#sheet-root .sc-try'); await wait(1500);
-  check('7: Try it plays the scene on the room, with Put back', (await cmds()).some(a => a.type === 'preset') && /Put back$/.test(await toastText()), await toastText());
+  check('7: Try it plays the scene on the room, with no toast and no Put back', (await cmds()).some(a => a.type === 'preset') && (await noToast()) === '', { cmds: await cmds(), toast: await noToast() });
+  // put the room back directly
+  await C(async l => { for (const [id, lv] of l) await window.__copper.run({ type: 'level', target: `d:${id}`, level: lv || 'off' }); }, tried0); await wait(1200);
   check('7: there is no Save button', !(await C(() => [...document.querySelectorAll('#sheet-root button')].some(b => /^save$/i.test(b.textContent.trim())))));
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; window.__copper.closeSheet(); history.replaceState(null, '', '#scenes'); window.__copper.render(); }); await wait(500);
 
@@ -209,6 +227,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('9: and says it never dims what is already on', wd.honest === 'Lights that are already on stay as they are.', wd.honest);
   const q0 = await C(() => window.__copper.S.config.settings.night_start);
   await clearCmds();
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   const band = await C(() => document.querySelector('.wd-band').getBoundingClientRect().width);
   await finger('.wd-moon', [[28, 20], [40, 20], [28 + band * 0.06, 20]], { up: false });
   const moving = await C(() => document.querySelector('.wd-head').textContent);
@@ -216,15 +235,17 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await C(() => { const el = document.querySelector('.wd-moon'); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 11, pointerType: 'touch' })); });
   await wait(1200);
   const q1 = await C(() => window.__copper.S.config.settings.night_start);
-  check('9: applied when it lifts, in 15 minute steps, with Undo', q1 !== q0 && Number(q1.slice(3)) % 15 === 0 && /^Quiet from .*Undo$/.test(await toastText()), { q0, q1, toast: await toastText() });
+  // the timeline moving is the answer: no toast and no Undo (2ca8d0a)
+  check('9: applied when it lifts, in 15 minute steps, with no toast', q1 !== q0 && Number(q1.slice(3)) % 15 === 0 && (await noToast()) === '', { q0, q1, toast: await noToast() });
   check('9: moving the quiet time never touches a light', !(await cmds()).length, await cmds());
-  await page.tap('#toast-root [data-act="toast-undo"]'); await wait(1200);
-  check('9: Undo puts the quiet time back', (await C(() => window.__copper.S.config.settings.night_start)) === q0);
+  await C(async q => { const c = window.__copper; c.S.config.settings.night_start = q; await c.data.saveConfig(); c.render(); }, q0); await wait(900);
+  check('9: the quiet time put back directly', (await C(() => window.__copper.S.config.settings.night_start)) === q0);
+  const wd0 = await C(() => JSON.stringify(window.__copper.S.config.settings.adaptive.winddown || null));
   const d0 = await C(() => (window.__copper.S.config.settings.adaptive.winddown || {}).to_level || 50);
   await finger('.wd-knob', [[22, 22], [22, 30], [22, 60]]); await wait(1200);
   const d1 = await C(() => (window.__copper.S.config.settings.adaptive.winddown || {}).to_level);
-  check('9: the handle on the lowest step sets how low the evening goes', d1 < d0 && /^Down to \d+%.*Undo$/.test(await toastText()), { d0, d1, toast: await toastText() });
-  await page.tap('#toast-root [data-act="toast-undo"]'); await wait(1000);
+  check('9: the handle on the lowest step sets how low the evening goes, with no toast', d1 < d0 && (await noToast()) === '', { d0, d1, toast: await noToast() });
+  await C(async w => { const c = window.__copper; const a = c.S.config.settings.adaptive; const v = JSON.parse(w); if (v) a.winddown = v; else delete a.winddown; await c.data.saveConfig(); c.render(); }, wd0); await wait(900);
   await finger('.wd-band', [[40, 100], [40, 100]]); await wait(150);
   const tip = await C(() => { const t = document.querySelector('.wd-tip'); return t && !t.hidden ? t.textContent : null; });
   check('9: a tap on the band only says what on means then', /^At .+: \d+%$/.test(tip || ''), tip);

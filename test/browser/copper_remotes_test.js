@@ -22,7 +22,6 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const go = async hash => { await page.goto(base + '#' + hash); await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 }); await wait(900); };
   const cfg = () => C(() => window.__copper.S.config);
   const tap = async sel => { await C(s => { const e = document.querySelector(s); if (!e) throw new Error('no ' + s); e.dispatchEvent(new MouseEvent('click', { bubbles: true })); }, sel); await wait(700); };
-  const toastText = () => C(() => (document.querySelector('#toast-root .msg') || {}).textContent || '');
 
   await page.goto(base);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('.login-form button'); }
@@ -66,10 +65,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('Press opens its sheet', (await page.textContent('#sheet-root h2')) === 'Top button · Press' && /#remote\/9\/k0-single$/.test(page.url()), await page.textContent('#sheet-root h2'));
   check('Controls starts on the remote\'s room', (await page.textContent('#sheet-root [data-act="controls"] .row-val')) === 'Kitchen');
   check('five suggested ways', (await page.$$('#sheet-root .press .t-over + .group .way')).length === 5);
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await tap('#sheet-root .way[data-r="on"]');
   let b = (await cfg()).bindings.find(x => x.device_id === '9' && x.button_number === 0 && x.gesture === 'single');
   check('Turn on is set on the top button', !!b && b.actions[0].level === 'on' && b.actions[0].target === 'a:20', b);
-  check('and said in the toast', (await toastText()) === 'Top button · Press → Turn on · Kitchen', await toastText());
+  // a setting change shows where it was made: no toast and no Undo (2ca8d0a)
+  check('with no toast and no Undo (the tick is the answer)', (await C(() => document.querySelector('#toast-root').textContent)) === '', await C(() => document.querySelector('#toast-root').textContent));
   check('the picked way is ticked', !!(await page.$('#sheet-root .way.sel[data-r="on"] .radio.on')));
   // night
   await tap('#sheet-root [data-act="night-toggle"]');

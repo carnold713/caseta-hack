@@ -147,8 +147,11 @@ const FAN = [
     // ---- 06b Sleep timer
     await page.click('.feats .feat:last-child'); await wait(900);
     await sheetAt('06b Sleep timer', [['first duration', '.dur:first-child', 20, 98, 68, 64], ['Custom', '.dur.more', 324, 98, 68, 64]]);
+    await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
     await page.click('.dur[data-m="15"]'); await wait(1600);
-    check('15 min starts a timer and the ring shows', !!(await page.$('.ts-run')) && /Timer set · 15 min/.test(await page.textContent('#toast-root')));
+    // the candle is the answer: no toast (the owner's rule, 2ca8d0a: a toast whose only job is Undo is not shown)
+    const set15 = await C(id => { const c = window.__copper; const t = Object.entries(c.S.timers || {}).find(([k]) => c.data.targetDevices(k.includes('|') ? k.split('|') : k).includes(id)); return { ring: !!document.querySelector('.ts-run'), minutes: t ? Number(t[1].minutes) : null, toast: document.querySelector('#toast-root').textContent }; }, lamp);
+    check('15 min starts a timer on the hub and the ring shows, with no toast', set15.ring && set15.minutes === 15 && !set15.toast, set15);
     // v7 (12817:49023): running, the sheet is a candle on a stage, the time left under it
     await sheetAt('06b running', [['candle stage', '.ts-run .tc-stage', 20, 98, 372, 300], ['time left', '.tc-left', 20, 418, 372, 44]]);
     check('the candle says the time left', (await page.textContent('[data-left]')) === '15 min left', await page.textContent('[data-left]'));
@@ -167,9 +170,10 @@ const FAN = [
   check('a dimmer has no White or Colour', !(await page.$('.looks')));
   check('and its pills close up under the switch', await C(() => Math.round(document.querySelector('.feats').getBoundingClientRect().top)) === 414);
   const starred0 = await C(() => window.__copper.S.config.favorites.includes('d:5'));
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await page.click('[data-act="star"]'); await wait(1200);
   check('star saves', await C(w => window.__copper.S.config.favorites.includes('d:5') !== w, starred0));
-  check('with an Undo toast', /Undo/.test(await page.textContent('#toast-root').catch(() => '')));
+  check('and shows no toast, no Undo (the star itself is the answer)', !(await C(() => document.querySelector('#toast-root').textContent)), await C(() => document.querySelector('#toast-root').textContent));
   if (starred0) { await page.click('[data-act="star"]'); await wait(1200); }
   const svg = await page.locator('.dial > svg').boundingBox();
   const s = svg.width / 340; const pt = p => { const a = Math.PI * (1 - p / 100); return [svg.x + (170 + 150 * Math.cos(a)) * s, svg.y + (170 - 150 * Math.sin(a)) * s]; };
