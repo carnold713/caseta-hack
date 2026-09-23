@@ -204,13 +204,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const gn = (await cfg()).bindings.filter(x => x.gesture === 'hold' && x.actions[0].target === 'h:all');
   check('Goodnight button: set up as a hold that turns everything off', gn.length >= 1 && /#remote\//.test(page.url()), [gnSteps, page.url()]);
 
-  // ---- the evening wind-down
+  // ---- the evening wind-down (a page of its own since v7; its levels are a sheet over it)
   await go('routines/winddown');
   const wd0 = !!((await cfg()).settings.adaptive || {}).enabled;
-  await tap('#sheet-root [data-act="wd-toggle"]');
+  await tap('#screen [data-act="wd-toggle"]');
   check('the wind-down switch', !!(await cfg()).settings.adaptive.enabled !== wd0);
-  if (!(await cfg()).settings.adaptive.enabled) await tap('#sheet-root [data-act="wd-toggle"]');
-  await tap('#sheet-root [data-go="routines/winddown-levels"]');
+  if (!(await cfg()).settings.adaptive.enabled) await tap('#screen [data-act="wd-toggle"]');
+  await tap('#screen [data-go="routines/winddown-levels"]');
   await tap('#sheet-root [data-act="wd-set"][data-k="to_level"][data-v="40"]');
   check('a level in Advanced', (await cfg()).settings.adaptive.winddown.to_level === 40);
 
