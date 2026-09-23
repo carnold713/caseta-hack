@@ -38,23 +38,22 @@
 .hdr-btn.a2 { right: calc(var(--gutter) + 64px); }
 .page-title { margin: 0; padding: 20px var(--gutter) 0; }
 
-/* Tab bar: floats 20 from each edge, 372 x 72. The active tab is a white circle inset 8 all round,
-   which is the same rule every circle-in-a-track follows here. */
+/* Tab bar: five tabs since Settings joined them. It floats 40 above the bottom, centred, and is only as wide as its
+   circles: five 56 circles 8 apart inside an 8 inset is 328, and it never grows to the screen's width. The active
+   tab is a white circle inset 8 all round, the rule every circle-in-a-track follows here. */
 .tabbar {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(40px + env(safe-area-inset-bottom));
-  width: calc(min(100vw, 600px) - 40px); height: 72px;
+  width: max-content; max-width: calc(100vw - 40px); height: 72px;
   border-radius: 36px;
   background: rgba(18, 18, 18, .72);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   box-shadow: var(--shadow-lift), inset 0 0 0 1px var(--line);
-  /* space-between, not space-around: with four 56 circles in a 372 bar and an 8 inset, this puts
-     their centres at 36 / 136 / 236 / 336, which is where the file has them. */
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: min(8px, calc((100vw - 336px) / 4));
   padding: 0 8px;
 }
 .tabbar button {
-  width: 56px; height: 56px; border-radius: 28px; border: 0; background: none;
+  flex: none; width: 56px; height: 56px; border-radius: 28px; border: 0; background: none;
   display: grid; place-items: center;
   color: var(--icon-2);
   transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease);

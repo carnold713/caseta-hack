@@ -32,9 +32,10 @@ export function view(c) {
   const conn = c.conn();
   const zone = RT.zoneName(s.timezone) || 'Not set';
   return `<div class="settings-page">
-    <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
-      <button class="hdr-btn a1" data-go="settings/connection" aria-label="Connection"><span class="conn-state ${conn}"></span>${icon('wifi', 22, 1.6)}</button></header>
-    <h1 class="t-h1 page-h1">Settings</h1>
+    <header class="tab-head">
+      <h1 class="t-h1">Settings</h1>
+      <button class="hdr-btn a1" data-go="settings/connection" aria-label="Connection"><span class="conn-state ${conn}"></span>${icon('wifi', 22, 1.6)}</button>
+    </header>
 
     <div class="t-over sec">Home</div>
     <div class="group">

@@ -74,6 +74,10 @@
 
 /* ---- 13 Rooms -------------------------------------------------------------------------------- */
 
+/* A tab's own page opens the same way: its title at 58 beside a circle at 52 (Settings, as Rooms). */
+.tab-head { position: relative; height: 132px; }
+.tab-head h1 { position: absolute; left: var(--gutter); top: 58px; margin: 0; }
+
 /* "Rooms" at 58 beside the add circle at 52, the All scenes card at 132, a room every 192 after. */
 .rooms-head { position: relative; height: 132px; }
 .rooms-head h1 { position: absolute; left: var(--gutter); top: 58px; margin: 0; }

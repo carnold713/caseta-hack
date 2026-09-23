@@ -78,8 +78,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await goto('settings');
     const sections = await C(() => [...document.querySelectorAll('.settings-page .t-over.sec')].map(e => e.textContent));
     check('Settings has the file\'s sections, and This app', ['Home', 'Buttons', 'Evening', 'Devices', 'Connector', 'Backup', 'This app'].every(x => sections.includes(x)), sections);
-    const h1 = await C(() => { const b = document.querySelector('.settings-page .page-h1').getBoundingClientRect(); return [b.top, b.height].map(Math.round); });
-    check('11: Settings at 128 (its padding box at 108)', h1[0] === 108 && h1[1] === 64, h1);
+    // a tab of its own now: its title at 58 beside the connection circle, as Rooms has it, and no back arrow
+    const h1 = await C(() => { const b = document.querySelector('.settings-page .tab-head h1').getBoundingClientRect(); return [b.top, b.height].map(Math.round); });
+    check('11: Settings at 58, as a tab\'s title', h1[0] === 58 && h1[1] === 44, h1);
+    check('11: Settings is the current tab, with no back arrow', await C(() => document.querySelector('#tabs [aria-current]').dataset.go === 'settings' && !document.querySelector('.settings-page .hdr-btn.back')));
     await goto('settings/power');
     await tap('#sheet-root [data-act="set-power"][data-v="all"]');
     check('power brings back everything', (await cfg()).settings.power_on === 'all');

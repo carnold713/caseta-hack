@@ -153,8 +153,8 @@ const SCREENS = {
   routines: routinesScreen, routine: routineScreen, setup: guidedScreen, activity: activityScreen,
   settings: settingsScreen, add: addScreen, nightstand: nightstandScreen,
 };
-const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'home', add: 'home', activity: 'home' };
-const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines']];
+const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'settings', add: 'settings', activity: 'home' };
+const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines'], ['settings', 'gear', 'Settings']];
 // A screen draws the pages under it that it declares (screen.subs); any other sub page is not built yet.
 function screenFor(r) {
   const screen = SCREENS[r.name];
@@ -379,7 +379,7 @@ document.addEventListener('submit', async e => {
 let lastPage = null, lastName = route().name;
 // How deep each page sits: a tab is 0, what a tab opens is 1, a page opened from those is 2. Deeper is a push,
 // shallower is back, and one tab to another is a load with its stagger (M4).
-const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 1, nightstand: 1, light: 2, timing: 2, add: 2 };
+const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 0, nightstand: 1, light: 2, timing: 2, add: 2 };
 // The evening wind-down is a page of its own under the Routines tab (#routines/winddown, its sheets
 // #routines/winddown-*), so it sits one deeper than the tab even though it shares the tab's route name.
 const depthOf = r => (r.name === 'routines' && /^winddown/.test(r.id || '') ? 1 : DEPTH[r.name] ?? 1);

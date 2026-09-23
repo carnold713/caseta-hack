@@ -131,8 +131,7 @@ export function view(c) {
     <header class="home-head">
       <button class="greet ${st === 'off' ? 'off' : ''}" data-act="conn-open" aria-label="Connection" data-xf="standard">${greet}</button>
       <h1 class="t-h1">${esc(name)}</h1>
-      <button class="hdr-btn a2" data-go="activity" aria-label="Recent activity">${icon('clock', 20, 1.7)}</button>
-      <button class="hdr-btn a1" data-go="settings" aria-label="Settings">${icon('gear', 20, 1.7)}</button>
+      <button class="hdr-btn a1" data-go="activity" aria-label="Recent activity">${icon('clock', 20, 1.7)}</button>
     </header>
     ${st === 'off' ? offlineCard(c) : ''}
     ${empty ? `<div class="connect-card"><span class="ic-c">${icon('wifi', 22, 1.6)}</span><p class="t-row">Let's connect your home</p><p class="t-cap muted">A small helper program on a computer in your house links this app to your Lutron bridge. About ten minutes, once.</p><button class="pill blue" data-go="settings/how">Show me how</button></div>` : ''}

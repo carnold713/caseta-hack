@@ -152,8 +152,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       check(`${width}: ${p} fits the width`, over <= 0, over);
     }
     await goto('home');
-    const edges = await C(() => { const t = document.querySelector('.tabbar').getBoundingClientRect(), h = document.querySelector('.house').getBoundingClientRect(); return [t.left, innerWidth - t.right, h.left, innerWidth - h.right].map(Math.round); });
-    check(`${width}: the tab bar and the cards sit 20 from each edge`, edges.every(e => e === 20), edges);
+    const edges = await C(() => { const h = document.querySelector('.house').getBoundingClientRect(); return [h.left, innerWidth - h.right].map(Math.round); });
+    check(`${width}: the cards sit 20 from each edge`, edges.every(e => e === 20), edges);
+    // five tabs since Settings joined them, and the bar only as wide as its circles, centred
+    const bar = await C(() => { const t = document.querySelector('.tabbar').getBoundingClientRect(); return { n: document.querySelectorAll('.tabbar button').length, w: Math.round(t.width), l: Math.round(t.left), r: Math.round(innerWidth - t.right) }; });
+    check(`${width}: the tab bar holds five tabs, 328 wide and centred`, bar.n === 5 && bar.w === 328 && Math.abs(bar.l - bar.r) <= 1, bar);
     await goto('settings');
     await C(() => window.scrollTo(0, document.documentElement.scrollHeight)); await wait(300);
     const gap = await C(() => { const kids = [...document.querySelector('.settings-page').children].filter(e => e.getBoundingClientRect().height); const last = kids[kids.length - 1].getBoundingClientRect(); return Math.round(document.querySelector('.tabbar').getBoundingClientRect().top - last.bottom); });
