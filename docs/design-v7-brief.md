@@ -10,7 +10,7 @@ people who then build the frames in Figma. Read it whole before starting.
 ## What exists
 
 - The Figma file `jhFLTG342sNF9LyGll8LDf`, page **Pico App** (`12728:20`): the v6 frames 01 to 25, the foundations
-  board `00 · Copper Night — foundations & map`, the icon set `00b`, the motion board `M · Motion principles`
+  board 00 (Copper Night foundations and map), the icon set `00b`, the motion board `M · Motion principles`
   (`12761:76`) and the seven worked animations M1 to M7, and the section **Revisions · the whole-house card as
   built** (the Home card as it now works). Screens to know first: 02 Home (`12732:48971`), 03 Room
   (`12733:20`), 04 Light (`12731:22`), 05 Colour (`12732:48591`), 05b White (`12732:49220`), 06 Follow the day
