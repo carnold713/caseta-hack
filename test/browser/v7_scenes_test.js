@@ -109,10 +109,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('6: tapped again when already showing: one soft ring, and the scene is sent again', same.soft && !same.wave && sent.length === 1, { same, cmds: await cmds() });
   check('6: with no "already showing" notice', !/Already showing/.test(await toastText()), await toastText());
   await wait(900);
-  // hold the chip: it opens for changing
+  // hold the chip: it opens for changing, over the room (roomscene_test has the rest of that)
   const cb = await page.locator(chip).first().boundingBox();
   await page.mouse.move(cb.x + cb.width / 2, cb.y + 20); await page.mouse.down(); await wait(700); await page.mouse.up(); await wait(900);
-  check('6: holding a chip opens the scene to change it', page.url().endsWith(`#scenes/${sceneId}`), page.url());
+  check('6: holding a chip opens the scene to change it, over the room', /#room\/[^/]+\/scene\//.test(page.url()) && page.url().endsWith(`/scene/${sceneId}`), page.url());
 
   // ==== 7 · The stage
   await wait(600);
