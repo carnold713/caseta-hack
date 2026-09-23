@@ -88,11 +88,12 @@ function assume(ids, level, { held = false } = {}) { if (data.connState() === 'o
 let toastTimer = null;
 function toast(msg, opts = {}) {
   const root = $('#toast-root');
-  const undo = opts.undo ? `<button class="act" data-act="toast-undo">Undo</button>` : '';
-  root.innerHTML = `<div class="toast ${opts.err ? 'err' : ''}" role="status">${icon(opts.err ? 'x' : opts.icon || 'check', 20, 1.8)}<span class="msg">${esc(msg)}</span>${undo}</div>`;
+  // "Undo" for a change; "Put back" for a scene, Goodnight or Try it (opts.undoLabel), which may stay longer (opts.ms)
+  const undo = opts.undo ? `<button class="act" data-act="toast-undo">${esc(opts.undoLabel || 'Undo')}</button>` : '';
+  root.innerHTML = `<div class="toast ${opts.err ? 'err' : ''}" role="status"${opts.ms ? ` style="--toast-ms:${opts.ms}ms"` : ''}>${icon(opts.err ? 'x' : opts.icon || 'check', 20, 1.8)}<span class="msg">${esc(msg)}</span>${undo}</div>`;
   root._undo = opts.undo || null;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { root._undo = null; const t = root.firstElementChild; if (t) motion.leave(t); }, 5000);
+  toastTimer = setTimeout(() => { root._undo = null; const t = root.firstElementChild; if (t) motion.leave(t); }, opts.ms || 5000);
 }
 
 // ---------- the sheet ----------
@@ -171,6 +172,8 @@ const ctx = {
   // swap the page's sub route in place (White to Colour on the same sheet): no new step for the back button
   swap: hash => { history.replaceState(null, '', '#' + hash); render(); },
   conn: () => data.connState(),
+  // whether a route is built here (Goodnight hands off to #nightstand only when it is)
+  has: name => !!SCREENS[name],
   ui: { dragging: false },
 };
 
