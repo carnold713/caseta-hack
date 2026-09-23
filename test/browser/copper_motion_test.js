@@ -48,7 +48,8 @@ const running = () => document.getAnimations().map(a => {
   check('durations: tap .12, sheet .42 / .28, push .3, dimmer .4, scene 1.0', tok.slice(5).join() === '120ms,420ms,280ms,300ms,400ms,1000ms', tok.slice(5));
 
   // ---- M4 · the app opening is a load: its blocks fade in and rise 12 px, 0.32 s, 0.04 s apart
-  await page.goto(root + '#rooms'); await ready(); await wait(30);
+  // (a real reload: going to the same page with a new hash would only be a tab change)
+  await C(() => history.replaceState(null, '', '#rooms')); await page.reload(); await ready(); await wait(30);
   let a = await anims();
   const rise = a.filter(x => x.dur === 320 && x.props.includes('transform') && /translateY\(12px\)/.test(x.from.transform || ''));
   const delays = [...new Set(rise.map(x => x.delay))].sort((p, q) => p - q);

@@ -99,7 +99,7 @@ export function after(c, r, root) {
     c.gate.sendLevel(ids.map(id => `d:${id}`), v);
   };
   // a sideways drag only: a finger passing over it on the way up or down the page scrolls the page (gesture.js)
-  track(bar, { c, axis: 'x', move: e => set(e.clientX) });
+  track(bar, { c, axis: 'x', start: () => bar.classList.add('held'), move: e => set(e.clientX) });
 }
 
 export const actions = {

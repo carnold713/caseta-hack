@@ -249,13 +249,17 @@ app.get('/install.sh', requireAuth, (req, res) => {
   res.type('text/x-shellscript').send(body);
 });
 
-// Digital Asset Links for the PWABuilder Android package (Trusted Web Activity).
+// Digital Asset Links for the PWABuilder Android package (Trusted Web Activity). Set on the host (ASSETLINKS_JSON,
+// or ANDROID_PACKAGE_NAME with ANDROID_CERT_SHA256) it wins; otherwise the one kept in hub/assetlinks.json.
+const ASSETLINKS_FILE = path.join(__dirname, 'assetlinks.json');
 app.get('/.well-known/assetlinks.json', (req, res) => {
   res.type('application/json');
   if (process.env.ASSETLINKS_JSON) return res.send(process.env.ASSETLINKS_JSON);
   const pkg = process.env.ANDROID_PACKAGE_NAME;
   const sha = process.env.ANDROID_CERT_SHA256;
-  if (!pkg || !sha) return res.send('[]');
+  if (!pkg || !sha) {
+    try { return res.send(JSON.stringify(JSON.parse(fs.readFileSync(ASSETLINKS_FILE, 'utf8')))); } catch (_) { return res.send('[]'); }
+  }
   res.send(JSON.stringify([{
     relation: ['delegate_permission/common.handle_all_urls'],
     target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: sha.split(',').map(s => s.trim()) }

@@ -58,15 +58,37 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const light = await C(() => { const c = window.__copper; return c.data.controllable().find(d => d.domain === 'light').device_id; });
   await goto(`light/${light}`);
   await C(() => { window.__sent = []; });
-  const dialAt = () => C(() => document.querySelector('.dial').getAttribute('aria-valuenow'));
+  // the light's level (the dial's own number glides, so it can be between values for a moment)
+  const dialAt = () => C(id => window.__copper.data.level(id), light);
+  await wait(600);
   before = await dialAt();
-  const arc = await C(() => { const s = document.querySelector('.dial svg').getBoundingClientRect(), d = document.querySelector('.dial').getBoundingClientRect(); return [Math.round(s.left - d.left + 30), 150]; });
+  // a point on the arc well away from the knob (the knob itself takes a finger at once, which is the point of it)
+  const arc = await C(lv => { const s = document.querySelector('.dial svg').getBoundingClientRect(), d = document.querySelector('.dial').getBoundingClientRect(); const p = lv < 50 ? 85 : 15; const a = Math.PI * (1 - p / 100); return [Math.round(s.left - d.left + 170 + 150 * Math.cos(a)), Math.round(170 - 150 * Math.sin(a))]; }, before || 0);
   await finger('.dial', [arc, [arc[0] + 2, arc[1] - 20], [arc[0] + 3, arc[1] - 70]], { cancel: true });
-  check('a scroll that starts on the dial changes nothing', (await dialAt()) === before && (await sent()) === 0);
+  check('a scroll that starts on the dial changes nothing', (await dialAt()) === before && (await sent()) === 0, { before, now: await dialAt(), sent: await sent() });
   const k = await C(() => { const g = document.querySelector('.dial .kgrab').getBoundingClientRect(), d = document.querySelector('.dial').getBoundingClientRect(); return [Math.round(g.left - d.left + 28), Math.round(g.top - d.top + 28)]; });
   await finger('.dial', [k, [k[0] - 30, k[1] - 40], [k[0] - 80, k[1] - 80]]);
   check('the knob takes a finger in any direction', (await sent()) > 0 && (await dialAt()) !== before, { sent: await sent(), v: await dialAt() });
   await wait(1600);
+
+  // ---- switching a light on while the evening curve is on: it shows the level it is about to be, from the first
+  //      frame, and the dial glides there: no 100% first and then a jump down to the evening's level
+  const adaptive0 = await C(() => JSON.stringify(window.__copper.S.config.settings.adaptive || null));
+  await C(async () => { const c = window.__copper; c.S.config.settings.adaptive = { ...(c.S.config.settings.adaptive || {}), enabled: true }; await c.data.saveConfig(); });
+  await goto(`light/${light}`);
+  if (await C(() => !!document.querySelector('.dev.on'))) { await C(() => document.querySelector('[data-act="dev-off"]').click()); await wait(1200); }
+  const want = await C(id => window.__copper.onLevel(id, `d:${id}`), light);
+  const seen = await C(async () => {
+    document.querySelector('[data-act="dev-on"]').click();
+    const out = [];
+    for (let i = 0; i < 30; i++) { out.push(Number(document.querySelector('.dial').getAttribute('aria-valuenow'))); await new Promise(r => setTimeout(r, 50)); }
+    return out;
+  });
+  check('on at the evening level: the dial never goes past where the light ends up', Math.max(...seen) <= want + 1, { want, seen });
+  check('it rises there without a jump (no step bigger than a glide makes)', seen.every((v, i) => !i || Math.abs(v - seen[i - 1]) <= 40), seen);
+  check('and the light is where the app said it would be', Math.abs((await C(id => window.__copper.data.level(id), light)) - want) <= 1, { want, got: await C(id => window.__copper.data.level(id), light) });
+  await C(async a => { const c = window.__copper; c.S.config.settings.adaptive = JSON.parse(a) || undefined; if (!c.S.config.settings.adaptive) delete c.S.config.settings.adaptive; await c.data.saveConfig(); }, adaptive0);
+  await wait(400);
 
   // ---- a sheet swiped away, and one let go too soon
   const touch = (sel, ys) => C(([s, ys]) => {

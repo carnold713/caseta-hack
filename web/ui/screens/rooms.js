@@ -61,6 +61,7 @@ export const actions = {
 export function roomPower(c, aid, want) {
   const ls = c.H.roomLights(aid).map(d => d.device_id);
   const on = want != null ? want : !ls.some(id => (c.data.level(id) || 0) > 0);
-  c.assume(ls, on ? (c.S.config.settings.group_on_level || 100) : 0); c.soon();
+  for (const id of ls) c.assume([id], on ? c.onLevel(id, `a:${aid}`) : 0);
+  c.soon();
   c.run({ type: 'level', target: `a:${aid}`, level: on ? 'on' : 'off' });
 }

@@ -312,9 +312,11 @@ That already gives you a full-screen app with an icon.
 For a real APK / Play-Store style install, go to
 [pwabuilder.com](https://www.pwabuilder.com), paste the URL, and package
 for Android. PWABuilder gives you a signing-key SHA-256 fingerprint and a
-package name; put them in `ANDROID_CERT_SHA256` and `ANDROID_PACKAGE_NAME`
-on Railway. The hub serves them at `/.well-known/assetlinks.json`, which is
-what makes Android trust the app and hide the browser bar.
+package name. The hub serves them at `/.well-known/assetlinks.json`, which is
+what makes Android trust the app and hide the browser bar: from
+`hub/assetlinks.json` in the repo (the current Android package's), unless
+`ANDROID_CERT_SHA256` and `ANDROID_PACKAGE_NAME` (or a whole `ASSETLINKS_JSON`)
+are set on Railway, which win.
 
 ### Updating the connector
 

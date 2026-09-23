@@ -289,6 +289,8 @@
   background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, .45);
 }
 /* the hem is the grip: a band across the window, 56 tall, centred on it */
+.window:not(.held) .fabric { transition: height var(--dimmer) var(--ease-both); }
+.window:not(.held) .handle { transition: top var(--dimmer) var(--ease-both); }
 .window .hem-grab { position: absolute; left: 0; right: 0; top: calc(var(--down) * 3px - 28px); height: 56px; touch-action: none; cursor: grab; }
 .window .handle i { position: absolute; left: 28px; top: 9px; width: 24px; height: 2px; border-radius: 1px; background: rgba(0, 0, 0, .25); }
 .readout { position: absolute; left: calc(50% + 90px); top: calc(336px + var(--down) * 3px - 34px); pointer-events: none; }
@@ -623,7 +625,7 @@
 .rcard.pressed { box-shadow: inset 0 0 0 2px var(--blue); }
 .rc-stage { position: absolute; left: 8px; right: 8px; top: 8px; height: 136px; border-radius: 20px; overflow: hidden; display: grid; place-items: center; background: radial-gradient(closest-side, #3C3C3C, #262626); }
 .rc-cap { position: absolute; left: 18px; top: 104px; width: 128px; height: 24px; border-radius: 12px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 500; line-height: 24px; text-align: center; }
-.rc-nm { position: absolute; left: 16px; right: 16px; top: 150px; font-size: 20px; font-weight: 500; line-height: 24px; }
+.rc-nm { position: absolute; left: 16px; right: 8px; top: 150px; font-size: 20px; font-weight: 500; line-height: 24px; }
 .rc-st { position: absolute; left: 16px; top: 178px; right: 12px; font-size: 14px; line-height: 18px; color: var(--text-2); }
 .rc-usual { position: absolute; left: 16px; top: 198px; border: 0; padding: 0; background: none; color: var(--text-1); font: inherit; font-size: 14px; font-weight: 500; line-height: 18px; }
 .rc-err { position: absolute; left: 16px; top: 177px; right: 12px; display: flex; gap: 6px; font-size: 14px; line-height: 18px; color: var(--err); }

@@ -60,6 +60,21 @@ async function save(msg, opts = {}) {
 let saveTimer = null;
 function saveSoon(ms = 700) { clearTimeout(saveTimer); saveTimer = setTimeout(() => save('', { quiet: true }), ms); }
 // Show a light's new level before the bridge confirms it, so a tap feels like it landed.
+// What "on" will mean for a light right now, decided the way the connector decides it (engine.on_level_for), so a
+// light switched on shows the level it is about to be and does not jump when the bridge answers: a task light comes
+// on at the home's level, a light set with its own level at that, anything else at the evening curve's level while
+// the wind-down is on (30% late at night, say), and otherwise at the home's level.
+function onLevel(id, target) {
+  const s = S.config.settings || {};
+  const base = Number(s.group_on_level) || 100;
+  if ((s.roles || {})[id] === 'task') return base;
+  if (typeof target === 'string' && target.startsWith('g:')) {
+    const g = (S.config.groups || []).find(x => x.id === target.slice(2));
+    if (g && g.on_level) return Number(g.on_level);
+  }
+  const cl = RT.curveLevelNow();
+  return cl != null ? cl : base;
+}
 // A slider held by a finger also holds that level against the bridge's echoes of the values it passed through.
 function assume(ids, level, { held = false } = {}) { for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; if (held) data.hold(ids); }
 
@@ -146,7 +161,7 @@ function go(hash) { if (location.hash === '#' + hash) render(); else location.ha
 const ctx = {
   data, H, DAY, EDIT, REM, RT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
   openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
-  run, gate, save, saveSoon, assume, toast, go, openSheet, closeSheet, render: () => render(),
+  run, gate, save, saveSoon, assume, onLevel, toast, go, openSheet, closeSheet, render: () => render(),
   // swap the page's sub route in place (White to Colour on the same sheet): no new step for the back button
   swap: hash => { history.replaceState(null, '', '#' + hash); render(); },
   conn: () => data.connState(),
@@ -382,7 +397,7 @@ const SHARED = {
     const id = el.dataset.id; const d = data.dev(id); if (!d) return;
     if (d.domain === 'fan') { const on = data.isOn(id); run({ type: 'fan', target: `d:${id}`, speed: on ? 'Off' : 'Medium' }); return; }
     const on = data.isOn(id);
-    assume([id], on ? 0 : 100); soon();
+    assume([id], on ? 0 : onLevel(id, `d:${id}`)); soon();
     run({ type: 'level', target: `d:${id}`, level: on ? 'off' : 'on' });
   },
   // a scene chip: Lutron scenes and the app's own run the same way

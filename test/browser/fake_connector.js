@@ -56,6 +56,16 @@ function curveLevel() {
   const lv = h < 7.5 ? 60 : h < 19.5 ? 100 : h < 22 ? Math.round(100 - (h - 19.5) / 2.5 * 50) : 15;
   return ad.enabled ? lv : null;
 }
+// What "on" means for a light right now, as engine.on_level_for decides: a task light at the home's level, a light
+// set with its own level at that, else the evening curve while the wind-down is on, else the home's level.
+function onLevel(id, target) {
+  const st = (config && config.settings) || {};
+  const base = Number(st.group_on_level) || 100;
+  if ((st.roles || {})[id] === 'task') return base;
+  if (typeof target === 'string' && target.startsWith('g:')) { const g = ((config && config.groups) || []).find(x => x.id === target.slice(2)); if (g && g.on_level) return Number(g.on_level); }
+  const cl = curveLevel();
+  return cl != null ? cl : base;
+}
 function sun() {
   const n = now(); const s = sunToday(n);
   const loc = config && config.settings && config.settings.location;
@@ -189,7 +199,7 @@ ws.on('message', raw => {
       const upd = {};
       // remember what was lit before the house goes dark, like the connector does
       if (a.level === 'off' || a.level === 0 || a.level === 'toggle') { const lit = {}; for (const [id, st] of Object.entries(states)) if ((st.level || 0) > 0) lit[id] = st.level; if (Object.keys(lit).length) lastOn = lit; }
-      for (const id of ids) { const cur = (states[id] || {}).level || 0; const v = a.level === 'toggle' ? (ids.some(x => ((states[x] || {}).level || 0) > 0) ? 0 : 100) : a.level === 'on' ? 100 : a.level === 'off' ? 0 : Number(a.level); states[id] = { ...(states[id] || {}), level: v }; upd[id] = states[id]; if (cur === v) continue; }
+      for (const id of ids) { const cur = (states[id] || {}).level || 0; const v = a.level === 'toggle' ? (ids.some(x => ((states[x] || {}).level || 0) > 0) ? 0 : onLevel(id, a.target)) : a.level === 'on' ? onLevel(id, a.target) : a.level === 'off' ? 0 : Number(a.level); states[id] = { ...(states[id] || {}), level: v }; upd[id] = states[id]; if (cur === v) continue; }
       if (Object.keys(upd).length) setTimeout(() => { send({ type: 'state', states: upd }); for (const id of Object.keys(upd)) followZone(id, upd[id].level); }, lag);
     }
     if (a.type === 'color' && a.follow) {

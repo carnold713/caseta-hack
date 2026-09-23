@@ -168,8 +168,11 @@ const FAN = [
   if (starred0) { await page.click('[data-act="star"]'); await wait(1200); }
   const svg = await page.locator('.dial > svg').boundingBox();
   const s = svg.width / 340; const pt = p => { const a = Math.PI * (1 - p / 100); return [svg.x + (170 + 150 * Math.cos(a)) * s, svg.y + (170 - 150 * Math.sin(a)) * s]; };
-  await page.mouse.move(...pt(2)); await page.mouse.down();
-  for (let p = 10; p <= 80; p += 10) { await page.mouse.move(...pt(p)); await wait(50); }
+  // the knob is the grip (a finger anywhere else on the arc only moves it sideways, so a scroll stays a scroll)
+  const from = await lv('5');
+  await page.mouse.move(...pt(from)); await page.mouse.down();
+  for (let p = from + (80 > from ? 5 : -5); 80 > from ? p <= 80 : p >= 80; p += 80 > from ? 5 : -5) { await page.mouse.move(...pt(p)); await wait(50); }
+  await page.mouse.move(...pt(80)); await wait(50);
   await page.mouse.up(); await wait(1500);
   const v = await lv('5');
   check('dragging the arc to 80 sets 80', v >= 78 && v <= 82, v);
@@ -226,7 +229,9 @@ const FAN = [
   await page.mouse.move(bar.x + bar.width * 0.6, bar.y + 28); await page.mouse.down();
   await page.mouse.move(bar.x + bar.width * 0.3, bar.y + 28, { steps: 6 }); await page.mouse.up(); await wait(1600);
   const hl = await C(() => window.__copper.H.houseLevel());
-  check('the house bar moves what is on', hl >= 27 && hl <= 33, hl);
+  // the knob stays under the finger: it sits 28 inside the fill's end, so the level is where the finger is plus 28
+  const want = Math.round((bar.width * 0.3 + 28) / bar.width * 100);
+  check('the house bar moves what is on, the knob under the finger', Math.abs(hl - want) <= 3, { hl, want });
   const hold = await page.locator('[data-hold="goodnight"]').boundingBox();
   await page.mouse.move(hold.x + 22, hold.y + 22); await page.mouse.down(); await wait(400); await page.mouse.up(); await wait(900);
   check('a short press of Goodnight does nothing', (await C(() => window.__copper.H.litLights().length)) > 0);

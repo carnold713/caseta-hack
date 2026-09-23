@@ -197,9 +197,39 @@ function shadeView(c, d) {
 export function after(c, r, root) {
   const d = c.data.dev(r.id); if (!d) return;
   const id = d.device_id;
-  if (d.domain === 'light') wireDial(c, id, root.querySelector('[data-drag="dial"]'));
+  if (d.domain === 'light') { const el = root.querySelector('[data-drag="dial"]'); wireDial(c, id, el); glide(c, id, el); }
   if (d.domain === 'cover') wireShade(c, id, root.querySelector('[data-drag="shade"]'));
 }
+
+// The dial never jumps. Whatever it last showed, it moves from there to the level now: a tap on On, the bridge
+// answering with the evening's 30% after a light came on, a scene arriving. Things the app decides happen slowly:
+// the dimmer's 0.4 s EASE_IN_AND_OUT for one light, the scene's 1.0 s while a scene arrives. Under a finger it is
+// the finger's (set() writes `shown` as it paints).
+const shown = {};
+let tween = 0;
+const easeInOut = t => (t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+function glide(c, id, el) {
+  cancelAnimationFrame(tween);
+  if (!el) return;
+  const to = Number(el.getAttribute('aria-valuenow')) || 0;
+  const from = shown[id];
+  shown[id] = to;
+  if (from == null || from === to || c.ui.dragging || reduced()) return;
+  const ms = document.body.classList.contains('scene-arriving') ? 1000 : 400;
+  const t0 = performance.now();
+  paintDial(el, from); shown[id] = from;
+  const step = now => {
+    if (!el.isConnected) return;
+    const t = Math.min(1, (now - t0) / ms);
+    const v = Math.round(from + (to - from) * easeInOut(t));
+    paintDial(el, v); shown[id] = v;
+    if (t < 1) tween = requestAnimationFrame(step);
+  };
+  tween = requestAnimationFrame(step);
+}
+const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Leaving a light's page forgets what its dial showed, so coming back does not glide from an old level.
+export function leave() { cancelAnimationFrame(tween); for (const k of Object.keys(shown)) delete shown[k]; }
 
 function paintDial(el, v) {
   const [kx, ky] = arcPoint(v);
@@ -225,7 +255,8 @@ function wireDial(c, id, el) {
   const near = e => { const b = svg.getBoundingClientRect(); const s = b.width / 340; const dx = e.clientX - (b.left + CX * s), dy = e.clientY - (b.top + CY * s); const r = Math.hypot(dx, dy) / s; return r > 100 && r < 200 && dy < 20 * s; };
   const set = v => {
     v = Math.max(0, Math.min(100, v));
-    paintDial(el, v);
+    cancelAnimationFrame(tween);
+    paintDial(el, v); shown[id] = v;
     c.assume([id], v, { held: true });
     c.gate.sendLevel(`d:${id}`, v);
     el.closest('.dev').classList.toggle('on', v > 0);
@@ -248,7 +279,7 @@ function wireShade(c, id, el) {
     c.gate.sendLevel(`d:${id}`, v);
   };
   // the shade moves by its hem: a finger on the hem takes it up or down; anywhere else on the window scrolls
-  track(el, { c, grab: e => !!e.target.closest('.hem-grab'), move: e => set(at(e)) });
+  track(el, { c, grab: e => !!e.target.closest('.hem-grab'), start: () => el.classList.add('held'), move: e => set(at(e)) });
 }
 
 // ---------- taps ----------
@@ -259,7 +290,7 @@ export const actions = {
   'dev-on'(c, el, r) {
     const d = c.data.dev(r.id); if (!d || c.data.isOn(r.id)) return;
     if (d.domain === 'fan') { fanTo(c, r.id, 'Medium'); return; }
-    c.assume([r.id], d.domain === 'light' ? (c.S.config.settings.group_on_level || 100) : 100); c.soon();
+    c.assume([r.id], d.domain === 'light' ? c.onLevel(r.id, `d:${r.id}`) : 100); c.soon();
     c.run({ type: 'level', target: `d:${r.id}`, level: 'on' });
   },
   'dev-off'(c, el, r) {

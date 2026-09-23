@@ -407,6 +407,12 @@
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
 }
+/* When the house changes rather than a finger (a light switched on comes up to the evening's level, a scene, another
+   phone), the bar moves there on the dimmer's 0.4 s instead of jumping. Under a finger (.held) it is the finger's. */
+.hbar:not(.held) .fill { transition: width var(--dimmer) var(--ease-both); }
+.hbar:not(.held) .knob { transition: left var(--dimmer) var(--ease-both); }
+.scene-arriving .hbar:not(.held) .fill { transition-duration: var(--scene); }
+.scene-arriving .hbar:not(.held) .knob { transition-duration: var(--scene); }
 
 /* Hold to turn the house off: 1000 ms. A white 8% track with a white 2px arc on it, and at rest the
    arc is already an eighth of the way round, as the hint that this is held rather than tapped. Not
