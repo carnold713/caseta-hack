@@ -123,7 +123,7 @@ export const actions = {
     // the file stays on the hub, so Undo has something to come back to; a new photo or deleting the room replaces it
     const had = room.photo; room.photo = null;
     await c.save('', { quiet: true });
-    c.toast('Photo removed', { undo: async () => { room.photo = had; await c.save('Photo put back'); } });
+    c.toast('Photo removed', { keepUndo: true, undo: async () => { room.photo = had; await c.save('Photo put back'); } });
   },
   'setup-follow'(c, el, r) {
     const lamps = c.DAY.roomFollowLamps(r.id).map(d => d.device_id);

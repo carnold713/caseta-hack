@@ -439,7 +439,8 @@ export const actions = {
     const d = c.data.dev(r.id); if (!d) return;
     const was = before(c, d.device_id);
     const k = setWhite(c, d, Number(el.dataset.k)); c.soon();
-    c.toast(`${d.name} · ${k}K, the day’s white now. Hold the sun to follow it.`, { undo: undoTo(c, d, was) });
+    // the light shows the change; the note stays for what it teaches (a hold on the sun follows the day)
+    c.toast(`${d.name} · ${k}K, the day’s white now. Hold the sun to follow it.`);
   },
   // held for 0.6 s, the sun fills with light and the lamp follows the day
   'white-follow'(c, el, r) {

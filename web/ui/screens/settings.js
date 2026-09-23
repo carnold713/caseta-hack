@@ -234,7 +234,8 @@ function restore(c, text) {
   if (!cfg || typeof cfg !== 'object' || !cfg.settings) { c.toast('That is not a settings backup', { err: true }); return; }
   c.S.config = cfg; c.ui.restoreText = '';
   c.closeSheet(); history.replaceState(null, '', '#settings');
-  c.save('Settings restored');
+  // the whole configuration replaced: like a deletion, nothing on the page brings the old one back, so it keeps Undo
+  c.save('Settings restored', { keepUndo: true });
 }
 
 export const actions = {

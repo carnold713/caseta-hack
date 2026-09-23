@@ -125,12 +125,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
     await tap('#sheet-root [data-act="restore-go"]'); await wait(800);
     check('a backup restores', (await cfg()).settings.home_name === 'Restored');
-    // restoring is a change, not a deletion: no toast and no Undo (2ca8d0a)
+    // restoring replaces the whole configuration, which nothing on the page brings back, so like a deletion it says so
+    // with Undo; and Undo puts the name back for what follows
     const rtoast = await C(() => document.querySelector('#toast-root').textContent);
-    check('with no toast and no Undo', rtoast === '', rtoast);
-    // put the name back directly, as the rest of this test expects it
-    await C(async () => { const c = window.__copper; c.S.config.settings.home_name = 'Test Home'; await c.data.saveConfig(); });
-    check('the name is put back for what follows', (await cfg()).settings.home_name === 'Test Home');
+    check('it says so, with Undo', /Settings restored/.test(rtoast) && /Undo/.test(rtoast), rtoast);
+    await tap('#toast-root [data-act="toast-undo"]'); await wait(800);
+    check('Undo puts the settings back', (await cfg()).settings.home_name === 'Test Home', (await cfg()).settings.home_name);
 
     // ---- 20 Add a device: the fake bridge hears a Pico 2.5 s after listening starts
     await goto('add');

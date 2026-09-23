@@ -264,7 +264,8 @@ async function runWave(c, el, r, p) {
   setTimeout(() => {
     if (wave !== me || c.conn() === 'off') return;
     const m = missed(c, p); if (!m.length) return;
-    c.toast(m.length === 1 ? `${m[0].name} didn't change` : `${m.length} lights didn't change`, { undo: () => c.run({ type: 'preset', preset_id: p.id }), undoLabel: 'Try again', ms: 8000 });
+    // a failure, not an Undo: an error always shows, and keeps its Try again
+    c.toast(m.length === 1 ? `${m[0].name} didn't change` : `${m.length} lights didn't change`, { err: true, undo: () => c.run({ type: 'preset', preset_id: p.id }), undoLabel: 'Try again', ms: 8000 });
   }, Math.max(1, fade) * 1000 + 2500);
 }
 
