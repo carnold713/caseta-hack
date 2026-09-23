@@ -70,6 +70,15 @@
   --dimmer: 400ms;
   --scene: 1000ms;
   --breathe: 1600ms;
+  /* v7's five (design-v7-ui.md, "The five proposed tokens"): a living house moves slower than attention (ambient);
+     a scene spreads through space, 60 ms per 100 px from where it was tapped (wave); a thing that flies to its
+     place is placed, not thrown (land); the offline ember rests at three breaths of the reconnecting dot (ember);
+     light arriving in the dark comes slower than the dimmer (night fade). */
+  --ambient: 8000ms;
+  --wave: 60ms;
+  --land: 600ms;
+  --ember: 4800ms;
+  --night-fade: 1600ms;
   /* The four curves every token is built from, as get_motion_context returns them for the file's
      "Easing reference" (12761:76): standard cubic, EASE_IN for exits, EASE_IN_AND_OUT for the dimmer, the scene
      and the breathing dot, and two springs. GENTLE is the sheet's (it overshoots 2.8% and settles); QUICK is a

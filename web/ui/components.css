@@ -455,3 +455,14 @@
 .sheet.still, .scrim.still { animation: none; }
 .sheet { animation-name: sheetrise; }
 @keyframes sheetrise { from { transform: translateY(100%); } }
+
+/* A glow (web/ui/glow.js): three radial layers sharing a centre, blended screen so lights add. Sized and coloured by
+   custom properties, so a new level or colour on a live element fades on the dimmer instead of jumping. Off is no
+   light at all. Put it inside the thing it lights, which clips it (overflow: hidden) unless it is meant to bleed. */
+.glow { position: absolute; left: var(--g-x, 50%); top: var(--g-y, 50%); width: 0; height: 0; pointer-events: none; z-index: 0; }
+.glow > i { position: absolute; left: 0; top: 0; border-radius: 50%; mix-blend-mode: screen; transform: translate(-50%, -50%) scale(1);
+  transition: width var(--dimmer) var(--ease-both), height var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both), background var(--dimmer) var(--ease-both); }
+.glow .g-wash { width: calc(var(--g-d) * 1.6); height: calc(var(--g-d) * 1.6); background: radial-gradient(closest-side, var(--g-wash), transparent); filter: blur(var(--g-blur, 32px)); }
+.glow .g-body { width: var(--g-d); height: var(--g-d); background: radial-gradient(closest-side, var(--g-body), var(--g-body-mid) 45%, transparent); }
+.glow .g-core { width: calc(var(--g-d) * .32); height: calc(var(--g-d) * .32); background: radial-gradient(closest-side, var(--g-core), transparent); opacity: var(--g-core-on, 1); }
+.glow.off > i { opacity: 0; transform: translate(-50%, -50%) scale(.85); }
