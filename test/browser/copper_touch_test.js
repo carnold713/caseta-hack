@@ -54,6 +54,22 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('and the knob is under the finger', Math.abs(kn - 200) <= 2, kn);
   await wait(1600);
 
+  // ---- the bridge talking while a finger is still deciding (the first few px) must not take the bar away
+  await C(() => { window.__sent = []; });
+  const kept = await C(async () => {
+    const el = document.querySelector('.hbar'); const b = el.getBoundingClientRect();
+    const ev = (type, x) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 11, pointerType: 'touch', isPrimary: true, clientX: b.left + x, clientY: b.top + 28 }));
+    ev('pointerdown', 150);
+    window.__copper.render(); window.__copper.soon();
+    await new Promise(r => setTimeout(r, 150));
+    const same = document.querySelector('.hbar') === el;
+    ev('pointermove', 154); ev('pointermove', 175); ev('pointermove', 230); ev('pointerup', 230);
+    return same;
+  });
+  check('a redraw waits while a finger is on the bar, so the bar is not swapped out from under it', kept);
+  check('and the drag that follows works', (await sent()) > 0, await sent());
+  await wait(1600);
+
   // ---- a light's dial
   const light = await C(() => { const c = window.__copper; return c.data.controllable().find(d => d.domain === 'light').device_id; });
   await goto(`light/${light}`);

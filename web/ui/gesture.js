@@ -24,16 +24,23 @@ export const scrollingNow = () => performance.now() - scrolledAt < AFTER_SCROLL;
 export function track(el, o) {
   if (!el) return;
   let g = null;   // the finger on it: {id, x, y, live}
+  // From the moment a finger lands on a control until it lifts or turns out to be a scroll, the app does not
+  // redraw: a redraw would replace this element under the finger, and the drag it was about to become with it.
+  const hold = () => { o.c.ui.dragging = true; };
+  const release = () => { if (o.c.ui.dragging) o.c.endDrag(); };
   const begin = e => {
     g.live = true;
-    o.c.ui.dragging = true;
-    try { el.setPointerCapture(e.pointerId); } catch (_) { /* fine */ }
+    hold();
     if (o.start) o.start(e);
     o.move(e);
   };
   el.addEventListener('pointerdown', e => {
     if (e.button > 0 || scrollingNow() || (o.accept && !o.accept(e))) { g = null; return; }
     g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), live: false };
+    hold();
+    // keep the finger (or the mouse) on this control even as it drifts off it while deciding; a touch that turns
+    // out to be a scroll still scrolls, because touch-action, not capture, decides that
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* fine */ }
     if (o.grab && o.grab(e)) { e.preventDefault(); begin(e); }
   });
   el.addEventListener('pointermove', e => {
@@ -42,16 +49,20 @@ export function track(el, o) {
     const dx = Math.abs(e.clientX - g.x), dy = Math.abs(e.clientY - g.y);
     if (Math.max(dx, dy) < SLOP) return;
     const along = o.axis === 'y' ? dy : dx, across = o.axis === 'y' ? dx : dy;
-    if (o.axis && along > across * RATIO) begin(e);
-    else g = null;   // it was a scroll (or a swipe the other way): this finger is not ours
+    if (o.axis && along > across * RATIO) { begin(e); return; }
+    // it was a scroll (or a swipe the other way): this finger is not ours, and the app may redraw again
+    g = null;
+    try { el.releasePointerCapture(e.pointerId); } catch (_) { /* fine */ }
+    release();
   });
   const finish = (e, cancelled) => {
     if (!g || (e && e.pointerId !== g.id)) return;
     const was = g; g = null;
-    if (was.live) { if (o.end) o.end(); if (o.c.ui.dragging) o.c.endDrag(); return; }
-    if (!cancelled && o.tap && performance.now() - was.t < 500 && Math.hypot(e.clientX - was.x, e.clientY - was.y) < SLOP) o.tap(e);
+    if (was.live && o.end) o.end();
+    if (!was.live && !cancelled && o.tap && performance.now() - was.t < 500 && Math.hypot(e.clientX - was.x, e.clientY - was.y) < SLOP) o.tap(e);
+    release();
   };
   el.addEventListener('pointerup', e => finish(e, false));
   el.addEventListener('pointercancel', e => finish(e, true));
-  el.addEventListener('lostpointercapture', e => { if (g && g.live && e.pointerId === g.id) finish(e, true); });
+  el.addEventListener('lostpointercapture', e => { if (g && e.pointerId === g.id) finish(e, true); });
 }
