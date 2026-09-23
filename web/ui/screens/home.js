@@ -56,7 +56,7 @@ export function view(c) {
 
     <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
-      <div class="house-head" data-xf>${lit.length ? `${lit.length} on · ${lv}%` : 'Everything is off'}</div>
+      <div class="house-head">${lit.length ? `${lit.length} on · <span data-hlv>${lv}</span>%` : 'Everything is off'}</div>
       ${lit.length ? `<div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="house" style="--pct:${lv}%" role="slider" aria-label="Brightness of the lights that are on" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
         <span class="fill"></span>
         <span class="lo">${icon('sun', 22, 1.8)}</span>
@@ -94,7 +94,9 @@ export function after(c, r, root) {
     c.ui.greeted = true;
     c.openSheet({ ...greetingSheet(c), key: 'greet', onClose: () => { c.S.config.settings.greeted = true; c.save('', { quiet: true }); } });
   }
-  const bar = root.querySelector('[data-drag="house"]'); if (!bar) return;
+  const bar = root.querySelector('[data-drag="house"]');
+  countTo(c, root.querySelector('[data-hlv]'));
+  if (!bar) return;
   const set = x => {
     const b = bar.getBoundingClientRect();
     // The knob sits inside the end of the fill (its centre 28 short of it), so the finger is kept on the knob:
@@ -104,6 +106,10 @@ export function after(c, r, root) {
     // the sun at the dim end steps aside when the knob comes over it
     bar.classList.toggle('low', v / 100 * b.width < 100);
     bar.setAttribute('aria-valuenow', v);
+    // the number above counts with the finger
+    cancelAnimationFrame(counting);
+    const n = document.querySelector('[data-hlv]'); if (n) n.textContent = v;
+    shownHouse = v;
     const ids = c.H.houseLevelTargets(); if (!ids.length) return;
     c.assume(ids, v, { held: true });
     c.gate.sendLevel(ids.map(id => `d:${id}`), v);
@@ -111,6 +117,34 @@ export function after(c, r, root) {
   // a sideways drag only: a finger passing over it on the way up or down the page scrolls the page (gesture.js)
   track(bar, { c, axis: 'x', start: () => bar.classList.add('held'), move: e => set(e.clientX) });
 }
+
+// The house level counts to where it is, never fades from one number to the next: with the finger as it drags
+// (set() writes it), and when the house changes by itself (a scene, the bridge settling a light) it counts there
+// over the dimmer's 0.4 s, or the scene's 1.0 s while a scene arrives.
+let shownHouse = null, counting = 0;
+const easeInOut = t => (t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+function countTo(c, el) {
+  cancelAnimationFrame(counting);
+  if (!el) { shownHouse = null; return; }
+  const to = Number(el.textContent) || 0;
+  const from = shownHouse;
+  shownHouse = to;
+  if (from == null || from === to || c.ui.dragging || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  const ms = document.body.classList.contains('scene-arriving') ? 1000 : 400;
+  const t0 = performance.now();
+  el.textContent = from; shownHouse = from;
+  const step = now => {
+    if (!el.isConnected) return;
+    const t = Math.min(1, (now - t0) / ms);
+    const v = Math.round(from + (to - from) * easeInOut(t));
+    el.textContent = v; shownHouse = v;
+    if (t < 1) counting = requestAnimationFrame(step);
+  };
+  counting = requestAnimationFrame(step);
+}
+
+// Leaving Home forgets the number shown, so coming back does not count from an old one.
+export function leave() { cancelAnimationFrame(counting); shownHouse = null; }
 
 // Under the bar: which lights it moves, by name. A tap on the held button borrows this line to say to hold it.
 function houseCaption(c, lit) {

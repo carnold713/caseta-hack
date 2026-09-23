@@ -56,6 +56,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('and the knob is under the finger', Math.abs(kn - 200) <= 2, kn);
   await wait(1600);
 
+  // ---- the number above the bar counts with the finger, while it is still down
+  const counted = await C(async () => {
+    const el = document.querySelector('.hbar'); const b = el.getBoundingClientRect();
+    const ev = (type, x) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: b.left + x, clientY: b.top + 28 }));
+    const seen = [];
+    ev('pointerdown', 80);
+    for (const x of [92, 120, 160, 200, 240]) { ev('pointermove', x); seen.push([Number(document.querySelector('[data-hlv]').textContent), Number(el.getAttribute('aria-valuenow'))]); }
+    ev('pointerup', 240);
+    return seen;
+  });
+  check('the house level counts with the finger as it drags', counted.slice(1).every(([n, v]) => n === v) && counted[counted.length - 1][0] > counted[1][0], counted);
+  await wait(1600);
+
   // ---- the bridge talking while a finger is still deciding (the first few px) must not take the bar away
   await C(() => { window.__sent = []; });
   const kept = await C(async () => {
