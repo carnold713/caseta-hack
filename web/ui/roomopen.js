@@ -68,10 +68,14 @@ export function finish() {
 }
 // Where Rooms was scrolled when a card opened the room it is coming back from, once.
 export function takeScroll() { const y = scrollBack; scrollBack = null; return y; }
+// The room a card opened, and where Rooms was scrolled then ({ aid, y }), or null: a back swipe (M13) draws Rooms
+// behind the room as this close starts from.
+export const openedFrom = () => (opened ? { ...opened } : null);
 
 // Called when the page changes, before the new one is drawn. Says 'room-open' or 'room-close' when this transition
-// plays, and otherwise null (the caller captures the page for the plain push or back).
-export function prepare({ from, to, r, depth, screen }) {
+// plays, and otherwise null (the caller captures the page for the plain push or back). `pose` is where a back swipe
+// left the room (predictiveback.js): the close then starts from there.
+export function prepare({ from, to, r, depth, screen, pose = null }) {
   finish();
   const t = tapped; tapped = null; pending = null;
   if (from === 'rooms/null' && r.name === 'room' && !r.sub && to === `room/${r.id}` && t && t.hash === `room/${r.id}`) {
@@ -98,7 +102,7 @@ export function prepare({ from, to, r, depth, screen }) {
     // the room's own elements, so its photograph is not decoded again; the plain back plays them if the card is
     // not on screen when Rooms is drawn
     capture(screen, { live: true });
-    pending = { kind: 'close', aid, hero, h1, ...read };
+    pending = { kind: 'close', aid, hero, h1, pose, ...read };
     return 'room-close';
   }
   // a room left for anywhere but deeper forgets which card opened it
@@ -397,11 +401,12 @@ function open({ O, ghost }, screen) {
 // ---------- back ----------
 function close(p, screen) {
   const card = screen.querySelector(`.room-big[data-go="room/${CSS.escape(p.aid)}"]`);
-  if (!card || shown(card) < 0.5 || !card.querySelector('.nm')) { plainArrive('back', screen); return; }
+  if (!card || shown(card) < 0.5 || !card.querySelector('.nm')) { if (p.pose) p.pose.plain(screen, takeGhost()); else plainArrive('back', screen); return; }
   const g = takeGhost();
   if (!g) return;
   g.style.zIndex = '';
   screen.after(g);
+  const pose = p.pose;
   const O = readCard(card);
   const { hero, h1, Hr, Ht, Hb, artR } = p;
   const G = geometry(O, Hr);
@@ -426,6 +431,8 @@ function close(p, screen) {
   ];
   for (const n of going) core(n, [{ opacity: 1 }, { opacity: 0 }], fade);
 
+  // a room let go by a back swipe starts shrunk where the finger left it and comes back to full size as it closes
+  if (pose) core(g, pose.from(g), { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
   // the window closes into the card, and the card's face comes back over it
   core(hero, [G.open, G.shut], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
   for (const [n, a, b] of face(hero, O, G)) {
@@ -448,15 +455,19 @@ function close(p, screen) {
   if (O.vl) { const v = copyText(O.vl, 1); top.appendChild(v); core(v, [{ opacity: 0 }, { opacity: 1 }], last(200, { easing: T.ease })); }
   if (O.pwr) { const b = copyButton(O.pwr, 1); top.appendChild(b); core(b, [{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'scale(1)' }], last(200, { easing: T.ease })); }
 
-  // the list returns from where it stepped to, nearest first; "Rooms" comes down into place
-  for (const s of steps) s.el.animate([{ opacity: 0, transform: `translateY(${s.dy}px) scale(0.96)` }, { opacity: 1, transform: 'translateY(0px) scale(1)' }], { duration: 400, easing: T.ease, delay: s.delay, fill: 'backwards' });
-  if (head) head.animate([{ opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: 400, easing: T.ease, fill: 'backwards' });
+  // the list returns from where it stepped to, nearest first; "Rooms" comes down into place. After a back swipe
+  // it returns from where the swipe showed it, already in view.
+  const L = pose && pose.list;
+  for (const s of steps) s.el.animate([L ? { opacity: 1, transform: `translateY(${s.dy < 0 ? L.up : L.down}px) scale(1)` } : { opacity: 0, transform: `translateY(${s.dy}px) scale(0.96)` }, { opacity: 1, transform: 'translateY(0px) scale(1)' }], { duration: 400, easing: T.ease, delay: s.delay, fill: 'backwards' });
+  if (head) head.animate([L ? { opacity: 1, transform: `translateY(${L.head}px)` } : { opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: 400, easing: T.ease, fill: 'backwards' });
 
   // a softer spill of light is drawn back into the card
   const sp = spill(O, top);
   sp.animate([{ opacity: 0, transform: 'scale(1.45)' }, { opacity: 0.35, offset: 0.4 }, { opacity: 0, transform: 'scale(1)' }], { duration: 700, delay: 100, easing: 'ease-in-out', fill: 'both' })
     .finished.catch(() => {}).then(() => sp.remove());
 
+  // and Rooms, under it, comes up from where the swipe had it
+  if (pose) pose.handed(screen, g, { dur: CLOSE.dur, ease: CLOSE.ease });
   holdFor(CLOSE.dur + 50);
   Promise.all(f.anims.map(a => a.finished)).then(() => landed(f), () => {});
 }

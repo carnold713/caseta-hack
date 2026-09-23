@@ -27,12 +27,21 @@ PWABuilder one (`app.railway.up.hub_production_fa07.twa`); both can be installed
   fades out at 11:42 pm", a countdown, *Off now* and *Add 15 min*. Android 13 and later ask once, right after a
   timer is first set, never on launch. It shows timers the app knows about; a timer started from a remote while the
   app has not been opened since appears the next time it is.
+- **Back, following the swipe** (`MainActivity.java`, M13). Android's back steps back through the app: a sheet
+  closes, a room goes back to Rooms, a tab goes back to Home, and only on Home does the app go to the background.
+  On Android 14 and later the page follows the back swipe as it happens (predictive back, opted in with
+  `android:enableOnBackInvokedCallback` in the manifest): the page shrinks with the finger and the one it would go
+  back to waits behind it. Each part of the gesture is handed to `window.__caseta.back` in the page
+  (`web/ui/predictiveback.js`), which takes the step itself so it animates. A page that does not answer (an older web
+  app, the offline page) gets the WebView's own back, as before. On Home the page says there is nowhere to go and
+  the system's own swipe back to the home screen plays.
 - **Edge to edge** (`plugins.SystemBars`): the app draws under the status bar, as the Figma frames do, with the safe
   areas passed to the page.
 
 The page hands the native side what it needs through the `Hub` plugin (`HubPlugin.java`, called from
 `web/ui/native.js`): the hub and the sign-in (for the tile, the widget and the buttons, which run without the app
-open), the house as Home draws it, and the running timers. In a browser all of that is a no-op.
+open), the house as Home draws it, the running timers, and whether Back has anywhere to go. In a browser all of that
+is a no-op.
 
 ## Building it by hand
 

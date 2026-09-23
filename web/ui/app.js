@@ -11,6 +11,7 @@ import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
 import * as motion from '/ui/motion.js';
 import * as roomOpen from '/ui/roomopen.js';
+import * as swipeBack from '/ui/predictiveback.js';
 import { wireSheetDrag } from '/ui/sheetdrag.js';
 import * as homeScreen from '/ui/screens/home.js';
 import * as roomsScreen from '/ui/screens/rooms.js';
@@ -186,6 +187,13 @@ function go(hash) { if (location.hash === '#' + hash) render(); else location.ha
 //     rather than writing the page over the sheet's entry, which left two of the page and a Back that did nothing.
 const place = () => (history.state && typeof history.state.n === 'number' ? history.state.n : 0);
 const stamp = extra => history.replaceState({ ...(history.state || {}), n: place(), ...extra }, '', location.href);
+// One step back: the entry under this one, or Home from a tab at the bottom. False on Home at the bottom, where Back
+// leaves the app (Android's back swipe asks this too, predictiveback.js).
+function stepBack() {
+  if (place() > 0) { history.back(); return true; }
+  if (route().name !== 'home') { location.replace('#home'); return true; }
+  return false;
+}
 let pendingTab = null;
 function goTab(tab) {
   const n = place();
@@ -261,6 +269,7 @@ function render() {
   const y = roomOpen.takeScroll();
   if (y != null) window.scrollTo(0, y);
   if (how === 'room-open' || how === 'room-close') roomOpen.arrive(how, scr);
+  else if (how === 'swipe-back') swipeBack.arrive(scr);
   else if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
   motion.settle(scr);
   routedSheet(screen, r);
@@ -393,7 +402,7 @@ document.addEventListener('click', e => {
   if (act === 'sheet-close') { dismissSheet(); return; }
   if (act === 'picker-back') { closePicker(); return; }
   if (act === 'toast-undo') { const root = $('#toast-root'); const u = root._undo; root.innerHTML = ''; root._undo = null; if (u) u(); return; }
-  if (act === 'back') { if (place() > 0) history.back(); else if (route().name !== 'home') location.replace('#home'); return; }
+  if (act === 'back') { stepBack(); return; }
   if (onboard.act(act)) { render(); return; }
   const r = route();
   const screen = screenFor(r);
@@ -479,9 +488,11 @@ window.addEventListener('hashchange', e => {
     // one tab to another slides the way the tab bar reads: a tab to the right comes in from the right
     const order = TABS.map(t => t[0]);
     arriving = !was && !now ? (order.indexOf(r.name) < order.indexOf(lastName) ? 'back' : 'push') : now < was ? 'back' : 'push';
-    // a room card tapped on Rooms opens into its room, and leaving that room for Rooms closes it back (M10)
-    const shared = roomOpen.prepare({ from: lastPage, to: page, r, depth: now, screen: $('#screen') });
-    if (shared) arriving = shared; else motion.capture($('#screen'));
+    // a room card tapped on Rooms opens into its room, and leaving that room for Rooms closes it back (M10); a back
+    // swipe let go (M13) hands its page over from where the finger left it, to that close or to its own slide off
+    const screen = $('#screen'), pose = swipeBack.letGo();
+    const shared = roomOpen.prepare({ from: lastPage, to: page, r, depth: now, screen, pose }) || swipeBack.prepare(screen, pose);
+    if (shared) arriving = shared; else motion.capture(screen);
   }
   lastName = r.name; lastDepth = depthOf(r);
   if (page !== lastPage) window.scrollTo(0, 0);
@@ -585,6 +596,11 @@ if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 if (!history.state || typeof history.state.n !== 'number') stamp({ n: 0 });
 try { sessionStorage.setItem('navN', String(place())); } catch (_) { /* fine */ }
 render();
+// Android's back swipe, followed by the page (M13): what it needs of the app
+swipeBack.wire({
+  ctx, route, parseRoute, pageOf, depthOf, place, stepBack,
+  draw: r => screenFor(r).view(ctx, r), hasTabs: r => !screenFor(r).noTabs, dismissSheet: o => dismissSheet(o),
+});
 // a slow minute tick keeps anything that says a time (the greeting, "since 9:41 pm") honest
 setInterval(() => { if (!ctx.ui.dragging && !document.hidden) soon(); }, 60000);
 

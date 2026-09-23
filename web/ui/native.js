@@ -37,3 +37,12 @@ export function timers(list) {
 
 export async function notificationsAllowed() { const r = await call('notifications'); return !!(r && r.allowed); }
 export async function askNotifications() { const r = await call('askNotifications'); return !!(r && r.allowed); }
+
+// Whether Back has anywhere to go in the page (predictiveback.js): while it has, Android hands its back swipe to the
+// page; on Home at the bottom it does not, and the system's own back to the home screen plays. Only when it changes.
+let lastBack = null;
+export function backable(can) {
+  if (!isNative || can === lastBack) return;
+  lastBack = can;
+  call('backable', { can });
+}

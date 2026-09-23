@@ -19,6 +19,7 @@ import com.getcapacitor.annotation.PermissionCallback;
  *   house                               lights on and how bright, as the app draws it, for the widget
  *   timers                              the running sleep timers, for their notifications
  *   notifications / askNotifications    whether the lock screen may show them (Android 13 asks once)
+ *   backable                            whether back has anywhere to go in the page (MainActivity, predictive back)
  */
 @CapacitorPlugin(
     name = "Hub",
@@ -54,6 +55,16 @@ public class HubPlugin extends Plugin {
     public void timers(PluginCall call) {
         JSArray list = call.getArray("list", new JSArray());
         if (notificationsAllowed()) TimerNotifications.sync(getContext(), list);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void backable(PluginCall call) {
+        boolean can = Boolean.TRUE.equals(call.getBoolean("can", true));
+        // plugin calls arrive off the main thread; the back callback lives on it
+        getActivity().runOnUiThread(() -> {
+            if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).setPageCanGoBack(can);
+        });
         call.resolve();
     }
 
