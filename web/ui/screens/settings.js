@@ -298,7 +298,7 @@ export const actions = {
     const id = c.ui.setOpen;
     c.S.config.groups = c.data.groups().filter(g => g.id !== id);
     c.ui.setOpen = null; c.closePicker();
-    c.save('Light set deleted');
+    c.save('Light set deleted', { keepUndo: true });
   },
   // Hue
   async 'hue-discover'(c) {

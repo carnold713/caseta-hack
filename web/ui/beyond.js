@@ -33,15 +33,15 @@ export function onReady(c) {
   if (d === 'night-light') { c.go(c.has && c.has('nightstand') ? 'nightstand' : 'home'); return; }
   if (d === 'scenes') c.go('scenes');
 }
-// All off from the icon: everything off, then the app open on Home with Undo, which puts back each light as it was.
+// All off from the icon: everything off, then the app open on Home saying so. It is sent even when this phone
+// believes nothing is lit, because off must always reach the house (the connector makes sure of each light).
 async function allOff(c) {
   c.go('home');
   if (c.conn() === 'off') { c.toast(OFFLINE_TAP, { icon: 'wifi' }); return; }
-  const was = c.H.litLights().map(d => [d.device_id, c.data.level(d.device_id)]).filter(([, lv]) => lv > 0);
-  if (!was.length) { c.toast('Everything is already off'); return; }
-  c.assume(was.map(([id]) => id), 0); c.soon();
+  c.assume(c.H.litLights().map(d => d.device_id), 0); c.soon();
   if (!await c.run({ type: 'level', target: 'h:all', level: 'off' })) return;
-  c.toast('Everything off', { undo: async () => { for (const [id, lv] of was) c.run({ type: 'level', target: `d:${id}`, level: lv }); } });
+  // from the icon the rooms may be out of sight, so it says what it did; no Undo (the owner's rule: a toast is not an undo button)
+  c.toast('Everything off');
 }
 
 // ---------- after each redraw ----------

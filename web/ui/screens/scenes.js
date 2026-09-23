@@ -452,6 +452,6 @@ export const actions = {
     c.closePicker(); c.closeSheet();
     await c.save('', { quiet: true });
     history.replaceState(null, '', '#scenes'); c.render();
-    c.toast(`${c.H.sceneShortName(p)} deleted`, { undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
+    c.toast(`${c.H.sceneShortName(p)} deleted`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };

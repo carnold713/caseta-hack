@@ -102,7 +102,7 @@ export const actions = {
       c.closePicker(); c.closeSheet();
       await c.save('', { quiet: true });
       c.go('home');
-      c.toast(`${d.name} removed from your home`, { undo: async () => { c.data.restoreConfig(prev); c.EDIT.unhideDevice(r.id); await c.save('Put back'); } });
+      c.toast(`${d.name} removed from your home`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); c.EDIT.unhideDevice(r.id); await c.save('Put back'); } });
       // an older connector does not say whether the bridge let go of it: hide it if it comes back
       if (!stillListed) setTimeout(() => { if (c.data.dev(r.id)) { c.EDIT.hideDevice(r.id); c.save('', { quiet: true }); } }, 4000);
     } catch (e) {

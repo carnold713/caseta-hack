@@ -185,10 +185,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await wait(1200);
     await page.goto(root + '?do=all-off'); await ready(); await wait(1800);
     const after = await C(ids => ({ lv: ids.map(id => window.__copper.data.level(id)), url: location.search, hash: location.hash, toast: document.querySelector('#toast-root').textContent }), litIds);
-    check(after.lv.every(v => !v) && after.url === '' && /Everything off/.test(after.toast) && /Undo/.test(after.toast), 'All off from the icon: everything off, the app open on it with Undo', after);
-    await page.click('#toast-root [data-act="toast-undo"]'); await wait(1500);
-    const back = await C(ids => ids.map(id => window.__copper.data.level(id)), litIds);
-    check(back[0] === 40 && back[1] === 70, 'Undo puts each light back as it was', back);
+    check(after.lv.every(v => !v) && after.url === '' && /Everything off/.test(after.toast) && !/Undo/.test(after.toast), 'All off from the icon: everything off, the app open on it saying so (no Undo)', after);
     await C(async ids => { for (const id of ids) await window.__copper.run({ type: 'level', target: `d:${id}`, level: 'off' }); }, litIds);
     await wait(900);
     // Goodnight and Night light only open; nothing turns on from outside the app

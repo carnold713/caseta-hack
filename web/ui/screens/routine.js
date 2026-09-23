@@ -411,6 +411,6 @@ export const actions = {
     c.closePicker(); c.closeSheet();
     await c.save('', { quiet: true });
     history.replaceState(null, '', '#routines'); c.render();
-    c.toast(`${sc.name || 'Routine'} deleted`, { undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
+    c.toast(`${sc.name || 'Routine'} deleted`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };

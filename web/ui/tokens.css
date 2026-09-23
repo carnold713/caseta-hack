@@ -119,7 +119,13 @@ html, body {
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  /* An app, not a document: a tap or a long press never selects the words under it or brings up the copy
+     callout. Only the fields a person types into select text, and a command line or the bridge's own log, the two
+     things worth copying by hand. */
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
 }
+input, textarea, select, [contenteditable], [contenteditable] *, code, pre { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 
 /* The type ramp. Sizes and tracking are the file's; tracking is stated in per cent there and
    converted here, so -2% at 40px is -0.8px. */

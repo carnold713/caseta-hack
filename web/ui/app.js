@@ -52,11 +52,12 @@ async function run(action) {
 }
 // A finger on a slider: one command in flight per light, the newest value next (the layer's gate).
 const gate = data.gate(run);
-// Every change applies at once and offers Undo; there is no save button anywhere.
+// Every change applies at once; there is no save button anywhere, and only a deletion offers Undo.
 async function save(msg, opts = {}) {
   try {
     const { prev } = await data.saveConfig();
-    if (!opts.quiet) toast(msg || 'Saved', { undo: prev ? async () => { data.restoreConfig(prev); await save('Undone'); } : null });
+    // a change shows where it was made; only a deletion says so, with Undo (see toast)
+    if (!opts.quiet && opts.keepUndo) toast(msg || 'Saved', { keepUndo: true, undo: prev ? async () => { data.restoreConfig(prev); await save('', { quiet: true }); } : null });
   } catch (e) {
     toast(`Couldn't save. ${e.message}`, { err: true });
   }
@@ -86,7 +87,12 @@ function assume(ids, level, { held = false } = {}) { if (data.connState() === 'o
 
 // ---------- the toast ----------
 let toastTimer = null;
+// A toast is for what the house cannot show. A light turning on, dimming or changing colour is its own answer, and
+// the owner found a toast sitting over the page after every tap, offering Undo, more in the way than useful. So a
+// toast whose only job is Undo is not shown at all; Undo stays where something was deleted (a room, a scene, a
+// routine), which nothing on the page can bring back (opts.keepUndo). Errors and plain notes still show.
 function toast(msg, opts = {}) {
+  if (opts.undo && !opts.keepUndo && !opts.err) return;
   const root = $('#toast-root');
   // "Undo" for a change; "Put back" for a scene, Goodnight or Try it (opts.undoLabel), which may stay longer (opts.ms)
   const undo = opts.undo ? `<button class="act" data-act="toast-undo">${esc(opts.undoLabel || 'Undo')}</button>` : '';
@@ -139,8 +145,9 @@ wireSheetDrag($('#sheet-root'), () => dismissSheet({ dropped: true }));
 // #home, #rooms, #room/<id>, #light/<id>, #remotes, #remote/<id>, #routines, #settings, #activity, #scenes. The old
 // app's #automations still lands on Routines, so an installed shortcut keeps working.
 const ALIAS = { automations: 'routines', '': 'home' };
-function route() {
-  const raw = location.hash.replace(/^#/, '');
+function route() { return parseRoute(location.hash); }
+function parseRoute(hash) {
+  const raw = String(hash || '').replace(/^#/, '');
   let parts;
   try { parts = decodeURIComponent(raw).split('/'); } catch (_) { parts = ['home']; }
   const name = ALIAS[parts[0]] ?? parts[0];
@@ -163,6 +170,30 @@ function screenFor(r) {
   return screen;
 }
 function go(hash) { if (location.hash === '#' + hash) render(); else location.hash = hash; }
+// ---------- the back button ----------
+// Every entry this app makes carries its place in the app's own history, { n }: 0 is the entry it opened on, and each
+// page (or sheet) opened on top adds one. Two rules keep Back to one press per step:
+//   a tab never stacks up: the history under a tab's own page is Home and nothing else, so Back from any tab is
+//     Home and Back from Home leaves the app. Switching tabs steps back to the bottom first and goes from there.
+//   a sheet opened from its page is a step of its own, so closing it (the X, a swipe down, a choice) steps back
+//     rather than writing the page over the sheet's entry, which left two of the page and a Back that did nothing.
+const place = () => (history.state && typeof history.state.n === 'number' ? history.state.n : 0);
+const stamp = extra => history.replaceState({ ...(history.state || {}), n: place(), ...extra }, '', location.href);
+let pendingTab = null;
+function goTab(tab) {
+  const n = place();
+  if (n > 0) { pendingTab = tab; history.go(-n); return; }
+  if (!landTab(tab)) render();
+}
+// On the bottom entry: Home is the floor; another tab sits one above it. True when the address changes (its own
+// hashchange then draws it), false when the bottom entry already is that tab.
+function landTab(tab) {
+  const here = location.hash.replace(/^#/, '') || 'home';
+  if (here === tab) return false;
+  if (tab === 'home' || route().name !== 'home') location.replace('#' + tab);
+  else location.hash = tab;
+  return true;
+}
 
 // ---------- what every screen is handed ----------
 const ctx = {
@@ -170,7 +201,7 @@ const ctx = {
   openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
   run, gate, save, saveSoon, assume, onLevel, toast, go, openSheet, closeSheet, render: () => render(),
   // swap the page's sub route in place (White to Colour on the same sheet): no new step for the back button
-  swap: hash => { history.replaceState(null, '', '#' + hash); render(); },
+  swap: hash => { history.replaceState(history.state, '', '#' + hash); render(); },
   conn: () => data.connState(),
   // whether a route is built here (Goodnight hands off to #nightstand only when it is)
   has: name => !!SCREENS[name],
@@ -263,7 +294,11 @@ function routedSheet(screen, r) {
   ctx.ui.routed = !!(got && got.spec);
   if (!got || !got.spec) { ctx.ui.picker = null; return; }
   const key = location.hash.replace(/^#/, '');
-  const close = () => { ctx.ui.picker = null; history.replaceState(null, '', '#' + got.parent); render(); };
+  const close = () => {
+    ctx.ui.picker = null;
+    if (history.state && history.state.sheet && place() > 0) { history.back(); return; }
+    history.replaceState(history.state, '', '#' + got.parent); render();
+  };
   const pk = ctx.ui.picker && ctx.ui.picker.key === key ? ctx.ui.picker : null;
   const spec = pk ? { ...pk.spec(ctx, r), back: true } : got.spec;
   const root = openSheet({ ...spec, key: pk ? `${key}#${pk.name}` : key, onClose: close });
@@ -332,12 +367,12 @@ document.addEventListener('click', e => {
   if (Date.now() - heldAt < 700) { e.preventDefault(); return; }
   // the innermost target wins: a tile navigates, the power circle inside it toggles
   const el = e.target.closest('[data-act], [data-go]'); if (!el) return;
-  if (!el.dataset.act) { e.preventDefault(); closeSheet(); go(el.dataset.go); return; }
+  if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs')) goTab(el.dataset.go); else go(el.dataset.go); return; }
   const act = el.dataset.act;
   if (act === 'sheet-close') { dismissSheet(); return; }
   if (act === 'picker-back') { closePicker(); return; }
   if (act === 'toast-undo') { const root = $('#toast-root'); const u = root._undo; root.innerHTML = ''; root._undo = null; if (u) u(); return; }
-  if (act === 'back') { if (history.length > 1) history.back(); else go('home'); return; }
+  if (act === 'back') { if (place() > 0) history.back(); else if (route().name !== 'home') location.replace('#home'); return; }
   if (onboard.act(act)) { render(); return; }
   const r = route();
   const screen = screenFor(r);
@@ -397,8 +432,24 @@ function pageOf(r) {
   }
   return `${r.name}/${r.id}`;
 }
-window.addEventListener('hashchange', () => {
+// Stepping back to the bottom entry fires hashchange only when its address differs; when it does not, popstate is
+// all there is, and the tab switch finishes from here.
+window.addEventListener('popstate', () => {
+  if (pendingTab && place() === 0) setTimeout(() => { if (pendingTab) { const t = pendingTab; pendingTab = null; if (!landTab(t)) render(); } }, 0);
+});
+window.addEventListener('hashchange', e => {
   closeSheet();
+  // an entry this app has not numbered yet is a new step: one above the page it was opened from, and a sheet if it
+  // is a sheet over that same page
+  if (!history.state || typeof history.state.n !== 'number') {
+    let from = 0; try { from = (JSON.parse(sessionStorage.getItem('navN') || '0')) || 0; } catch (_) { /* fine */ }
+    const oldPage = pageOf(parseRoute(new URL(e.oldURL).hash));
+    const r0 = route();
+    history.replaceState({ n: from + 1, sheet: pageOf(r0) === oldPage && `${r0.name}/${r0.id}${r0.sub ? '/' + r0.sub : ''}` !== oldPage }, '', location.href);
+  }
+  try { sessionStorage.setItem('navN', String(place())); } catch (_) { /* fine */ }
+  // a tab switch that stepped back to the bottom entry now goes to its tab
+  if (pendingTab && place() === 0) { const t = pendingTab; pendingTab = null; if (landTab(t)) return; }
   const r = route(); const page = pageOf(r);
   // a page that holds something open while it is shown (the bridge listening) lets go of it when it is left
   if (r.name !== lastName && SCREENS[lastName] && SCREENS[lastName].leave) SCREENS[lastName].leave(ctx);
@@ -503,6 +554,9 @@ function onAdd(m) {
 // The Home greeting and the whole house rely on the home's own time zone; nothing else needs doing before the first
 // draw. With a token, dial straight away; without one, the sign-in is the first thing drawn.
 if (S.token) connect();
+// the entry the app opened on is the bottom of its history
+if (!history.state || typeof history.state.n !== 'number') stamp({ n: 0 });
+try { sessionStorage.setItem('navN', String(place())); } catch (_) { /* fine */ }
 render();
 // a slow minute tick keeps anything that says a time (the greeting, "since 9:41 pm") honest
 setInterval(() => { if (!ctx.ui.dragging && !document.hidden) soon(); }, 60000);

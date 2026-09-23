@@ -260,21 +260,13 @@ export const actions = {
   // a tap on the held button: nothing turns on, the line under the bar says to hold it
   'house-on-hint'(c) { c.ui.houseHint = Date.now(); c.render(); setTimeout(() => c.render(), 2600); },
   // The house off. If an automation is holding some of what is on, ask first rather than fight it every time.
+  // All off turns everything off, at once, every time. It is always sent, whatever this phone believes is lit (a
+  // light the app last heard as off may be on), and it no longer stops to ask about lights a routine turned on: the
+  // owner's rule is that off really means off. The connector makes sure of it (engine.py, "off means off").
   'house-off'(c) {
     const lit = c.H.litLights().map(d => d.device_id);
-    if (!lit.length) return;
-    const auto = c.H.autoOnLights(lit);
-    if (auto.length) { askAutomated(c, lit, auto); return; }
     c.assume(lit, 0); c.soon();
     c.run({ type: 'level', target: 'h:all', level: 'off' });
-  },
-  'poweroff-all'(c) { c.closeSheet(); const lit = c.H.litLights().map(d => d.device_id); c.assume(lit, 0); c.soon(); c.run({ type: 'level', target: 'h:all', level: 'off' }); },
-  'poweroff-rest'(c, el) {
-    c.closeSheet();
-    const rest = (el.dataset.ids || '').split(',').filter(Boolean);
-    if (!rest.length) return;
-    c.assume(rest, 0); c.soon();
-    c.run({ type: 'level', target: rest.map(id => `d:${id}`), level: 'off' });
   },
   // Goodnight house, held for a second: every light off, the shades closed, the fans stopped. Then the page goes to
   // sleep with the house (goodnightDark). Offline, nothing went dark, so nothing on the page does either.
@@ -442,15 +434,3 @@ function gnEnd(c, { quick = false } = {}) {
     .finished.catch(() => {}).then(() => el.remove());
 }
 
-function askAutomated(c, lit, auto) {
-  const names = auto.map(id => (c.data.dev(id) || {}).name).filter(Boolean);
-  const list = names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-  const one = names.length === 1;
-  const rest = lit.filter(id => !auto.includes(id));
-  c.openSheet({ over: 'Whole house', title: 'Some lights are on a routine', body: `
-    <p class="t-body muted sheet-p">${c.esc(list)} ${one ? 'is' : 'are'} on a routine right now. Turn ${one ? 'it' : 'them'} off with everything else, or leave ${one ? 'it' : 'them'} on and turn off the rest of the house?</p>
-    <div class="group">
-      <button class="row" data-act="poweroff-all"><span class="row-txt"><span class="t">Turn off everything</span></span></button>
-      <button class="row sub" data-act="poweroff-rest" data-ids="${c.esc(rest.join(','))}"><span class="row-txt"><span class="t">Leave ${one ? 'it' : 'them'} on</span><span class="d">${rest.length ? `${rest.length} other light${rest.length === 1 ? '' : 's'} turn off` : 'Nothing else is on'}</span></span></button>
-    </div>` });
-}

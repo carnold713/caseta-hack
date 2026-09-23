@@ -658,7 +658,7 @@ export const actions = {
       c.closePicker(); c.closeSheet();
       await c.save('', { quiet: true });
       c.go('remotes');
-      c.toast(`${d.name} removed from your home`, { undo: async () => { c.data.restoreConfig(prev); c.EDIT.unhideDevice(d.device_id); await c.save('Put back'); } });
+      c.toast(`${d.name} removed from your home`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); c.EDIT.unhideDevice(d.device_id); await c.save('Put back'); } });
       if (!stillListed) setTimeout(() => { if (c.data.dev(d.device_id)) { c.EDIT.hideDevice(d.device_id); c.save('', { quiet: true }); } }, 4000);
     } catch (e) {
       el.disabled = false; el.textContent = 'Remove';

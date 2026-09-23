@@ -155,6 +155,6 @@ export const actions = {
     c.go('rooms');
     // the photograph's bytes go only once Undo has lapsed, so Undo has a picture to come back to
     const drop = room.photo ? setTimeout(() => { c.data.api(`/api/roomphoto/${encodeURIComponent(aid)}`, { method: 'DELETE' }).catch(() => {}); }, 8000) : null;
-    c.toast(`${room.name} deleted`, { undo: async () => { clearTimeout(drop); c.data.restoreConfig(prev); await c.save('Put back'); } });
+    c.toast(`${room.name} deleted`, { keepUndo: true, undo: async () => { clearTimeout(drop); c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };
