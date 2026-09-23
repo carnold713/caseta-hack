@@ -37,7 +37,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // count the level commands this phone sends
   await C(() => { window.__sent = []; const c = window.__copper; const g = c.gate.sendLevel; c.gate.sendLevel = (...a) => { window.__sent.push(a); return g(...a); }; });
 
-  // ---- the house bar
+  // ---- the house bar (shown only while something is on: with everything off there is nothing for it to move)
+  if (!(await page.$('.hbar'))) { await C(async () => { const c = window.__copper; const a = c.data.areas().find(x => c.H.roomLights(x.id).length); await c.run({ type: 'level', target: `a:${a.id}`, level: 60 }); }); await wait(1500); }
+  check('with something on, the house bar is there', !!(await page.$('.hbar')));
   const lvl = () => C(() => document.querySelector('.hbar').getAttribute('aria-valuenow'));
   let before = await lvl();
   await finger('.hbar', [[100, 20], [101, 30], [102, 60], [103, 110]], { cancel: true });
