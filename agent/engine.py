@@ -159,6 +159,14 @@ class ActionRunner:
         # dimmers and there is nothing to ask a lamp on another system, so the connector runs it: a step
         # on a tick until the button is let go, which is what a hold feels like from the far side.
         self._ramps: Dict[str, Any] = {}    # device_id -> the task stepping it
+        # One light, one command at a time, newest wins. Taps can land faster than a bridge answers (On, Off,
+        # On again, or All off while a scene is still arriving), and each used to run as soon as it came in, so
+        # an older command could reach a light after a newer one and leave it on when the last tap said off.
+        # Every command to a light takes a number; it waits its turn on that light's lock, and if a newer
+        # number has been taken while it waited, it stands down.
+        self._seq: Dict[str, int] = {}
+        self._locks: Dict[str, asyncio.Lock] = {}
+        self._offcheck: Dict[str, Any] = {}  # device_id -> the task making sure it really went off
         # Hue and Nanoleaf lights live in the same device dict under "hue_"/"nanoleaf_" ids; the agent sets
         # these to a small dispatcher that routes each call to whichever backend the id actually belongs to
         # (see BRIDGE_PREFIXES above and agent.py's _level_set_bridge/_color_set/_scene_recall). The names
@@ -338,6 +346,7 @@ class ActionRunner:
         await self._set_level(device_id, level, fade)
 
     async def _set_color(self, device_id: str, kelvin: Optional[float], hex_str: Optional[str], level: Optional[int], fade: Optional[float]) -> None:
+        self._claim(device_id)
         if self.hue_color is None:
             raise RuntimeError("no light backend connected")
         fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
@@ -366,7 +375,18 @@ class ActionRunner:
             return None
         return timedelta(seconds=float(seconds))
 
+    def _claim(self, device_id: str) -> int:
+        self._seq[device_id] = self._seq.get(device_id, 0) + 1
+        return self._seq[device_id]
+
     async def _set_level(self, device_id: str, level: int, fade: Optional[float]) -> None:
+        seq = self._claim(device_id)
+        async with self._locks.setdefault(device_id, asyncio.Lock()):
+            if self._seq.get(device_id) != seq:
+                return   # a newer command for this light came in while this one waited: it has the last word
+            await self._send_level(device_id, level, fade)
+
+    async def _send_level(self, device_id: str, level: int, fade: Optional[float]) -> None:
         bridge = self._bridge()
         if bridge is None:
             raise RuntimeError("bridge not connected")
@@ -394,6 +414,44 @@ class ActionRunner:
             await bridge.set_value(device_id, int(level), fade_time=fade_td)
         else:
             await bridge.set_value(device_id, int(level))
+
+    # ----- off means off -----
+    def _make_sure_off(self, device_ids: List[str], fade: Optional[float]) -> None:
+        """After an off, look again once the fade is over, and send it again to any light still lit.
+
+        A bridge busy with a burst (All off is every light at once) can drop one, and a light somebody pressed
+        at the wall in the same second can come back on. Each light is checked by itself, twice more at most,
+        and only while nothing newer has been asked of it: a light turned on again on purpose is left alone.
+        """
+        fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
+        wait = (float(fs) if fs is not None else 0.5) + 1.5
+        for d in device_ids:
+            if self._is_fan(d):
+                continue
+            old = self._offcheck.pop(d, None)
+            if old is not None and not old.done():
+                old.cancel()
+            self._offcheck[d] = asyncio.create_task(self._check_off(d, self._seq.get(d, 0), wait))
+
+    async def _check_off(self, device_id: str, seq: int, wait: float) -> None:
+        try:
+            for attempt in range(2):
+                await asyncio.sleep(wait + attempt)
+                if self._seq.get(device_id) != seq or self._level_of(device_id) <= 0:
+                    return
+                LOG.warning("%s still on %ss after it was turned off; sending off again", device_id, round(wait + attempt, 1))
+                async with self._locks.setdefault(device_id, asyncio.Lock()):
+                    if self._seq.get(device_id) != seq:
+                        return
+                    try:
+                        await self._send_level(device_id, 0, 0)
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.warning("%s: off again failed: %s", device_id, exc)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if self._offcheck.get(device_id) is asyncio.current_task():
+                self._offcheck.pop(device_id, None)
 
     # ----- hold-to-dim floor -----
     def _stop_ramp(self, device_id: str) -> None:
@@ -655,7 +713,8 @@ class ActionRunner:
             if level == "toggle":
                 any_on = any(self._level_of(d) > 0 for d in targets)
                 if any_on:
-                    await asyncio.gather(*(self._set_level(d, 0, fade) for d in targets))
+                    await asyncio.gather(*(self._set_level(d, 0, fade) for d in targets), return_exceptions=True)
+                    self._make_sure_off(targets, fade)
                 else:
                     await asyncio.gather(*(self._set_level(d, self.on_level_for(d, a["target"]), fade) for d in targets))
                 return None
@@ -664,7 +723,12 @@ class ActionRunner:
                 return None
             if level == "off":
                 level = 0
-            await asyncio.gather(*(self._set_level(d, int(level), fade) for d in targets))
+            got = await asyncio.gather(*(self._set_level(d, int(level), fade) for d in targets), return_exceptions=True)
+            if int(level) == 0:
+                self._make_sure_off(targets, fade)
+            errs = [(d, e) for d, e in zip(targets, got) if isinstance(e, Exception)]
+            if errs:
+                raise RuntimeError(f"{len(errs)} of {len(targets)} didn't answer ({errs[0][0]}: {errs[0][1]})")
             return None
 
         if t == "restore":
@@ -811,7 +875,11 @@ def _is_lamp(device_id: str, dev: dict) -> bool:
     """
     if str(device_id).startswith(BRIDGE_PREFIXES):
         return dev.get("zone") is not None and dev.get("type") not in _FAN_TYPES | _COVER_TYPES
-    return dev.get("type") in _LIGHT_TYPES | _SWITCH_TYPES
+    if dev.get("type") in _LIGHT_TYPES | _SWITCH_TYPES:
+        return True
+    # A Lutron model this list has never heard of still has a zone if it is an output the bridge can set; unless it
+    # is a fan or a shade it is a light or a switch. Leaving it out is how "All off" came to miss a light.
+    return dev.get("zone") is not None and dev.get("type") not in _FAN_TYPES | _COVER_TYPES
 _COVER_TYPES = {
     "SerenaHoneycombShade", "SerenaRollerShade", "TriathlonHoneycombShade", "TriathlonEssentialsRollerShade",
     "TriathlonRollerShade", "TriathlonTiltOnlyWoodBlind", "QsWirelessShade", "QsWirelessHorizontalSheerBlind",
