@@ -218,3 +218,10 @@ export function act(name) {
   if (name === 'ob-again') { try { localStorage.removeItem('onboarded'); } catch (_) { /* fine */ } page = 0; shownPage = null; return true; }
   return false;
 }
+
+// Straight after the first sign-in, once the home has loaded: what was found, in one line.
+export function foundLine(c) {
+  const rooms = c.data.areas().length;
+  const lights = c.data.devices().filter(d => d.domain === 'light').length;
+  return `Your home: ${rooms} ${rooms === 1 ? 'room' : 'rooms'}, ${lights} ${lights === 1 ? 'light' : 'lights'}.`;
+}

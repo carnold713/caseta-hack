@@ -35,19 +35,56 @@
   ],
   "shortcuts": [
     {
-      "name": "Remotes",
-      "url": "/#remotes",
-      "description": "Set up a remote"
+      "name": "All off",
+      "short_name": "All off",
+      "url": "/?do=all-off",
+      "description": "Turn every light off, with Undo",
+      "icons": [
+        {
+          "src": "/icons/shortcut-all-off.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Goodnight",
+      "short_name": "Goodnight",
+      "url": "/?do=goodnight",
+      "description": "Open the Goodnight hold",
+      "icons": [
+        {
+          "src": "/icons/shortcut-goodnight.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Night light",
+      "short_name": "Night light",
+      "url": "/?do=night-light",
+      "description": "A little light to get up by",
+      "icons": [
+        {
+          "src": "/icons/shortcut-night-light.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Scenes",
+      "short_name": "Scenes",
       "url": "/#scenes",
-      "description": "Run a scene"
-    },
-    {
-      "name": "Routines",
-      "url": "/#routines",
-      "description": "What the house does on its own"
+      "description": "Run a scene",
+      "icons": [
+        {
+          "src": "/icons/shortcut-scenes.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

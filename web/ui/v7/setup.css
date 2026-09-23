@@ -117,3 +117,24 @@ body.nightlook #app.offline .home { --ember-a: .6; }
 #app.offline .tile::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: rgba(18, 18, 18, .35); pointer-events: none; }
 /* coming back, each glow returns to its true light on the dimmer (motion.js carries it across the redraw) */
 .screen .glow, .home .house-light { transition: opacity var(--dimmer) var(--ease-both); }
+
+/* ---- 20 · Beyond the app ----------------------------------------------------------------------------------- */
+
+/* The Goodnight shortcut lands on Home with the hold in view and points at it once: its ring draws round and lets go
+   (the standard curve out, EASE_IN back), in white, since nothing is lit. A hold is never pressed for you. */
+.goodnight .hold.called svg.ring .arc { animation: gn-called 1400ms var(--ease) var(--called-at, 0ms) both; }
+@keyframes gn-called { 0% { stroke-dashoffset: 112.7; } 45% { stroke-dashoffset: 0; } 60% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 112.7; animation-timing-function: ease-in; } }
+/* The question about the lock screen shows what it would put there: the frame's notification, still. */
+.nt-preview { position: relative; display: block; margin: 4px var(--gutter) 0; padding: 18px 20px 20px; border-radius: var(--r-card);
+  background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.nt-preview .nt-app { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-3); }
+.nt-preview .nt-app img { width: 20px; height: 20px; border-radius: 10px; }
+.nt-preview .nt-title { display: block; margin: 14px 64px 0 0; font-size: 16px; font-weight: 500; line-height: 20px; }
+.nt-preview .nt-candle { position: absolute; right: 26px; top: 26px; width: 12px; height: 36px; border-radius: 3px;
+  background: linear-gradient(180deg, #F3D9C3, #C9A88C); }
+.nt-preview .nt-candle::before { content: ''; position: absolute; left: -24px; top: -40px; width: 60px; height: 60px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 180, 107, .45), rgba(255, 180, 107, 0)); mix-blend-mode: screen; }
+.nt-preview .nt-candle::after { content: ''; position: absolute; left: 3px; top: -13px; width: 6px; height: 10px; border-radius: 50% 50% 45% 45%;
+  background: linear-gradient(180deg, #FFE3B8, #E6A06A); }
+.nt-preview .nt-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+.nt-preview .nt-btns span { height: 44px; border-radius: 22px; display: grid; place-items: center; background: var(--surface-3); font-size: 15px; font-weight: 500; }

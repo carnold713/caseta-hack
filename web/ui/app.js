@@ -26,6 +26,9 @@ import * as guidedScreen from '/ui/screens/guided.js';
 import * as activityScreen from '/ui/screens/activity.js';
 import * as settingsScreen from '/ui/screens/settings.js';
 import * as addScreen from '/ui/screens/add.js';
+import * as onboard from '/ui/screens/onboard.js';
+import { OFFLINE_TAP } from '/ui/screens/conn.js';
+import * as beyond from '/ui/beyond.js';
 import * as nightstandScreen from '/ui/screens/nightstand.js';
 
 const data = create({ storage: localStorage });
@@ -40,6 +43,8 @@ const $ = s => document.querySelector(s);
 // ---------- commands and saving ----------
 // Run one action now. A failure is said in a toast and never thrown at the screen.
 async function run(action) {
+  // 18 · Offline, calmly: past the quiet ten seconds a tap is answered at once and nothing is queued to replay later
+  if (data.connState() === 'off') { toast(OFFLINE_TAP, { icon: 'wifi' }); return false; }
   // a scene arriving crossfades every light it touches over the scene's 1.0 s, not one light's 0.4 s
   if (action && (action.type === 'preset' || action.type === 'scene')) motion.sceneArriving();
   try { await data.run(action); return true; }
@@ -77,14 +82,14 @@ function onLevel(id, target) {
   return cl != null ? cl : base;
 }
 // A slider held by a finger also holds that level against the bridge's echoes of the values it passed through.
-function assume(ids, level, { held = false } = {}) { for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; if (held) data.hold(ids); }
+function assume(ids, level, { held = false } = {}) { if (data.connState() === 'off') return; for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; if (held) data.hold(ids); }
 
 // ---------- the toast ----------
 let toastTimer = null;
 function toast(msg, opts = {}) {
   const root = $('#toast-root');
   const undo = opts.undo ? `<button class="act" data-act="toast-undo">Undo</button>` : '';
-  root.innerHTML = `<div class="toast ${opts.err ? 'err' : ''}" role="status">${icon(opts.err ? 'x' : 'check', 20, 1.8)}<span class="msg">${esc(msg)}</span>${undo}</div>`;
+  root.innerHTML = `<div class="toast ${opts.err ? 'err' : ''}" role="status">${icon(opts.err ? 'x' : opts.icon || 'check', 20, 1.8)}<span class="msg">${esc(msg)}</span>${undo}</div>`;
   root._undo = opts.undo || null;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { root._undo = null; const t = root.firstElementChild; if (t) motion.leave(t); }, 5000);
@@ -181,8 +186,8 @@ function render() {
   if (ctx.ui.dragging) { pending = true; return; }
   pending = false;
   const app = $('#app'), scr = $('#screen'), tabs = $('#tabs');
-  if (!S.token) { wasScreen = false; app.className = onboarded() ? 'plain' : 'plain onboarding'; tabs.hidden = true; scr.innerHTML = loginHTML(); return; }
-  if (!S.ready || !S.config) { wasScreen = false; app.className = 'plain'; tabs.hidden = true; scr.innerHTML = loadingHTML(); return; }
+  if (!S.token) { wasScreen = false; app.className = onboard.onboarded() ? 'plain' : 'plain onboarding'; tabs.hidden = true; onboard.draw(scr); return; }
+  if (!S.ready || !S.config) { wasScreen = false; app.className = 'plain'; tabs.hidden = true; scr.innerHTML = onboard.loadingHTML(); return; }
   const r = route();
   const screen = screenFor(r);
   const keep = {};
@@ -204,6 +209,8 @@ function render() {
   if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
   motion.settle(scr);
   routedSheet(screen, r);
+  // an icon shortcut landing (Goodnight's hold in view), and the one question about the lock screen
+  beyond.after(ctx);
 }
 // ---------- night ----------
 // design-v7-ui.md, "A lighting system · 7": from the evening wind-down's start (10 pm without one) until the wake-up
@@ -271,47 +278,15 @@ ctx.soon = soon;
 ctx.endDrag = () => { ctx.ui.dragging = false; if (pending) render(); };
 
 // ---------- signing in and loading ----------
-// 01 · Onboarding (12732:20): three pages before the password, the first as the file draws it. A phone that has
-// seen them goes straight to the password next time.
-const ONBOARD = [
-  { a: 'Control', b: 'every light', pill: 'room', say: 'Caséta, Hue and Nanoleaf together. Nothing to save: everything is undoable.' },
-  { a: 'Every', b: 'button, your way', pill: 'pico', say: 'Press, press twice, hold: each can do something different, and something else at night.' },
-  { a: 'The house', b: 'on its own', pill: 'moon', say: 'Lights on before you get home, a slow light to wake to, a calmer evening. A minute each to set up.' },
-];
-let onboardPage = 0;
-const onboarded = () => { try { return localStorage.getItem('onboarded') === '1'; } catch (_) { return true; } };
-function onboardHTML() {
-  const p = ONBOARD[onboardPage];
-  const pill = p.pill === 'room' ? '<span class="ob-room"><i class="slats"></i><i class="glow"></i><i class="floor"></i><i class="sofa"></i><i class="seat"></i><i class="cush"></i><i class="chair"></i></span>'
-    : p.pill === 'pico' ? `<span class="ob-ic">${icon('remote', 24, 1.6)}</span>` : `<span class="ob-ic">${icon('moon', 24, 1.6)}</span>`;
-  return `<div class="onboard p${onboardPage}">
-    <span class="ob-logo"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 1.5L10.65 7.35L16.5 9L10.65 10.65L9 16.5L7.35 10.65L1.5 9L7.35 7.35L9 1.5Z" fill="#D98A4E"/></svg>Caseta</span>
-    <span class="ob-dots">${ONBOARD.map((_, i) => `<i class="${i === onboardPage ? 'on' : ''}"></i>`).join('')}</span>
-    <h1 class="ob-h"><span>${p.a}</span>${pill}<span>${p.b}</span></h1>
-    <p class="ob-say">${p.say}</p>
-    <button class="ob-back" data-act="ob-back" aria-label="Back" ${onboardPage ? '' : 'disabled'}>${icon('back', 22, 1.7)}</button>
-    <button class="ob-go" data-act="ob-next">${onboardPage < ONBOARD.length - 1 ? 'Next' : 'Get started'}${icon('arrow', 22, 1.8)}</button>
-  </div>`;
-}
-function loginHTML() {
-  if (!onboarded()) return onboardHTML();
-  return `<div class="login">
-    <h1 class="t-h1">Welcome</h1>
-    <p class="t-body muted">Enter your home's password to get started.</p>
-    <form data-form="login" class="login-form">
-      <input class="field" type="password" id="pw" autocomplete="current-password" placeholder="Password" aria-label="Password">
-      <button class="pill solid" type="submit">Continue</button>
-      <p class="t-cap login-err" id="login-err" hidden></p>
-    </form>
-    <button class="link blue ob-again" data-act="ob-again">What this app does</button></div>`;
-}
-function loadingHTML() { return `<div class="login"><h1 class="t-h1">Getting your home ready</h1><p class="t-body muted">One moment.</p></div>`; }
+// 16 · Onboarding (v7, 12814:49907) and the password: the pages over the drawn house are onboard.js, which draws
+// them in place so the house's windows are never lit twice.
 async function signIn(pw) {
   const res = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw }) });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.token) throw new Error(res.status === 429 ? 'Too many tries. Wait a few minutes and try again.' : "That isn't the password.");
+  if (!res.ok || !body.token) throw new Error(res.status === 429 ? 'Too many tries. Wait a few minutes and try again.' : "That's not it. Try again.");
   localStorage.setItem('token', body.token);
   S.token = body.token;
+  ctx.ui.justSignedIn = true;
   connect();
   render();
 }
@@ -322,7 +297,8 @@ async function signIn(pw) {
 let graceTimer = null;
 function onConn(conn) {
   if (conn === 'started') { clearTimeout(graceTimer); graceTimer = setTimeout(render, RECONNECT_GRACE + 50); }
-  if (conn === 'cleared') { clearTimeout(graceTimer); ctx.ui.hadBlip = true; }
+  // back from a real outage (not a blip inside the grace), said once
+  if (conn === 'cleared') { clearTimeout(graceTimer); ctx.ui.hadBlip = true; if ($('#app').classList.contains('offline')) toast('Back in touch'); }
 }
 function connect() {
   data.connectWS({
@@ -335,12 +311,15 @@ function connect() {
       if (m.type === 'button' || m.type === 'gesture') onLive(m);
       if (m.type === 'add_state' || m.type === 'add_heard' || m.type === 'add_log') onAdd(m);
       if (r.conn) onConn(r.conn);
+      // 20 · Beyond the app: a shortcut runs once the home is loaded; the lock screen hears about every timer
+      if (m.type === 'snapshot' || m.type === 'timers') beyond.onTimers(ctx);
+      if (m.type === 'snapshot') { beyond.onReady(ctx); if (ctx.ui.justSignedIn) { ctx.ui.justSignedIn = false; toast(onboard.foundLine(ctx)); } }
       if (r.changed || m.type === 'snapshot') soon();
     },
     close: conn => { onConn(conn); if (S.ready) soon(); },
   });
 }
-data.hooks.signedOut = () => render();
+data.hooks.signedOut = () => { beyond.signedOut(); render(); };
 
 // ---------- taps ----------
 document.addEventListener('click', e => {
@@ -354,9 +333,7 @@ document.addEventListener('click', e => {
   if (act === 'picker-back') { closePicker(); return; }
   if (act === 'toast-undo') { const root = $('#toast-root'); const u = root._undo; root.innerHTML = ''; root._undo = null; if (u) u(); return; }
   if (act === 'back') { if (history.length > 1) history.back(); else go('home'); return; }
-  if (act === 'ob-next') { if (onboardPage < ONBOARD.length - 1) onboardPage += 1; else { try { localStorage.setItem('onboarded', '1'); } catch (_) { /* fine */ } } render(); return; }
-  if (act === 'ob-back') { if (onboardPage > 0) onboardPage -= 1; render(); return; }
-  if (act === 'ob-again') { try { localStorage.removeItem('onboarded'); } catch (_) { /* fine */ } onboardPage = 0; render(); return; }
+  if (onboard.act(act)) { render(); return; }
   const r = route();
   const screen = screenFor(r);
   const fn = (screen.actions && screen.actions[act]) || SHARED[act];
@@ -390,7 +367,7 @@ document.addEventListener('submit', async e => {
   e.preventDefault();
   const err = $('#login-err');
   try { err.hidden = true; await signIn($('#pw').value); }
-  catch (x) { err.textContent = x.message; err.hidden = false; }
+  catch (x) { err.textContent = x.message; err.hidden = false; onboard.wrong($('#screen')); }
 });
 // A new address closes whatever sheet was up; one that only swaps the sheet over the same page (White to Colour)
 // keeps the page's scroll.
@@ -418,6 +395,8 @@ window.addEventListener('hashchange', () => {
 
 // Taps that mean the same on every screen.
 const SHARED = {
+  // Allow and Not now on the lock screen question, over whichever page it was asked on
+  ...beyond.actions,
   // a light's power circle: on to off, off to on, shown at once and confirmed by the bridge
   toggle(c, el) {
     const id = el.dataset.id; const d = data.dev(id); if (!d) return;
@@ -429,6 +408,7 @@ const SHARED = {
   // a scene chip: Lutron scenes and the app's own run the same way
   scene(c, el) {
     const t = el.dataset.t;
+    if (data.connState() === 'off') { toast(OFFLINE_TAP, { icon: 'wifi' }); return; }
     if (t.startsWith('p:')) {
       const p = data.presets().find(x => x.id === t.slice(2)); if (!p) return;
       for (const [id, v] of Object.entries(p.levels || {})) if (data.dev(id)) S.states[id] = { ...(S.states[id] || {}), level: typeof v === 'object' ? Number(v.level) || 0 : typeof v === 'number' ? v : 0 };
