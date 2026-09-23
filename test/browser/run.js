@@ -28,7 +28,7 @@ const ORDER = [
   'slide_test', 'night_test', 'onescene_test', 'cycle_test', 'fade_test', 'back_test', 'hold_test',
   'power_test', 'now_test', 'dimoff_test', 'lag_test', 'add_test', 'bugs_test', 'quiet_test',
   'health_test', 'huearea_test', 'err_test', 'remove_test', 'rooms_test', 'reconnect_test', 'sheetscroll_test', 'nav_test',
-  'v7_home_test', 'v7_night_test', 'v7_log_test', 'v7_setup_test', 'toastoff_test',
+  'v7_home_test', 'v7_night_test', 'v7_log_test', 'v7_setup_test', 'toastoff_test', 'roomopen_test',
 ];
 
 const only = process.argv.slice(2).filter(a => !a.startsWith('-'));

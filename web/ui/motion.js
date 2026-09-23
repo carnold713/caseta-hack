@@ -34,6 +34,8 @@ const canAnimate = el => el && typeof el.animate === 'function';
 let busyUntil = 0;
 export const busyFor = () => Math.max(0, busyUntil - performance.now());
 const hold = ms => { busyUntil = Math.max(busyUntil, performance.now() + ms); };
+// the same, for a transition that plays itself (a room opening, roomopen.js)
+export const holdFor = hold;
 
 // ---------- carry ----------
 // The path of an element is its chain of child indexes from the root, with its tag. Two redraws of the same state
@@ -268,19 +270,27 @@ function crossfade(old, el, kind) {
 
 // ---------- push, back and load ----------
 // Before the page changes: a copy of it where it stood, to drift away while the new one comes in.
+// `live` moves the page's own elements into the ghost instead of copying them, for a transition that animates
+// the old page's parts one by one (a room opening): a photograph already on screen is never decoded again, so it
+// cannot blink. The page is about to be drawn over anyway, so nothing is lost by taking them. What is taken no
+// longer answers taps or selectors: its ids and its data-go and data-act are dropped.
 let ghost = null;
-export function capture(screen) {
+export function capture(screen, { live = false } = {}) {
   dropGhost();
-  if (reduced() || !screen || !screen.firstElementChild) return;
+  if (reduced() || !screen || !screen.firstElementChild) return null;
   const box = screen.getBoundingClientRect();
   const g = document.createElement('div');
   g.className = 'page-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
   Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, pointerEvents: 'none', zIndex: '1' });
-  for (const k of screen.children) g.appendChild(k.cloneNode(true));
+  for (const k of [...screen.children]) g.appendChild(live ? k : k.cloneNode(true));
   g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  if (live) g.querySelectorAll('[data-go], [data-act]').forEach(n => { n.removeAttribute('data-go'); n.removeAttribute('data-act'); });
   ghost = g;
+  return g;
 }
 function dropGhost() { if (ghost) { ghost.remove(); ghost = null; } }
+// A transition that plays the ghost itself takes it, so the next arrival does not play it too.
+export function takeGhost() { const g = ghost; ghost = null; return g; }
 
 // 'push' (deeper), 'back' (out again) or 'load' (a tab, or the app opening).
 export function arrive(kind, screen) {

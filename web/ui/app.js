@@ -10,6 +10,7 @@ import { icon } from '/ui/icons.js';
 import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
 import * as motion from '/ui/motion.js';
+import * as roomOpen from '/ui/roomopen.js';
 import { wireSheetDrag } from '/ui/sheetdrag.js';
 import * as homeScreen from '/ui/screens/home.js';
 import * as roomsScreen from '/ui/screens/rooms.js';
@@ -236,6 +237,9 @@ function render() {
   const r = route();
   // the page the app opened on, known once the home has loaded (hashchange compares against it)
   if (lastPage === null) lastPage = pageOf(r);
+  // a redraw while a room is still opening (or closing) waits for the window to land, so nothing is drawn out from
+  // under it
+  if (!arriving && wasScreen && roomOpen.flying()) { roomOpen.whenLanded(render); return; }
   const screen = screenFor(r);
   const keep = {};
   scr.querySelectorAll('[data-keep]').forEach(el => { keep[el.dataset.keep] = el.scrollLeft; });
@@ -253,7 +257,11 @@ function render() {
   const tab = TAB_OF[r.name] || 'home';
   tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
   if (screen.after) screen.after(ctx, r, scr);
-  if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
+  // Rooms comes back where it was scrolled when a card opened the room being left
+  const y = roomOpen.takeScroll();
+  if (y != null) window.scrollTo(0, y);
+  if (how === 'room-open' || how === 'room-close') roomOpen.arrive(how, scr);
+  else if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
   motion.settle(scr);
   routedSheet(screen, r);
   // an icon shortcut landing (Goodnight's hold in view), and the one question about the lock screen
@@ -376,9 +384,11 @@ data.hooks.signedOut = () => { beyond.signedOut(); render(); };
 document.addEventListener('click', e => {
   // the tap that ends a press and hold is not a tap as well
   if (Date.now() - heldAt < 700) { e.preventDefault(); return; }
+  // while a room card is opening into its room (or closing back into it), a second tap does nothing
+  if (roomOpen.busy()) { e.preventDefault(); return; }
   // the innermost target wins: a tile navigates, the power circle inside it toggles
   const el = e.target.closest('[data-act], [data-go]'); if (!el) return;
-  if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs')) goTab(el.dataset.go); else go(el.dataset.go); return; }
+  if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs')) goTab(el.dataset.go); else { roomOpen.tap(el); go(el.dataset.go); } return; }
   const act = el.dataset.act;
   if (act === 'sheet-close') { dismissSheet(); return; }
   if (act === 'picker-back') { closePicker(); return; }
@@ -469,7 +479,9 @@ window.addEventListener('hashchange', e => {
     // one tab to another slides the way the tab bar reads: a tab to the right comes in from the right
     const order = TABS.map(t => t[0]);
     arriving = !was && !now ? (order.indexOf(r.name) < order.indexOf(lastName) ? 'back' : 'push') : now < was ? 'back' : 'push';
-    motion.capture($('#screen'));
+    // a room card tapped on Rooms opens into its room, and leaving that room for Rooms closes it back (M10)
+    const shared = roomOpen.prepare({ from: lastPage, to: page, r, depth: now, screen: $('#screen') });
+    if (shared) arriving = shared; else motion.capture($('#screen'));
   }
   lastName = r.name; lastDepth = depthOf(r);
   if (page !== lastPage) window.scrollTo(0, 0);
@@ -565,6 +577,10 @@ function onAdd(m) {
 // The Home greeting and the whole house rely on the home's own time zone; nothing else needs doing before the first
 // draw. With a token, dial straight away; without one, the sign-in is the first thing drawn.
 if (S.token) connect();
+// The app places the scroll itself (a new page starts at the top, Rooms comes back where it was). Left to the
+// browser, Back would first jump the page it is leaving to the scroll of the entry it is going to, so the page
+// that closes (a room into its card) would not close from where it was on screen.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 // the entry the app opened on is the bottom of its history
 if (!history.state || typeof history.state.n !== 'number') stamp({ n: 0 });
 try { sessionStorage.setItem('navN', String(place())); } catch (_) { /* fine */ }

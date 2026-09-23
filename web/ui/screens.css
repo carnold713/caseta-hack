@@ -101,8 +101,11 @@
   background: linear-gradient(180deg, var(--rg-hi, #4A3A2E) 0%, var(--rg-lo, #231C17) 100%);
   transition: transform var(--tap) var(--spring-quick);
 }
-.room-big:active { transform: scale(.98); }
-.room-big .room-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* The press is the file's 0.97 (M10), held while the finger is down. */
+.room-big:active { transform: scale(.97); }
+/* A card shows the middle 180 of its room page's 300 tall photograph, at the page's scale, so opening the room
+   (roomopen.js) only uncovers more of the same picture and never rescales it. */
+.room-big .room-photo { position: absolute; left: 0; top: calc(50% - 150px); width: 100%; height: 300px; object-fit: cover; }
 .room-big.photo::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0) 25%, rgba(0, 0, 0, .78) 100%);
@@ -174,6 +177,14 @@
 .room-chips.headed { margin-top: 10px; }
 .chip.editing .ic { color: var(--copper); }
 .room-grid { margin-top: 16px; padding-bottom: 8px; }
+/* M10: a lit tile blooms with its own light as the room fills in (roomopen.js plays it; at rest it is not there).
+   Centred on the tile's glow in its top right corner, in the lamp's colour for a colour lamp. */
+.room-grid .tile.on::before {
+  content: ''; position: absolute; right: -67px; top: -64px; width: 200px; height: 200px; border-radius: 50%;
+  --bloom: var(--lamp-glow, rgba(255, 214, 168, .55));
+  background: radial-gradient(closest-side, var(--bloom) 0%, color-mix(in srgb, var(--bloom) 80%, transparent) 25%, color-mix(in srgb, var(--bloom) 45%, transparent) 50%, color-mix(in srgb, var(--bloom) 15%, transparent) 75%, transparent 100%);
+  mix-blend-mode: screen; opacity: 0; pointer-events: none;
+}
 .room-empty { margin-top: 16px; }
 .room-setup-row { margin-top: 24px; }
 
