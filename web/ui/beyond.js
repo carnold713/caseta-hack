@@ -1,14 +1,15 @@
-// 20 · Beyond the app (v7, 12816:49515). An installed web app cannot put a widget on the home screen or a tile on the
-// lock screen; that needs a native shell (the widget is drawn in 12817:49222 for the day it goes native). What a web
-// app can do is built here:
+// 20 · Beyond the app (v7, 12816:49515). An installed web app cannot put a widget on the home screen or a tile in the
+// quick settings; the Android app (mobile/, native.js) has both, and the lock screen's timers there are Android's own.
+// What the web app does, in a browser or inside that app, is built here:
 //
 //   the icon's long-press shortcuts (web/manifest.webmanifest): All off, Goodnight, Night light, Scenes. Only All off
-//     acts, and the app opens on it with Undo. Goodnight opens Home at its hold, Night light the nightstand: the app
+//     acts, and the app opens on it saying so. Goodnight opens Home at its hold, Night light the nightstand: the app
 //     never turns a light on from outside itself.
 //   one quiet notification per running sleep timer, "{Floor lamp} fades out at {11:42 pm}", with "Off now" and
 //     "Add 15 min". The service worker (web/sw.js) shows it and acts on its buttons with the app's sign-in, which
 //     this hands it. It is shown only once the person has said yes, and that is asked once, right after they set a
 //     timer, never on load.
+import * as native from '/ui/native.js';
 import { OFFLINE_TAP } from '/ui/screens/conn.js';
 
 // ---------- shortcuts ----------
@@ -61,6 +62,10 @@ export function after(c) {
 
 // ---------- the lock screen: running sleep timers ----------
 const canNotify = () => typeof Notification !== 'undefined' && 'serviceWorker' in navigator && typeof isSecureContext !== 'undefined' && isSecureContext;
+// In the Android app the lock screen is Android's own (native.js, mobile/): whether it may show timers is asked there.
+let nativeAllowed = false;
+if (native.isNative) native.notificationsAllowed().then(a => { nativeAllowed = a; });
+const permission = () => (native.isNative ? (nativeAllowed ? 'granted' : 'default') : Notification.permission);
 const asked = () => { try { return localStorage.getItem('notifyAsked') === '1'; } catch (_) { return true; } };
 const setAsked = () => { try { localStorage.setItem('notifyAsked', '1'); } catch (_) { /* then it may ask again */ } };
 
@@ -98,6 +103,12 @@ export function onTimers(c) {
   const keys = new Set(list.map(t => t.target));
   const fresh = seen && list.some(t => !seen.has(t.target));
   seen = keys;
+  const driven0 = navigator.webdriver && !window.__askNotify;
+  if (native.isNative) {
+    if (fresh && !driven0 && !nativeAllowed && !asked()) c.ui.askNotify = true;
+    native.timers(nativeAllowed ? list : []);
+    return;
+  }
   if (!canNotify()) return;
   // A browser driven by a script (navigator.webdriver: the browser tests) is not asked: a sheet rising over the page
   // would take the next tap the script meant for the page. The setup test asks for it by name.
@@ -106,7 +117,7 @@ export function onTimers(c) {
   if (Notification.permission === 'granted') post({ type: 'timers', token: c.S.token, tz: (c.S.config && c.S.config.settings && c.S.config.settings.timezone) || null, items: list });
 }
 // Signed out: the worker forgets the sign-in and takes its notifications down.
-export function signedOut() { if (canNotify()) post({ type: 'signout' }); seen = null; }
+export function signedOut() { if (native.isNative) native.credentials(''); else if (canNotify()) post({ type: 'signout' }); seen = null; }
 
 async function worker() {
   let reg = await navigator.serviceWorker.getRegistration().catch(() => null);
@@ -121,7 +132,7 @@ async function post(msg) { const w = await worker(); if (w) w.postMessage(msg); 
 // The question, with what it would look like: the candle, the words, the two buttons it would have.
 function ask(c) {
   const t = runningTimers(c)[0];
-  if (!t || Notification.permission !== 'default' || asked()) return;
+  if (!t || permission() !== 'default' || asked()) return;
   const { esc } = c;
   c.openSheet({
     over: 'Sleep timer', title: 'Show running timers on the lock screen?', key: 'notify-ask',
@@ -138,7 +149,8 @@ export const actions = {
   async 'notify-allow'(c) {
     setAsked(); c.closeSheet();
     let p = 'default';
-    try { p = await Notification.requestPermission(); } catch (_) { /* a browser that says no by throwing */ }
+    if (native.isNative) { nativeAllowed = await native.askNotifications(); p = nativeAllowed ? 'granted' : 'denied'; }
+    else try { p = await Notification.requestPermission(); } catch (_) { /* a browser that says no by throwing */ }
     if (p === 'granted') onTimers(c);
     c.render();
   },

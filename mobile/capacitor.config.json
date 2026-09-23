@@ -1,0 +1,23 @@
+{
+  "appId": "app.caseta.home",
+  "appName": "Caseta",
+  "webDir": "www",
+  "server": {
+    "url": "https://hub-production-fa07.up.railway.app",
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "hub-production-fa07.up.railway.app"
+    ]
+  },
+  "android": {
+    "backgroundColor": "#121212",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "initialViewportFitValueHint": "cover",
+      "style": "DARK"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121212">
+<title>Caseta</title>
+<style>
+  /* Shown by the Android shell when the hub cannot be reached as the app opens: the same dark, calm room as the
+     app's own offline page (18), one ember and one sentence, and a way to try again. The remotes keep working. */
+  :root { --bg: #121212; --t1: #FFFFFF; --t2: #9E9E9E; --copper: #D98A4E; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--t1); font-family: 'Lutron Sans Screen', 'DM Sans', system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  main { position: relative; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 20px 72px; box-sizing: border-box; overflow: hidden; }
+  .ember { position: absolute; left: 50%; top: 28%; width: 360px; height: 360px; margin: -180px 0 0 -180px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(217, 138, 78, .34), rgba(184, 108, 53, .12) 55%, transparent); filter: blur(24px);
+    animation: ember 4.8s ease-in-out infinite; }
+  @keyframes ember { 50% { opacity: .6; transform: scale(.96); } }
+  h1 { font-weight: 300; font-size: 40px; line-height: 44px; letter-spacing: -.02em; margin: 0 0 12px; }
+  p { font-size: 16px; line-height: 22px; color: var(--t2); margin: 0 0 32px; max-width: 320px; }
+  button { height: 56px; border-radius: 28px; border: 0; background: #F8F8F8; color: #262626; font: inherit; font-size: 16px; font-weight: 500; }
+  button:active { transform: scale(.96); }
+  @media (prefers-reduced-motion: reduce) { .ember { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="ember" aria-hidden="true"></div>
+  <h1>Can't reach the house</h1>
+  <p>Check this phone's Wi-Fi or mobile data. Your remotes and wall controls still work.</p>
+  <button id="again">Try again</button>
+</main>
+<script>
+  document.getElementById('again').addEventListener('click', () => { location.href = 'https://hub-production-fa07.up.railway.app/'; });
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "caseta-android",
+  "private": true,
+  "description": "The Android app: a Capacitor shell around the hub's own web app, plus the native pieces a web app cannot have (a quick settings tile, a home screen widget, sleep timer notifications with buttons).",
+  "scripts": {
+    "sync": "cap sync android",
+    "apk": "cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

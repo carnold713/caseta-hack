@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Light that is on, in the corner: the wash of a 2700K lamp. Only drawn while something is lit. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient android:type="radial" android:gradientRadius="120dp"
+        android:startColor="#66D98A4E" android:centerColor="#22B86C35" android:endColor="#00B86C35" />
+</shape>

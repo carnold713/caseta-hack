@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Caseta</string>
+    <string name="title_activity_main">Caseta</string>
+    <string name="package_name">app.caseta.home</string>
+    <string name="custom_url_scheme">app.caseta.home</string>
+    <string name="widget_description">How many lights are on, and All off</string>
+    <string name="tile_label">All off</string>
+</resources>

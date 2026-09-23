@@ -1,0 +1,115 @@
+# The Android app (mobile/): builds a signed APK on every push that touches it, and puts it at one fixed address,
+# the "android-latest" release, so the phone can always fetch the newest from the same link:
+#   https://github.com/carnold713/caseta-hack/releases/download/android-latest/caseta.apk
+#
+# Signing. Android only installs an update over an app signed with the same key. If the repository has the secrets
+# CASETA_KEYSTORE_B64 (the keystore, base64), CASETA_KEYSTORE_PASSWORD, CASETA_KEY_ALIAS and CASETA_KEY_PASSWORD,
+# they sign it. Without them, one key is made on the first run and kept in the Actions cache, which holds it as long
+# as a build runs at least once a week; if it is ever lost, the next APK needs the old app uninstalled first.
+name: Android APK
+
+on:
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      # a step's `if` cannot read secrets, so whether the key was given is read here
+      HAS_KEY: ${{ secrets.CASETA_KEYSTORE_B64 != '' }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Capacitor
+        run: npm ci
+
+      - name: Copy the shell's pages and config into the Android project
+        run: npx cap sync android
+
+      - name: The signing key (from secrets)
+        if: ${{ env.HAS_KEY == 'true' }}
+        env:
+          KS: ${{ secrets.CASETA_KEYSTORE_B64 }}
+        run: |
+          echo "$KS" | base64 -d > "$HOME/caseta.jks"
+          {
+            echo "CASETA_KEYSTORE=$HOME/caseta.jks"
+            echo "CASETA_KEYSTORE_PASSWORD=${{ secrets.CASETA_KEYSTORE_PASSWORD }}"
+            echo "CASETA_KEY_ALIAS=${{ secrets.CASETA_KEY_ALIAS }}"
+            echo "CASETA_KEY_PASSWORD=${{ secrets.CASETA_KEY_PASSWORD }}"
+          } >> "$GITHUB_ENV"
+
+      - name: The signing key (kept in the cache, without secrets)
+        if: ${{ env.CASETA_KEYSTORE == '' }}
+        id: cachedkey
+        uses: actions/cache@v4
+        with:
+          path: ~/caseta-sideload.jks
+          key: caseta-sideload-key-v1
+
+      - name: Make the cached key the first time
+        if: ${{ env.CASETA_KEYSTORE == '' }}
+        run: |
+          if [ ! -f "$HOME/caseta-sideload.jks" ]; then
+            keytool -genkeypair -v -keystore "$HOME/caseta-sideload.jks" -alias caseta -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass caseta-sideload -keypass caseta-sideload -dname "CN=Caseta, O=Home"
+          fi
+          {
+            echo "CASETA_KEYSTORE=$HOME/caseta-sideload.jks"
+            echo "CASETA_KEYSTORE_PASSWORD=caseta-sideload"
+            echo "CASETA_KEY_ALIAS=caseta"
+            echo "CASETA_KEY_PASSWORD=caseta-sideload"
+          } >> "$GITHUB_ENV"
+
+      - name: Build the APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease -PversionCode=${{ github.run_number }} -PversionName=1.${{ github.run_number }}
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/caseta.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caseta-apk
+          path: caseta.apk
+
+      - name: Publish to the android-latest release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="Built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}, version 1.${{ github.run_number }}. Open this page on the phone and tap caseta.apk to install or update."
+          if gh release view android-latest >/dev/null 2>&1; then
+            gh release upload android-latest caseta.apk --clobber
+            gh release edit android-latest --notes "$notes" --prerelease
+          else
+            gh release create android-latest caseta.apk --title "Caseta for Android (latest)" --notes "$notes" --prerelease --target "$GITHUB_SHA"
+          fi

@@ -29,6 +29,7 @@ import * as addScreen from '/ui/screens/add.js';
 import * as onboard from '/ui/screens/onboard.js';
 import { OFFLINE_TAP } from '/ui/screens/conn.js';
 import * as beyond from '/ui/beyond.js';
+import * as native from '/ui/native.js';
 import * as nightstandScreen from '/ui/screens/nightstand.js';
 
 const data = create({ storage: localStorage });
@@ -220,8 +221,11 @@ function render() {
   if (ctx.ui.dragging) { pending = true; return; }
   pending = false;
   const app = $('#app'), scr = $('#screen'), tabs = $('#tabs');
+  native.credentials(S.token);
   if (!S.token) { wasScreen = false; app.className = onboard.onboarded() ? 'plain' : 'plain onboarding'; tabs.hidden = true; onboard.draw(scr); return; }
   if (!S.ready || !S.config) { wasScreen = false; app.className = 'plain'; tabs.hidden = true; scr.innerHTML = onboard.loadingHTML(); return; }
+  // the Android app's widget shows the house as Home says it
+  native.house(H.litLights().length, Math.round(H.houseLevel()));
   const r = route();
   // the page the app opened on, known once the home has loaded (hashchange compares against it)
   if (lastPage === null) lastPage = pageOf(r);
