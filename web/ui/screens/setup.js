@@ -1,7 +1,7 @@
 // 16 · Room setup (12744:111648): a sheet over the room. Its name and photo, Follow the day for its lamps, a sleep
 // timer for the room, what is in it, its remotes, where the bridges keep it, and deleting it.
 import { roomPicker, confirmSheet, nameSheet, undoMove } from '/ui/screens/pickers.js';
-import { roomTimer } from '/ui/screens/looks.js';
+import { roomTimer, actions as lookActions } from '/ui/screens/looks.js';
 import { photoBlob, sendPhoto, pickFile } from '/ui/photo.js';
 
 const seenKey = aid => `roomInfoSeen:${aid}`;
@@ -93,7 +93,11 @@ async function moveTo(c, did, rid) {
 
 export const sheets = { setup, timer: (c, r) => roomTimer(c, r.id) };
 
+// The room's timer sheet is looks.js's, so its buttons are too: without these a tap on one did nothing.
+const timerActions = Object.fromEntries(Object.entries(lookActions).filter(([k]) => k.startsWith('timer-')));
+
 export const actions = {
+  ...timerActions,
   'setup-name'(c, el, r) {
     c.openPicker('name', c2 => nameSheet(c2, { over: 'Room setup', title: 'Name', value: c2.data.areaName(r.id), act: 'setup-name-set' }));
   },
