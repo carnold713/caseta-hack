@@ -192,6 +192,8 @@ function render() {
   if (!S.token) { wasScreen = false; app.className = onboard.onboarded() ? 'plain' : 'plain onboarding'; tabs.hidden = true; onboard.draw(scr); return; }
   if (!S.ready || !S.config) { wasScreen = false; app.className = 'plain'; tabs.hidden = true; scr.innerHTML = onboard.loadingHTML(); return; }
   const r = route();
+  // the page the app opened on, known once the home has loaded (hashchange compares against it)
+  if (lastPage === null) lastPage = pageOf(r);
   const screen = screenFor(r);
   const keep = {};
   scr.querySelectorAll('[data-keep]').forEach(el => { keep[el.dataset.keep] = el.scrollLeft; });
@@ -374,7 +376,7 @@ document.addEventListener('submit', async e => {
 });
 // A new address closes whatever sheet was up; one that only swaps the sheet over the same page (White to Colour)
 // keeps the page's scroll.
-let lastPage = '', lastName = route().name;
+let lastPage = null, lastName = route().name;
 // How deep each page sits: a tab is 0, what a tab opens is 1, a page opened from those is 2. Deeper is a push,
 // shallower is back, and one tab to another is a load with its stagger (M4).
 const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 1, nightstand: 1, light: 2, timing: 2, add: 2 };
@@ -382,9 +384,22 @@ const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, 
 // #routines/winddown-*), so it sits one deeper than the tab even though it shares the tab's route name.
 const depthOf = r => (r.name === 'routines' && /^winddown/.test(r.id || '') ? 1 : DEPTH[r.name] ?? 1);
 let lastDepth = depthOf(route());
+// The page an address shows, under any sheet on it. #settings/name is Settings with the Name sheet up, and
+// #routines/winddown-curve is a sheet over a sheet over the wind-down page: opening one is not a new page, so the
+// page under it neither scrolls to the top nor slides.
+function pageOf(r) {
+  for (let i = 0; i < 4 && S.ready && S.config; i++) {
+    let got = null;
+    try { got = sheetOf(screenFor(r), r); } catch (_) { break; }
+    if (!got || !got.spec || !got.parent) break;
+    const [n, id, ...rest] = got.parent.split('/');
+    r = { name: ALIAS[n] ?? n, id: id || null, sub: rest.join('/') || null };
+  }
+  return `${r.name}/${r.id}`;
+}
 window.addEventListener('hashchange', () => {
   closeSheet();
-  const r = route(); const page = `${r.name}/${r.id}`;
+  const r = route(); const page = pageOf(r);
   // a page that holds something open while it is shown (the bridge listening) lets go of it when it is left
   if (r.name !== lastName && SCREENS[lastName] && SCREENS[lastName].leave) SCREENS[lastName].leave(ctx);
   if (page !== lastPage && S.ready && S.config) {

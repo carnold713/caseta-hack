@@ -208,6 +208,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     // a real load (the address is only a hash away, which would not reload)
     await page.goto(root + '#home'); await page.reload(); await ready(); await wait(1200);
     check(!(await page.$('#sheet-root .nt-preview')), 'nothing is asked on load');
+    // a full run leaves other tests' sleep timers going (Nightstand's 15 minutes, a room's): clear them first, so
+    // the notifications counted below are only this test's
+    await C(async () => { const c = window.__copper; for (const t of Object.keys(c.S.timers || {})) { try { await c.run({ type: 'cancel_timer', target: t.includes('|') ? t.split('|') : t }); } catch (_) {} } });
+    for (let i = 0; i < 20 && await C(() => Object.keys(window.__copper.S.timers || {}).length); i++) await wait(250);
     const tLamp = await C(() => window.__copper.data.devices().find(x => x.domain === 'light' && !/^(hue_|nanoleaf_)/.test(x.device_id)).device_id);
     await C(async id => { const c = window.__copper; await c.run({ type: 'level', target: `d:${id}`, level: 30 }); await c.run({ type: 'timer', target: `d:${id}`, minutes: 30, fade: 5 }); }, tLamp);
     await page.waitForSelector('#sheet-root .nt-preview', { timeout: 6000 }).catch(() => {});
