@@ -197,12 +197,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await wait(3600);
   await go('home');
 
-  // ---- 10 · offline: the hold still fills, nothing darkens, and it says the house did not hear
+  // ---- 10 · offline: the hold still fills and nothing darkens; it used to say the house did not hear, in a toast,
+  // and toasts are off (the owner's call), so for now it says nothing
   await C(() => { const c = window.__copper; c.__conn = c.conn; c.conn = () => 'off'; });
   await cmd({ type: 'level', target: 'a:20', level: 60 }); await wait(1200);
   await hold('[data-hold="goodnight"]', 1150); await wait(300);
-  const off = await C(() => ({ night: !!document.querySelector('.gn-night'), toast: document.querySelector('#toast-root').textContent }));
-  check('offline: no darkening, and "The house didn\'t hear that. Your remotes still work."', !off.night && /The house didn't hear that\. Your remotes still work\./.test(off.toast), off);
+  const off = await C(() => ({ night: !!document.querySelector('.gn-night'), lit: window.__copper.H.litLights().length, toast: document.querySelector('#toast-root').innerHTML }));
+  check('offline: no darkening, the lights left as they were, and no toast', !off.night && off.lit > 0 && off.toast === '', off);
   await C(() => { const c = window.__copper; c.conn = c.__conn; delete c.__conn; c.render(); });
   await cmd({ type: 'level', target: 'h:all', level: 'off' }); await wait(1000);
 

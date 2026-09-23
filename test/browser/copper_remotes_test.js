@@ -187,11 +187,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await tap('.upnext [data-act="rt-skip"]');
   check('skipping sets the day', !!(await sc()).skip_until, await sc());
   await go(`routine/${rid}/more`);
+  const withRoutine = await C(() => JSON.stringify(window.__copper.S.config));
   await tap('#sheet-root [data-act="delete"]');
   await tap('#sheet-root [data-act="delete-go"]');
   check('deleted, both halves', !(await cfg()).schedules.some(x => x.id === rid || x.id === rid + '-off'));
-  await tap('#toast-root [data-act="toast-undo"]'); await wait(800);
-  check('Undo puts it back', !!(await sc()));
+  check('with no toast and no Undo (toasts are off)', (await C(() => document.querySelector('#toast-root').innerHTML)) === '', await C(() => document.querySelector('#toast-root').innerHTML));
+  // there is no Undo to tap, so the routine is put back directly
+  await C(async prev => { const c = window.__copper; c.data.restoreConfig(prev); await c.save('', { quiet: true }); }, withRoutine); await wait(800);
+  check('put back directly, it is there again', !!(await sc()));
 
   // ---- 22 guided: Welcome lights and a Goodnight button
   await go('setup/welcome');

@@ -123,14 +123,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const good = await C(() => JSON.stringify({ ...window.__copper.S.config, settings: { ...window.__copper.S.config.settings, home_name: 'Restored' } }));
     await C(t => { const a = document.querySelector('#sheet-root textarea'); a.value = t; a.dispatchEvent(new Event('input', { bubbles: true })); }, good);
     await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
+    const unrestored = await C(() => JSON.stringify(window.__copper.S.config));
     await tap('#sheet-root [data-act="restore-go"]'); await wait(800);
     check('a backup restores', (await cfg()).settings.home_name === 'Restored');
-    // restoring replaces the whole configuration, which nothing on the page brings back, so like a deletion it says so
-    // with Undo; and Undo puts the name back for what follows
-    const rtoast = await C(() => document.querySelector('#toast-root').textContent);
-    check('it says so, with Undo', /Settings restored/.test(rtoast) && /Undo/.test(rtoast), rtoast);
-    await tap('#toast-root [data-act="toast-undo"]'); await wait(800);
-    check('Undo puts the settings back', (await cfg()).settings.home_name === 'Test Home', (await cfg()).settings.home_name);
+    // toasts are off (the owner's call), so a restore says nothing and offers no Undo; the test puts the name back
+    // itself for what follows
+    const rtoast = await C(() => document.querySelector('#toast-root').innerHTML);
+    check('with no toast and no Undo (toasts are off)', rtoast === '', rtoast);
+    await C(async prev => { const c = window.__copper; c.data.restoreConfig(prev); await c.save('', { quiet: true }); }, unrestored); await wait(800);
+    check('the settings put back directly', (await cfg()).settings.home_name === 'Test Home', (await cfg()).settings.home_name);
 
     // ---- 20 Add a device: the fake bridge hears a Pico 2.5 s after listening starts
     await goto('add');

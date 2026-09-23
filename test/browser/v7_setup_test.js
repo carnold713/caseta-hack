@@ -158,19 +158,22 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     check(veil === 'rgba(18, 18, 18, 0.35)', 'a lit tile keeps its look under a 35% veil', veil);
     const n0 = commands.length, before = await C(() => JSON.stringify(window.__copper.S.states));
     await page.click(`.tile .pwr[data-id="${lamp}"]`); await wait(250);
-    const toastNow = await page.textContent('#toast-root');
-    check(/Can't reach the house right now\. Your remotes still work\./.test(toastNow), 'a tap on a light answers at once', toastNow);
+    // it used to answer in a toast; toasts are off (the owner's call), so for now the tap is silent
+    const toastNow = await C(() => document.querySelector('#toast-root').innerHTML);
+    check(toastNow === '', 'a tap on a light shows no toast (toasts are off)', toastNow);
     await wait(800);
     check(commands.length === n0 && before === await C(() => JSON.stringify(window.__copper.S.states)), 'and nothing is sent, queued or pretended', { sent: commands.length - n0 });
     await page.screenshot({ path: 'v7-setup-offline-tap.png' });
-    // coming back, for real: the socket drops, reconnects, and says so once
+    // coming back, for real: the socket drops, reconnects, and the ember goes (the "Back in touch" toast is off)
     await C(() => { location.hash = 'home'; }); await wait(700);
-    await C(() => { const c = window.__copper; c.S.agent.online = true; c.S.ws.close(); });
+    await C(() => { const c = window.__copper; window.__oldWs = c.S.ws; c.S.agent.online = true; c.S.ws.close(); });
     await wait(150);
     await C(() => { const c = window.__copper; c.S.troubleSince = Date.now() - 11000; c.render(); });
-    await page.waitForFunction(() => /Back in touch/.test(document.querySelector('#toast-root').textContent), null, { timeout: 12000 }).catch(() => {});
+    // what used to be read off the "Back in touch" toast: a new socket open, the house answering, the ember gone
+    await page.waitForFunction(() => { const c = window.__copper; return c.S.ws !== window.__oldWs && c.S.wsOpen && c.conn() === 'ok' && !document.querySelector('#app').classList.contains('offline'); }, null, { timeout: 12000 }).catch(() => {});
     await wait(300);
-    check(/Back in touch/.test(await page.textContent('#toast-root')) && !/offline/.test(await C(() => document.querySelector('#app').className)), 'back: the ember goes and a line says so once', await page.textContent('#toast-root'));
+    const back = await C(() => { const c = window.__copper; const r = { fresh: c.S.ws !== window.__oldWs, conn: c.conn(), app: document.querySelector('#app').className, toast: document.querySelector('#toast-root').innerHTML }; delete window.__oldWs; return r; });
+    check(back.fresh && back.conn === 'ok' && !/offline/.test(back.app) && back.toast === '', 'back: the socket dials again, the ember goes, and no toast', back);
     await C(async id => { await window.__copper.run({ type: 'level', target: `d:${id}`, level: 'off' }); }, lamp);
     await wait(900);
 
@@ -180,12 +183,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     check(JSON.stringify(man.shortcuts.map(s => s.name)) === '["All off","Goodnight","Night light","Scenes"]', 'the icon\'s long-press offers All off, Goodnight, Night light, Scenes', sc);
     const icons = await Promise.all(man.shortcuts.map(s => fetch(root + s.icons[0].src.slice(1)).then(r => r.status)));
     check(icons.every(s => s === 200), 'each with its own icon', icons);
-    // All off acts, and opens with Undo that puts each light back
+    // All off acts; it used to say so in a toast, and toasts are off
     const litIds = await C(async () => { const c = window.__copper; const ls = c.data.devices().filter(x => x.domain === 'light' && !/^(hue_|nanoleaf_)/.test(x.device_id)).slice(0, 2); await c.run({ type: 'level', target: `d:${ls[0].device_id}`, level: 40 }); await c.run({ type: 'level', target: `d:${ls[1].device_id}`, level: 70 }); return ls.map(x => x.device_id); });
     await wait(1200);
     await page.goto(root + '?do=all-off'); await ready(); await wait(1800);
-    const after = await C(ids => ({ lv: ids.map(id => window.__copper.data.level(id)), url: location.search, hash: location.hash, toast: document.querySelector('#toast-root').textContent }), litIds);
-    check(after.lv.every(v => !v) && after.url === '' && /Everything off/.test(after.toast) && !/Undo/.test(after.toast), 'All off from the icon: everything off, the app open on it saying so (no Undo)', after);
+    const after = await C(ids => ({ lv: ids.map(id => window.__copper.data.level(id)), url: location.search, hash: location.hash, toast: document.querySelector('#toast-root').innerHTML }), litIds);
+    check(after.lv.every(v => !v) && after.url === '' && after.toast === '', 'All off from the icon: everything off, the app open on it, with no toast', after);
     await C(async ids => { for (const id of ids) await window.__copper.run({ type: 'level', target: `d:${id}`, level: 'off' }); }, litIds);
     await wait(900);
     // Goodnight and Night light only open; nothing turns on from outside the app

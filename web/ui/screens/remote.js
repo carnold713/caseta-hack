@@ -343,7 +343,7 @@ function controlsSheet(c, pid, n, g, over) {
       <button class="chip lead" data-act="ctl-newset">${icon('plus', 16, 1.2)}New set</button></div>
       <p class="t-cap muted sheet-p ctl-note">A new set is made from the lights picked now. Rename or change sets in Settings.</p>`;
   }
-  const summary = `<div class="ctl-sum"><span class="row-ic">${icon('lamp', 20, 1.3)}</span><div><p><span class="muted">Controls </span><b>${esc(data.targetDevices(t).length ? REM.targetSummary(t) : targetWord(c, t))}</b></p><p class="t-cap muted">Applied as you pick · Undo from the toast</p></div></div>`;
+  const summary = `<div class="ctl-sum"><span class="row-ic">${icon('lamp', 20, 1.3)}</span><div><p><span class="muted">Controls </span><b>${esc(data.targetDevices(t).length ? REM.targetSummary(t) : targetWord(c, t))}</b></p><p class="t-cap muted">Applied as you pick${c.toasts ? ' · Undo from the toast' : ''}</p></div></div>`;
   return { over, title: 'Controls', body: `<div class="ctl"><div class="chip-wrap modes">${chips}</div>${body}${summary}</div>` };
 }
 

@@ -1,6 +1,6 @@
 // Copper Night (/ui/): changing the home. About this light (what it is for, what it is, its room, hiding it), Follow
-// the day, room setup (renaming, a new room, deleting one with Undo) and scenes (making one, editing it, starring,
-// running it, the press and hold, deleting it with Undo, the five suggestions). Puts the config back as it found it.
+// the day, room setup (renaming, a new room, deleting one and putting it back) and scenes (making one, editing it, starring,
+// running it, the press and hold, deleting it and putting it back, the five suggestions). Puts the config back as it found it.
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -105,7 +105,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('the room’s sleep timer is the timer sheet, for the room', /room\/20\/timer$/.test(page.url()) && (await page.textContent('.ts-applies .v')) === 'This room', page.url());
   await page.click('.sheet-close'); await wait(500);
 
-  // ---- a new room, named, then deleted with Undo
+  // ---- a new room, named, then deleted (toasts are off, so there is no Undo; the test puts it back itself)
   await go('rooms');
   const n0 = await C(() => window.__copper.data.appRooms().length);
   await page.click('[data-act="room-new"]'); await wait(1500);
@@ -114,11 +114,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const rid = await C(() => location.hash.split('/')[1]);
   check('named Den', (await C(id => window.__copper.data.areaName(id), rid)) === 'Den' && (await C(() => window.__copper.data.appRooms().length)) === n0 + 1);
   await page.press('.name-form input', 'Enter'); await wait(400);
+  const withDen = await C(() => JSON.stringify(window.__copper.S.config));
   await page.click('[data-act="setup-delete"]'); await wait(400);
   await page.click('[data-act="setup-delete-go"]'); await wait(1500);
   check('deleting it goes back to Rooms', /#rooms$/.test(page.url()) && !(await C(id => window.__copper.data.appRoom(id), rid)), page.url());
-  await page.click('#toast-root [data-act="toast-undo"]'); await wait(1400);
-  check('Undo brings it back', !!(await C(id => window.__copper.data.appRoom(id), rid)));
+  check('and no toast and no Undo (toasts are off)', (await C(() => document.querySelector('#toast-root').innerHTML)) === '', await C(() => document.querySelector('#toast-root').innerHTML));
+  await C(async prev => { const c = window.__copper; c.data.restoreConfig(prev); await c.save('', { quiet: true }); }, withDen); await wait(600);
+  check('the room put back directly is there again', !!(await C(id => window.__copper.data.appRoom(id), rid)));
 
   // ---- 14 and 15: scenes
   await C(() => { const c = window.__copper; c.run({ type: 'level', target: 'd:5', level: 60 }); });
@@ -163,18 +165,28 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const row = await page.locator(`.scene-row[data-id="${pid}"]`).boundingBox();
   await page.mouse.move(row.x + 120, row.y + 30); await page.mouse.down(); await wait(750); await page.mouse.up(); await wait(900);
   check('press and hold opens it instead', page.url().endsWith(`#scenes/${pid}`) && !!(await page.$('#sheet-root .scene-sheet')), page.url());
+  const withScene = await C(() => JSON.stringify(window.__copper.S.config));
   await page.click('[data-act="scene-delete"]'); await wait(400);
   await page.click('[data-act="scene-delete-go"]'); await wait(1400);
   check('Delete scene, back to the list', !(await P()) && /#scenes$/.test(page.url()));
-  await page.click('#toast-root [data-act="toast-undo"]'); await wait(1400);
-  check('Undo brings it back', !!(await P()));
+  check('and no toast and no Undo (toasts are off)', (await C(() => document.querySelector('#toast-root').innerHTML)) === '', await C(() => document.querySelector('#toast-root').innerHTML));
+  await C(async prev => { const c = window.__copper; c.data.restoreConfig(prev); await c.save('', { quiet: true }); }, withScene); await wait(600);
+  check('the scene put back directly is there again', !!(await P()));
   const aid = await C(() => document.querySelector('.suggest-card [data-act="scenes-five"]')?.dataset.area);
   if (aid) {
     await page.click(`.suggest-card [data-act="scenes-five"][data-area="${aid}"]`); await wait(1400);
     check('Add all five', (await C(a => window.__copper.data.presets().filter(p => p.area === a && p.mood).length, aid)) === 5);
   }
   const lut = await page.$('[data-act="scene-run-lutron"]');
-  if (lut) { await lut.click(); await wait(1200); check('a Lutron scene runs', /is on/.test(await page.textContent('#toast-root'))); }
+  if (lut) {
+    // the run itself is what is checked; it used to be read off its "is on" toast, and toasts are off
+    const sid = await lut.getAttribute('data-sid');
+    await C(() => { const c = window.__copper; window.__sent = []; if (!c.__run0) { c.__run0 = c.run; c.run = a => { window.__sent.push(a); return c.__run0(a); }; } });
+    await lut.click(); await wait(1200);
+    const lr = await C(id => ({ sent: window.__sent.filter(a => a.type === 'scene' && String(a.scene_id) === id).length, toast: document.querySelector('#toast-root').innerHTML }), sid);
+    await C(() => { const c = window.__copper; if (c.__run0) { c.run = c.__run0; delete c.__run0; } });
+    check('a Lutron scene runs, with no toast', lr.sent === 1 && lr.toast === '', lr);
+  }
 
   // put the config back as it was
   await C(async b => { const c = window.__copper; c.data.restoreConfig(b); await c.data.saveConfig(); }, before);

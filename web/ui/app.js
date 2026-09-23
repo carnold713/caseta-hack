@@ -89,12 +89,15 @@ function onLevel(id, target) {
 function assume(ids, level, { held = false } = {}) { if (data.connState() === 'off') return; for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; if (held) data.hold(ids); }
 
 // ---------- the toast ----------
+// The owner turned toasts off for now because they got in the way; set this back to true to bring every one back.
+const TOASTS = false;
 let toastTimer = null;
 // A toast is for what the house cannot show. A light turning on, dimming or changing colour is its own answer, and
 // the owner found a toast sitting over the page after every tap, offering Undo, more in the way than useful. So a
 // toast whose only job is Undo is not shown at all; Undo stays where something was deleted (a room, a scene, a
 // routine), which nothing on the page can bring back (opts.keepUndo). Errors and plain notes still show.
 function toast(msg, opts = {}) {
+  if (!TOASTS) return;
   if (opts.undo && !opts.keepUndo && !opts.err) return;
   const root = $('#toast-root');
   // "Undo" for a change; "Put back" for a scene, Goodnight or Try it (opts.undoLabel), which may stay longer (opts.ms)
@@ -203,6 +206,8 @@ const ctx = {
   data, H, DAY, EDIT, REM, RT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
   openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
   run, gate, save, saveSoon, assume, onLevel, toast, go, openSheet, closeSheet, render: () => render(),
+  // whether toasts are on at all, so copy that points at one (Undo from the toast) can leave that out while they are off
+  toasts: TOASTS,
   // swap the page's sub route in place (White to Colour on the same sheet): no new step for the back button
   swap: hash => { history.replaceState(history.state, '', '#' + hash); render(); },
   conn: () => data.connState(),

@@ -129,10 +129,11 @@ const running = () => document.getAnimations().map(a => {
     await wait(2500);
   }
 
-  // ---- the toast leaves in 0.2 s EASE_IN, back down 12 px
-  await C(() => window.__copper.toast('Testing')); await wait(5050);
+  // ---- toasts are off (the owner's call): asking for one draws nothing, so nothing of it rises or leaves
+  await C(() => window.__copper.toast('Testing')); await wait(400);
   a = await anims();
-  check('the toast leaves in 0.2 s EASE_IN', a.some(x => /toast/.test(x.cls) && x.dur === 200 && x.ease === 'ease-in'), a.filter(x => /toast/.test(x.cls)));
+  const tr = await C(() => document.querySelector('#toast-root').innerHTML);
+  check('a toast asked for draws nothing and animates nothing', tr === '' && !a.some(x => /toast/.test(x.cls)), { tr, anims: a.filter(x => /toast/.test(x.cls)) });
 
   // ---- M7 · listening: three sonar rings a third of a beat apart, the glow breathing; then a ping and the card on GENTLE
   await C(() => { location.hash = 'add'; }); await wait(700);
