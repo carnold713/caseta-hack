@@ -11,8 +11,10 @@ const GENTLE = 'linear(0, 0.0188, 0.0679, 0.1374, 0.2195, 0.308, 0.3978, 0.4856,
 const OWN_DRAG = '[data-drag], .wheel, .ws-track, input, textarea, select, [contenteditable]';
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// root: #sheet-root. dismiss(): close it for good, without a second drop animation.
-export function wireSheetDrag(root, dismiss) {
+// root: #sheet-root. dismiss(): close it for good, without a second drop animation. handoff(dy), when given, may
+// take a sheet let go past the point of closing and close it its own way from where the finger left it (a scene's
+// editor goes back into its chip, chipopen.js); it says true when it has.
+export function wireSheetDrag(root, dismiss, { handoff = null } = {}) {
   let d = null;   // {sheet, scrim, y0, x0, t0, dy, live, head, lastY, lastT, v}
   const sheetOf = t => t && t.closest && t.closest('#sheet-root .sheet');
   const onHead = t => !!(t.closest('.grab') || (t.closest('.sheet-head') && !t.closest('button, a, input')));
@@ -49,6 +51,7 @@ export function wireSheetDrag(root, dismiss) {
     const away = g.dy > Math.min(160, h * 0.25) || (g.v > 0.8 && g.dy > 40);
     const clear = () => { g.sheet.style.transform = ''; if (g.scrim) g.scrim.style.opacity = ''; };
     if (reduced()) { if (away) dismiss(); else clear(); return; }
+    if (away && handoff && handoff(g.dy)) return;
     if (away) {
       // the rest of the way down, as fast as a sheet leaves (0.28 s for the whole height)
       const ms = Math.max(120, 280 * (1 - g.dy / h));
