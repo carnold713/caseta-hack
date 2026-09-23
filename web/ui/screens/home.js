@@ -1,6 +1,9 @@
 // 02 · Home. The whole house, the starred lights and scenes, the rooms. Read from the Figma frame (12732:48971).
-// "Coming up" and the one setup suggestion arrive with phase 4, when the automation rules move into the data layer.
+// Under the rooms: what is coming up within the hour, and the one suggestion or problem (next.js). The dot beside
+// the greeting, and the offline card, open the connection sheet (conn.js).
 import { tile, sceneChip, roomStatus, roomPicture, offlineCard } from '/ui/screens/parts.js';
+import { homeCards, greetingSheet, shouldGreet, nextActions } from '/ui/screens/next.js';
+import { connActions } from '/ui/screens/conn.js';
 
 function greeting(c) {
   const h = c.DAY.homeNow().getHours();
@@ -18,6 +21,7 @@ export function view(c) {
   const greet = st === 'off'
     ? `<span class="conn-dot lost"></span>Offline · showing last known state`
     : `${esc(greeting(c))}${st === 'reconnecting' ? '<span class="conn-dot" aria-label="Reconnecting"></span>' : ''}`;
+  const empty = !data.devices().length;
 
   const starred = H.rowLights();
   const favScenes = (S.config.favorites || []).filter(t => t.startsWith('p:') || t.startsWith('s:')).map(t => {
@@ -28,12 +32,13 @@ export function view(c) {
 
   return `<div class="home">
     <header class="home-head">
-      <p class="greet ${st === 'off' ? 'off' : ''}">${greet}</p>
+      <button class="greet ${st === 'off' ? 'off' : ''}" data-act="conn-open" aria-label="Connection">${greet}</button>
       <h1 class="t-h1">${esc(name)}</h1>
       <button class="hdr-btn a2" data-go="activity" aria-label="Recent activity">${icon('clock', 20, 1.7)}</button>
       <button class="hdr-btn a1" data-go="settings" aria-label="Settings">${icon('gear', 20, 1.7)}</button>
     </header>
     ${st === 'off' ? offlineCard(c) : ''}
+    ${empty ? `<div class="connect-card"><span class="ic-c">${icon('wifi', 22, 1.6)}</span><p class="t-row">Let's connect your home</p><p class="t-cap muted">A small helper program on a computer in your house links this app to your Lutron bridge. About ten minutes, once.</p><button class="pill blue" data-go="settings/how">Show me how</button></div>` : ''}
 
     <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
@@ -66,12 +71,18 @@ export function view(c) {
         ${roomPicture(c, a.id, a.name, false)}
         <span class="nm">${esc(a.name)}</span><span class="vl">${esc(roomStatus(c, a.id))}</span>
       </button>`).join('')}</div>` : ''}
+    ${homeCards(c)}
   </div>`;
 }
 
 // The house brightness: a finger anywhere on the bar sets it, moving what is on (or, with nothing on, bringing every
 // light up to that level). One command in flight, the newest value winning; nothing redraws until the finger lifts.
 export function after(c, r, root) {
+  // the first time this home connects, once: where would you like to start
+  if (shouldGreet(c) && !c.ui.greeted && !document.querySelector('#sheet-root .sheet')) {
+    c.ui.greeted = true;
+    c.openSheet({ ...greetingSheet(c), key: 'greet', onClose: () => { c.S.config.settings.greeted = true; c.save('', { quiet: true }); } });
+  }
   const bar = root.querySelector('[data-drag="house"]'); if (!bar) return;
   const set = x => {
     const b = bar.getBoundingClientRect();
@@ -90,6 +101,8 @@ export function after(c, r, root) {
 }
 
 export const actions = {
+  ...nextActions,
+  ...connActions,
   // The house on: every light when something is already on; from dark, what was on before (the connector
   // remembers) or every light, as Settings says.
   'house-on'(c) { c.run(c.H.houseOnAction()); },
@@ -118,12 +131,7 @@ export const actions = {
     for (const a of acts.slice(1)) c.run(a);
     c.toast(acts.some(a => a.type === 'lower') ? 'Everything off, shades closing' : 'Everything off');
   },
-  'what-now'(c) {
-    c.openSheet({ over: 'Connection', title: 'Your home is not answering', body: `
-      <p class="t-body muted sheet-p">The app can't reach the small computer in your house that talks to the Lutron bridge. Your remotes and wall controls still work: they talk to the bridge directly.</p>
-      <div class="group"><div class="row"><span class="row-txt"><span class="t">Check it has power</span><span class="d">If it was unplugged, it reconnects on its own within a minute of starting.</span></span></div>
-      <div class="row"><span class="row-txt"><span class="t">Check your home's internet</span><span class="d">It needs a connection out to reach this app.</span></span></div></div>` });
-  },
+  'what-now'(c) { connActions['conn-open'](c); },
 };
 
 function askAutomated(c, lit, auto) {
@@ -131,8 +139,8 @@ function askAutomated(c, lit, auto) {
   const list = names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
   const one = names.length === 1;
   const rest = lit.filter(id => !auto.includes(id));
-  c.openSheet({ over: 'Whole house', title: 'Some lights are automated', body: `
-    <p class="t-body muted sheet-p">${c.esc(list)} ${one ? 'is' : 'are'} on an automation right now. Turn ${one ? 'it' : 'them'} off with everything else, or leave ${one ? 'it' : 'them'} on and turn off the rest of the house?</p>
+  c.openSheet({ over: 'Whole house', title: 'Some lights are on a routine', body: `
+    <p class="t-body muted sheet-p">${c.esc(list)} ${one ? 'is' : 'are'} on a routine right now. Turn ${one ? 'it' : 'them'} off with everything else, or leave ${one ? 'it' : 'them'} on and turn off the rest of the house?</p>
     <div class="group">
       <button class="row" data-act="poweroff-all"><span class="row-txt"><span class="t">Turn off everything</span></span></button>
       <button class="row sub" data-act="poweroff-rest" data-ids="${c.esc(rest.join(','))}"><span class="row-txt"><span class="t">Leave ${one ? 'it' : 'them'} on</span><span class="d">${rest.length ? `${rest.length} other light${rest.length === 1 ? '' : 's'} turn off` : 'Nothing else is on'}</span></span></button>

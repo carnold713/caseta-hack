@@ -30,7 +30,7 @@ const PLAN_HOME_CONTROLS = 19;   // docs/ia-v5.md 3: Home at rest, five rooms an
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(`[${size}] pageerror: ` + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/net::ERR|favicon|sw\.js/.test(m.text())) errors.push(`[${size}] console: ` + m.text()); });
-    await page.goto(BASE + '/'); await page.waitForTimeout(500);
+    await page.goto(BASE + '/classic/'); await page.waitForTimeout(500);
     if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); }
     await page.waitForSelector('.room', { timeout: 15000 }); await page.waitForTimeout(1200);
     if (!token) token = await page.evaluate(() => localStorage.getItem('token'));

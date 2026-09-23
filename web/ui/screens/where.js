@@ -12,7 +12,7 @@ export function whereBlock(c, { compact = false } = {}) {
     return `<p class="t-cap muted where-line">${icon('sun', 18, 1.6)}<span>Sunset uses ${esc(c.S.config.settings.home_name || 'your home')}'s location (${esc(loc.name || 'saved')})${hm ? `, ${c.RT.fmtTime(hm)} today` : ''}. <button class="link blue" data-act="loc-city">Change</button></span></p>`;
   }
   const why = LOC.denied ? "Your phone didn't share its location. Pick the nearest city instead." : "Sunset moves through the year, so the app needs to know roughly where the home is. It's kept on your own hub.";
-  return `<div class="where ${compact ? 'compact' : ''}"><p class="t-row">Where is your home?</p><p class="t-cap muted">${why}</p>
+  return `<div class="loc-ask ${compact ? 'compact' : ''}"><p class="t-row">Where is your home?</p><p class="t-cap muted">${why}</p>
     <div class="btns"><button class="pill blue" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button><button class="pill ghost" data-act="loc-city">Pick a city</button></div></div>`;
 }
 

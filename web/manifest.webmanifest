@@ -1,22 +1,53 @@
 {
-  "name": "Pico Hack for Caseta",
-  "short_name": "Pico Hack",
-  "description": "Double-click, hold and custom scenes for Lutron Caseta Pico remotes.",
+  "name": "Caseta",
+  "short_name": "Caseta",
+  "description": "Every light, every remote and every routine in a Lutron Caséta home, with Hue and Nanoleaf.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f8f8f8",
-  "theme_color": "#006dcc",
-  "categories": ["utilities", "lifestyle"],
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "categories": [
+    "utilities",
+    "lifestyle"
+  ],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "Remotes", "url": "/#remotes", "description": "Set up a remote" },
-    { "name": "Scenes", "url": "/#scenes", "description": "Run a scene" }
+    {
+      "name": "Remotes",
+      "url": "/#remotes",
+      "description": "Set up a remote"
+    },
+    {
+      "name": "Scenes",
+      "url": "/#scenes",
+      "description": "Run a scene"
+    },
+    {
+      "name": "Routines",
+      "url": "/#routines",
+      "description": "What the house does on its own"
+    }
   ]
 }

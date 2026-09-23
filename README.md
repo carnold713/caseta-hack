@@ -410,16 +410,18 @@ binding fires instantly.
 
 ## Look and feel
 
-**A rebuild is under way.** The phone UI is being replaced by "Copper Night", a
-dark design in Figma, on top of the same hub, connector and data. Its build spec
-is `docs/design-spec-v6.md`, read from the Figma file itself; its foundations
-(tokens, components, the icon and art sets) are in `web/ui/`, and
-`/ui/gallery.html` shows every component. The new app itself is at **`/ui/`**:
-Home, Rooms, a room and its setup, a light (white, colour, sleep timer, Follow
-the day, About), a fan, a shade, and every scene; Remotes, Routines and Settings
-are next, and until then they link back to the current app.
-`docs/data-layer.md` covers the data layer both UIs run on. Until cutover the
-app you open at `/` is still the one below.
+The app at `/` is **Copper Night**, a dark design in Figma, on top of the same
+hub, connector and data. Its build spec is `docs/design-spec-v6.md`, read from
+the Figma file itself; it lives in `web/ui/`, and `/ui/gallery.html` shows every
+component. It covers Home, Rooms, a room and its setup, a light (white, colour,
+sleep timer, Follow the day, About), a fan, a shade, every scene, Remotes and
+what each press does, Routines and the guided setups, Activity, Settings (Hue
+and Nanoleaf pairing, light sets, hidden devices, the connector, backup and
+restore), adding a Lutron device, and a short onboarding before the password.
+`docs/data-layer.md` covers the data layer it runs on.
+
+**The previous app is kept at `/classic/`**, unchanged and linked from
+Settings, This app. Everything below about its look describes that one.
 
 `docs/design-spec-v3.md` is the visual spec the interface follows, derived
 from the Sonos iOS app: a light grey sheet with grouped grey cards, black
@@ -439,11 +441,12 @@ page never changes a light, and the viewport does not zoom.
 hub/server.js     Express + ws: static PWA, /api/*, /ws/app (phones), /ws/agent (home), /install.sh
 hub/validate.js   config schema, shared truth for bindings and actions
 hub/store.js      JSON files in DATA_DIR
-web/              the PWA: index.html, styles.css, light.css, motion.css, js/{core,pico,home,light,room,rooms,remotes,scenes,settings,automations,cities,color,daylight,boot,slide,motion,lightfield}.js, sw.js, icons/
+web/              the PWA: index.html (the new app, same as web/ui/index.html), classic/index.html (the previous
+                  app at /classic/), styles.css, light.css, motion.css, js/{core,pico,home,light,room,rooms,remotes,scenes,settings,automations,cities,color,daylight,boot,slide,motion,lightfield}.js, sw.js, icons/
 web/data/         the data layer, no DOM: state, socket, api and command gate, save and undo, inventory and
                   targets (caseta-data.js), roles and suggested scenes (home.js), Follow the day (daylight.js).
                   One file for every host: a script tag, a require, or an import through index.js
-web/ui/           Copper Night: index.html + app.js (the new app at /ui/), screens/, screens.css, tokens.css,
+web/ui/           Copper Night: index.html + app.js (the app at /, also served at /ui/), screens/, screens.css, tokens.css,
                   components.css, icons.js, colour.js, art/ (exported from Figma), gallery.html
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)

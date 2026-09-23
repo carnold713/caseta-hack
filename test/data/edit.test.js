@@ -129,3 +129,22 @@ test('hiding, and forgetting a removed device everywhere it was named', () => {
   assert.equal(e.canRemove('1'), true);
   assert.equal(e.canRemove('hue_l1'), false);
 });
+
+test('adding a Lutron device: its name, the rooms offered, the bridge area it is made in, and filing it', () => {
+  const { d, e } = setup();
+  assert.equal(e.addTypeName('Pico3ButtonRaiseLower'), 'Pico 3-button remote with dimming');
+  assert.equal(e.addTypeName('PlugInDimmer'), 'Plug-in dimmer');
+  assert.equal(e.addDefaultName('PlugInDimmer'), 'New plug-in dimmer');
+  assert.equal(e.addDefaultName('Pico2Button'), 'New remote');
+  const rooms = e.addRooms();
+  assert.deepEqual(rooms.map(r => r.name), ['Kitchen', 'Living room'], "the app's rooms, seeded from the bridge");
+  const kitchen = rooms.find(r => r.name === 'Kitchen');
+  assert.deepEqual(e.lutronHomeFor(kitchen.id), { id: 'a2', name: 'Kitchen', own: true });
+  const den = e.createRoom('Den');
+  assert.equal(e.lutronHomeFor(den.id).own, false, 'a room of the app only borrows one of the bridge areas');
+  d.S.inv.devices[9] = { device_id: '9', name: 'New dimmer', domain: 'light', area: 'a1', serial: 'S9' };
+  d.S.config.settings.hidden_devices = ['9'];
+  assert.equal(e.fileNewDevice('9', 'S9', den.id), true);
+  assert.equal(d.devArea(d.dev('9')), den.id, 'it lives where it was put, whatever area the bridge used');
+  assert.deepEqual(e.hidden(), [], 'and a device removed once comes back');
+});

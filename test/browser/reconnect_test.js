@@ -16,7 +16,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   const errors = []; page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error' && !/net::ERR|favicon|sw\.js|WebSocket/.test(m.text())) errors.push('console: ' + m.text()); });
   const wait = ms => page.waitForTimeout(ms);
-  await page.goto(BASE + '/'); await wait(600);
+  await page.goto(BASE + '/classic/'); await wait(600);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); }
   await page.waitForSelector('.room', { timeout: 15000 }); await wait(1500);
   await page.evaluate(() => { if (sheet.isOpen()) sheet.close(); render(); }); await wait(400);

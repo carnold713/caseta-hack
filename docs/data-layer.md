@@ -11,7 +11,7 @@ be tested without a browser.
 | `caseta-data.js` | `CasetaData` | The state (`S`), the socket and what each message does to the state, `api()` and the command gate, save and undo, the connection's quiet window, and every question asked of the inventory: devices, rooms, targets, remotes, `describe()` |
 | `home.js` | `CasetaHome` | Light roles, the five suggested scenes and their levels, which scene a room is showing, a room's scenes in order, what is lit, the starred row, the one-time seeding of the app's rooms |
 | `daylight.js` | `CasetaDaylight` | Follow the day: the curve, who follows it, the words for what a lamp is doing, and the names of whites |
-| `edit.js` | `CasetaEdit` | Changing the home: making, renaming, deleting rooms and moving things between them (and asking the bridges to follow); making and editing scenes; a light's kind and role; hiding and removing a device |
+| `edit.js` | `CasetaEdit` | Changing the home: making, renaming, deleting rooms and moving things between them (and asking the bridges to follow); making and editing scenes; a light's kind and role; hiding and removing a device; what the Add a device card offers (a heard device's name, the rooms, which of the Lutron bridge's areas a room maps to) and filing a new device into the room it was put in |
 | `remotes.js` | `CasetaRemotes` | Picos: which key is which on each model, learning a remote's numbering from its presses, what a press does and how that is said, the ready-made ways a press can go, night versions, walks through scenes, Leaving, the usual layout, the step editor's fields |
 | `routines.js` | `CasetaRoutines` | Routines: time in the home's own zone, on-and-off pairs folded into one, the sentence a routine is said in, the next run and skipping it, the three guided setups, the evening wind-down's numbers, running timers |
 | `index.js` | | The ES-module entry for the new UI |
@@ -58,18 +58,20 @@ points into them: `const describe = DATA.describe`, `const moodLevels = HOME.moo
 changed. What is really the UI's stayed where it was: the sheet, the walk, the toast, painting state in place,
 the render dispatcher.
 
-## What is deliberately not in it yet
+## What moved in later phases
 
-Each of these moves at the start of the phase whose screens need it, after that phase's frames have been read
-from the Figma file, because each one depends on something the file decides:
+Each of these moved at the start of the phase whose screens needed it, after that phase's frames had been read
+from the Figma file, because each one depended on something the file decides:
 
 - **Colour vocabulary.** Settled in phase 3: Copper Night has its own twelve lamp colours and names
   (`web/ui/colour.js`), so the old app's swatches stay the old app's.
 - **The Lantern tint solver** (`color.js`, lit surfaces pinned to one luminance, room meshes). It is proven by
   `scripts/tint-check.js` against `web/js/color.js` byte for byte, and Copper Night draws lit tiles as copper
   gradients. Reused or deleted when phase 3 settles how a colour lamp's tile is tinted.
-- **Button and routine recipes** (`remotes.js`, `automations.js`). Phase 4.
-- **Add a device, Hue and Nanoleaf pairing, setup suggestions.** Phase 5.
+- **Button and routine recipes.** Moved in phase 4 as `remotes.js` and `routines.js`.
+- **Add a device.** Its rules moved into `edit.js` in phase 5. Hue and Nanoleaf pairing and the setup
+  suggestions stay in their screens (`web/ui/screens/settings.js`, `next.js`): each is a few API calls and a
+  flag, with no rule another host would share.
 
 ## Tests
 

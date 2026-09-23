@@ -22,7 +22,7 @@ function topLevelNames(src) {
 
 test('no top-level name in web/js is declared by two plain scripts', () => {
   // A <script type="module"> has a scope of its own, so its top-level names cannot collide with anyone's.
-  const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(WEB, 'classic', 'index.html'), 'utf8');  // the classic app, which is the one made of plain scripts
   const modules = new Set([...html.matchAll(/<script[^>]*type="module"[^>]*src="\/js\/([^"]+)"/g)].map(m => m[1]));
   const files = fs.readdirSync(JS).filter(n => n.endsWith('.js') && !modules.has(n));
   assert.ok(files.length > 5, 'found the app scripts');

@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 4400;
   const page = await ctx.newPage();
   page.on('pageerror', e => console.log('PAGEERROR', e.message, e.stack && e.stack.split('\n').slice(0,3).join(' | ')));
   page.on('console', m => { if (m.type() === 'error' && !/fonts|ERR_/.test(m.text())) console.log('CONSOLE', m.text()); });
-  await page.goto(`http://127.0.0.1:${PORT}/`);
+  await page.goto(`http://127.0.0.1:${PORT}/classic/`);
   await page.waitForTimeout(500);
   const hasPw = await page.$('#pw');
   if (hasPw) { if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); } }

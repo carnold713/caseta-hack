@@ -16,7 +16,7 @@ const grey = c => { const [r, g, b] = c.match(/\d+/g).slice(0, 3).map(Number); r
   if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, process.env.APP_TOKEN);
   const page = await ctx.newPage();
   page.on('pageerror', e => { console.log('PAGEERROR ' + e.message); fails.push('pageerror'); });
-  await page.goto(`http://127.0.0.1:${PORT}/`);
+  await page.goto(`http://127.0.0.1:${PORT}/classic/`);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); }
   await page.waitForSelector('.room', { timeout: 10000 }); await page.waitForTimeout(1000);
   await page.evaluate(() => { if (typeof sheet !== 'undefined' && sheet.isOpen()) sheet.close(); }); await page.waitForTimeout(500);

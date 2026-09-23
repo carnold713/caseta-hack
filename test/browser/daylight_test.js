@@ -17,7 +17,7 @@ const SHOT = process.env.SHOT_DIR || __dirname;
   const shot = n => page.screenshot({ path: `${SHOT}/s21-${n}.png` });
   const text = async sel => ((await page.textContent(sel)) || '').replace(/\s+/g, ' ').trim();
 
-  await page.goto(`http://127.0.0.1:${PORT}/`);
+  await page.goto(`http://127.0.0.1:${PORT}/classic/`);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); }
   await page.waitForSelector('#nav button[data-view=settings]', { timeout: 10000 }); await page.waitForTimeout(1200);
   await page.evaluate(() => { if (sheet.isOpen()) sheet.close(); }); await page.waitForTimeout(300);

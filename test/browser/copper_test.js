@@ -76,6 +76,8 @@ const FAN = [
   await page.goto(base);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('.login-form button'); }
   await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 }); await wait(800);
+  // the greeting a home gets once, the first time it connects, would sit over Home: this home has had it
+  await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
   // start clean: no look saved by an earlier run, and the stars as they were
   const favs0 = await C(() => window.__copper.S.config.favorites.slice());
   await C(async () => { const c = window.__copper; const n = c.S.config.presets.length; c.S.config.presets = c.S.config.presets.filter(p => !/ · My look/.test(p.name)); if (c.S.config.presets.length !== n) await c.data.saveConfig(); });
@@ -178,8 +180,8 @@ const FAN = [
   check('Off turns it off', (await lv('5')) === 0, await lv('5'));
   await page.click('[data-act="dev-on"]'); await wait(1400);
   check('On turns it on', (await lv('5')) > 0, await lv('5'));
-  await page.evaluate(() => { location.hash = 'remotes'; }); await wait(700);
-  check('a page not built yet says so and links to the current app', !!(await page.$('.soon-page a[href="/"]')));
+  await page.evaluate(() => { location.hash = 'nowhere'; }); await wait(700);
+  check('an address with no page says so and offers Home and the classic app', !!(await page.$('.soon-page [data-go="home"]')) && !!(await page.$('.soon-page a[href="/classic/"]')));
   await page.click('[data-act="back"]'); await wait(800);
   check('back returns to the light', /#light\/5$/.test(page.url()), page.url());
 

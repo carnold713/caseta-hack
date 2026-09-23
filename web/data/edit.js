@@ -57,6 +57,7 @@
       const target = roomById(roomId);
       for (const r of rooms()) r.device_ids = (r.device_ids || []).filter(x => x !== deviceId);
       if (target) target.device_ids = [...(target.device_ids || []), deviceId];
+      settings().rooms = [...rooms()];
       return target;
     }
     // "5 · 1 fan · 1 shade": what a room holds.
@@ -241,8 +242,62 @@
       return { stillListed };
     }
 
+    // ---------- adding a Lutron device ----------
+    // What the bridge calls a device it heard, in plain words, and the name a new one starts with.
+    function addTypeName(t) {
+      if (!t) return 'Device';
+      if (/Pico/.test(t)) { const m = D.modelName({ type: t }); return m === 'Remote' ? 'Pico remote' : `Pico ${m}`; }
+      if (/Shade|Blind|Drape|Tilt/.test(t)) return 'Shade';
+      if (/Fan/.test(t)) return 'Fan control';
+      if (/PlugIn.*Dimmer/.test(t)) return 'Plug-in dimmer';
+      if (/PlugIn.*Switch/.test(t)) return 'Plug-in switch';
+      if (/Dimmer|Dimmed|Tune/.test(t)) return 'Dimmer';
+      if (/Switch/.test(t)) return 'Switch';
+      return t;
+    }
+    const addDefaultName = t => { const n = addTypeName(t); return /^Pico/.test(n) ? 'New remote' : `New ${n.toLowerCase()}`; };
+    // The rooms a new device can go in: the app's own once it has them, else the Lutron bridge's.
+    function addRooms() {
+      H.ensureRooms();
+      if (rooms().length) return rooms().map(r => ({ id: r.id, name: r.name })).sort((a, b) => a.name.localeCompare(b.name));
+      return Object.values(S.inv.areas || {}).filter(a => a && a.id && a.name && !String(a.id).startsWith('hue_')).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    // The bridge can only make a device in one of its own areas: the room's own when it has one, else the area its
+    // Lutron lights already use, else one with the same name, else the first. `own` says whether it is the room's.
+    function lutronHomeFor(roomId) {
+      const areas = Object.values(S.inv.areas || {}).filter(a => a && a.id && a.name && !String(a.id).startsWith('hue_')).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      if (!areas.length) return null;
+      const r = roomById(roomId);
+      if (r && r.bridge_area) { const own = areas.find(a => String(a.id) === r.bridge_area); if (own) return { id: String(own.id), name: own.name, own: true }; }
+      if (!r) { const a = areas.find(x => String(x.id) === roomId); if (a) return { id: String(a.id), name: a.name, own: true }; }
+      const mates = H.fileable().filter(d => D.devArea(d) === roomId && !String(d.device_id).startsWith('hue_') && d.area && !String(d.area).startsWith('hue_'));
+      if (mates.length) { const a = areas.find(x => String(x.id) === String(mates[0].area)); if (a) return { id: String(a.id), name: a.name, own: false }; }
+      const want = ((r && r.name) || '').toLowerCase();
+      const near = want && areas.find(a => String(a.name).toLowerCase() === want);
+      if (near) return { id: String(near.id), name: near.name, own: false };
+      return { id: String(areas[0].id), name: areas[0].name, own: false };
+    }
+    // A device just made: into the room the person picked, whichever area the bridge used, and back from hidden if
+    // it was removed once before. True when the config changed.
+    function fileNewDevice(deviceId, serial, roomId) {
+      let changed = false;
+      const ids = new Set([deviceId, ...Object.values(S.inv.devices || {}).filter(x => serial && String(x.serial || '') === String(serial)).map(x => x.device_id)].filter(Boolean));
+      for (const id of ids) if (hidden().includes(id)) { unhideDevice(id); changed = true; }
+      const did = deviceId || [...ids][0];
+      const target = roomById(roomId);
+      if (did && target && !(target.device_ids || []).includes(did)) {
+        for (const x of rooms()) x.device_ids = (x.device_ids || []).filter(y => y !== did);
+        target.device_ids = [...(target.device_ids || []), did];
+        // a new list, so the data layer's room index (cached on the list) is rebuilt
+        settings().rooms = [...rooms()];
+        changed = true;
+      }
+      return changed;
+    }
+
     return {
       FADES, fadeText,
+      addTypeName, addDefaultName, addRooms, lutronHomeFor, fileNewDevice,
       createRoom, renameRoom, deleteRoom, moveDevice, roomContents, bridgeMakeRoom, bridgeRenameRoom, bridgeMoveDevice,
       markEdited, newScene, renameScene, sceneInclude, sceneSetLevel, sceneSetColour, sceneSetRoom, sceneSetFade,
       sceneCapture, sceneSuggest, deleteScene, sceneDevices, lightsText,

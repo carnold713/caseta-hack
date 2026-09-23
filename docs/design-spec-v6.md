@@ -538,6 +538,66 @@ What reading frames 07 to 25 settled:
   coming and going. The hub records no author, so a change reads "From the
   app" where the file writes a person's name.
 
+### Phase 5: setup, settings and the cutover
+
+Built: **01 onboarding**, **11 Settings** and every sheet it opens, **12 the
+connection sheet**, **20 Add a device**, and Home's greeting, suggestion card
+and "Coming up" line. Then the cutover: **the new app is at `/`** and the old
+one at **`/classic/`**, where it keeps working exactly as before.
+
+Routes: `#settings` with `/name`, `/where`, `/timezone`, `/power`, `/onlevel`,
+`/fade`, `/night`, `/nightlook`, `/connection`, `/bridge`, `/hue`,
+`/nanoleaf`, `/hidden`, `/sets`, `/how`, `/restore`, `/ideas`, `/install` and
+`/logout` as sheets; `#add`. A route the new app does not know lands on a "Not
+here" page with Go home and the classic app.
+
+`test/browser/copper_setup_test.js` drives it (onboarding to sign-in, the
+classic app at `/classic/`, the greeting once per home, the suggestion and Not
+now, the connection sheet and the remotes check, each Settings sheet that
+changes something, a backup restored and undone, and a Pico heard, named, put
+in a room and made) and measures frames 01 and 11.
+
+What reading frames 01, 11, 12 and 20 settled:
+
+- **Onboarding is three pages before the password**, the file's copper star
+  pill, dots, a two-line headline around a picture pill, a 64 back circle and
+  a 296 wide button. It shows once per phone; "What this app does" under the
+  password brings it back. The file's first page joins "Nothing to save" and
+  "everything is undoable" with a long dash; here it is a colon.
+- **Settings is one grouped list** in the file's order (Home, Buttons,
+  Evening, Devices, Connector, Backup) with This app and Log out added below,
+  because the old Settings reached all of it: Hue and Nanoleaf pairing, hidden
+  devices, light sets, the connector's updates and install line, the bridge's
+  notes, backup and restore, ideas, installing to the home screen, and the
+  classic app. Every row opens a sheet that applies as it is changed, with
+  Undo on the toast.
+- **Night look** is a warm veil over the whole app (`body.nightlook`): always,
+  never, or automatically during the house's night hours.
+- **The connection sheet's headline says the one thing that matters**: nothing
+  ("Nothing needs you. Everything is connected"), a blip that has passed, a
+  reconnect in progress, or the first link that is down and what to check. The
+  four rows are this phone, the app's server, the house computer and the
+  Lutron bridge. "Check the remotes" counts buttons, not button settings, so a
+  button with a tap, a double press and a hold is one button set up. It opens
+  from the greeting line on Home, the offline card and Settings.
+- **Add a device listens as soon as it opens** and stops when it is left. The
+  file's three steps (Listening, Name it, Pick a room) run over a radar drawn
+  around the file's wireless illustration; what the bridge hears slides up in
+  a card with a name and the rooms as chips, and one tap makes it. A room the
+  Lutron bridge has no area for is still offered: the bridge keeps the device
+  under one of its own areas, the card says which, and the app files it where
+  it was put. "See what the bridge said" and "Which button?" are kept from the
+  old flow, since this part of the bridge is undocumented.
+- **Home offers one suggestion at a time** under the rooms (a remote to set
+  up, moods, Welcome lights and the rest of the old app's list), never over a
+  problem, with Not now remembered. "Coming up" appears when a routine runs
+  within the hour, with Skip. The first time a home connects it is greeted
+  once with where to start, and closing that is remembered on the hub.
+- **The cutover keeps both apps offline-ready.** The service worker caches the
+  new app, the classic app and what they share, and falls back to whichever
+  one the address asked for. `/ui/` still serves the new app, so old links
+  keep working.
+
 **Open: the webfont.** `tokens.css` declares Lutron Sans Screen at
 `/ui/font/LutronSansScreen-{Light,Regular,Medium}.woff2`. Those three files are
 not in the repo, because whether the face can ship as a webfont in the PWA is

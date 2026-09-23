@@ -23,6 +23,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.goto(base);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('.login-form button'); }
   await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 }); await wait(800);
+  // the greeting a home gets once, the first time it connects, would sit over Home: this home has had it
+  await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
   const before = await C(() => JSON.stringify(window.__copper.S.config));
   // Positions read from the file, measured from the sheet's own top (a sheet) or the page's (a page).
   const at = async (what, list, inSheet) => {
