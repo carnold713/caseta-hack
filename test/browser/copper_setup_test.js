@@ -106,8 +106,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await tap(`#sheet-root [data-act="set-light"][data-id="${light}"]`);
   check('a light set with a light in it', (await cfg()).groups.some(g => g.name === 'New set' && g.device_ids.includes(light)));
   await goto('settings/hue');
-  await tap('#sheet-root [data-act="hue-discover"]'); await wait(1500);
-  check('Hue: looking for a bridge answers', !!(await page.$('#sheet-root [data-act="hue-pick"]')) || /No Hue bridge|connected|lights? in/i.test(await page.textContent('#sheet-root')));
+  // hue_test runs earlier in the suite and leaves a bridge paired; alone, there is none yet
+  if (await page.$('#sheet-root [data-act="hue-forget"]')) {
+    check('Hue: a paired bridge shows its lights, and Forget', /lights? in \d+ rooms?/.test(await page.textContent('#sheet-root')));
+  } else {
+    await tap('#sheet-root [data-act="hue-discover"]'); await wait(1500);
+    check('Hue: looking for a bridge answers', !!(await page.$('#sheet-root [data-act="hue-pick"]')) || /No Hue bridge|connected|lights? in/i.test(await page.textContent('#sheet-root')));
+  }
   await goto('settings/how');
   check('How your home connects shows the install line', /install\.sh\?token=/.test(await page.textContent('#sheet-root code')));
   await goto('settings/restore');
