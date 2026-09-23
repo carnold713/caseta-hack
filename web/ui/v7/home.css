@@ -1,1 +1,160 @@
-/* Copper Night v7 · home. Owned by one builder; see docs/design-v7-ui.md for the light and the motion. */
+/* Copper Night v7 · home. Owned by one builder; see docs/design-v7-ui.md for the light and the motion.
+   1 Home · the house, lit (12814:126, all off 12817:96) · 2 Rooms · light that pools (12814:49603)
+   10 Goodnight house (12817:49280) · 12 Welcome lights, coming up (12815:169, 12815:49652) */
+
+/* ---- 1 · the house, lit ------------------------------------------------------------------------ */
+
+/* The house's own light, behind everything on Home: 420 tall at the very top, bleeding off the top edge and fading
+   out by 420 (a mask, opaque to 52%) so the starred tiles sit on plain #121212. Light, not a control: the page
+   scrolls through it and nothing on it takes a touch. */
+.home { position: relative; }
+.home > :not(.house-light) { position: relative; z-index: 1; }
+.house-light {
+  position: absolute; left: 0; right: 0; top: 0; height: 420px; overflow: hidden; pointer-events: none; z-index: 0;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+}
+/* A pool drifts its own few pixels on the ambient 8 s, ease in and out each way, and its body swells 3%: a living
+   house moves slower than attention. The drift is a `translate`, the swell a `scale`, so neither fights the
+   transform the dimmer uses to bring a light on or put it out. Half the pools run half a beat behind (--ph). */
+.hl-pool {
+  position: absolute; width: 0; height: 0; transform: scale(var(--k, 1));
+  animation: hl-drift var(--ambient) var(--ease-both) var(--ph, 0s) infinite;
+}
+.hl-pool .g-body { animation: hl-swell var(--ambient) var(--ease-both) var(--ph, 0s) infinite; }
+@keyframes hl-drift { 0%, 100% { translate: 0 0; } 50% { translate: var(--dx, 0) var(--dy, 0); } }
+@keyframes hl-swell { 0%, 100% { scale: 1; } 50% { scale: 1.03; } }
+/* A room going out fades and draws in to 0.85 on the dimmer (and back for one coming on): the file's pair. */
+.house-light .glow > i, .room-big .glow > i, .arrival .glow > i {
+  transition: width var(--dimmer) var(--ease-both), height var(--dimmer) var(--ease-both),
+              opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both);
+}
+/* Past five lit rooms the rest fold into a faint copper haze rather than more pools. */
+.hl-haze {
+  position: absolute; inset: 0; opacity: 0; transition: opacity var(--dimmer) var(--ease-both);
+  background: radial-gradient(60% 55% at 50% 28%, rgba(217, 138, 78, .12), rgba(217, 138, 78, 0));
+}
+.hl-haze.on { opacity: 1; }
+
+/* The whole-house card is frosted glass over the field (88% with a background blur), and its own copper glow is
+   gone: the field now tells that story, and the card does not tell it twice. */
+.card.house {
+  background: rgba(38, 38, 38, .88);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.card.house.lit::before { content: none; }
+.house-head .hh-w { display: inline-block; }
+
+/* ---- 10 · Goodnight house ---------------------------------------------------------------------- */
+
+/* Over everything but the toast (which says Put back on it), under the status bar. Every piece starts clear; the
+   script in home.js brings each in on its token. A tap anywhere on it skips to the end. */
+.gn-night { position: fixed; inset: 0; z-index: 25; cursor: default; -webkit-tap-highlight-color: transparent; }
+.gn-veil { position: absolute; inset: 0; background: #0A0908; opacity: 0; }
+.gn-route, .gn-moon, .gn-sleep, .gn-extras, .gn-stay { opacity: 0; }
+/* the moon and the light kept for the way to bed share one place, 42% down: the file's 388 of 915 */
+.gn-moon, .gn-route { position: absolute; left: 50%; top: 42.4%; width: 0; height: 0; }
+.gn-moon > .ic { position: absolute; left: -12px; top: -12px; color: #D1D1D1; }
+.gn-moon .glow .g-core { display: none; }   /* a moon, not a lamp: no hot centre */
+.gn-bead { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 5px; background: #FFD9A8; box-shadow: 0 0 8px rgba(255, 199, 138, .6); }
+.gn-ring { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; transform: rotate(-90deg); overflow: visible; }
+.gn-ring circle { fill: none; stroke: rgba(255, 217, 168, .55); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 1 1; animation: gn-drain linear forwards; }
+@keyframes gn-drain { from { stroke-dasharray: 1 1; } to { stroke-dasharray: 0 1; } }
+.gn-kept { position: absolute; left: 0; top: 33px; transform: translateX(-50%); margin: 0; white-space: nowrap; font-size: 16px; line-height: 20px; color: #C2B8AD; }
+.gn-sleep, .gn-extras, .gn-stay { position: absolute; left: 20px; right: 20px; margin: 0; text-align: center; }
+.gn-sleep { top: calc(42.4% + 28px); font-size: 32px; font-weight: 300; line-height: 34px; letter-spacing: -.015em; color: #D1D1D1; }
+.gn-extras { top: calc(42.4% + 74px); font-size: 14px; line-height: 18px; color: #7D6A5A; }
+.gn-stay { top: calc(42.4% + 102px); display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 14px; color: #C2B8AD; }
+.gn-stay:empty { display: none; }
+.gn-stay .link { border: 0; background: none; font: inherit; font-weight: 500; color: var(--copper-hi); padding: 8px 0; text-decoration: underline; }
+/* the Goodnight toast stays 8 s, and its bar drains over the same (app.js sets --toast-ms) */
+.toast::after { animation-duration: var(--toast-ms, 5s); }
+
+/* ---- 2 · Rooms · light that pools -------------------------------------------------------------- */
+
+/* The card stacks: picture, the off veil, the warmth, the glow, the scrim, the words. */
+.room-big .rm-veil, .room-big .rm-warm { position: absolute; inset: 0; pointer-events: none; }
+/* Off, the room is asleep: grey and dark under a veil (the photo loses its colour). Lit, the veil lifts on the
+   dimmer, 0.08 s behind the glow, so the light seems to reach the room rather than appear on it. */
+.room-big .rm-veil {
+  background: rgba(18, 18, 18, .35);
+  -webkit-backdrop-filter: grayscale(1); backdrop-filter: grayscale(1);
+  opacity: 1; transition: opacity var(--dimmer) var(--ease-both);
+}
+.room-big.photo .rm-veil { background: rgba(18, 18, 18, .55); }
+.room-big.lit .rm-veil { opacity: 0; transition-delay: calc(var(--stagger) * 5); }
+.room-big .rm-warm {
+  background: #FFB46B; mix-blend-mode: soft-light;
+  opacity: 0; transition: opacity var(--dimmer) var(--ease-both);
+}
+.room-big.lit .rm-warm { opacity: var(--warm, 0); transition-delay: calc(var(--stagger) * 5); }
+.room-big .room-art { transition: opacity var(--dimmer) var(--ease-both); }
+.room-big.lit .room-art { opacity: .32; }
+/* The v6 disc is replaced by the room's own light (glow.js); these undo its box so the three layers can draw. */
+.room-big .glow {
+  left: var(--g-x, 50%); top: var(--g-y, 50%); right: auto; width: 0; height: 0; border-radius: 0; background: none;
+  transform: scale(1); opacity: 1;
+  transition: left var(--dimmer) var(--ease-both), top var(--dimmer) var(--ease-both),
+              transform var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both);
+}
+/* The bloom: lit, the glow rests at 100 in from the right and 44 down (the colour pool at 162, 60, at 0.6); off, it
+   sits in the power circle at a fifth of its size and gone. On, it opens out from the button 0.12 s after the
+   press lands (the file's 0.30 press, 0.42 bloom). */
+.room-big .glow.acc { transform: scale(.6); }
+.room-big .glow.off { left: calc(100% - 38px); top: 142px; transform: scale(.2); opacity: 0; }
+.room-big .glow.acc.off { transform: scale(.12); }
+.room-big.lit .glow:not(.off) { transition-delay: calc(var(--stagger) * 3); }
+/* The power circle: copper while the room is lit, 0.24 s standard, with a soft copper shadow; the press is the tap. */
+.room-big .pwr {
+  transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease),
+              box-shadow var(--standard) var(--ease), transform var(--tap) var(--spring-quick);
+}
+.room-big.lit .pwr { box-shadow: 0 0 16px rgba(217, 138, 78, .45); }
+.room-big:not(.lit) .pwr { background: rgba(18, 18, 18, .7); color: var(--text-2); }
+.room-big .pwr:active { transform: scale(.96); }
+
+/* ---- 12 · Welcome lights, coming up ------------------------------------------------------------ */
+
+/* 372 x 128, radius 28, the countdown ring 72 at 20, 28 and the words at 108. */
+.card-row.arrival {
+  display: block; height: 128px; padding: 0; overflow: hidden; cursor: pointer;
+  border-radius: var(--r-card); background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line);
+}
+/* Dusk, on the right of the card: the card's own grey warming to #3A2A20 at its edge, and for a sunset routine a
+   sun sinking through its bottom edge, lower and fainter as the minutes go (--p, carried on a slow linear). */
+.arrival .dusk { position: absolute; top: 0; bottom: 0; right: 0; width: 140px; background: linear-gradient(90deg, rgba(38, 38, 38, 0), #3A2A20); pointer-events: none; }
+.arrival .dusk-sun {
+  position: absolute; right: 3px; top: 77px; width: 80px; height: 80px; pointer-events: none;
+  transform: translateY(calc(var(--p, 0) * 24px)); opacity: calc(1 - var(--p, 0) * .65);
+  transition: transform 1s linear, opacity 1s linear;
+}
+.arrival .dusk-sun::before { content: ''; position: absolute; inset: -12px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 180, 107, .28), rgba(255, 180, 107, 0)); mix-blend-mode: screen; }
+.arrival .dusk-sun i { position: absolute; left: 31px; top: 31px; width: 18px; height: 18px; border-radius: 9px; background: radial-gradient(circle at 40% 40%, #FFD9A8, #E6A06A 60%, #D98A4E); }
+.arrival .ar-ring { position: absolute; left: 20px; top: 28px; width: 72px; height: 72px; }
+.arrival .ar-ring svg { position: absolute; inset: 0; width: 72px; height: 72px; transform: rotate(-90deg); overflow: visible; }
+.arrival .ar-ring circle { fill: none; stroke-width: 3; }
+.arrival .ar-ring .trk { stroke: rgba(255, 255, 255, .08); transition: opacity var(--exit) var(--ease-in); }
+.arrival .ar-ring .arc { stroke-linecap: round; transition: stroke-dashoffset 1s linear, opacity var(--standard) var(--ease); }
+.arrival .ar-ring .arc.w { stroke: #D1D1D1; }
+.arrival .ar-ring .arc.cu { stroke: url(#ar-cu); opacity: 0; }
+/* the last ten minutes: the light is close, and the arc is copper */
+.arrival.close .ar-ring .arc.cu { opacity: 1; }
+.arrival.close .ar-ring .arc.w { opacity: 0; }
+/* skipped: the ring empties and greys */
+.arrival.skipped .ar-ring .arc { stroke: #6E6E6E; }
+/* on: the ring goes (0.2 s EASE_IN) and the lantern lights, its glow coming up on the dimmer */
+.arrival.ran .ar-ring .trk, .arrival.ran .ar-ring .arc { opacity: 0; transition: opacity var(--exit) var(--ease-in); }
+.arrival .ar-art { position: absolute; left: 20px; top: 20px; width: 32px; height: 32px; opacity: .8; transition: opacity var(--dimmer) var(--ease-both); }
+.arrival .ar-art.lit { opacity: 0; filter: brightness(1.4); }
+.arrival.ran .ar-art { opacity: 0; }
+.arrival.ran .ar-art.lit { opacity: 1; }
+.arrival.skipped .ar-art { opacity: .35; }
+.arrival .glow { left: 36px; top: 36px; }
+.arrival .ar-txt { position: absolute; left: 108px; right: 16px; top: 29px; display: flex; flex-direction: column; align-items: flex-start; }
+.arrival .ar-txt .t { font-size: 16px; font-weight: 500; line-height: 20px; }
+.arrival .ar-txt .d { margin-top: 6px; font-size: 14px; line-height: 18px; color: var(--text-2); }
+.arrival .ar-txt .link {
+  margin-top: 12px; padding: 0; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 500;
+  color: var(--text-1); text-decoration: underline; text-underline-offset: 2px;
+}
+.arrival.ran .ar-txt { top: 44px; }

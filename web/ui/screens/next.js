@@ -5,6 +5,8 @@
 //
 // One suggestion per session, never over a problem, and "Not now" is remembered: 14 days for that one, and after
 // three in a week the card rests for 30.
+import { glowHTML } from '/ui/glow.js';
+
 const DAY = 86400000;
 const get = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
 const set = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* fine */ } };
@@ -56,6 +58,8 @@ function problem(c) {
   const b = c.data.bindings().find(x => c.REM.bindingBroken(x));
   if (b) { const d = c.data.dev(b.device_id); return { title: `${d ? d.name : 'A remote'} points at something that is gone`, reason: 'Pick again.', go: `remote/${b.device_id}`, warn: true }; }
   const sc = c.RT.list().find(x => c.RT.failedLast(x));
+  // One that should have turned a light on this evening offers to do it now: one named light, a deliberate button.
+  if (sc && turnsOn(sc) && missedLately(c, sc)) return { title: `${sc.name} didn't run: couldn't reach the bridge.`, reason: '', go: `routine/${sc.id}`, warn: true, now: sc.id };
   if (sc) return { title: `${sc.name} didn't run`, reason: "Couldn't reach the bridge", go: `routine/${sc.id}`, warn: true };
   return null;
 }
@@ -70,11 +74,100 @@ function pick(c) {
   return s || null;
 }
 
+// ---------- 12 · Welcome lights, coming up (12815:169, 12815:49652) ----------
+// Within the hour before a routine turns a light on, the "Coming up" line becomes a card with a ring. The ring fills
+// as the moment nears, in plain white until the last ten minutes, when it crosses to copper (0.24 s standard): the
+// light is close. A sunset routine's card is a small dusk, its sun sinking and fading as the minutes go. When it
+// runs the ring goes (0.2 s EASE_IN), the lantern lights with its glow on the dimmer, and the card becomes a line
+// for ten minutes. Skipped, the ring empties and greys. Nothing on the card turns anything on early; the ring is not
+// a button.
+const RING = 2 * Math.PI * 34.5;   // r 34.5: the 3 px stroke inside the 72 ring
+const turnsOn = sc => (sc.actions || []).some(a => (a.type === 'level' && a.level !== 'off' && a.level !== 0) || a.type === 'preset' || a.type === 'scene');
+const hmMin = hm => { const [h, m] = String(hm).split(':').map(Number); return h * 60 + (m || 0); };
+// The light a routine turns on, by name, and the one to draw: "Porch light", its art and its colour.
+function routineLight(c, sc) {
+  const { L } = c.RT.splitOf(sc);
+  const ids = c.data.targetDevices(L.length === 1 ? L[0] : L);
+  const d = ids.map(id => c.data.dev(id)).find(x => x && (x.domain === 'light' || x.domain === 'switch')) || null;
+  return { name: L.length ? c.data.targetName(L.length === 1 ? L[0] : L) : 'The lights', d, ids };
+}
+// Failed in the last six hours: late enough in the day that turning it on now is still what it was for.
+function missedLately(c, sc) {
+  const e = (c.S.activity || []).find(x => x.kind === 'schedule' && x.id === sc.id);
+  return !!(e && e.ok === false && e.at && Date.now() - Date.parse(e.at) < 6 * 3600000);
+}
+// Ran within the last ten minutes, by the activity log: the card stays as a line for that long.
+function ranRecently(c, sc) {
+  const e = (c.S.activity || []).find(x => x.kind === 'schedule' && x.id === sc.id);
+  return !!(e && e.ok !== false && e.at && Date.now() - Date.parse(e.at) < 600000);
+}
+// A run skipped for tonight still gets its card (greyed, with Don't skip) until its time has passed.
+function skippedSoon(c) {
+  const { RT } = c; const now = hmMin(RT.nowHm());
+  for (const sc of RT.schedules()) {
+    if (sc.enabled === false || RT.parentOf(sc) || !turnsOn(sc) || RT.skipping(sc) !== RT.today()) continue;
+    const hm = sc.at.type === 'time' ? sc.at.time : RT.sunAt(sc.at.type, sc.at.offset_min);
+    if (!hm) continue;
+    const m = hmMin(hm) - now;
+    if (m > 0 && m <= 60) return { sc, hm, min: m };
+  }
+  return null;
+}
+function arrivalCard(c, sc, { min = 0, time = '', date = '', state = 'soon' } = {}) {
+  const { esc, RT, H } = c;
+  const { name, d, ids } = routineLight(c, sc);
+  const p = state === 'soon' ? Math.max(0, Math.min(1, 1 - min / 60)) : state === 'ran' ? 1 : 0;
+  const close = state === 'soon' && min <= 10;
+  let cap;
+  if (state === 'ran') {
+    const off = RT.pairOf(sc);
+    const offHm = off ? (off.at.type === 'time' ? off.at.time : RT.sunAt(off.at.type, off.at.offset_min)) : null;
+    cap = `${name} is on${offHm ? ` · off at ${RT.fmtTime(offHm)}` : ''}`;
+  } else if (state === 'skipped') cap = 'Skipping tonight';
+  else if (sc.only_if === 'all_off' && H.litLights().length) {
+    // said plainly, so a skip is not a surprise
+    const where = c.data.devAreaName(H.litLights()[0]) || H.litLights()[0].name;
+    cap = `Runs only if the house is dark. ${where} is on right now.`;
+  } else cap = `${name} on at ${time} · in ${min} min`;
+  // the lantern's own light once it is on: the real light's level and white, tile scale
+  let glow = '';
+  if (d) {
+    const lv = state === 'ran' ? Math.max(1, ...ids.map(id => c.data.level(id) || 0)) : 100;
+    const col = (c.S.states[d.device_id] || {}).color;
+    glow = glowHTML({ level: lv, kelvin: col && col.mode === 'ct' ? col.kelvin : 3000, hex: d.color && col && col.mode === 'xy' ? col.hex : undefined, ctx: 'tile', cls: `ar-glow${state === 'ran' ? '' : ' off'}` });
+  }
+  // a light outside is drawn as the porch lantern the file draws, whatever the switch behind it is
+  const art = c.artSrc(!d || OUTSIDE.test(c.data.devAreaName(d)) ? 'light-porch-lantern' : c.deviceArt(c, d));
+  const sun = sc.at && sc.at.type === 'sunset' && state === 'soon';
+  const link = state === 'ran' ? '' : state === 'skipped'
+    ? `<button class="link" data-act="next-unskip" data-id="${esc(sc.id)}">Don't skip</button>`
+    : `<button class="link" data-act="next-skip" data-id="${esc(sc.id)}" data-date="${esc(date)}">${esc(RT.skipLabel(sc))}</button>`;
+  return `<div class="card-row arrival ${state}${close ? ' close' : ''}" data-go="routine/${esc(sc.id)}" role="link" style="--p:${p.toFixed(3)}">
+    <span class="dusk" aria-hidden="true"></span>
+    ${sun ? '<span class="dusk-sun" aria-hidden="true"><i></i></span>' : ''}
+    <span class="ar-ring" aria-hidden="true">${glow}
+      <svg viewBox="0 0 72 72"><defs><linearGradient id="ar-cu" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F3D9C3"/><stop offset=".5" stop-color="#E6A06A"/><stop offset="1" stop-color="#D98A4E"/></linearGradient></defs>
+        <circle class="trk" cx="36" cy="36" r="34.5"/><circle class="arc w" cx="36" cy="36" r="34.5" style="stroke-dasharray:${RING.toFixed(2)};stroke-dashoffset:${(RING * (1 - p)).toFixed(2)}"/><circle class="arc cu" cx="36" cy="36" r="34.5" style="stroke-dasharray:${RING.toFixed(2)};stroke-dashoffset:${(RING * (1 - p)).toFixed(2)}"/></svg>
+      <img class="ar-art" src="${art}" alt=""><img class="ar-art lit" src="${art}" alt=""></span>
+    <span class="ar-txt"><span class="t">${esc(sc.name)}</span><span class="d" data-xf="standard">${esc(cap)}</span>${link}</span>
+  </div>`;
+}
+
 // Home's cards: what is due within the hour, then the problem or the one suggestion.
 export function homeCards(c) {
   const { esc, icon, RT } = c;
   let out = '';
-  const due = RT.upcoming(3600000)[0];
+  const dues = RT.upcoming(3600000);
+  // The soonest routine that turns a light on gets the ring; one that ran in the last ten minutes stays as a line;
+  // one skipped for tonight stays, greyed, with Don't skip.
+  const arrive = dues.find(x => !RT.parentOf(x.sc) && turnsOn(x.sc));
+  const ran = !arrive && RT.schedules().find(sc => !RT.parentOf(sc) && turnsOn(sc) && ranRecently(c, sc));
+  const skipped = !arrive && !ran ? skippedSoon(c) : null;
+  if (arrive) out += arrivalCard(c, arrive.sc, { min: Math.max(1, Math.ceil((arrive.n.t - Date.now()) / 60000)), time: arrive.n.time, date: arrive.n.date });
+  else if (ran) out += arrivalCard(c, ran, { state: 'ran' });
+  else if (skipped) out += arrivalCard(c, skipped.sc, { state: 'skipped' });
+  // anything else due within the hour is a line under it, as before
+  const due = dues.find(x => !(arrive && x === arrive) && !(x.sc === (ran || (skipped && skipped.sc))));
   if (due) {
     const sc = RT.parentOf(due.sc) || due.sc;
     const off = due.sc !== sc;
@@ -90,8 +183,8 @@ export function homeCards(c) {
   if (s) {
     const tag = s.go ? `data-go="${esc(s.go)}"` : `data-act="${s.act}" data-id="${esc(s.id2 || '')}"`;
     out += `<div class="card-row next-row ${p ? 'warn' : ''}" ${tag} role="link"><span class="row-ic">${icon(p ? 'info' : 'sparkle', 20, 1.6)}</span>
-      <span class="row-txt"><span class="t">${esc(s.title)}</span><span class="d">${esc(s.reason)}</span></span>
-      ${p ? '' : `<button class="link" data-act="next-later" data-id="${esc(s.id)}">Not now</button>`}</div>`;
+      <span class="row-txt"><span class="t">${esc(s.title)}</span>${s.reason ? `<span class="d">${esc(s.reason)}</span>` : ''}</span>
+      ${p ? (p.now ? `<button class="link blue" data-act="next-now" data-id="${esc(p.now)}">Turn it on</button>` : '') : `<button class="link" data-act="next-later" data-id="${esc(s.id)}">Not now</button>`}</div>`;
   }
   return out ? `<div class="next-cards">${out}</div>` : '';
 }
@@ -151,5 +244,12 @@ export const nextActions = {
     c.go(`room/${aid}`);
   },
   'next-skip'(c, el) { const sc = c.RT.byId(el.dataset.id); if (!sc) return; const msg = c.RT.skip(sc, el.dataset.date); if (msg) c.save(msg); },
+  // A missed routine, done now by hand: its lights come on, as it would have turned them on.
+  'next-now'(c, el) {
+    const sc = c.RT.byId(el.dataset.id); if (!sc) return;
+    const on = (sc.actions || []).filter(a => a.type !== 'lower' && a.type !== 'raise');
+    for (const a of on) c.run(a);
+    c.toast(`${sc.name} on`);
+  },
   'next-unskip'(c, el) { const sc = c.RT.byId(el.dataset.id); if (sc) c.save(c.RT.unskip(sc)); },
 };
