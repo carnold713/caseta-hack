@@ -13,13 +13,34 @@ export function pressedKey(c, pid) {
   return best ? best.n : null;
 }
 
+// A real press, as the remote's page draws it (13): which key, which press, when, and for a hold whether the finger
+// is still down. Kept in the ui state so every redraw while the light runs picks it up where it is. A hold that never
+// hears its release (the connection dropped) lets go on its own after half a minute.
+export function notePress(c, m) {
+  const t = Date.now();
+  const f = c.ui.pressFx;
+  const same = f && f.pid === m.device_id && f.n === m.button_number;
+  if (m.gesture === 'hold_end' || m.gesture === 'hold') {
+    if (same && f.holding) { f.holding = false; f.releasedAt = t; setTimeout(() => c.soon(), 260); }
+    return;
+  }
+  const g = m.gesture === 'hold_start' ? 'hold' : m.gesture === 'double' ? 'double' : 'single';
+  c.ui.pressFx = { pid: m.device_id, n: m.button_number, g, at: t, holding: g === 'hold', bound: !!m.bound, arrived: {} };
+  setTimeout(() => c.soon(), 2260);
+  if (g === 'hold') setTimeout(() => { const h = c.ui.pressFx; if (h && h.at === t && h.holding) { h.holding = false; h.releasedAt = Date.now(); c.soon(); } }, 30000);
+}
+// The phone hears presses only through the house; offline, the remotes still work and nothing here can light.
+export const listenLine = (c, pin) => c.conn() === 'off'
+  ? `<div class="listen ${pin ? 'pin' : ''} deaf"><span>Your remotes still work. This page lights up again when the house is back in touch.</span></div>`
+  : `<div class="listen ${pin ? 'pin' : ''}"><span class="breath"><i></i></span><span>Press any button on a real remote to jump to it</span></div>`;
+
 // A remote on its stage: the drawing, or the owner's photograph under the same keys.
 export function remoteArt(c, d, opts = {}) {
   const R = c.REM;
   const model = R.modelFor(d), finish = R.finishFor(d);
   const keys = R.slots(d);
   const photo = picoPhoto(model, finish, () => c.soon());
-  const svg = picoSVG({ model, finish, keys, sel: opts.sel, pressed: opts.pressed, height: opts.height, interactive: opts.interactive, label: opts.label });
+  const svg = picoSVG({ model, finish, keys, sel: opts.sel, pressed: opts.pressed, lit: opts.lit, height: opts.height, interactive: opts.interactive, label: opts.label });
   return photo ? `<span class="pico-photo" style="height:${opts.height}px"><img src="${photo}" alt="">${svg}</span>` : svg;
 }
 
@@ -43,7 +64,7 @@ export function view(c) {
     : `<div class="rempty"><p class="t-body muted">No remotes yet. Pair a Pico in the Lutron app, or add one from Settings, and it shows up here.</p><button class="pill ghost" data-act="refresh">Look again</button></div>`;
   return `<div class="remotes-page">
     <h1 class="t-h1 top-h1">Remotes</h1>
-    <div class="listen"><span class="breath"><i></i></span><span>Press any button on a real remote to jump to it</span></div>
+    ${listenLine(c, false)}
     ${body}
     <div class="info-row"><span class="ic-c">${icon('remote', 20, 1.4)}</span><p>Remotes keep working even when this phone is offline.</p></div>
   </div>`;
@@ -65,7 +86,10 @@ export const actions = {
 export function live(c, m) {
   if (m.type !== 'gesture') return;
   const d = c.data.dev(m.device_id); if (!d) return;
+  // a hold's release is not a new press to jump to
+  if (m.gesture === 'hold_end' || m.gesture === 'hold') return;
   c.ui.remoteKey = { ...(c.ui.remoteKey || {}), [d.device_id]: m.button_number };
+  notePress(c, m);
   c.go(`remote/${d.device_id}`);
   c.toast(`That's ${d.name}. Tap a row to change what it does.`);
 }

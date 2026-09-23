@@ -6,6 +6,9 @@
 //
 // Each key is a <g data-key="n"> so a screen can light the one pressed (.pressed), the one picked (.sel), and show
 // which have settings. `keyCentres` says where each key sits, for the leader lines on the remote page.
+//
+// A key a real press lit (`lit`) carries one more layer over its face: light from inside, in Lutron blue, since the
+// remote is Lutron's own thing (design-v7-ui.md, 13). The screen says how far into its light the key is.
 import { CasetaRemotes } from '/data/index.js';
 
 const { PICO_MODELS, PICO_FINISHES } = CasetaRemotes;
@@ -40,7 +43,8 @@ function layout(model) {
 const centre = k => k.at || [k.box[0] + k.box[2] / 2, k.box[1] + k.box[3] / 2];
 
 // The drawn remote. opts: model, finish, keys (the slots with their real numbers), set (numbers with settings),
-// sel (the key picked), pressed (the key just pressed), interactive, height.
+// sel (the key picked), pressed (the key just pressed), interactive, height, lit ({n, cls, style}: the key a real press
+// lit, a class for how, and a style carrying where its animation is up to).
 export function picoSVG(opts) {
   const model = opts.model || 'PJ2-3BRL';
   const f = PICO_FINISHES[opts.finish] || PICO_FINISHES.white;
@@ -71,9 +75,11 @@ export function picoSVG(opts) {
     if (k.glyph === 'on' || k.glyph === 'off') glyph = bulb(PICO_MODELS[model].geom ? x + w * 0.2 : cx, PICO_MODELS[model].geom ? y + h * 0.36 : cy, k.glyph === 'on');
     else if (k.glyph === 'up' || k.glyph === 'down') glyph = tri(cx, cy, k.glyph === 'up');
     else if (k.glyph !== 'fav') glyph = `<text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="${ink}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${k.glyph}</text>`;
-    const cls = ['pk', num.real ? '' : 'ghost', opts.sel === num.n ? 'sel' : '', opts.pressed === num.n ? 'pressed' : ''].filter(Boolean).join(' ');
+    const lit = opts.lit && opts.lit.n === num.n ? opts.lit : null;
+    const cls = ['pk', num.real ? '' : 'ghost', opts.sel === num.n ? 'sel' : '', opts.pressed === num.n ? 'pressed' : '', lit ? `lit ${lit.cls || ''}` : ''].filter(Boolean).join(' ');
     const act = opts.interactive && num.real ? ` data-act="${opts.interactive}" data-n="${num.n}" role="button" aria-label="${opts.label ? opts.label(num.n) : 'Key'}"` : '';
-    return `<g class="${cls}" data-key="${num.n}"${act}><g class="pk-shape" fill="url(#pkb-${fk})" stroke="${f.btnEdge}" stroke-width=".7" filter="url(#pk-lift)">${shape}</g>${glyph}<g class="pk-ring" fill="none">${shape}</g></g>`;
+    const glow = lit ? `<g class="pk-lit" fill="url(#pk-litg)">${shape}</g>` : '';
+    return `<g class="${cls.trim()}" data-key="${num.n}"${act}${lit && lit.style ? ` style="${lit.style}"` : ''}><g class="pk-shape" fill="url(#pkb-${fk})" stroke="${f.btnEdge}" stroke-width=".7" filter="url(#pk-lift)">${shape}</g>${glow}${glyph}<g class="pk-ring" fill="none">${shape}</g></g>`;
   }).join('');
   const hh = opts.height || 212;
   return `<svg class="pico-svg" viewBox="0 0 ${W} ${H}" width="${Math.round(hh * W / H)}" height="${hh}" aria-hidden="${opts.interactive ? 'false' : 'true'}">
@@ -81,7 +87,8 @@ export function picoSVG(opts) {
       <linearGradient id="pkbody-${fk}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${f.bodyHi}"/><stop offset=".55" stop-color="${f.body}"/><stop offset="1" stop-color="${f.bodyLo}"/></linearGradient>
       <linearGradient id="pkb-${fk}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${f.btnHi}"/><stop offset=".35" stop-color="${f.btn}"/><stop offset="1" stop-color="${f.btnLo}"/></linearGradient>
       <filter id="pk-lift" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy=".8" stdDeviation=".7" flood-color="#000" flood-opacity=".22"/></filter>
-      <filter id="pk-shadow" x="-20%" y="-10%" width="140%" height="125%"><feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000" flood-opacity=".45"/></filter>
+      <filter id="pk-shadow" x="-20%" y="-10%" width="140%" height="125%"><feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000" flood-opacity=".45"/></filter>${opts.lit ? `
+      <radialGradient id="pk-litg" gradientUnits="objectBoundingBox" cx=".5" cy=".5" r=".6"><stop offset="0" stop-color="#52AEFF" stop-opacity=".34"/><stop offset=".55" stop-color="#52AEFF" stop-opacity=".12"/><stop offset="1" stop-color="#52AEFF" stop-opacity="0"/></radialGradient>` : ''}
     </defs>
     <g filter="url(#pk-shadow)"><rect x="1" y="6" width="${W - 2}" height="200" rx="8.5" fill="url(#pkbody-${fk})" stroke="${f.edge}" stroke-width=".8"/></g>
     <rect x="2.2" y="7.2" width="${W - 4.4}" height="197.6" rx="7.6" fill="none" stroke="${f.bodyHi}" stroke-opacity=".9" stroke-width=".6"/>

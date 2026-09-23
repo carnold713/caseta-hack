@@ -6,7 +6,8 @@
 // and building it step by step. #remote/<id>/more is the rest: the room, the picture, the usual layout, the Lutron
 // app, removing it.
 import { keyCentres, PICO_BOX } from '/ui/pico.js';
-import { remoteArt, pressedKey } from '/ui/screens/remotes.js';
+import { remoteArt, pressedKey, notePress, listenLine } from '/ui/screens/remotes.js';
+import { glowHTML } from '/ui/glow.js';
 import { valueLine, lampHex } from '/ui/screens/parts.js';
 import { roomPicker, confirmSheet } from '/ui/screens/pickers.js';
 import { picoSVG } from '/ui/pico.js';
@@ -24,6 +25,92 @@ function keyOf(c, d) {
   const k = (c.ui.remoteKey || {})[d.device_id];
   return ns.includes(k) ? k : ns[0];
 }
+// ---------- 13 · a remote, pressed ----------
+// A real press sends light through the drawing: the key lights from inside in Lutron blue, the leader line draws on
+// with a bead running along it to the label, and the lights that press drives come on in copper in the strip under
+// the remote as their new state arrives (a confirmation, never a prediction). The file's keyframes (12815:50218),
+// counted from the press: the key's tap, 0.12 s down and back on the quick spring; the key's light 0.24 s standard,
+// held, gone over the exit's 0.2 s at 2.0 s; the leader drawn 0.12 to 0.36 s standard while the bead runs it and
+// fades on the exit; the label brightening from 0.36 s and back at 1.2 s; each light's glow 0.4 s on the dimmer,
+// 0.04 s apart. A press twice sends two beads a beat apart; a hold keeps the key lit and the bead at the label until
+// it is let go. The screen is drawn whole from its state, so each piece is a CSS animation whose delay says how far
+// into it this redraw is (--fx), and a redraw mid-flight carries on from the same point.
+const FX_TAP = 2200, FX_OUT = 200, BEAT = 240;
+function fxOf(c, pid) {
+  const f = c.ui.pressFx; if (!f || f.pid !== pid) return null;
+  const now = Date.now();
+  if (f.holding) return { ...f, phase: 'held', t: now - f.at };
+  if (f.releasedAt) { const t = now - f.releasedAt; return t < FX_OUT ? { ...f, phase: 'out', t } : null; }
+  const t = now - f.at;
+  return t < FX_TAP ? { ...f, phase: 'tap', t } : null;
+}
+const fxStyle = (t, extra = '') => `--fx:${-Math.round(t)}ms${extra}`;
+function nightNow(c) {
+  const s = c.S.config.settings; const a = s.night_start, b = s.night_end; if (!a || !b) return false;
+  const hm = c.RT.nowHm();
+  return a < b ? hm >= a && hm < b : hm >= a || hm < b;
+}
+// What the pressed key's label says while its light runs: the press's sentence, the night's version after hours,
+// or that nothing is set yet (and where to set it).
+function pressLabel(c, pid, fx) {
+  const R = c.REM;
+  if (R.buttonBroken(pid, fx.n)) return null;
+  const acts = R.gestureActions(pid, fx.n, fx.g);
+  const inh = fx.g === 'hold' && !acts.length ? R.inheritedHold(pid, fx.n) : null;
+  if (!acts.length && !inh) return { cls: 'none', t: 'Nothing set yet · Set it', go: `remote/${pid}/k${fx.n}-${fx.g}` };
+  const nacts = R.gestureActions(pid, fx.n, fx.g, true);
+  if (nacts.length && nightNow(c)) return { cls: 'night', t: `After ${clock(c.S.config.settings.night_start)}: ${R.shortDescribe(nacts)}`, s: R.GESTURE_WORD[fx.g] };
+  return { cls: '', t: acts.length ? R.shortDescribe(acts) : `${inh.dir === 'up' ? 'Brightens' : 'Dims'} while held`, s: fx.g === 'single' ? '' : R.GESTURE_WORD[fx.g] };
+}
+// How the key, the leader and the bead look for this press: 'none' grey (nothing set), 'err' red (a removed light),
+// 'night' the evening's warmer tone.
+function fxClass(c, pid, fx) {
+  if (c.REM.buttonBroken(pid, fx.n)) return 'err';
+  const L = pressLabel(c, pid, fx);
+  return L ? L.cls : 'err';
+}
+
+// Which lights a remote moves: every light any of its presses points at, by day or night. "Everything" and the
+// house's shades and fans are left out (the Goodnight on a hold would otherwise list the whole house).
+function stripLights(c, pid) {
+  const { data } = c;
+  const ids = new Set();
+  const add = t => { for (const x of [].concat(t || [])) if (x !== 'h:all' && x !== 'h:fans' && x !== 'h:shades') for (const id of data.targetDevices(x)) ids.add(id); };
+  for (const b of data.bindings()) {
+    if (b.device_id !== pid) continue;
+    for (const a of [...(b.actions || []), ...((b.night && b.night.actions) || [])]) {
+      if (a.target) add(a.target);
+      if (a.type === 'preset') { const p = data.presets().find(x => x.id === a.preset_id); if (p) for (const id of Object.keys(p.levels || {})) ids.add(id); }
+    }
+  }
+  return data.controllable().filter(d => ids.has(d.device_id) && (d.domain === 'light' || d.domain === 'switch'));
+}
+// Last drawn on or off, per light, so a light coming on in this redraw can be told from one that already was.
+const wasOn = {};
+function lightsStrip(c, d) {
+  const { esc, icon, data } = c;
+  const list = stripLights(c, d.device_id);
+  if (!list.length) return '';
+  const rooms = [...new Set(list.map(x => data.devAreaName(x)))];
+  let k = 0;
+  const chips = list.map(x => {
+    const id = x.device_id; const on = data.isOn(id);
+    // lights changing in the same redraw come on (or go) 0.04 s apart, so the eye can follow the row
+    const moved = id in wasOn && wasOn[id] !== on;
+    wasOn[id] = on;
+    const st = c.S.states[id] || {}; const col = st.color || {};
+    const hex = on ? lampHex(c, x) : null;
+    // an off light keeps its glow drawn at nothing, so coming on fades it in from 0.85 on the dimmer, as light does.
+    // Tile-sized, as the file draws it (its 40 circle would hide a dot-sized one entirely)
+    const glow = glowHTML({ level: on ? (data.level(id) || 100) : 60, ctx: 'tile', hex, kelvin: !hex && col.mode === 'ct' ? col.kelvin : 2700, cls: on ? 'lm-glow' : 'lm-glow off' });
+    return `<button class="lm-chip ${on ? 'on' : ''}" data-go="light/${esc(id)}" data-id="${esc(id)}" style="--d:${moved ? k++ * 40 : 0}ms" aria-label="${esc(x.name)}, ${on ? `${data.level(id) || 100}%` : 'off'}">
+      <span class="lm-c">${glow}<i class="lm-lit"${hex ? ` style="background:${hex}"` : ''}></i>${icon(x.domain === 'switch' ? 'bulb' : 'lamp', 20, 1.4)}</span><span class="lm-nm nm-cut">${esc(x.name)}</span></button>`;
+  }).join('');
+  // three across as the file draws it; two when there are only two, or when names would not fit in a third
+  const two = list.length === 2 || list.some(x => x.name.length > 9);
+  return `<div class="lm-strip"><div class="t-over lm-over">${esc(rooms.length === 1 ? rooms[0] : 'Lights it moves')}</div><div class="lm-row ${two ? 'two' : ''}">${chips}</div></div>`;
+}
+
 // "10:30 pm"
 const clock = hm => { if (!hm) return ''; const [h, m] = hm.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'pm' : 'am'}`; };
 
@@ -49,7 +136,8 @@ function stage(c, d, sel) {
   const pid = d.device_id;
   const model = REM.modelFor(d);
   const scale = STAGE_H / PICO_BOX.H;
-  const pressed = pressedKey(c, pid);
+  const fx = fxOf(c, pid);
+  const pressed = fx ? fx.n : pressedKey(c, pid);
   const keys = keyCentres(model, REM.slots(d)).filter(k => k.real);
   // Each label sits beside its key unless that would crowd the one above, when it moves down and its leader bends to
   // reach it: the middle keys of a remote with arrows sit closer together than two lines of words.
@@ -59,22 +147,38 @@ function stage(c, d, sel) {
   const over = ly.length ? ly[ly.length - 1] - 310 : 0;
   if (over > 0) for (let i = ly.length - 1; i >= 0; i--) ly[i] = Math.min(ly[i] - (i === ly.length - 1 ? over : 0), i < ly.length - 1 ? ly[i + 1] - 42 : ly[i]);
   const DOT = 158, BEND = 176, END = 196;
+  const fxc = fx ? fxClass(c, pid, fx) : '';
+  const fxs = fx ? `fx-${fx.phase} ${fxc}` : '';
+  const pl = fx ? pressLabel(c, pid, fx) : null;
+  let beads = '';
   const paths = keys.map((k, i) => {
     const L = leader(c, pid, k.n);
     const cls = L.err ? 'err' : '';
-    return `<path class="${cls}" d="M${DOT + 8} ${ys[i]} H${BEND} L${END - 6} ${ly[i]} H${END}"/><circle class="le ${cls} ${k.n === sel ? 'on' : ''}" cx="${END + 2}" cy="${ly[i]}" r="2"/>`;
+    const d = `M${DOT + 8} ${ys[i]} H${BEND} L${END - 6} ${ly[i]} H${END}`;
+    let lit = '';
+    if (fx && fx.n === k.n) {
+      lit = `<path class="lead-lit ${fxs}" pathLength="1" d="${d}" style="${fxStyle(fx.t)}"/>`;
+      // the bead runs from the key's dot to the label; a press twice sends a second one a beat behind the first
+      const run = `M${DOT} ${ys[i]} H${BEND} L${END - 6} ${ly[i]} H${END + 2}`;
+      beads = (fx.g === 'double' ? [0, BEAT] : [0]).map(o => `<i class="bead ${fxs}" style="offset-path:path('${run}');${fxStyle(fx.t - o)}"></i>`).join('');
+    }
+    return `<path class="${cls}" d="${d}"/>${lit}<circle class="le ${cls} ${k.n === sel ? 'on' : ''}" cx="${END + 2}" cy="${ly[i]}" r="2"/>`;
   }).join('');
   const lines = keys.map((k, i) => {
-    const L = leader(c, pid, k.n);
+    let L = leader(c, pid, k.n);
     const state = L.err ? 'err' : L.none ? 'none' : 'set';
     const on = k.n === sel;
+    const here = fx && fx.n === k.n;
+    if (here && pl) L = { t: pl.t, s: pl.s || L.s };
+    const act = here && pl && pl.go ? `data-go="${esc(pl.go)}"` : `data-act="key" data-n="${k.n}"`;
     return `<i class="sd ${state}" style="top:${ys[i] - 3}px"></i>
-      <button class="ld ${state} ${on ? 'on' : ''} ${pressed === k.n ? 'pressed' : ''}" style="top:${ly[i] - 20}px" data-act="key" data-n="${k.n}" aria-label="${esc(REM.buttonName(pid, k.n))}">
+      <button class="ld ${state} ${on ? 'on' : ''} ${pressed === k.n ? 'pressed' : ''} ${here ? `fx-lab ${fxs}` : ''}" style="top:${ly[i] - 20}px;${here ? fxStyle(fx.t) : ''}" ${act} aria-label="${esc(REM.buttonName(pid, k.n))}">
       <span class="lt nm-cut">${esc(L.t)}</span>${L.s ? `<span class="ls nm-cut">${esc(L.s)}</span>` : ''}</button>`;
   }).join('');
+  const lit = fx ? { n: fx.n, cls: fxs, style: fxStyle(fx.t) } : null;
   return `<div class="rstage">
-    <span class="rart" style="left:${STAGE_LEFT}px;top:${STAGE_TOP}px">${remoteArt(c, d, { height: STAGE_H, sel, pressed, interactive: 'key', label: n => esc(REM.buttonName(pid, n)) })}</span>
-    <svg class="leaders" width="372" height="332" aria-hidden="true">${paths}</svg>${lines}</div>`;
+    <span class="rart" style="left:${STAGE_LEFT}px;top:${STAGE_TOP}px">${remoteArt(c, d, { height: STAGE_H, sel, pressed, lit, interactive: 'key', label: n => esc(REM.buttonName(pid, n)) })}</span>
+    <svg class="leaders" width="372" height="332" aria-hidden="true">${paths}</svg>${lines}${beads}</div>`;
 }
 
 // The three presses of the picked key.
@@ -118,9 +222,10 @@ export function view(c, r) {
     </header>
     <h1 class="t-h1 page-h1 nm-cut">${esc(d.name)}</h1>
     <p class="t-cap muted rm-sub">${esc(REM.modelLine(d))}</p>
-    <div class="listen pin"><span class="breath"><i></i></span><span>Press any button on a real remote to jump to it</span></div>
+    ${listenLine(c, true)}
     ${waiting}${offer}
     ${stage(c, d, sel)}
+    ${lightsStrip(c, d)}
     <div class="t-over sec rm-key">${esc(REM.buttonName(pid, sel))}</div>
     <div class="group">${pressRows(c, d, sel)}</div>
     ${twice}
@@ -566,6 +671,8 @@ export const actions = {
 export function live(c, m, r) {
   if (m.type !== 'gesture') return;
   const d = c.data.dev(m.device_id); if (!d) return;
+  notePress(c, m);
+  if (m.gesture === 'hold_end' || m.gesture === 'hold') return;
   c.ui.remoteKey = { ...(c.ui.remoteKey || {}), [d.device_id]: m.button_number };
   if (d.device_id !== r.id && !r.sub) { c.go(`remote/${d.device_id}`); c.toast(`That's ${d.name}`); }
 }

@@ -1,1 +1,175 @@
 /* Copper Night v7 · log. Owned by one builder; see docs/design-v7-ui.md for the light and the motion. */
+
+/* ========== 13 · A remote, pressed (12815:50218, 12815:50442) ==========
+   A real press sends light through the drawn Pico. Every piece is a CSS animation whose negative delay (--fx, set by
+   remote.js) says how far into the press this redraw is, so the page can be redrawn mid-flight and carry on. Times
+   are the file's, counted from the press: the tap 0 to 0.6 s on the quick spring, the key's light in over 0.24 s
+   standard and out at 2.0 s over the exit's 0.2 s, the leader drawn 0.12 to 0.36 s, the bead running it. Lutron
+   blue while the light is the remote's; copper once it is light in the room. */
+:root {
+  --fx-quick: linear(0, 0.03, 0.1077, 0.2165, 0.342, 0.4728, 0.6001, 0.7175, 0.8208, 0.9077, 0.9776, 1.0307, 1.0684, 1.0925, 1.1051, 1.1084, 1.1047, 1.096, 1.084, 1.0703, 1.0561, 1.0424, 1.0297, 1.0187, 1.0094, 1.0019, 0.9963, 0.9923, 0.9898, 0.9885, 0.9882, 0.9887, 0.9897, 0.991, 0.9925, 0.994, 0.9955, 0.9969, 0.9981, 0.9991, 0.9998, 1.0004, 1.0009, 1.0011, 1.0012, 1.0013, 1.0012, 1.0011, 1.001, 1.0008, 1.0006);
+  --fx-night: #E6A06A;
+}
+.listen.deaf { height: auto; min-height: 36px; padding: 8px 14px; white-space: normal; line-height: 18px; color: var(--text-2); }
+.listen.pin.deaf { width: auto; }
+
+/* the key: pressed (the tap), then lit from inside */
+.pico-svg .pk.lit { transform-box: fill-box; transform-origin: center; }
+.pico-svg .pk.lit.fx-tap, .pico-svg .pk.lit.fx-held { animation: lg-tap 600ms linear both; animation-delay: var(--fx, 0ms); }
+.pico-svg .pk-lit { opacity: 0; pointer-events: none; }
+.pico-svg .pk.lit.fx-tap .pk-lit { animation: lg-key 2200ms linear both; animation-delay: var(--fx, 0ms); }
+.pico-svg .pk.lit.fx-held .pk-lit { animation: lg-in 240ms var(--ease) both; animation-delay: var(--fx, 0ms); }
+.pico-svg .pk.lit.fx-out .pk-lit { animation: lg-out 200ms var(--ease-in) both; animation-delay: var(--fx, 0ms); }
+.pico-svg .pk.lit.none .pk-lit { filter: saturate(0); }
+.pico-svg .pk.lit.none .pk-ring { stroke: var(--text-3); }
+.pico-svg .pk.lit.err .pk-ring { stroke: var(--err); }
+@keyframes lg-tap { 0% { transform: scale(1); animation-timing-function: var(--fx-quick); } 20% { transform: scale(.96); animation-timing-function: var(--fx-quick); } 100% { transform: scale(1); } }
+@keyframes lg-key { 0% { opacity: 0; animation-timing-function: var(--ease); } 10.91% { opacity: 1; } 90.91% { opacity: 1; animation-timing-function: var(--ease-in); } 100% { opacity: 0; } }
+@keyframes lg-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lg-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* the leader, drawn on */
+.leaders path.lead-lit { stroke: var(--blue-hi); stroke-opacity: 1; stroke-width: 1.5; stroke-dasharray: 1 1; }
+.leaders path.lead-lit.fx-tap { animation: lg-lead 2200ms linear both; animation-delay: var(--fx, 0ms); }
+.leaders path.lead-lit.fx-held { animation: lg-lead-in 360ms linear both; animation-delay: var(--fx, 0ms); }
+.leaders path.lead-lit.fx-out { animation: lg-out 200ms var(--ease-in) both; animation-delay: var(--fx, 0ms); }
+.leaders path.lead-lit.none { stroke: var(--text-3); }
+.leaders path.lead-lit.err { stroke: var(--err); }
+@keyframes lg-lead { 0% { stroke-dasharray: 0 1; } 5.45% { stroke-dasharray: 0 1; animation-timing-function: var(--ease); } 16.36% { stroke-dasharray: 1 1; } 90.91% { opacity: 1; animation-timing-function: var(--ease-in); } 100% { stroke-dasharray: 1 1; opacity: 0; } }
+@keyframes lg-lead-in { 0%, 33.3% { stroke-dasharray: 0 1; animation-timing-function: var(--ease); } 100% { stroke-dasharray: 1 1; } }
+
+/* the bead: an 8 disc of Lutron blue in a 24 halo, running the leader from the key's dot to the label */
+.rstage .bead { position: absolute; left: 0; top: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--blue-hi); pointer-events: none; opacity: 0; z-index: 2;
+  offset-anchor: center; offset-rotate: 0deg; offset-distance: 0%; --bead: 82, 174, 255; }
+.rstage .bead::before { content: ''; position: absolute; left: -8px; top: -8px; width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--bead), .35), rgba(var(--bead), 0)); }
+.rstage .bead.fx-tap { animation: lg-bead-go 360ms linear both, lg-bead 560ms linear both; animation-delay: var(--fx, 0ms); }
+.rstage .bead.fx-held { animation: lg-bead-go 360ms linear both, lg-bead-in 200ms linear both; animation-delay: var(--fx, 0ms); }
+.rstage .bead.fx-out { offset-distance: 100%; animation: lg-out 200ms var(--ease-in) both; animation-delay: var(--fx, 0ms); }
+.rstage .bead.none { background: var(--text-3); --bead: 158, 158, 158; }
+.rstage .bead.err { background: var(--err); --bead: 204, 0, 0; }
+.rstage .bead.night { background: var(--fx-night); --bead: 230, 160, 106; }
+@keyframes lg-bead-go { 0%, 33.3% { offset-distance: 0%; animation-timing-function: var(--ease); } 100% { offset-distance: 100%; } }
+@keyframes lg-bead { 0%, 21.4% { opacity: 0; animation-timing-function: var(--ease); } 35.7% { opacity: 1; } 64.3% { opacity: 1; animation-timing-function: var(--ease-in); } 100% { opacity: 0; } }
+@keyframes lg-bead-in { 0%, 60% { opacity: 0; animation-timing-function: var(--ease); } 100% { opacity: 1; } }
+
+/* the label brightens as the bead reaches it, and settles back */
+.ld.fx-lab .lt { animation: lg-lab 1440ms linear both; animation-delay: var(--fx, 0ms); }
+.ld.fx-lab.fx-held .lt { animation: lg-lab-in 600ms linear both; animation-delay: var(--fx, 0ms); text-shadow: 0 0 12px rgba(82, 174, 255, .55); }
+.ld.fx-lab.none .lt { color: var(--text-2); font-weight: 500; top: 2px; }
+.ld.fx-lab.night .lt { color: var(--fx-night); }
+@keyframes lg-lab { 0%, 25% { text-shadow: 0 0 12px rgba(82, 174, 255, 0); animation-timing-function: var(--ease); } 41.7% { text-shadow: 0 0 12px rgba(82, 174, 255, .55); } 83.3% { text-shadow: 0 0 12px rgba(82, 174, 255, .55); animation-timing-function: var(--ease); } 100% { text-shadow: 0 0 12px rgba(82, 174, 255, 0); } }
+@keyframes lg-lab-in { 0%, 60% { text-shadow: 0 0 12px rgba(82, 174, 255, 0); animation-timing-function: var(--ease); } 100% { text-shadow: 0 0 12px rgba(82, 174, 255, .55); } }
+
+/* the lights it moves: a strip under the remote (20, 600, 372, 88), each light a 40 circle and its name; on is the
+   copper tile gradient with the light's own glow at the level it is at, coming on over the dimmer 0.04 s apart */
+.lm-strip { position: relative; margin: 12px var(--gutter) 0; padding: 14px 16px 12px; border-radius: var(--r-group); background: var(--surface-2); overflow: hidden; }
+.lm-over { line-height: 14px; }
+.lm-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 12px; margin-top: 8px; }
+.lm-chip { display: flex; align-items: center; gap: 10px; min-width: 0; height: 40px; padding: 0; border: 0; background: none; color: var(--text-1); font: inherit; font-size: 14px; line-height: 18px; text-align: left; cursor: pointer; }
+.lm-c { position: relative; flex: none; width: 40px; height: 40px; border-radius: 20px; background: var(--surface-3); color: var(--icon-2); display: grid; place-items: center; }
+.lm-c > svg { position: relative; z-index: 1; }
+.lm-chip.on .lm-c { color: #fff; }
+.lm-lit { position: absolute; inset: 0; border-radius: inherit; background: var(--tile-on); opacity: 0; transition: opacity var(--dimmer) var(--ease-both) var(--d, 0ms); }
+.lm-chip.on .lm-lit { opacity: 1; }
+.lm-chip .glow > i { transition: opacity var(--dimmer) var(--ease-both) var(--d, 0ms), transform var(--dimmer) var(--ease-both) var(--d, 0ms); }
+.lm-nm { min-width: 0; }
+.lm-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* the bead and the tap are movement: gone. The key's light and the leader still come and go, as a crossfade. */
+  .rstage .bead { display: none; }
+  .pico-svg .pk.lit.fx-tap, .pico-svg .pk.lit.fx-held { animation: none !important; }
+  .pico-svg .pk.lit.fx-tap .pk-lit { animation-duration: 2200ms !important; }
+  .pico-svg .pk.lit.fx-held .pk-lit { animation-duration: 240ms !important; }
+  .pico-svg .pk.lit.fx-out .pk-lit, .leaders path.lead-lit.fx-out { animation-duration: 200ms !important; }
+  .leaders path.lead-lit.fx-tap { animation: lg-lead-rm 2200ms linear both !important; animation-delay: var(--fx, 0ms) !important; }
+  .leaders path.lead-lit.fx-held { animation: lg-in 240ms linear both !important; animation-delay: var(--fx, 0ms) !important; }
+  @keyframes lg-lead-rm { 0% { opacity: 0; } 10.91% { opacity: 1; } 90.91% { opacity: 1; } 100% { opacity: 0; } }
+}
+
+/* ========== 14 · Activity as a light log, headed by Today in light (12815:51909, 12815:52130) ==========
+   The card (20, 252, 372, 282), then the day header at 562, a ribbon per room 56 apart from 590 (name 12 Medium, strip
+   372 x 24), the clock at 868, the rooms left dark at 892, and the log as built from 932. The day draws in once, the
+   first time it is shown, on the file's clock (--fx is how far in this redraw is): the card rises 0 to 0.32 s, its
+   corner light 0.3 to 0.7 s, the curve and its line 0.3 to 1.3 s while the headline counts up in whole hours at
+   0.55, 0.8 and 1.05 s, the evening's lowest point 1.1 s, the facts 1.3 s, each ribbon over the scene's 1.0 s from
+   1.1 s, 0.04 s apart, and the now line at 2.1 s. */
+.ll { margin-top: 20px; }
+.til { position: relative; margin: 0 var(--gutter); padding: 22px 20px 14px; border-radius: var(--r-card); background: var(--surface-1); overflow: hidden; }
+.til > :not(.glow) { position: relative; z-index: 1; }
+.til-wait { height: 282px; visibility: hidden; }
+.til-over { line-height: 14px; }
+.til-lit, .til-sub { margin: 8px 0 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
+.til-h { position: relative; margin: 1px 0 0; height: 44px; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.01em; white-space: nowrap; }
+.til-step { position: absolute; left: 0; top: 0; opacity: 0; }
+.til-sub { margin-top: 2px; }
+.til-curve { position: relative; margin-top: 13px; width: 332px; max-width: 100%; height: 64px; }
+.til-curve svg { display: block; overflow: visible; max-width: 100%; }
+.til-base { fill: rgba(255, 255, 255, .08); }
+.til-line, .til-glow { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.til-glow { opacity: .5; }
+.til-low { position: absolute; width: 0; height: 0; }
+.til-low > i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #FFB46B; }
+.til-facts { margin-top: 14px; display: grid; gap: 11px; }
+.til-f { display: flex; align-items: center; gap: 10px; margin: 0; min-height: 17px; font-size: 14px; line-height: 17px; color: var(--text-1); }
+.til-f > svg { flex: none; margin: 0 4px; color: var(--text-2); }
+.til-f > span:last-child { min-width: 0; }
+.til-lamp { position: relative; flex: none; width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; color: #fff; margin: -3px -2px -2px 0; }
+.til-lamp > i { position: absolute; inset: 0; border-radius: inherit; background: var(--tile-on); }
+.til-lamp > svg { position: relative; z-index: 1; }
+
+.rbw { position: relative; margin-top: 14px; }
+.ll-head { display: flex; align-items: center; height: 32px; padding: 0 var(--gutter); touch-action: pan-y; }
+.ll-name { flex: 1; line-height: 14px; }
+.ll-day { width: 32px; height: 32px; border: 0; border-radius: 16px; padding: 0; background: none; color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+.ll-day[disabled] { opacity: .3; cursor: default; }
+.ll-day:not(.next) { order: 2; }
+.ll-day.next { order: 3; }
+.rbs { position: relative; margin: 0 var(--gutter); padding-top: 10px; touch-action: pan-y; }
+.rb + .rb { margin-top: 14px; }
+.rb-nm { display: flex; gap: 6px; margin: 0; height: 14px; font-size: 12px; font-weight: 500; line-height: 14px; color: var(--text-2); transition: color var(--standard) var(--ease); }
+.rb-v { color: var(--text-1); }
+.rb.here .rb-nm { color: var(--text-1); }
+.rb-strip { position: relative; margin-top: 4px; height: 24px; border-radius: 12px; background: var(--surface-2); overflow: hidden; }
+.rb-lit { position: absolute; inset: 0; }
+.rb-seg { position: absolute; top: 0; bottom: 0; min-width: 1px; border-radius: 4px; transition: opacity var(--standard) var(--ease); }
+.rb-tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: rgba(255, 255, 255, .4); }
+.rbw.scrubbing .rb-seg:not(.at) { opacity: .5; }
+.rb-now { position: absolute; top: 20px; bottom: -6px; width: 1px; margin-left: -1px; background: rgba(255, 255, 255, .5); pointer-events: none; }
+.rb-scrub { position: absolute; left: var(--gutter); right: var(--gutter); top: 0; height: 314px; pointer-events: none; opacity: 0; transform: translateY(12px);
+  transition: opacity var(--exit) var(--ease-in), transform 0s linear var(--exit); }
+.rb-scrub.on { opacity: 1; transform: none; transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease); }
+.rb-line { position: absolute; left: var(--sx, 100%); top: 32px; bottom: 0; width: 1px; background: rgba(255, 255, 255, .8); }
+.rb-lab { position: absolute; top: 0; left: var(--lx, 0px); height: 32px; padding: 0 16px; border-radius: 20px; background: var(--surface-3); font-size: 14px; line-height: 32px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+.rb-axis { position: relative; margin: 12px var(--gutter) 0; height: 14px; font-size: 12px; line-height: 14px; color: var(--text-4); }
+.rb-axis > span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.rb-axis > span.first { transform: none; }
+.rb-axis > span.last { transform: translateX(-100%); }
+.rb-dark { margin: 10px var(--gutter) 0; font-size: 12px; line-height: 14px; color: var(--text-3); }
+.ll-note, .ll-off { margin: 0 var(--gutter); font-size: 14px; line-height: 20px; color: var(--text-2); }
+.ll-off { margin-top: 12px; color: var(--text-3); }
+/* the log row a moment on the ribbons lines up with */
+.ev { transition: background-color var(--standard) var(--ease); }
+.ev[data-go] { cursor: pointer; }
+.ev.lit { margin-left: -8px; margin-right: -8px; padding: 10px 8px; margin-top: -10px; margin-bottom: 14px; border-radius: 20px; background: var(--surface-2); }
+
+.ll.fx .til { animation: lg-rise var(--enter) var(--ease) both; animation-delay: var(--fx); }
+.ll.fx .til-corner { animation: lg-in 400ms var(--ease-both) both; animation-delay: calc(var(--fx) + 300ms); }
+.ll.fx .til-area { animation: lg-wipe var(--scene) var(--ease) both; animation-delay: calc(var(--fx) + 300ms); }
+.ll.fx .til-line, .ll.fx .til-glow { animation: lg-trim var(--scene) var(--ease) both; animation-delay: calc(var(--fx) + 300ms); }
+.ll.fx .til-step { animation: lg-on var(--len) linear; animation-delay: calc(var(--fx) + var(--at)); }
+.ll.fx .til-total.counted { animation: lg-in 1050ms step-end both; animation-delay: var(--fx); }
+.ll.fx .til-low { animation: lg-pop var(--enter) var(--ease) both; animation-delay: calc(var(--fx) + 1100ms); }
+.ll.fx .til-facts { animation: lg-rise var(--enter) var(--ease) both; animation-delay: calc(var(--fx) + 1300ms); }
+.ll.fx .rb-lit { animation: lg-wipe var(--scene) var(--ease) both; animation-delay: calc(var(--fx) + 1100ms + var(--i, 0) * var(--stagger)); }
+.ll.fx .rb-now { animation: lg-in var(--enter) var(--ease) both; animation-delay: calc(var(--fx) + 2100ms); }
+@keyframes lg-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes lg-wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes lg-trim { from { stroke-dasharray: 0 1; } to { stroke-dasharray: 1 1; } }
+@keyframes lg-on { from, to { opacity: 1; } }
+@keyframes lg-pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+/* the key's rows move down under the strip, to 708 as the file has them */
+.lm-strip + .t-over.sec.rm-key { margin-top: 20px; }
+/* screens.css gives the guided setup's .g-body a top margin, which also lands on every glow's body layer (the same
+   class): it pushes the body 20 px below its centre. Put mine back where the light is. */
+.lm-chip .glow > i, .til .glow > i { margin: 0; }
