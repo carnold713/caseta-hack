@@ -6,6 +6,19 @@ import { tile, sceneChip, roomStatus, roomPicture, offlineCard } from '/ui/scree
 import { homeCards, greetingSheet, shouldGreet, nextActions } from '/ui/screens/next.js';
 import { connActions } from '/ui/screens/conn.js';
 
+// Where the lights that are on are: "Office", "Office and Kitchen", "3 rooms".
+function litWhere(c, lit) {
+  const names = [...new Set(lit.map(d => c.data.devAreaName(d)).filter(Boolean))];
+  if (!names.length) return '';
+  return names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} rooms`;
+}
+// What "All on" will do to brightness right now: the evening's level while the wind-down holds lights down.
+function allOnLevel(c) {
+  const base = Number(c.S.config.settings.group_on_level) || 100;
+  const cl = c.RT.curveLevelNow();
+  return cl != null && cl < base ? cl : null;
+}
+
 function greeting(c) {
   const h = c.DAY.homeNow().getHours();
   return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -44,17 +57,14 @@ export function view(c) {
     <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
       <div class="house-head" data-xf>${lit.length ? `${lit.length} on · ${lv}%` : 'Everything is off'}</div>
-      <div class="hbar ${lit.length && lv >= 30 ? '' : 'low'}" data-drag="house" style="--pct:${lit.length ? lv : 0}%" role="slider" aria-label="House brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
+      ${lit.length ? `<div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="house" style="--pct:${lv}%" role="slider" aria-label="Brightness of the lights that are on" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
         <span class="fill"></span>
         <span class="lo">${icon('sun', 22, 1.8)}</span>
         <span class="hi">${icon('sun', 26, 1.6)}</span>
         <span class="knob"></span>
-      </div>
-      <p class="house-cap">${lit.length ? 'Adjusts lights that are on' : 'Slide to bring the lights up'}</p>
-      <div class="house-pills">
-        <button class="pill" data-act="house-on">${icon('power', 20, 1.9)}${H.houseOnLabel()}</button>
-        <button class="pill ghost" data-act="house-off">${icon('power', 20, 1.9)}All off</button>
-      </div>
+      </div>` : ''}
+      ${houseCaption(c, lit)}
+      ${housePills(c, lit)}
       <div class="goodnight">
         <button class="hold" data-hold="goodnight" data-ms="1000" aria-label="Goodnight house, hold to turn everything off">
           <svg class="ring" width="44" height="44" viewBox="0 0 44 44"><circle class="trk" cx="22" cy="22" r="20.5"/><circle class="arc" cx="22" cy="22" r="20.5"/></svg>
@@ -102,12 +112,37 @@ export function after(c, r, root) {
   track(bar, { c, axis: 'x', start: () => bar.classList.add('held'), move: e => set(e.clientX) });
 }
 
+// Under the bar: which lights it moves, by name. A tap on the held button borrows this line to say to hold it.
+function houseCaption(c, lit) {
+  const hint = c.ui.houseHint && Date.now() - c.ui.houseHint < 2500;
+  if (hint) return `<p class="house-cap hint">${lit.length ? 'Hold All on to light the whole house' : 'Hold to bring the lights back on'}</p>`;
+  if (!lit.length) return '<p class="house-cap">Nothing is on right now</p>';
+  const where = litWhere(c, lit);
+  return `<p class="house-cap">Adjusts the ${lit.length === 1 ? 'light' : `${lit.length} lights`} on${where ? ` in ${c.esc(where)}` : ''}</p>`;
+}
+// Turning lights off is a tap. Turning the whole house on is a hold (0.6 s, the pill filling with copper as it is
+// held), so a thumb brushing it at night does nothing; a tap only says to hold it. Neither pill is lit to show a
+// state: the headline says what is on.
+function housePills(c, lit) {
+  const { icon, H } = c;
+  const lvl = allOnLevel(c);
+  const onLabel = `${H.houseOnLabel()}${lvl != null && lit.length ? ` · ${lvl}%` : ''}`;
+  const on = `<button class="pill ghost hold-pill" data-hold="house-on" data-ms="600" data-act="house-on-hint" aria-label="${c.esc(onLabel)}, hold to turn on">${icon('power', 20, 1.9)}<span>${c.esc(onLabel)}</span></button>`;
+  if (!lit.length) return `<div class="house-pills one">${on}</div>`;
+  return `<div class="house-pills">
+    <button class="pill solid" data-act="house-off">${icon('power', 20, 1.9)}All off</button>
+    ${on}
+  </div>`;
+}
+
 export const actions = {
   ...nextActions,
   ...connActions,
-  // The house on: every light when something is already on; from dark, what was on before (the connector
+  // The house on, held: every light when something is already on; from dark, what was on before (the connector
   // remembers) or every light, as Settings says.
-  'house-on'(c) { c.run(c.H.houseOnAction()); },
+  'house-on'(c) { c.ui.houseHint = 0; c.run(c.H.houseOnAction()); },
+  // a tap on the held button: nothing turns on, the line under the bar says to hold it
+  'house-on-hint'(c) { c.ui.houseHint = Date.now(); c.render(); setTimeout(() => c.render(), 2600); },
   // The house off. If an automation is holding some of what is on, ask first rather than fight it every time.
   'house-off'(c) {
     const lit = c.H.litLights().map(d => d.device_id);

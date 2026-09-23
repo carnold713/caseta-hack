@@ -35,6 +35,14 @@
 .house .hbar { margin-top: 16px; touch-action: pan-y; cursor: pointer; }
 .house-cap { margin: 8px 0 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
 .house-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
+.house-pills.one { grid-template-columns: 1fr; }
+.house-cap.hint { color: var(--copper-hi); }
+/* Held to turn the house on: copper fills the pill from the left over the hold, and empties if the finger lets go
+   early. A finger that goes on to scroll scrolls (pan-y), which lets the hold go. */
+.pill.hold-pill { position: relative; overflow: hidden; isolation: isolate; touch-action: pan-y; }
+.pill.hold-pill::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--copper); transform: scaleX(0); transform-origin: left; transition: transform var(--exit) var(--ease-in); }
+.pill.hold-pill[data-holding='1']::before { transform: scaleX(1); transition: transform 600ms linear; }
+.pill.hold-pill[data-holding='1'] { color: #fff; }
 .house-pills .pill { width: 100%; padding: 0 12px; white-space: nowrap; }
 .goodnight { display: flex; gap: 12px; align-items: center; margin-top: 16px; height: 44px; }
 .goodnight .t-row { line-height: 19px; }

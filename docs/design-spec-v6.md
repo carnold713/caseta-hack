@@ -640,6 +640,27 @@ The file's frames are 412 wide; phones are 375 to 430. What that settled:
 `test/browser/copper_touch_test.js` checks the gestures, the sheet swipe, and
 every main page at 390 and 430 for width, gutters and the tab bar.
 
+### The whole-house card, revisited
+
+In use, the file's card read wrongly: "All on" was filled copper whenever
+anything was on, so it looked like a state ("everything is on") while two lamps
+in one room were lit, and one brush of a thumb lit the whole house at night.
+What changed, on purpose, against the file:
+
+- **The line under the bar says which lights it moves**: "Adjusts the 2 lights
+  on in Office" (or "in Office and Kitchen", "in 3 rooms").
+- **Off is a tap, on is a hold.** "All off" is the solid pill whenever anything
+  is on. "All on" is an outlined pill that has to be held for 0.6 s; copper
+  fills it from the left while it is held and empties if it is let go. A tap
+  turns nothing on and the line under the bar says to hold it. A finger that
+  goes on to scroll scrolls.
+- **Neither pill shows a state.** The headline ("2 on · 60%") does.
+- **It says how bright "All on" will be** while the evening wind-down holds
+  lights down: "All on · 30%".
+- **With everything off there is no slider** (it used to bring every light up
+  from dark): just "Lights back on", held, which brings back what was on before
+  (or every light, as Settings says).
+
 **Open: the webfont.** `tokens.css` declares Lutron Sans Screen at
 `/ui/font/LutronSansScreen-{Light,Regular,Medium}.woff2`. Those three files are
 not in the repo, because whether the face can ship as a webfont in the PWA is

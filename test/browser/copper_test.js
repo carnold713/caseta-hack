@@ -222,9 +222,18 @@ const FAN = [
 
   // ---- the house
   await go('home');
-  await page.click('[data-act="house-on"]'); await wait(1600);
-  check('house on', (await C(() => window.__copper.H.litLights().length)) > 0);
-  check('the pill says All on while anything is', (await page.textContent('[data-act="house-on"]')).trim() === 'All on');
+  // the house comes on by a hold, never a tap: a tap only says to hold it
+  const onPill = '[data-hold="house-on"]';
+  const lit0 = await C(() => window.__copper.H.litLights().length);
+  await page.click(onPill); await wait(900);
+  check('a tap on the house-on pill turns nothing on', (await C(() => window.__copper.H.litLights().length)) === lit0);
+  check('and says to hold it', /Hold/.test(await page.textContent('.house-cap')), await page.textContent('.house-cap'));
+  const pb = await page.locator(onPill).boundingBox();
+  await page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2); await page.mouse.down(); await wait(800); await page.mouse.up(); await wait(1600);
+  check('held, the house comes on', (await C(() => window.__copper.H.litLights().length)) > 0);
+  check('the pill says All on while anything is', (await page.textContent(onPill)).trim() === 'All on', await page.textContent(onPill));
+  check('and neither pill is copper at rest: the headline says what is on', await C(s => getComputedStyle(document.querySelector(s)).backgroundColor === 'rgba(0, 0, 0, 0)' && !!document.querySelector('.house-pills .pill.solid[data-act="house-off"]'), onPill));
+  check('the line under the bar says which lights it moves', /^Adjusts the (light|\d+ lights) on/.test(await page.textContent('.house-cap')), await page.textContent('.house-cap'));
   const bar = await page.locator('.hbar').boundingBox();
   await page.mouse.move(bar.x + bar.width * 0.6, bar.y + 28); await page.mouse.down();
   await page.mouse.move(bar.x + bar.width * 0.3, bar.y + 28, { steps: 6 }); await page.mouse.up(); await wait(1600);
