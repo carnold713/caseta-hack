@@ -62,7 +62,7 @@ export function glowSpec({ level, kelvin, hex: h, ctx = 'card', night = false, g
   const base = st.colour ? { core: 0.42 * g, body: 0.26 * g, wash: 0.2 * g } : { core: 0.5 * g, body: 0.32 * g, wash: 0.24 * g };
   return {
     D: Math.round(D), core: L > 0.2, blur: night ? 40 : 32,
-    coreC: rgba(st.core, base.core * m), bodyC: rgba(st.body, base.body * m), bodyMid: rgba(st.body, base.body * m * 0.45),
+    coreC: rgba(st.core, base.core * m), bodyC: rgba(st.body, base.body * m),
     washC: rgba(st.wash, base.wash * m * st.washA),
   };
 }
@@ -72,7 +72,7 @@ export function glowSpec({ level, kelvin, hex: h, ctx = 'card', night = false, g
 export function glowVars(o) {
   const s = glowSpec(o);
   if (!s) return '--g-d:0px;--g-on:0';
-  return `--g-d:${s.D}px;--g-core:${s.coreC};--g-body:${s.bodyC};--g-body-mid:${s.bodyMid};--g-wash:${s.washC};--g-blur:${s.blur}px;--g-core-on:${s.core ? 1 : 0};--g-on:1`;
+  return `--g-d:${s.D}px;--g-core:${s.coreC};--g-body:${s.bodyC};--g-wash:${s.washC};--g-blur:${s.blur}px;--g-core-on:${s.core ? 1 : 0};--g-on:1`;
 }
 
 export function glowHTML(o = {}) {

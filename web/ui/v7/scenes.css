@@ -83,7 +83,7 @@
 .sc-stage::after { content: ''; position: absolute; left: 0; right: 0; top: 290px; bottom: 0; background: linear-gradient(180deg, #221D19, #161311); }
 .sc-floor { position: absolute; left: 12px; right: 12px; top: 290px; height: 1px; background: rgba(255, 255, 255, .08); z-index: 1; }
 .sc-wash { position: absolute; left: 50%; top: 120px; width: 520px; height: 300px; margin: -150px 0 0 -260px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(217, 138, 78, .22), rgba(217, 138, 78, 0)); opacity: var(--wash, .4);
+  background: radial-gradient(closest-side, rgba(217, 138, 78, .22) 0%, rgba(217, 138, 78, 0.217) 6.2%, rgba(217, 138, 78, 0.208) 12.5%, rgba(217, 138, 78, 0.194) 18.8%, rgba(217, 138, 78, 0.176) 25%, rgba(217, 138, 78, 0.155) 31.2%, rgba(217, 138, 78, 0.131) 37.5%, rgba(217, 138, 78, 0.107) 43.8%, rgba(217, 138, 78, 0.083) 50%, rgba(217, 138, 78, 0.062) 56.2%, rgba(217, 138, 78, 0.042) 62.5%, rgba(217, 138, 78, 0.027) 68.8%, rgba(217, 138, 78, 0.015) 75%, rgba(217, 138, 78, 0.007) 81.2%, rgba(217, 138, 78, 0.002) 87.5%, rgba(217, 138, 78, 0.000) 93.8%, transparent 100%); opacity: var(--wash, .4);
   transition: opacity var(--dimmer) var(--ease-both); pointer-events: none; }
 .sc-lanes { position: absolute; inset: 0 12px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(56px, 1fr);
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none; z-index: 2; touch-action: pan-x pan-y; }
@@ -93,7 +93,7 @@
 .sc-stem { position: absolute; left: 50%; width: 1px; margin-left: -.5px; top: var(--y); height: calc(290px - var(--y)); background: rgba(255, 255, 255, .08);
   transition: top var(--standard) var(--ease), height var(--standard) var(--ease); }
 .sc-pool { position: absolute; left: 50%; top: 283px; width: var(--pw, 40px); height: 14px; margin-left: calc(var(--pw, 40px) / -2); border-radius: 50%;
-  background: radial-gradient(closest-side, var(--pool), transparent); filter: blur(4px); opacity: var(--pa, 1); mix-blend-mode: screen;
+  background: radial-gradient(closest-side, var(--pool) 0%, color-mix(in srgb, var(--pool) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--pool) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--pool) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--pool) 80.1%, transparent) 25%, color-mix(in srgb, var(--pool) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--pool) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--pool) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--pool) 37.9%, transparent) 50%, color-mix(in srgb, var(--pool) 28%, transparent) 56.2%, color-mix(in srgb, var(--pool) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--pool) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--pool) 6.8%, transparent) 75%, color-mix(in srgb, var(--pool) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--pool) 1%, transparent) 87.5%, color-mix(in srgb, var(--pool) 0.1%, transparent) 93.8%, transparent 100%); filter: blur(4px); opacity: var(--pa, 1); mix-blend-mode: screen;
   transition: width var(--standard) var(--ease), margin-left var(--standard) var(--ease), opacity var(--dimmer) var(--ease-both); }
 /* The orb: a 44 bead of the light itself with its three-layer glow, a grip that takes the finger at once. */
 .sc-orb { position: absolute; left: 50%; top: calc(var(--y) - 22px); width: 44px; height: 44px; margin-left: -22px; border-radius: 50%;
@@ -209,7 +209,7 @@
 .wd-moon { position: absolute; top: -6px; width: 56px; height: 52px; margin-left: -28px; display: flex; flex-direction: column; align-items: center;
   color: rgba(209, 209, 209, .8); touch-action: none; cursor: grab; outline: none; z-index: 2; animation: wd-moonrise 1000ms ease-in-out both; }
 .wd-moon .wd-moon-glow { position: absolute; left: 50%; top: 30px; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(244, 241, 234, .10), rgba(244, 241, 234, 0)); pointer-events: none; }
+  background: radial-gradient(closest-side, rgba(244, 241, 234, .10) 0%, rgba(244, 241, 234, 0.099) 6.2%, rgba(244, 241, 234, 0.095) 12.5%, rgba(244, 241, 234, 0.088) 18.8%, rgba(244, 241, 234, 0.080) 25%, rgba(244, 241, 234, 0.070) 31.2%, rgba(244, 241, 234, 0.060) 37.5%, rgba(244, 241, 234, 0.049) 43.8%, rgba(244, 241, 234, 0.038) 50%, rgba(244, 241, 234, 0.028) 56.2%, rgba(244, 241, 234, 0.019) 62.5%, rgba(244, 241, 234, 0.012) 68.8%, rgba(244, 241, 234, 0.007) 75%, rgba(244, 241, 234, 0.003) 81.2%, rgba(244, 241, 234, 0.001) 87.5%, rgba(244, 241, 234, 0.000) 93.8%, transparent 100%); pointer-events: none; }
 .wd-moon .wd-moon-t { margin: -4px 0 4px; font-size: 12px; line-height: 14px; color: var(--text-3); white-space: nowrap; }
 .wd-moon:focus-visible { color: var(--copper-hi); }
 @keyframes wd-moonrise { from { opacity: .3; transform: translateY(6px); } to { opacity: 1; transform: none; } }

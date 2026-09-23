@@ -48,7 +48,7 @@
   --ok: #3A7934;
   --warn: #DB6900;
   --err: #CC0000;
-  --scrim: rgba(38, 38, 38, .5);   /* Overlay/overlay-50 */
+  --scrim: rgba(0, 0, 0, .5);      /* Overlay/overlay-50: black at half, blurred 4 (the owner's, over the file's #262626) */
 
   /* geometry */
   --gutter: 20px;

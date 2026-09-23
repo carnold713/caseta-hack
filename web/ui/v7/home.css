@@ -32,7 +32,7 @@
 /* Past five lit rooms the rest fold into a faint copper haze rather than more pools. */
 .hl-haze {
   position: absolute; inset: 0; opacity: 0; transition: opacity var(--dimmer) var(--ease-both);
-  background: radial-gradient(60% 55% at 50% 28%, rgba(217, 138, 78, .12), rgba(217, 138, 78, 0));
+  background: radial-gradient(60% 55% at 50% 28%, rgba(217, 138, 78, .12) 0%, rgba(217, 138, 78, 0.118) 6.2%, rgba(217, 138, 78, 0.114) 12.5%, rgba(217, 138, 78, 0.106) 18.8%, rgba(217, 138, 78, 0.096) 25%, rgba(217, 138, 78, 0.084) 31.2%, rgba(217, 138, 78, 0.072) 37.5%, rgba(217, 138, 78, 0.058) 43.8%, rgba(217, 138, 78, 0.045) 50%, rgba(217, 138, 78, 0.034) 56.2%, rgba(217, 138, 78, 0.023) 62.5%, rgba(217, 138, 78, 0.015) 68.8%, rgba(217, 138, 78, 0.008) 75%, rgba(217, 138, 78, 0.004) 81.2%, rgba(217, 138, 78, 0.001) 87.5%, rgba(217, 138, 78, 0.000) 93.8%, transparent 100%);
 }
 .hl-haze.on { opacity: 1; }
 
@@ -128,7 +128,7 @@
   transform: translateY(calc(var(--p, 0) * 24px)); opacity: calc(1 - var(--p, 0) * .65);
   transition: transform 1s linear, opacity 1s linear;
 }
-.arrival .dusk-sun::before { content: ''; position: absolute; inset: -12px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 180, 107, .28), rgba(255, 180, 107, 0)); mix-blend-mode: screen; }
+.arrival .dusk-sun::before { content: ''; position: absolute; inset: -12px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 180, 107, .28) 0%, rgba(255, 180, 107, 0.276) 6.2%, rgba(255, 180, 107, 0.265) 12.5%, rgba(255, 180, 107, 0.248) 18.8%, rgba(255, 180, 107, 0.224) 25%, rgba(255, 180, 107, 0.197) 31.2%, rgba(255, 180, 107, 0.167) 37.5%, rgba(255, 180, 107, 0.136) 43.8%, rgba(255, 180, 107, 0.106) 50%, rgba(255, 180, 107, 0.078) 56.2%, rgba(255, 180, 107, 0.054) 62.5%, rgba(255, 180, 107, 0.034) 68.8%, rgba(255, 180, 107, 0.019) 75%, rgba(255, 180, 107, 0.009) 81.2%, rgba(255, 180, 107, 0.003) 87.5%, rgba(255, 180, 107, 0.000) 93.8%, transparent 100%); mix-blend-mode: screen; }
 .arrival .dusk-sun i { position: absolute; left: 31px; top: 31px; width: 18px; height: 18px; border-radius: 9px; background: radial-gradient(circle at 40% 40%, #FFD9A8, #E6A06A 60%, #D98A4E); }
 .arrival .ar-ring { position: absolute; left: 20px; top: 28px; width: 72px; height: 72px; }
 .arrival .ar-ring svg { position: absolute; inset: 0; width: 72px; height: 72px; transform: rotate(-90deg); overflow: visible; }

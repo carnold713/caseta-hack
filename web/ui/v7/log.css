@@ -41,7 +41,7 @@
 /* the bead: an 8 disc of Lutron blue in a 24 halo, running the leader from the key's dot to the label */
 .rstage .bead { position: absolute; left: 0; top: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--blue-hi); pointer-events: none; opacity: 0; z-index: 2;
   offset-anchor: center; offset-rotate: 0deg; offset-distance: 0%; --bead: 82, 174, 255; }
-.rstage .bead::before { content: ''; position: absolute; left: -8px; top: -8px; width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--bead), .35), rgba(var(--bead), 0)); }
+.rstage .bead::before { content: ''; position: absolute; left: -8px; top: -8px; width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--bead), .35) 0%, rgba(var(--bead), 0.345) 6.2%, rgba(var(--bead), 0.331) 12.5%, rgba(var(--bead), 0.309) 18.8%, rgba(var(--bead), 0.280) 25%, rgba(var(--bead), 0.246) 31.2%, rgba(var(--bead), 0.209) 37.5%, rgba(var(--bead), 0.170) 43.8%, rgba(var(--bead), 0.133) 50%, rgba(var(--bead), 0.098) 56.2%, rgba(var(--bead), 0.068) 62.5%, rgba(var(--bead), 0.043) 68.8%, rgba(var(--bead), 0.024) 75%, rgba(var(--bead), 0.011) 81.2%, rgba(var(--bead), 0.004) 87.5%, rgba(var(--bead), 0.001) 93.8%, transparent 100%); }
 .rstage .bead.fx-tap { animation: lg-bead-go 360ms linear both, lg-bead 560ms linear both; animation-delay: var(--fx, 0ms); }
 .rstage .bead.fx-held { animation: lg-bead-go 360ms linear both, lg-bead-in 200ms linear both; animation-delay: var(--fx, 0ms); }
 .rstage .bead.fx-out { offset-distance: 100%; animation: lg-out 200ms var(--ease-in) both; animation-delay: var(--fx, 0ms); }

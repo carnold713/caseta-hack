@@ -232,7 +232,7 @@
    outer edge: the export says 88,-10, which is the border trap again. */
 .tile .glow {
   position: absolute; top: -9px; right: -7px; width: 86px; height: 86px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 241, 220, .55), rgba(255, 241, 220, 0));
+  background: radial-gradient(closest-side, rgba(255, 241, 220, .55) 0%, rgba(255, 241, 220, 0.543) 6.2%, rgba(255, 241, 220, 0.521) 12.5%, rgba(255, 241, 220, 0.486) 18.8%, rgba(255, 241, 220, 0.441) 25%, rgba(255, 241, 220, 0.387) 31.2%, rgba(255, 241, 220, 0.328) 37.5%, rgba(255, 241, 220, 0.267) 43.8%, rgba(255, 241, 220, 0.208) 50%, rgba(255, 241, 220, 0.154) 56.2%, rgba(255, 241, 220, 0.106) 62.5%, rgba(255, 241, 220, 0.067) 68.8%, rgba(255, 241, 220, 0.037) 75%, rgba(255, 241, 220, 0.017) 81.2%, rgba(255, 241, 220, 0.006) 87.5%, rgba(255, 241, 220, 0.001) 93.8%, transparent 100%);
   pointer-events: none;
 }
 .tile.on {
@@ -304,7 +304,7 @@
 .card.lit::before {
   content: ''; position: absolute; left: 170px; top: -190px; width: 380px; height: 380px;
   border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(217, 138, 78, .22), rgba(217, 138, 78, 0));
+  background: radial-gradient(closest-side, rgba(217, 138, 78, .22) 0%, rgba(217, 138, 78, 0.217) 6.2%, rgba(217, 138, 78, 0.208) 12.5%, rgba(217, 138, 78, 0.194) 18.8%, rgba(217, 138, 78, 0.176) 25%, rgba(217, 138, 78, 0.155) 31.2%, rgba(217, 138, 78, 0.131) 37.5%, rgba(217, 138, 78, 0.107) 43.8%, rgba(217, 138, 78, 0.083) 50%, rgba(217, 138, 78, 0.062) 56.2%, rgba(217, 138, 78, 0.042) 62.5%, rgba(217, 138, 78, 0.027) 68.8%, rgba(217, 138, 78, 0.015) 75%, rgba(217, 138, 78, 0.007) 81.2%, rgba(217, 138, 78, 0.002) 87.5%, rgba(217, 138, 78, 0.000) 93.8%, transparent 100%);
 }
 .card.lit > * { position: relative; }
 
@@ -312,6 +312,8 @@
 
 .scrim {
   position: fixed; inset: 0; background: var(--scrim); border: 0;
+  /* the page behind a sheet goes darker and a little soft, so the sheet is plainly what is in front */
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   animation: fade var(--standard) var(--ease);
 }
 .sheet {
@@ -460,11 +462,14 @@
 /* A glow (web/ui/glow.js): three radial layers sharing a centre, blended screen so lights add. Sized and coloured by
    custom properties, so a new level or colour on a live element fades on the dimmer instead of jumping. Off is no
    light at all. Put it inside the thing it lights, which clips it (overflow: hidden) unless it is meant to bleed.
-   The layers' margin is pinned because the guided setup's `.g-body` (a page body, screens.css) shares a name. */
+   The layers' margin is pinned because the guided setup's `.g-body` (a page body, screens.css) shares a name.
+   Every layer falls off on the same eased curve, full at the centre and reaching nothing with no slope, drawn as
+   sixteen stops, and so does every other glow in the app (scripts/soften-glows.py writes them): a straight fade,
+   or one with a knee in it, shows a ring where it starts or stops, and light has no edge. */
 .glow { position: absolute; left: var(--g-x, 50%); top: var(--g-y, 50%); width: 0; height: 0; pointer-events: none; z-index: 0; }
 .glow > i { position: absolute; left: 0; top: 0; margin: 0; border-radius: 50%; mix-blend-mode: screen; transform: translate(-50%, -50%) scale(1);
   transition: width var(--dimmer) var(--ease-both), height var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both), background var(--dimmer) var(--ease-both); }
-.glow .g-wash { width: calc(var(--g-d) * 1.6); height: calc(var(--g-d) * 1.6); background: radial-gradient(closest-side, var(--g-wash), transparent); filter: blur(var(--g-blur, 32px)); }
-.glow .g-body { width: var(--g-d); height: var(--g-d); background: radial-gradient(closest-side, var(--g-body), var(--g-body-mid) 45%, transparent); }
-.glow .g-core { width: calc(var(--g-d) * .32); height: calc(var(--g-d) * .32); background: radial-gradient(closest-side, var(--g-core), transparent); opacity: var(--g-core-on, 1); }
+.glow .g-wash { width: calc(var(--g-d) * 1.6); height: calc(var(--g-d) * 1.6); background: radial-gradient(closest-side, var(--g-wash) 0%, color-mix(in srgb, var(--g-wash) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--g-wash) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--g-wash) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--g-wash) 80.1%, transparent) 25%, color-mix(in srgb, var(--g-wash) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--g-wash) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--g-wash) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--g-wash) 37.9%, transparent) 50%, color-mix(in srgb, var(--g-wash) 28%, transparent) 56.2%, color-mix(in srgb, var(--g-wash) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--g-wash) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--g-wash) 6.8%, transparent) 75%, color-mix(in srgb, var(--g-wash) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--g-wash) 1%, transparent) 87.5%, color-mix(in srgb, var(--g-wash) 0.1%, transparent) 93.8%, transparent 100%); filter: blur(var(--g-blur, 32px)); }
+.glow .g-body { width: var(--g-d); height: var(--g-d); background: radial-gradient(closest-side, var(--g-body) 0%, color-mix(in srgb, var(--g-body) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--g-body) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--g-body) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--g-body) 80.1%, transparent) 25%, color-mix(in srgb, var(--g-body) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--g-body) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--g-body) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--g-body) 37.9%, transparent) 50%, color-mix(in srgb, var(--g-body) 28%, transparent) 56.2%, color-mix(in srgb, var(--g-body) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--g-body) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--g-body) 6.8%, transparent) 75%, color-mix(in srgb, var(--g-body) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--g-body) 1%, transparent) 87.5%, color-mix(in srgb, var(--g-body) 0.1%, transparent) 93.8%, transparent 100%); }
+.glow .g-core { width: calc(var(--g-d) * .32); height: calc(var(--g-d) * .32); background: radial-gradient(closest-side, var(--g-core) 0%, color-mix(in srgb, var(--g-core) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--g-core) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--g-core) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--g-core) 80.1%, transparent) 25%, color-mix(in srgb, var(--g-core) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--g-core) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--g-core) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--g-core) 37.9%, transparent) 50%, color-mix(in srgb, var(--g-core) 28%, transparent) 56.2%, color-mix(in srgb, var(--g-core) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--g-core) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--g-core) 6.8%, transparent) 75%, color-mix(in srgb, var(--g-core) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--g-core) 1%, transparent) 87.5%, color-mix(in srgb, var(--g-core) 0.1%, transparent) 93.8%, transparent 100%); opacity: var(--g-core-on, 1); }
 .glow.off > i { opacity: 0; transform: translate(-50%, -50%) scale(.85); }

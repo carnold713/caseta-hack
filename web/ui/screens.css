@@ -110,7 +110,7 @@
 .room-big .room-art { position: absolute; right: 26px; top: 16px; width: 124px; height: 124px; opacity: .22; }
 .room-big .glow {
   position: absolute; right: -40px; top: -50px; width: 240px; height: 240px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(255, 184, 112, .22), rgba(255, 184, 112, 0));
+  background: radial-gradient(closest-side, rgba(255, 184, 112, .22) 0%, rgba(255, 184, 112, 0.217) 6.2%, rgba(255, 184, 112, 0.208) 12.5%, rgba(255, 184, 112, 0.194) 18.8%, rgba(255, 184, 112, 0.176) 25%, rgba(255, 184, 112, 0.155) 31.2%, rgba(255, 184, 112, 0.131) 37.5%, rgba(255, 184, 112, 0.107) 43.8%, rgba(255, 184, 112, 0.083) 50%, rgba(255, 184, 112, 0.062) 56.2%, rgba(255, 184, 112, 0.042) 62.5%, rgba(255, 184, 112, 0.027) 68.8%, rgba(255, 184, 112, 0.015) 75%, rgba(255, 184, 112, 0.007) 81.2%, rgba(255, 184, 112, 0.002) 87.5%, rgba(255, 184, 112, 0.000) 93.8%, transparent 100%);
 }
 .room-big .add-photo {
   position: absolute; left: 16px; top: 16px; height: 32px; padding: 0 16px 0 12px; border-radius: 16px;
@@ -176,7 +176,7 @@
 .dev { position: relative; min-height: 890px; overflow: hidden; }
 .dev .halo {
   position: absolute; left: calc(50% - 280px); top: -260px; width: 560px; height: 560px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(255, 184, 112, .10), rgba(255, 184, 112, 0));
+  background: radial-gradient(closest-side, rgba(255, 184, 112, .10) 0%, rgba(255, 184, 112, 0.099) 6.2%, rgba(255, 184, 112, 0.095) 12.5%, rgba(255, 184, 112, 0.088) 18.8%, rgba(255, 184, 112, 0.080) 25%, rgba(255, 184, 112, 0.070) 31.2%, rgba(255, 184, 112, 0.060) 37.5%, rgba(255, 184, 112, 0.049) 43.8%, rgba(255, 184, 112, 0.038) 50%, rgba(255, 184, 112, 0.028) 56.2%, rgba(255, 184, 112, 0.019) 62.5%, rgba(255, 184, 112, 0.012) 68.8%, rgba(255, 184, 112, 0.007) 75%, rgba(255, 184, 112, 0.003) 81.2%, rgba(255, 184, 112, 0.001) 87.5%, rgba(255, 184, 112, 0.000) 93.8%, transparent 100%);
   opacity: 0; transform: scale(.85);
   transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both);
 }
@@ -256,7 +256,7 @@
 
 /* ---- 17 Fan ---------------------------------------------------------------------------------- */
 
-.dev.is-fan .halo { background: radial-gradient(closest-side, rgba(207, 224, 242, .12), rgba(207, 224, 242, 0)); }
+.dev.is-fan .halo { background: radial-gradient(closest-side, rgba(207, 224, 242, .12) 0%, rgba(207, 224, 242, 0.118) 6.2%, rgba(207, 224, 242, 0.114) 12.5%, rgba(207, 224, 242, 0.106) 18.8%, rgba(207, 224, 242, 0.096) 25%, rgba(207, 224, 242, 0.084) 31.2%, rgba(207, 224, 242, 0.072) 37.5%, rgba(207, 224, 242, 0.058) 43.8%, rgba(207, 224, 242, 0.045) 50%, rgba(207, 224, 242, 0.034) 56.2%, rgba(207, 224, 242, 0.023) 62.5%, rgba(207, 224, 242, 0.015) 68.8%, rgba(207, 224, 242, 0.008) 75%, rgba(207, 224, 242, 0.004) 81.2%, rgba(207, 224, 242, 0.001) 87.5%, rgba(207, 224, 242, 0.000) 93.8%, transparent 100%); }
 .dev.is-fan .feats { top: 414px; }
 .dev.is-fan .feat { background: var(--surface-2); }
 .dev.is-fan .feat .c { background: var(--surface-2); color: var(--icon-1); }
@@ -279,7 +279,7 @@
 
 /* ---- 18 Shade -------------------------------------------------------------------------------- */
 
-.dev.is-shade .halo { background: radial-gradient(closest-side, rgba(230, 225, 216, .09), rgba(230, 225, 216, 0)); }
+.dev.is-shade .halo { background: radial-gradient(closest-side, rgba(230, 225, 216, .09) 0%, rgba(230, 225, 216, 0.089) 6.2%, rgba(230, 225, 216, 0.085) 12.5%, rgba(230, 225, 216, 0.080) 18.8%, rgba(230, 225, 216, 0.072) 25%, rgba(230, 225, 216, 0.063) 31.2%, rgba(230, 225, 216, 0.054) 37.5%, rgba(230, 225, 216, 0.044) 43.8%, rgba(230, 225, 216, 0.034) 50%, rgba(230, 225, 216, 0.025) 56.2%, rgba(230, 225, 216, 0.017) 62.5%, rgba(230, 225, 216, 0.011) 68.8%, rgba(230, 225, 216, 0.006) 75%, rgba(230, 225, 216, 0.003) 81.2%, rgba(230, 225, 216, 0.001) 87.5%, rgba(230, 225, 216, 0.000) 93.8%, transparent 100%); }
 /* The window: dusk behind it, the fabric hanging from the roller to how far down it is, a white handle on the
    hem. 200 x 300 at 72, 336; the readout rides beside the handle. */
 .window {
@@ -287,7 +287,7 @@
   border-radius: var(--r-card); box-shadow: inset 0 0 0 1px var(--line);
   background: linear-gradient(180deg, #1D2F4A 0%, #3E4466 55%, #8A6A6E 85%, #C48A5C 100%);
 }
-.window .sun { position: absolute; left: 40px; top: 190px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 201, 142, .25), rgba(255, 201, 142, 0)); }
+.window .sun { position: absolute; left: 40px; top: 190px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 201, 142, .25) 0%, rgba(255, 201, 142, 0.247) 6.2%, rgba(255, 201, 142, 0.237) 12.5%, rgba(255, 201, 142, 0.221) 18.8%, rgba(255, 201, 142, 0.200) 25%, rgba(255, 201, 142, 0.176) 31.2%, rgba(255, 201, 142, 0.149) 37.5%, rgba(255, 201, 142, 0.122) 43.8%, rgba(255, 201, 142, 0.095) 50%, rgba(255, 201, 142, 0.070) 56.2%, rgba(255, 201, 142, 0.048) 62.5%, rgba(255, 201, 142, 0.030) 68.8%, rgba(255, 201, 142, 0.017) 75%, rgba(255, 201, 142, 0.008) 81.2%, rgba(255, 201, 142, 0.003) 87.5%, rgba(255, 201, 142, 0.000) 93.8%, transparent 100%); }
 .window .sill { position: absolute; left: 0; right: 0; top: 252px; height: 48px; background: rgba(0, 0, 0, .25); }
 .window .fabric {
   position: absolute; left: 0; top: 0; width: 200px; height: calc(var(--down) * 3px);
@@ -374,7 +374,7 @@
 .wheel { position: absolute; left: calc(50% - 130px); top: 64px; width: 260px; height: 260px; touch-action: none; cursor: crosshair; }
 .wheel .disc {
   position: absolute; left: 12px; top: 12px; width: 236px; height: 236px; border-radius: 50%;
-  background: radial-gradient(closest-side, #fff 0%, rgba(255, 255, 255, .75) 35%, rgba(255, 255, 255, 0) 100%),
+  background: radial-gradient(closest-side, #fff 0%, rgba(255, 255, 255, 0.987) 6.2%, rgba(255, 255, 255, 0.947) 12.5%, rgba(255, 255, 255, 0.884) 18.8%, rgba(255, 255, 255, 0.801) 25%, rgba(255, 255, 255, 0.703) 31.2%, rgba(255, 255, 255, 0.596) 37.5%, rgba(255, 255, 255, 0.486) 43.8%, rgba(255, 255, 255, 0.379) 50%, rgba(255, 255, 255, 0.280) 56.2%, rgba(255, 255, 255, 0.193) 62.5%, rgba(255, 255, 255, 0.122) 68.8%, rgba(255, 255, 255, 0.068) 75%, rgba(255, 255, 255, 0.031) 81.2%, rgba(255, 255, 255, 0.010) 87.5%, rgba(255, 255, 255, 0.001) 93.8%, transparent 100%),
               conic-gradient(from 90deg, hsl(5 100% 55%), hsl(45 100% 55%), hsl(90 100% 55%), hsl(135 100% 55%), hsl(180 100% 55%), hsl(225 100% 55%), hsl(270 100% 55%), hsl(315 100% 55%), hsl(365 100% 55%));
 }
 .wheel .handle { position: absolute; width: 36px; height: 36px; border-radius: 18px; pointer-events: none; box-shadow: inset 0 0 0 3px #fff, 0 4px 12px rgba(0, 0, 0, .45); }
@@ -414,7 +414,7 @@
 .durs-more { margin: 12px calc(-1 * var(--gutter)) 0; }
 .ts-run { display: flex; gap: 20px; margin-top: 20px; }
 .ts-run .ring { position: relative; width: 116px; height: 116px; flex: none; }
-.ts-run .ring .glow { position: absolute; left: -20px; top: -20px; width: 156px; height: 156px; border-radius: 50%; background: radial-gradient(closest-side, rgba(217, 138, 78, .18), rgba(217, 138, 78, 0)); }
+.ts-run .ring .glow { position: absolute; left: -20px; top: -20px; width: 156px; height: 156px; border-radius: 50%; background: radial-gradient(closest-side, rgba(217, 138, 78, .18) 0%, rgba(217, 138, 78, 0.178) 6.2%, rgba(217, 138, 78, 0.170) 12.5%, rgba(217, 138, 78, 0.159) 18.8%, rgba(217, 138, 78, 0.144) 25%, rgba(217, 138, 78, 0.127) 31.2%, rgba(217, 138, 78, 0.107) 37.5%, rgba(217, 138, 78, 0.088) 43.8%, rgba(217, 138, 78, 0.068) 50%, rgba(217, 138, 78, 0.050) 56.2%, rgba(217, 138, 78, 0.035) 62.5%, rgba(217, 138, 78, 0.022) 68.8%, rgba(217, 138, 78, 0.012) 75%, rgba(217, 138, 78, 0.006) 81.2%, rgba(217, 138, 78, 0.002) 87.5%, rgba(217, 138, 78, 0.000) 93.8%, transparent 100%); }
 .ts-run .ring > svg { position: absolute; inset: 0; }
 .ts-run .trk { fill: none; stroke: #333; stroke-width: 8; }
 .ts-run .arc { fill: none; stroke: url(#tsg); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
@@ -548,7 +548,7 @@
 }
 .scene-tile:active { transform: scale(.97); }
 .scene-tile.current { background: linear-gradient(180deg, #E6A06A 0%, #D98A4E 100%); }
-.scene-tile .glow { position: absolute; left: 80px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 226, 194, .35), rgba(255, 226, 194, 0)); }
+.scene-tile .glow { position: absolute; left: 80px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 226, 194, .35) 0%, rgba(255, 226, 194, 0.345) 6.2%, rgba(255, 226, 194, 0.331) 12.5%, rgba(255, 226, 194, 0.309) 18.8%, rgba(255, 226, 194, 0.280) 25%, rgba(255, 226, 194, 0.246) 31.2%, rgba(255, 226, 194, 0.209) 37.5%, rgba(255, 226, 194, 0.170) 43.8%, rgba(255, 226, 194, 0.133) 50%, rgba(255, 226, 194, 0.098) 56.2%, rgba(255, 226, 194, 0.068) 62.5%, rgba(255, 226, 194, 0.043) 68.8%, rgba(255, 226, 194, 0.024) 75%, rgba(255, 226, 194, 0.011) 81.2%, rgba(255, 226, 194, 0.004) 87.5%, rgba(255, 226, 194, 0.001) 93.8%, transparent 100%); }
 .scene-tile .sdots { position: absolute; left: 16px; top: 18px; }
 .scene-tile .st { position: absolute; left: 144px; top: 16px; color: var(--copper); }
 .scene-tile.current .st { color: #fff; }
@@ -769,7 +769,7 @@
 .tm-prompt { position: absolute; left: 0; right: 0; top: 24px; margin: 0; text-align: center; font-size: 16px; line-height: 22px; color: var(--text-2); }
 .tm-rings { position: absolute; left: calc(50% - 110px); top: 50px; width: 220px; height: 220px; }
 .tm-rings i { position: absolute; border-radius: 50%; }
-.tm-rings .r0 { inset: 0; background: radial-gradient(closest-side, rgba(0, 109, 204, .28), rgba(0, 109, 204, 0)); }
+.tm-rings .r0 { inset: 0; background: radial-gradient(closest-side, rgba(0, 109, 204, .28) 0%, rgba(0, 109, 204, 0.276) 6.2%, rgba(0, 109, 204, 0.265) 12.5%, rgba(0, 109, 204, 0.248) 18.8%, rgba(0, 109, 204, 0.224) 25%, rgba(0, 109, 204, 0.197) 31.2%, rgba(0, 109, 204, 0.167) 37.5%, rgba(0, 109, 204, 0.136) 43.8%, rgba(0, 109, 204, 0.106) 50%, rgba(0, 109, 204, 0.078) 56.2%, rgba(0, 109, 204, 0.054) 62.5%, rgba(0, 109, 204, 0.034) 68.8%, rgba(0, 109, 204, 0.019) 75%, rgba(0, 109, 204, 0.009) 81.2%, rgba(0, 109, 204, 0.003) 87.5%, rgba(0, 109, 204, 0.000) 93.8%, transparent 100%); }
 .tm-rings .r1 { inset: 18px; box-shadow: inset 0 0 0 2px rgba(82, 174, 255, .18); }
 .tm-rings .r2 { inset: 34px; box-shadow: inset 0 0 0 2px rgba(82, 174, 255, .4); }
 .tm-rings .r3 { inset: 48px; background: rgba(0, 109, 204, .2); box-shadow: inset 0 0 0 3px var(--blue-hi); }
@@ -817,7 +817,7 @@
 .where-line .ic { color: var(--icon-2); flex: none; }
 .where-line .link { font-size: 14px; }
 .upnext { position: relative; margin: 0 var(--gutter) 12px; height: 128px; border-radius: var(--r-card); background: var(--surface-1); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(217, 138, 78, .22); }
-.upnext .glow { position: absolute; left: -70px; top: -110px; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(closest-side, rgba(230, 160, 106, .22), rgba(230, 160, 106, 0)); pointer-events: none; }
+.upnext .glow { position: absolute; left: -70px; top: -110px; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(closest-side, rgba(230, 160, 106, .22) 0%, rgba(230, 160, 106, 0.217) 6.2%, rgba(230, 160, 106, 0.208) 12.5%, rgba(230, 160, 106, 0.194) 18.8%, rgba(230, 160, 106, 0.176) 25%, rgba(230, 160, 106, 0.155) 31.2%, rgba(230, 160, 106, 0.131) 37.5%, rgba(230, 160, 106, 0.107) 43.8%, rgba(230, 160, 106, 0.083) 50%, rgba(230, 160, 106, 0.062) 56.2%, rgba(230, 160, 106, 0.042) 62.5%, rgba(230, 160, 106, 0.027) 68.8%, rgba(230, 160, 106, 0.015) 75%, rgba(230, 160, 106, 0.007) 81.2%, rgba(230, 160, 106, 0.002) 87.5%, rgba(230, 160, 106, 0.000) 93.8%, transparent 100%); pointer-events: none; }
 .upnext .t-over { position: absolute; left: 20px; top: 20px; line-height: 14px; }
 .upnext .ic-c { position: absolute; left: 20px; top: 52px; width: 52px; height: 52px; border-radius: 26px; display: grid; place-items: center; background: #5A351B; color: var(--copper-hi); }
 .upnext .un-t { position: absolute; left: 88px; top: 52px; right: 20px; font-size: 20px; font-weight: 500; line-height: 26px; }
@@ -902,7 +902,7 @@
 .stepper i.cur { width: 20px; background: var(--blue); }
 .stepper span { margin-left: 6px; font-size: 14px; font-weight: 500; line-height: 20px; }
 .g-art { position: relative; height: 160px; }
-.g-art .glow { position: absolute; left: 86px; top: -24px; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 184, 112, .28), rgba(255, 184, 112, 0)); }
+.g-art .glow { position: absolute; left: 86px; top: -24px; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 184, 112, .28) 0%, rgba(255, 184, 112, 0.276) 6.2%, rgba(255, 184, 112, 0.265) 12.5%, rgba(255, 184, 112, 0.248) 18.8%, rgba(255, 184, 112, 0.224) 25%, rgba(255, 184, 112, 0.197) 31.2%, rgba(255, 184, 112, 0.167) 37.5%, rgba(255, 184, 112, 0.136) 43.8%, rgba(255, 184, 112, 0.106) 50%, rgba(255, 184, 112, 0.078) 56.2%, rgba(255, 184, 112, 0.054) 62.5%, rgba(255, 184, 112, 0.034) 68.8%, rgba(255, 184, 112, 0.019) 75%, rgba(255, 184, 112, 0.009) 81.2%, rgba(255, 184, 112, 0.003) 87.5%, rgba(255, 184, 112, 0.000) 93.8%, transparent 100%); }
 .g-art img { position: absolute; left: 146px; top: 16px; width: 120px; height: 120px; }
 .g-over { margin: 0 var(--gutter); line-height: 14px; }
 .g-q { margin: 8px var(--gutter) 0; font-size: 32px; font-weight: 300; line-height: 38px; letter-spacing: -.015em; }
@@ -1004,7 +1004,7 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .ad-steps .as-ln { flex: 1 1 24px; max-width: 24px; height: 1px; background: rgba(255, 255, 255, .16); }
 .radar { position: relative; width: 340px; height: 300px; margin: 0 auto; }
 .radar i { position: absolute; border-radius: 50%; }
-.radar .g { left: 0; top: -4px; width: 340px; height: 340px; background: radial-gradient(closest-side, rgba(0, 109, 204, .28), rgba(0, 109, 204, 0)); }
+.radar .g { left: 0; top: -4px; width: 340px; height: 340px; background: radial-gradient(closest-side, rgba(0, 109, 204, .28) 0%, rgba(0, 109, 204, 0.276) 6.2%, rgba(0, 109, 204, 0.265) 12.5%, rgba(0, 109, 204, 0.248) 18.8%, rgba(0, 109, 204, 0.224) 25%, rgba(0, 109, 204, 0.197) 31.2%, rgba(0, 109, 204, 0.167) 37.5%, rgba(0, 109, 204, 0.136) 43.8%, rgba(0, 109, 204, 0.106) 50%, rgba(0, 109, 204, 0.078) 56.2%, rgba(0, 109, 204, 0.054) 62.5%, rgba(0, 109, 204, 0.034) 68.8%, rgba(0, 109, 204, 0.019) 75%, rgba(0, 109, 204, 0.009) 81.2%, rgba(0, 109, 204, 0.003) 87.5%, rgba(0, 109, 204, 0.000) 93.8%, transparent 100%); }
 .radar .r1 { left: 42px; top: 38px; width: 256px; height: 256px; box-shadow: inset 0 0 0 1.5px rgba(0, 109, 204, .14); }
 .radar .r2 { left: 70px; top: 66px; width: 200px; height: 200px; box-shadow: inset 0 0 0 1.5px rgba(0, 109, 204, .3); }
 .radar .r3 { left: 95px; top: 91px; width: 150px; height: 150px; background: radial-gradient(closest-side, #0B2A4A 70%, rgba(0, 109, 204, .6)); box-shadow: inset 0 0 0 2px var(--blue); }
@@ -1055,7 +1055,7 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 /* ---- 01 Onboarding ------------------------------------------------------------------------------------------ */
 #app.onboarding .screen { padding: 0; }
 .onboard { position: relative; min-height: 100dvh; overflow: hidden; background: linear-gradient(180deg, #8C7C6E 0%, #74665A 35%, #5E5249 65%, #3A322C 100%); }
-.onboard::before { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 70% at 30% 35%, rgba(255, 214, 168, .22), rgba(255, 214, 168, 0) 60%), linear-gradient(180deg, rgba(18, 18, 18, 0) 45%, rgba(18, 18, 18, .55) 100%); }
+.onboard::before { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 70% at 30% 35%, rgba(255, 214, 168, .22) 0%, rgba(255, 214, 168, 0.217) 3.8%, rgba(255, 214, 168, 0.208) 7.5%, rgba(255, 214, 168, 0.194) 11.2%, rgba(255, 214, 168, 0.176) 15%, rgba(255, 214, 168, 0.155) 18.8%, rgba(255, 214, 168, 0.131) 22.5%, rgba(255, 214, 168, 0.107) 26.2%, rgba(255, 214, 168, 0.083) 30%, rgba(255, 214, 168, 0.062) 33.8%, rgba(255, 214, 168, 0.042) 37.5%, rgba(255, 214, 168, 0.027) 41.2%, rgba(255, 214, 168, 0.015) 45%, rgba(255, 214, 168, 0.007) 48.8%, rgba(255, 214, 168, 0.002) 52.5%, rgba(255, 214, 168, 0.000) 56.2%, transparent 60%), linear-gradient(180deg, rgba(18, 18, 18, 0) 45%, rgba(18, 18, 18, .55) 100%); }
 .onboard.p1 { background: linear-gradient(180deg, #5E6670 0%, #4C525A 40%, #3A3E44 70%, #24272B 100%); }
 .onboard.p2 { background: linear-gradient(180deg, #4A4058 0%, #3A3246 40%, #2C2636 70%, #1C1822 100%); }
 .onboard > * { position: absolute; }
@@ -1067,7 +1067,7 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .ob-room { position: relative; display: inline-block; width: 96px; height: 48px; border-radius: 24px; overflow: hidden; background: linear-gradient(180deg, #9A8470, #3A2C22); box-shadow: inset 0 0 0 1px var(--line); }
 .ob-room i { position: absolute; display: block; }
 .ob-room .slats { left: 40px; top: 0; width: 40px; height: 35px; background: repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 2px, transparent 2px 3.4px), linear-gradient(180deg, #5A4332, #3A2A1F); }
-.ob-room .glow { left: 5px; top: -12px; width: 43px; height: 43px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 214, 168, .35), rgba(255, 214, 168, 0)); }
+.ob-room .glow { left: 5px; top: -12px; width: 43px; height: 43px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 214, 168, .35) 0%, rgba(255, 214, 168, 0.345) 6.2%, rgba(255, 214, 168, 0.331) 12.5%, rgba(255, 214, 168, 0.309) 18.8%, rgba(255, 214, 168, 0.280) 25%, rgba(255, 214, 168, 0.246) 31.2%, rgba(255, 214, 168, 0.209) 37.5%, rgba(255, 214, 168, 0.170) 43.8%, rgba(255, 214, 168, 0.133) 50%, rgba(255, 214, 168, 0.098) 56.2%, rgba(255, 214, 168, 0.068) 62.5%, rgba(255, 214, 168, 0.043) 68.8%, rgba(255, 214, 168, 0.024) 75%, rgba(255, 214, 168, 0.011) 81.2%, rgba(255, 214, 168, 0.004) 87.5%, rgba(255, 214, 168, 0.001) 93.8%, transparent 100%); }
 .ob-room .floor { left: 0; right: 0; bottom: 0; height: 13px; background: linear-gradient(180deg, #8C7662, #4A3B2F); }
 .ob-room .sofa { left: 6px; top: 24px; width: 53px; height: 7px; border-radius: 14px; background: #B9A994; }
 .ob-room .seat { left: 3px; top: 29px; width: 60px; height: 6px; border-radius: 12px; background: #CDBFAB; }
