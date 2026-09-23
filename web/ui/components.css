@@ -324,8 +324,10 @@
   padding: 0 0 calc(24px + env(safe-area-inset-bottom));
   animation: rise var(--sheet-in) var(--spring);
 }
-/* A tall sheet (About this light, a scene) scrolls inside itself; the page under it stays put. */
-.sheet { max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+/* A tall sheet (About this light, a scene) scrolls inside itself; the page under it stays put. However tall its
+   content, a sheet stops 80 from the top of the screen, so the page it came from always shows above it: it reads
+   as something over the page, not a new page. */
+.sheet { max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
 .sheet::-webkit-scrollbar { display: none; }
 .sheet .grab {
   width: 40px; height: 4px; border-radius: 2px; margin: 8px auto 0;

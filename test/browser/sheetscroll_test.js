@@ -38,6 +38,17 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     check(!back.sheet && Math.abs(back.y - y0) < 2, 'closing it by Back leaves the page where it was', { before: y0, after: back.y, hash: back.hash });
   }
 
+  // however tall its content, a sheet stops 80 from the top of the screen (About this light is the tallest)
+  const lamp = await page.evaluate(() => (window.__copper.data.devices().find(d => d.domain === 'light') || {}).device_id);
+  await page.evaluate(id => { location.hash = `#light/${id}`; }, lamp); await wait(900);
+  await page.evaluate(id => { location.hash = `#light/${id}/about`; }, lamp);
+  await page.waitForSelector('#sheet-root .sheet', { timeout: 5000 }).catch(() => {});
+  await wait(900);
+  const tall = await page.evaluate(() => { const s = document.querySelector('#sheet-root .sheet'); if (!s) return null; const b = s.getBoundingClientRect(); return { top: Math.round(b.top), scrolls: s.scrollHeight > s.clientHeight }; });
+  check(!!tall && tall.top >= 80, 'a tall sheet leaves at least 80 of the page above it', tall);
+  check(!!tall && tall.scrolls, 'and scrolls inside itself', tall);
+  await page.goBack(); await wait(600);
+
   // a real page change still starts at the top
   await page.evaluate(() => { location.hash = '#activity'; }); await wait(900);
   check(await page.evaluate(() => scrollY) === 0, 'a new page still starts at the top');
