@@ -158,6 +158,8 @@ function validateConfig(cfg) {
   out.settings.light_kinds = {};
   for (const [k, v] of Object.entries(s.light_kinds || {})) { const kid = KIND_DEF.normalize(v); if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && kid) { out.settings.light_kinds[k] = kid; if (!out.settings.roles[k]) out.settings.roles[k] = KIND_DEF.ROLES[kid]; } }
   out.settings.night_look = ['auto', 'always', 'never'].includes(s.night_look) ? s.night_look : 'auto';
+  // The light Nightstand's night light turns on (a device id); unset, the app picks a bedroom lamp.
+  out.settings.night_light = /^[A-Za-z0-9_-]{1,64}$/.test(s.night_light || '') ? s.night_light : null;
   // Per-room colour keys and per-remote appearance overrides (model layout and finish), set from the app.
   out.settings.room_colors = {};
   for (const [k, v] of Object.entries(s.room_colors || {})) if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && typeof v === 'string' && /^[a-z]+$/.test(v)) out.settings.room_colors[k] = v;

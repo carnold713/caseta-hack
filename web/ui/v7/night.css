@@ -1,1 +1,158 @@
-/* Copper Night v7 · night. Owned by one builder; see docs/design-v7-ui.md for the light and the motion. */
+/* Copper Night v7 · night. Owned by one builder; see docs/design-v7-ui.md for the light and the motion.
+   Three things live here: night mode for the whole app ("A lighting system · 7"), Nightstand (19) and the wake-up
+   light's sunrise preview (11). */
+
+/* ---- Night mode ---------------------------------------------------------------------------------------------------
+   From the wind-down's start (or 10 pm) to the wake-up light (or 6 am) the interface warms and dims and the lights do
+   not: a lamp's glow always shows the lamp's real colour. app.js puts `night` on the root; screens hand `c.night` to
+   glowHTML for the glow's x 0.7. The crossing is itself a drift: every chrome colour slides over 30 s LINEAR, so
+   nobody sees the moment it happens (`drift` is armed after the first draw, so opening the app at night does not
+   drift). Registering the tokens as colours is what lets them transition at all. */
+@property --text-1 { syntax: '<color>'; inherits: true; initial-value: #FFFFFF; }
+@property --text-2 { syntax: '<color>'; inherits: true; initial-value: #D1D1D1; }
+@property --icon-1 { syntax: '<color>'; inherits: true; initial-value: #FFFFFF; }
+@property --icon-2 { syntax: '<color>'; inherits: true; initial-value: #D1D1D1; }
+@property --solid-fill { syntax: '<color>'; inherits: true; initial-value: #F8F8F8; }
+@property --blue { syntax: '<color>'; inherits: true; initial-value: #006DCC; }
+@property --night-white { syntax: '<color>'; inherits: true; initial-value: #FFFFFF; }
+:root { --night-white: #FFFFFF; }
+:root.night {
+  --text-1: #F1E7DC;
+  --text-2: #C2B8AD;
+  --icon-1: #F1E7DC;
+  --icon-2: #C2B8AD;
+  --solid-fill: #EDE3D8;
+  --night-white: #EDE3D8;
+  --blue: #0B5CA3;
+}
+:root.drift {
+  transition: --text-1 30s linear, --text-2 30s linear, --icon-1 30s linear, --icon-2 30s linear,
+    --solid-fill 30s linear, --night-white 30s linear, --blue 30s linear;
+}
+/* The knobs and handles the stylesheets paint pure white are white fills too. */
+:root.night .hbar .knob, :root.night .toggle[aria-checked='true']::after, :root.night .ws-thumb,
+:root.night .window .handle, :root.night .tile.on .pwr { background: var(--night-white); }
+/* The v6 night look laid a brown veil over everything, lamps included. v7 warms the chrome instead and leaves the
+   light alone, so the veil goes. */
+body.nightlook::after { content: none; }
+
+/* ---- 19 · Nightstand ----------------------------------------------------------------------------------------------
+   Background #0A0908, nothing white or blue: #1A1411 fills, #2A2019 and #3A2A20 lines, #BFA38A and #7D6A5A ink,
+   #E0B48A the warmest ink allowed. Everything is at least 56 tall and the area is most of the screen. */
+html:has(.ns-page), html:has(.ns-page) body { background: #0A0908; }
+html:has(.ns-page) #app .screen { padding-bottom: 0; }
+.ns-page {
+  position: relative; min-height: 100dvh; overflow: clip; touch-action: none; user-select: none; -webkit-user-select: none;
+  padding: calc(52px + env(safe-area-inset-top)) var(--gutter) calc(24px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; color: #BFA38A;
+}
+.ns-top { display: flex; }
+.ns-home {
+  height: 56px; padding: 0 22px 0 18px; border-radius: 28px; display: inline-flex; align-items: center; gap: 10px;
+  background: #1A1411; border: 1px solid #2A2019; color: #7D6A5A; font: inherit; font-size: 16px; font-weight: 500;
+  transition: transform var(--tap) var(--spring-quick);
+}
+.ns-home:active { transform: scale(.96); }
+.ns-time { margin: 24px 0 0; text-align: center; font-size: 40px; font-weight: 300; line-height: 48px; color: #7D6A5A; font-variant-numeric: tabular-nums; }
+.ns-area {
+  position: relative; margin-top: 52px; flex: 1 1 auto; min-height: 340px; max-height: 560px;
+  border-radius: 48px; background: #1A1411; box-shadow: inset 0 0 0 1px #2A2019;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  touch-action: none; cursor: pointer; outline: none;
+  transition: transform var(--tap) var(--spring-quick);
+}
+/* off is a tap, and a tap gets the press */
+.ns-area.on:active { transform: scale(.96); }
+/* the area's own light: a warm radial inside it while the lamp is on, rising on the night fade, going on the dimmer */
+.ns-inner {
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(250px 230px at 50% 34%, rgba(255, 154, 60, .12), rgba(255, 154, 60, 0));
+  transition: opacity var(--dimmer) var(--ease-both);
+}
+.ns-area.on .ns-inner { opacity: 1; transition-duration: var(--night-fade); }
+.ns-ring { position: relative; width: 112px; height: 112px; display: block; margin-top: -24px; }
+.ns-ring svg { position: absolute; inset: 0; overflow: visible; }
+.ns-ring circle { fill: none; stroke-width: 1; }
+.ns-ring .ns-track { stroke: #3A2A20; }
+.ns-area.on .ns-track { stroke: rgba(224, 180, 138, .45); transition: stroke var(--night-fade) var(--ease-both); }
+/* The thumb's hold closes the ring in a quarter of a second, linear, and empties if it lets go early. */
+.ns-ring .ns-fill { stroke: #E0B48A; stroke-width: 2; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0;
+  transition: stroke-dashoffset var(--exit) var(--ease-in), opacity var(--exit) var(--ease-in); }
+.ns-area[data-holding='1'] .ns-fill { stroke-dashoffset: 0; opacity: 1; transition: stroke-dashoffset 250ms linear, opacity 70ms ease-out; }
+/* The lamp's glow sits on the ring and spills well past the area: scale and opacity together, on the night fade
+   coming on (eyes that were asleep) and the dimmer going off (turning off is always easy). */
+.ns-glow { z-index: 0; }
+.ns-glow > i { transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both); }
+.ns-area.on .ns-glow > i { transition-duration: var(--night-fade); }
+.ns-candle {
+  position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
+  pointer-events: none; mix-blend-mode: screen; opacity: 0; transform: scale(.85);
+  background: radial-gradient(closest-side, rgba(255, 180, 107, .38), rgba(255, 180, 107, 0));
+  transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both);
+}
+.ns-area.on .ns-candle { opacity: 1; transform: scale(1); transition-duration: var(--night-fade); }
+.ns-moon { margin-top: 54px; color: #D9B896; position: relative; }
+.ns-lbl { position: relative; display: flex; flex-direction: column; align-items: center; margin-top: 18px; min-height: 80px; padding: 0 20px; }
+.ns-title { font-size: 24px; font-weight: 500; line-height: 30px; color: #BFA38A; }
+.ns-sub { margin-top: 8px; font-size: 16px; line-height: 20px; color: #7D6A5A; }
+.ns-area.on .ns-title { color: #E0B48A; }
+.ns-area.on .ns-sub { font-size: 14px; color: #BFA38A; }
+.ns-area.offline { cursor: default; }
+.ns-area.offline .ns-moon, .ns-area.offline .ns-title { opacity: .6; }
+/* The toast and a sheet over Nightstand keep to its palette. */
+html:has(.ns-page) .toast { background: #1A1411; color: #BFA38A; box-shadow: inset 0 0 0 1px #2A2019; }
+html:has(.ns-page) .toast .act { color: #E0B48A; }
+html:has(.ns-page) .sheet { background: #14100D; color: #BFA38A; --text-1: #BFA38A; --text-2: #7D6A5A; --icon-1: #BFA38A; --icon-2: #7D6A5A; --surface-2: #1A1411; --hairline: #2A2019; }
+html:has(.ns-page) .sheet .radio.on { background: #B86C35; border-color: #B86C35; }
+
+/* ---- 11 · Wake-up light, the sunrise preview ----------------------------------------------------------------------
+   One number drives it all: --f, how far through the rise the sun has been pulled (0 at the start, 1 at the alarm).
+   The Figma timeline, mapped from its 1.0 to 5.0 s scrub onto 0 to 1: first light 0 to .35, sunrise .3 to .7,
+   morning .65 to 1, the window's morning and the sun's climb across the whole of it, the stars gone by .6. It is
+   locked to the finger, so nothing here eases. */
+.sunrise { position: relative; margin: 0 var(--gutter); --f: 0; }
+.sunrise .dawn { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.sunrise .dawn i { position: absolute; inset: 0; mix-blend-mode: screen; }
+.sunrise .dawn .d1 { background: radial-gradient(circle 450px at 50% calc(100% + 85px), var(--dawn-1), transparent); opacity: clamp(0, calc(var(--f) / .35), 1); }
+.sunrise .dawn .d2 { background: radial-gradient(circle 650px at 50% calc(100% - 15px), var(--dawn-2), var(--dawn-2b) 50%, transparent); opacity: clamp(0, calc((var(--f) - .3) / .4), 1); }
+.sunrise .dawn .d3 { background: linear-gradient(180deg, transparent, var(--dawn-3)); opacity: clamp(0, calc((var(--f) - .65) / .35), 1); }
+.sr-cap { margin: 0 0 16px; color: var(--text-2); }
+.sr-window {
+  position: relative; height: 300px; border-radius: var(--r-card); overflow: hidden; isolation: isolate;
+  background: linear-gradient(180deg, #171411, #3A2A20); box-shadow: inset 0 0 0 1px var(--line);
+}
+.sr-am { position: absolute; inset: 0; background: linear-gradient(180deg, #3A3026, rgba(255, 217, 168, .55)); opacity: var(--f); }
+.sr-stars { position: absolute; left: 0; right: 0; top: 0; height: 200px; opacity: calc(1 - min(1, var(--f) / .6)); }
+.sr-stars i { position: absolute; width: 2px; height: 2px; border-radius: 1px; background: #E6D5C3; opacity: .6; }
+.sr-stars i:nth-child(3n) { opacity: .35; }
+/* the sun rises 112 from behind the hills, filled with the lamp's white at that minute, carrying its glow */
+.sr-sun { position: absolute; left: 50%; top: 261px; width: 0; height: 0; transform: translateY(calc(var(--f) * -112px)); }
+.sr-disc { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 50% 45%, var(--sun-hi), var(--sun)); }
+.sr-sun .glow { left: 0; top: 0; }
+.sr-sun .glow > i { transition: none; }
+.sr-hills { position: absolute; left: 0; bottom: 0; width: 100%; height: 100px; }
+.sr-hills .far { fill: #1C1713; }
+.sr-hills .near { fill: #15110E; }
+.sr-hills .ground { fill: #0F0C0A; }
+.sr-clock { position: absolute; left: 23px; top: 19px; line-height: 56px; color: #fff; font-variant-numeric: tabular-nums; }
+.sr-hm { font-size: 48px; font-weight: 300; letter-spacing: -.02em; }
+.sr-ap { font-size: 20px; color: #D1D1D1; }
+.sr-level { position: absolute; left: 23px; top: 77px; font-size: 14px; color: #D1D1D1; }
+.sr-scrub { position: relative; margin-top: 48px; }
+/* a grip: the knob takes the finger at once; the track moves sideways and lets a vertical swipe scroll */
+.sr-track { position: relative; height: 56px; border-radius: 28px; background: var(--surface-2); overflow: hidden; touch-action: pan-y; cursor: pointer; }
+.sr-fill { position: absolute; left: 0; top: 0; bottom: 0; width: calc(56px + (100% - 56px) * var(--f)); border-radius: 28px; background: var(--ramp); }
+.sr-knob { position: absolute; top: 8px; left: calc(8px + (100% - 56px) * var(--f)); width: 40px; height: 40px; border-radius: 20px; background: var(--night-white, #fff); box-shadow: 0 2px 8px rgba(0, 0, 0, .28); touch-action: none; }
+.sr-label {
+  position: absolute; bottom: calc(100% + 8px); left: clamp(56px, calc(28px + (100% - 56px) * var(--f)), calc(100% - 56px)); transform: translateX(-50%);
+  height: 28px; padding: 0 12px; border-radius: 14px; background: var(--surface-3); color: var(--text-1);
+  font-size: 13px; line-height: 28px; white-space: nowrap; font-variant-numeric: tabular-nums;
+  opacity: 0; transition: opacity var(--exit) var(--ease-in); pointer-events: none;
+}
+.sunrise.scrubbing .sr-label { opacity: 1; transition: opacity var(--standard) var(--ease); }
+.sr-ends { display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--text-3); }
+.sunrise .sr-note { margin: 12px 0 0; }
+.sr-try { position: relative; display: flex; width: 100%; height: 56px; margin-top: 20px; justify-content: center; }
+.sunrise .pill.ghost.sr-try { border: 1.5px solid rgba(255, 255, 255, .55); }
+.routine-page .sunrise { margin-top: 20px; margin-bottom: 28px; }
+.guided .sunrise { margin: 0 var(--gutter) 8px; }

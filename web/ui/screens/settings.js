@@ -7,6 +7,7 @@ import { nightHours, actions as routineListActions } from '/ui/screens/routines.
 import { connSheet, connActions } from '/ui/screens/conn.js';
 import { nameSheet, confirmSheet } from '/ui/screens/pickers.js';
 import { ideasSheet, installSheet, nextActions } from '/ui/screens/next.js';
+import { nightLamp } from '/ui/screens/nightstand.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const info = c => (c.S.agent && c.S.agent.info) || {};
@@ -57,6 +58,8 @@ export function view(c) {
       ${toggle('Evening wind-down', RT.windDownOn(), 'wd-toggle')}
       ${toggle('Following lamps dim too', DAY.followBright(), 'follow-bright')}
       ${row(c, 'Night look', { auto: 'Automatic', always: 'Always', never: 'Never' }[s.night_look || 'auto'], 'settings/nightlook')}
+      ${row(c, 'Night light', nightLamp(c) ? nightLamp(c).name : 'Not chosen', 'settings/nightlight')}
+      ${row(c, 'Nightstand', '', 'nightstand', { d: 'A dim, warm page for the middle of the night' })}
     </div>
 
     <div class="t-over sec">Devices</div>
@@ -123,6 +126,13 @@ const SHEETS = {
   fade: c => ({ over: 'Buttons', title: 'Fade time', body: `<p class="t-cap muted sheet-p">How long a light takes to reach a new level when nothing else says.</p><div class="chip-wrap">${[0, 0.5, 1, 2, 3, 5].map(v => `<button class="chip" aria-pressed="${(c.S.config.settings.default_fade ?? 0.5) === v}" data-act="set-fade" data-v="${v}">${v ? `${v} s` : 'At once'}</button>`).join('')}</div>` }),
   night: c => nightHours(c),
   nightlook: c => ({ over: 'Evening', title: 'Night look', body: `<p class="t-cap muted sheet-p">The app dims and warms like a room lit by lamps.</p>${radioRows(c, [['auto', 'Automatic', 'In the night hours'], ['always', 'Always', ''], ['never', 'Never', '']], c.S.config.settings.night_look || 'auto', 'set-nightlook')}` }),
+  // 19 · the light Nightstand's held thumb brings up to 10%. Unchosen, a lamp in a bedroom.
+  nightlight(c) {
+    const { esc, data } = c;
+    const cur = nightLamp(c);
+    const lights = data.controllable().filter(d => d.domain === 'light');
+    return { over: 'Evening', title: 'Night light', body: `<p class="t-cap muted sheet-p">On the Nightstand page a resting thumb brings it up to 10%, as warm as it goes, and it goes out by itself after 15 minutes.</p>${lights.length ? radioRows(c, lights.map(d => [esc(d.device_id), esc(d.name), esc(data.devAreaName(d))]), cur ? cur.device_id : '', 'set-nightlight') : '<p class="t-body muted sheet-p">No dimmable lights yet.</p>'}` };
+  },
   connection: c => connSheet(c),
   bridge(c) {
     const i = info(c); const h = i.health || null;
@@ -238,6 +248,7 @@ export const actions = {
   'set-power'(c, el) { c.S.config.settings.power_on = el.dataset.v; c.save(el.dataset.v === 'all' ? 'Power brings back everything' : 'Power brings back what was on'); },
   'set-onlevel'(c, el) { c.S.config.settings.group_on_level = Number(el.dataset.v); c.save(`Rooms come on at ${el.dataset.v}%`); },
   'set-fade'(c, el) { c.S.config.settings.default_fade = Number(el.dataset.v); c.save(`Fade time ${Number(el.dataset.v) ? `${el.dataset.v} s` : 'none'}`); },
+  'set-nightlight'(c, el) { const d = c.data.dev(el.dataset.v); if (!d) return; c.S.config.settings.night_light = d.device_id; c.save(`Night light: ${d.name}`); },
   'set-nightlook'(c, el) { c.S.config.settings.night_look = el.dataset.v; c.save(`Night look: ${{ auto: 'automatic', always: 'always', never: 'never' }[el.dataset.v]}`); },
   'follow-bright'(c) { c.DAY.setFollowBrightness(!c.DAY.followBright()); c.save(c.DAY.followBright() ? 'Following lamps dim in the evening too' : 'Following lamps keep their brightness'); },
   'auto-update'(c) { const s = c.S.config.settings; s.auto_update = s.auto_update === false; c.save(s.auto_update ? 'The connector updates itself' : 'Updates are up to you'); },

@@ -7,6 +7,7 @@
 import { whereBlock, whereActions } from '/ui/screens/where.js';
 import { picoSVG } from '/ui/pico.js';
 import { icon as glyph } from '/ui/icons.js';
+import { sunriseHTML, sunriseActions, wireSunrise } from '/ui/screens/routine.js';
 
 export const noTabs = true;
 const KINDS = { welcome: 'Welcome lights', wakeup: 'Wake-up light', goodnight: 'Goodnight button', leaving: 'Leaving button' };
@@ -60,12 +61,14 @@ function steps(c, gs) {
     const shown = (gs.allLamps ? dims : beds.length ? beds : dims.slice(0, 6));
     if (g.lamp && !shown.some(d => d.device_id === g.lamp) && data.dev(g.lamp)) shown.unshift(data.dev(g.lamp));
     const shade = RT.wakeShade(g);
+    // 11 · the rise rehearsed on the phone once there is a lamp, a time and a length to show (routine.js)
+    const preview = g.lamp ? `<div class="t-over sec-s">See how it wakes you</div>${sunriseHTML(c, { lamp: g.lamp, start: RT.hmAdd(g.alarm, -g.minutes), minutes: g.minutes, end: g.end, days: g.days }, 'setup')}` : '';
     return [
       { q: 'Which lamp should wake you?', ok: !!g.lamp, body: `<div class="answers">${shown.map(d => tile('k-lamp', d.device_id, `${esc(d.name)}<small>${esc(data.devAreaName(d))}</small>`, g.lamp === d.device_id)).join('')}${gs.allLamps || dims.length === shown.length ? '' : tile('k-all', '1', 'Another light…', false)}</div>` },
       { q: 'What time do you wake up?', ok: g.days.length > 0, body: `<div class="when-time"><input class="time-big" type="time" value="${esc(g.alarm)}" data-change="k-alarm" aria-label="Wake up at"></div>${dayTiles('k-days')}` },
       { q: 'How gently?', ok: true, body: `<div class="t-over sec-s">It takes</div><div class="answers">${[15, 25, 40].map(v => tile('k-min', v, `${v} minutes`, g.minutes === v)).join('')}</div>
-          <div class="t-over sec-s">And ends at</div><div class="answers">${[30, 50, 70].map(v => tile('k-end', v, `${v}%`, g.end === v)).join('')}</div>` },
-      { q: `Open ${shade ? shade.name : 'the shade'} too?`, skip: !shade, ok: true, body: `<div class="answers">${tile('k-shade', '1', 'Yes, when I wake', !!g.shade)}${tile('k-shade', '0', 'No', !g.shade)}</div>` },
+          <div class="t-over sec-s">And ends at</div><div class="answers">${[30, 50, 70].map(v => tile('k-end', v, `${v}%`, g.end === v)).join('')}</div>${preview}` },
+      { q: `Open ${shade ? shade.name : 'the shade'} too?`, skip: !shade, ok: true, body: `<div class="answers">${tile('k-shade', '1', 'Yes, when I wake', !!g.shade)}${tile('k-shade', '0', 'No', !g.shade)}</div>${preview}` },
     ];
   }
   // a Goodnight or a Leaving button
@@ -114,8 +117,10 @@ export function view(c, r) {
 // ---------- taps ----------
 const G = c => c.ui.gs && c.ui.gs.g;
 const toggleIn = (list, v) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
+export function after(c, r, scr) { wireSunrise(c, scr); }
 export const actions = {
   ...whereActions,
+  ...sunriseActions,
   'gs-back'(c) { const gs = c.ui.gs; if (gs && gs.step > 0) { gs.step -= 1; gs.other = false; c.render(); window.scrollTo(0, 0); } else { c.ui.gs = null; c.go('routines'); } },
   'gs-next'(c, el, r) {
     const gs = c.ui.gs; if (!gs) return;
@@ -125,7 +130,7 @@ export const actions = {
     // the last Next sets it up
     const g = gs.g;
     if (gs.kind === 'welcome') { if (!c.RT.saveWelcome(g)) return; c.ui.gs = null; c.save('Welcome lights set up'); c.go('routines'); return; }
-    if (gs.kind === 'wakeup') { if (!c.RT.saveWakeup(g)) return; c.ui.gs = null; c.save(`Wake-up light set up. It starts at ${c.RT.fmtTime(c.RT.hmAdd(g.alarm, -g.minutes))}`); c.go('routines'); return; }
+    if (gs.kind === 'wakeup') { if (!c.RT.saveWakeup(g)) return; c.ui.gs = null; c.save('Wake-up light on'); c.go('routines'); return; }
     if (!c.RT.saveButton(g)) return;
     c.ui.gs = null;
     c.ui.remoteKey = { ...(c.ui.remoteKey || {}), [g.remote]: g.button };

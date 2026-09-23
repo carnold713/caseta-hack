@@ -6,6 +6,8 @@ import { runActions } from '/ui/screens/routines.js';
 import { stepCards } from '/ui/screens/steps.js';
 import { confirmSheet, nameSheet } from '/ui/screens/pickers.js';
 import { icon as glyph } from '/ui/icons.js';
+import { glowHTML, setGlow, whiteStops, colourStops } from '/ui/glow.js';
+import { track } from '/ui/gesture.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const sc0 = (c, r) => c.RT.byId(r.id);
@@ -55,6 +57,7 @@ export function view(c, r) {
     </header>
     <h1 class="t-h1 page-h1 nm-cut">${esc(fresh ? 'New routine' : sc.name || 'Routine')}</h1>
     ${fresh ? '' : `<p class="t-cap muted rm-sub">${esc(typeof nl === 'string' ? nl : '')}</p>`}
+    ${wakeOf(c, sc) ? sunriseHTML(c, wakeOf(c, sc), `r:${sc.id}`) : ''}
     ${sentence}
     ${warn ? `<p class="rt-warn big">${esc(warn)}</p>` : ''}
     <div class="t-over sec">In short</div>
@@ -68,11 +71,160 @@ export function view(c, r) {
     <div class="group rt-paused"><div class="row"><span class="row-txt"><span class="t">Paused</span></span><button class="toggle" role="switch" aria-checked="${sc.enabled === false}" data-act="rt-toggle" data-id="${esc(sc.id)}" aria-label="Paused"></button></div></div>
     <div class="rt-btns">
       ${sc.enabled === false ? '' : `<button class="pill ghost" data-act="${RT.skipping(sc) ? 'rt-unskip' : 'rt-skip'}" data-id="${esc(sc.id)}">${esc(RT.skipLabel(sc))}</button>`}
-      <button class="pill ghost" data-act="try">Try it now</button>
+      ${wakeOf(c, sc) ? '' : '<button class="pill ghost" data-act="try">Try it now</button>'}
     </div>
     ${sun ? whereBlock(c) : ''}
   </div>`;
 }
+
+// ---------- 11 · the wake-up light, rehearsed (12814:49052, 12814:49334) ----------
+// A window onto the bedroom's morning and a strip from the start of the rise to the alarm. Dragging the knob pulls
+// the sun up: the whole screen brightens and warms the way the room will at that minute, the clock and the level
+// stepping with it. It is a preview and never touches the lamp; "Hold to try it on the lamp" is the one thing here
+// that does, and it offers Put back. The guided setup (guided.js) draws the same preview.
+//
+// w: { lamp, start 'HH:MM', minutes, end, days }. `key` keeps where the sun was left across redraws.
+export function wakeOf(c, sc) {
+  if (!sc || sc.kind !== 'wakeup' || !sc.at || sc.at.type !== 'time') return null;
+  const a = (sc.actions || []).find(x => x.type === 'level' && typeof x.target === 'string' && x.target.startsWith('d:'));
+  if (!a) return null;
+  return { lamp: a.target.slice(2), start: sc.at.time, minutes: Math.max(1, Math.round((Number(a.fade) || 0) / 60)), end: Number(a.level) || 50, days: sc.days || c.RT.ALL_DAYS };
+}
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const toM = k => 1e6 / k, toK = m => 1e6 / m;
+// The lamp's colour at a point of the rise. It tells the truth: a lamp that follows the day rises in the day's
+// white at that minute; any other colour lamp in the colour it was last left in (and the page says so); a dimmer
+// with no colour of its own in the copper ramp, ember to warm white.
+function wakeColour(c, w, f) {
+  const d = c.data.dev(w.lamp) || {};
+  if (d.ct && c.DAY.isFollowing(w.lamp) && !c.DAY.followPaused(w.lamp)) {
+    const at = c.RT.hmAdd(w.start, Math.round(w.minutes * f));
+    const ahead = ((c.RT.hmMin(at) - c.RT.hmMin(c.RT.nowHm())) + 1440) % 1440;
+    const k = c.DAY.followKelvinFor(w.lamp, new Date(Date.now() + ahead * 60000));
+    if (k) return { kelvin: k };
+  }
+  const st = (c.S.states[w.lamp] || {}).color;
+  if (d.color && st && st.mode === 'xy' && st.hex) return { hex: String(st.hex).toLowerCase(), last: true };
+  if (d.ct && st && st.kelvin) return { kelvin: Math.round(st.kelvin), last: true };
+  if (d.ct || d.color) return { kelvin: 2700, last: true };
+  const m = f < 0.5 ? toM(1900) + (toM(2200) - toM(1900)) * f * 2 : toM(2200) + (toM(3000) - toM(2200)) * (f - 0.5) * 2;
+  return { kelvin: Math.round(toK(m)), ramp: true };
+}
+const stopsOf = col => (col.hex ? colourStops(col.hex) : whiteStops(col.kelvin));
+const rgbaOf = (h, a) => { const x = String(h).replace('#', ''); return `rgba(${[0, 2, 4].map(i => parseInt(x.slice(i, i + 2), 16)).join(',')},${a})`; };
+function wakeAt(c, w, f) {
+  const lv = Math.max(1, Math.round(w.end * f));
+  const [h, m] = c.RT.hmAdd(w.start, Math.round(w.minutes * f)).split(':').map(Number);
+  return { lv, hm: `${h % 12 || 12}:${String(m).padStart(2, '0')}`, ap: h >= 12 ? 'pm' : 'am', col: wakeColour(c, w, f) };
+}
+// Everything that moves with the finger is a custom property or a line of text, so a drag never redraws the page.
+function sunriseVars(c, w, f) {
+  const { col } = wakeAt(c, w, f);
+  const st = stopsOf(col);
+  return `--f:${f.toFixed(4)};--sun:${st.body};--sun-hi:${st.core};--dawn-1:${rgbaOf(st.body, 0.22)};--dawn-2:${rgbaOf(st.body, 0.22)};--dawn-2b:${rgbaOf('#D98A4E', 0.08)};--dawn-3:${rgbaOf(st.core, 0.1)}`;
+}
+const STARS = [[64, 38], [118, 92], [206, 70], [232, 128], [282, 50], [300, 110], [330, 30], [150, 140]];
+export function sunriseHTML(c, w, key) {
+  const { esc, RT } = c;
+  const d = c.data.dev(w.lamp);
+  if (!d) return '';
+  const tr = c.ui.wakeTry && c.ui.wakeTry.key === key ? c.ui.wakeTry : null;
+  const f = clamp01(((c.ui.sunrise || {})[key]) || 0);
+  const now = wakeAt(c, w, f);
+  const ramp = [0, 0.5, 1].map(x => stopsOf(wakeAt(c, w, x).col).body);
+  const alarm = RT.hmAdd(w.start, w.minutes);
+  // "Bedside lamp · weekdays · 6:05 to 6:30 am"
+  const t0 = RT.fmtTime(w.start), t1 = RT.fmtTime(alarm);
+  const dt = RT.daysText(w.days);
+  const cap = `${d.name} · ${/^(Weekdays|Weekends|Every day)$/.test(dt) ? dt.toLowerCase() : dt} · ${t0.slice(-2) === t1.slice(-2) ? t0.slice(0, -3) : t0} to ${t1}`;
+  const hint = c.ui.wakeHint && Date.now() - c.ui.wakeHint < 2000;
+  const trying = tr ? `<button class="pill solid sr-try" data-act="wake-put-back">Put back</button><p class="t-cap muted sr-note">${esc(d.name)} ${Date.now() - tr.at < 30000 ? `is rising to ${w.end}% over 30 s` : `is at ${w.end}%`}</p>`
+    : `<button class="pill ghost hold-pill sr-try" data-hold="wake-try" data-ms="600" data-act="wake-try-hint" data-key="${esc(key)}" data-lamp="${esc(w.lamp)}" data-end="${w.end}" aria-label="Hold to try it on the lamp">${hint ? 'Hold it' : 'Hold to try it on the lamp · 30 s'}</button>`;
+  return `<div class="sunrise" data-sunrise="${esc(key)}" data-w="${esc(JSON.stringify(w))}" style="${sunriseVars(c, w, f)}">
+    <div class="dawn" aria-hidden="true"><i class="d1"></i><i class="d2"></i><i class="d3"></i></div>
+    <p class="t-cap sr-cap">${esc(cap)}</p>
+    <div class="sr-window" aria-hidden="true">
+      <i class="sr-am"></i>
+      <span class="sr-stars">${STARS.map(([x, y]) => `<i style="left:${(x / 372 * 100).toFixed(1)}%;top:${y}px"></i>`).join('')}</span>
+      <span class="sr-sun">${glowHTML({ level: now.lv, ...(now.col.hex ? { hex: now.col.hex } : { kelvin: now.col.kelvin }), ctx: 'orb', cls: 'sr-glow' })}<i class="sr-disc"></i></span>
+      <svg class="sr-hills" viewBox="0 0 372 100" preserveAspectRatio="none"><path class="far" d="M-72 58C8 -6 166 -8 250 58V100H-72z"/><path class="near" d="M158 64C230 2 402 2 490 64V100H158z"/><rect class="ground" x="-1" y="34" width="374" height="66"/></svg>
+      <div class="sr-clock"><span class="sr-hm">${now.hm}</span><span class="sr-ap"> ${now.ap}</span></div>
+      <div class="sr-level">${now.lv}% · ${esc(d.name)}</div>
+    </div>
+    <div class="sr-scrub">
+      <span class="sr-label" aria-hidden="true">${now.hm} ${now.ap} · ${now.lv}%</span>
+      <div class="sr-track" role="slider" aria-label="Preview the wake-up light" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(f * 100)}" style="--ramp:linear-gradient(90deg, ${ramp.join(', ')})"><i class="sr-fill"></i><i class="sr-knob"></i></div>
+      <div class="sr-ends"><span>${esc(RT.fmtTime(w.start))}</span><span>${esc(RT.fmtTime(alarm))}</span></div>
+    </div>
+    ${now.col.last ? '<p class="t-cap muted sr-note">It rises in the colour it was last left in.</p>' : ''}
+    ${trying}
+  </div>`;
+}
+// Set the preview to f in place: the custom properties, the numbers, the sun's glow.
+function paintSunrise(c, root, f) {
+  let w; try { w = JSON.parse(root.dataset.w); } catch (_) { return; }
+  const now = wakeAt(c, w, f);
+  root.setAttribute('style', sunriseVars(c, w, f));
+  const d = c.data.dev(w.lamp); const name = d ? d.name : '';
+  root.querySelector('.sr-hm').textContent = now.hm;
+  root.querySelector('.sr-ap').textContent = ` ${now.ap}`;
+  root.querySelector('.sr-level').textContent = `${now.lv}% · ${name}`;
+  root.querySelector('.sr-label').textContent = `${now.hm} ${now.ap} · ${now.lv}%`;
+  root.querySelector('.sr-track').setAttribute('aria-valuenow', String(Math.round(f * 100)));
+  setGlow(root.querySelector('.sr-glow'), { level: now.lv, ...(now.col.hex ? { hex: now.col.hex } : { kelvin: now.col.kelvin }), ctx: 'orb' });
+  (c.ui.sunrise || (c.ui.sunrise = {}))[root.dataset.sunrise] = f;
+}
+// The knob is a grip; a sideways drag on the track scrubs and an up or down swipe scrolls. Under the finger the sun
+// is locked to it, no easing (M6), and the numbers step.
+export function wireSunrise(c, scr) {
+  for (const root of scr.querySelectorAll('[data-sunrise]')) {
+    const tr = root.querySelector('.sr-track');
+    const at = e => { const r = tr.getBoundingClientRect(); return clamp01((e.clientX - r.left - 28) / Math.max(1, r.width - 56)); };
+    track(tr, {
+      c, axis: 'x',
+      grab: e => !!e.target.closest('.sr-knob'),
+      start: () => { root.classList.add('scrubbing'); if (c.ui.wakeTry) stopTry(c); },
+      move: e => paintSunrise(c, root, at(e)),
+      end: () => root.classList.remove('scrubbing'),
+      tap: e => paintSunrise(c, root, at(e)),
+    });
+  }
+  // a try on the lamp plays the rise across the screen as the lamp does it
+  const t = c.ui.wakeTry;
+  if (t && !t.raf && Date.now() - t.at < 30000) {
+    const step = () => {
+      if (c.ui.wakeTry !== t) return;
+      const f = clamp01((Date.now() - t.at) / 30000);
+      const el = document.querySelector(`[data-sunrise="${CSS.escape(t.key)}"]`);
+      if (el) paintSunrise(c, el, f); else (c.ui.sunrise || (c.ui.sunrise = {}))[t.key] = f;
+      if (f < 1) t.raf = requestAnimationFrame(step); else { t.raf = 0; c.render(); }
+    };
+    t.raf = requestAnimationFrame(step);
+  }
+}
+function stopTry(c) { const t = c.ui.wakeTry; if (t && t.raf) cancelAnimationFrame(t.raf); if (t) t.raf = 0; }
+export const sunriseActions = {
+  // a tap says how and does nothing: a stray tap at 11 pm would light the room someone is sleeping in
+  'wake-try-hint'(c) { c.ui.wakeHint = Date.now(); c.render(); setTimeout(() => c.render(), 2100); },
+  // held 0.6 s: the real lamp runs the rise compressed to 30 s, from where it is now
+  'wake-try'(c, el) {
+    const id = el.dataset.lamp, end = Number(el.dataset.end) || 50;
+    if (!c.data.dev(id)) return;
+    stopTry(c);
+    c.ui.wakeTry = { key: el.dataset.key, id, prev: c.data.level(id) || 0, at: Date.now(), raf: 0 };
+    (c.ui.sunrise || (c.ui.sunrise = {}))[el.dataset.key] = 0;
+    c.render();
+    c.run({ type: 'level', target: `d:${id}`, level: end, fade: 30 });
+  },
+  // exactly what it was before the try: off, or the level it was at
+  'wake-put-back'(c) {
+    const t = c.ui.wakeTry; if (!t) return;
+    stopTry(c); c.ui.wakeTry = null;
+    c.assume([t.id], t.prev); c.render();
+    c.run(t.prev ? { type: 'level', target: `d:${t.id}`, level: t.prev } : { type: 'level', target: `d:${t.id}`, level: 'off', fade: 0.4 });
+  },
+};
+export function after(c, r, scr) { wireSunrise(c, scr); }
 
 // ---------- the sheets ----------
 function whenSheet(c, sc, mode) {
@@ -178,6 +330,7 @@ const done = (c, sc, msg) => c.save(msg);
 export const actions = {
   ...whereActions,
   ...runActions,
+  ...sunriseActions,
   day(c, el, r) {
     const sc = sc0(c, r); if (!sc) return;
     if (!c.RT.toggleDay(sc, Number(el.dataset.d))) { c.toast('Pick at least one day'); return; }

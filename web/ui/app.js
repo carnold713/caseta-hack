@@ -26,6 +26,7 @@ import * as guidedScreen from '/ui/screens/guided.js';
 import * as activityScreen from '/ui/screens/activity.js';
 import * as settingsScreen from '/ui/screens/settings.js';
 import * as addScreen from '/ui/screens/add.js';
+import * as nightstandScreen from '/ui/screens/nightstand.js';
 
 const data = create({ storage: localStorage });
 const H = CasetaHome.create(data);
@@ -144,7 +145,7 @@ const SCREENS = {
   home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen, scenes: scenesScreen,
   remotes: remotesScreen, remote: remoteScreen, timing: timingScreen,
   routines: routinesScreen, routine: routineScreen, setup: guidedScreen, activity: activityScreen,
-  settings: settingsScreen, add: addScreen,
+  settings: settingsScreen, add: addScreen, nightstand: nightstandScreen,
 };
 const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'home', add: 'home', activity: 'home' };
 const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines']];
@@ -190,16 +191,12 @@ function render() {
   const how = arriving || (wasScreen ? null : 'load');
   arriving = null; wasScreen = true;
   const snap = how ? null : motion.snap(scr);
+  applyNight();
   scr.innerHTML = screen.view(ctx, r);
   scr.querySelectorAll('[data-keep]').forEach(el => { if (keep[el.dataset.keep] != null) el.scrollLeft = keep[el.dataset.keep]; });
   const st = data.connState();
   // a pushed detail page (a light, a fan, a shade) has no tab bar in the file; everything else does
   app.className = [st === 'off' ? 'offline' : '', screen.noTabs ? 'notabs' : ''].filter(Boolean).join(' ');
-  // the night look: the app dims and warms like a room lit by lamps, in the night hours or always, as Settings says
-  const look = S.config.settings.night_look || 'auto';
-  const hm = RT.nowHm(), ns = S.config.settings.night_start, ne = S.config.settings.night_end;
-  const night = ns < ne ? hm >= ns && hm < ne : hm >= ns || hm < ne;
-  document.body.classList.toggle('nightlook', look === 'always' || (look === 'auto' && night));
   tabs.hidden = !!screen.noTabs;
   const tab = TAB_OF[r.name] || 'home';
   tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
@@ -208,6 +205,35 @@ function render() {
   motion.settle(scr);
   routedSheet(screen, r);
 }
+// ---------- night ----------
+// design-v7-ui.md, "A lighting system · 7": from the evening wind-down's start (10 pm without one) until the wake-up
+// light starts (6 am without one) the app's own chrome warms and dims (web/ui/v7/night.css); the lamps' colours never
+// change. Settings' Night look can make it always or never. `ctx.night` lets a screen hand `night` to glowHTML.
+// A test forces it with ?night=1 or 0, or localStorage v7night.
+function nightNow() {
+  const s = S.config.settings;
+  let force = null;
+  try { force = new URLSearchParams(location.search).get('night') ?? localStorage.getItem('v7night'); } catch (_) { /* fine */ }
+  if (force === '1' || force === '0') return force === '1';
+  const look = s.night_look || 'auto';
+  if (look !== 'auto') return look === 'always';
+  const m = RT.hmMin(RT.nowHm());
+  const start = RT.hmMin(RT.windDownOn() ? RT.curveStart() : '22:00');
+  // the wake-up light of the morning ahead, if one runs that day
+  const day = RT.weekdayOf(m >= 720 ? RT.addDays(RT.today(), 1) : RT.today());
+  const wakes = (S.config.schedules || []).filter(x => x.kind === 'wakeup' && x.enabled !== false && x.at && x.at.type === 'time' && (x.days || RT.ALL_DAYS).includes(day)).map(x => RT.hmMin(x.at.time)).filter(t => t < 720);
+  const end = wakes.length ? Math.min(...wakes) : 360;
+  return start > end ? m >= start || m < end : m >= start && m < end;
+}
+function applyNight() {
+  const root = document.documentElement, first = ctx.night === undefined;
+  ctx.night = nightNow();
+  root.classList.toggle('night', ctx.night);
+  document.body.classList.toggle('nightlook', ctx.night);
+  // opening the app at night is not a crossing: the 30 s drift is armed only after the first look is drawn
+  if (first) setTimeout(() => root.classList.add('drift'), 120);
+}
+
 // A sheet that is a page's sub route (#light/<id>/white): drawn over the page, redrawn with it, and dismissing it
 // puts the address back to the page without adding a step to the back button.
 // A screen can instead decide its own sheet from the route (screen.sheetFor), for a sheet that is not a sub page:
@@ -371,7 +397,7 @@ document.addEventListener('submit', async e => {
 let lastPage = '', lastName = route().name;
 // How deep each page sits: a tab is 0, what a tab opens is 1, a page opened from those is 2. Deeper is a push,
 // shallower is back, and one tab to another is a load with its stagger (M4).
-const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 1, light: 2, timing: 2, add: 2 };
+const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 1, nightstand: 1, light: 2, timing: 2, add: 2 };
 window.addEventListener('hashchange', () => {
   closeSheet();
   const r = route(); const page = `${r.name}/${r.id}`;
