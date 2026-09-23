@@ -378,19 +378,23 @@ let lastPage = '', lastName = route().name;
 // How deep each page sits: a tab is 0, what a tab opens is 1, a page opened from those is 2. Deeper is a push,
 // shallower is back, and one tab to another is a load with its stagger (M4).
 const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 1, nightstand: 1, light: 2, timing: 2, add: 2 };
+// The evening wind-down is a page of its own under the Routines tab (#routines/winddown, its sheets
+// #routines/winddown-*), so it sits one deeper than the tab even though it shares the tab's route name.
+const depthOf = r => (r.name === 'routines' && /^winddown/.test(r.id || '') ? 1 : DEPTH[r.name] ?? 1);
+let lastDepth = depthOf(route());
 window.addEventListener('hashchange', () => {
   closeSheet();
   const r = route(); const page = `${r.name}/${r.id}`;
   // a page that holds something open while it is shown (the bridge listening) lets go of it when it is left
   if (r.name !== lastName && SCREENS[lastName] && SCREENS[lastName].leave) SCREENS[lastName].leave(ctx);
   if (page !== lastPage && S.ready && S.config) {
-    const was = DEPTH[lastName] ?? 1, now = DEPTH[r.name] ?? 1;
+    const was = lastDepth, now = depthOf(r);
     // one tab to another slides the way the tab bar reads: a tab to the right comes in from the right
     const order = TABS.map(t => t[0]);
     arriving = !was && !now ? (order.indexOf(r.name) < order.indexOf(lastName) ? 'back' : 'push') : now < was ? 'back' : 'push';
     motion.capture($('#screen'));
   }
-  lastName = r.name;
+  lastName = r.name; lastDepth = depthOf(r);
   if (page !== lastPage) window.scrollTo(0, 0);
   lastPage = page;
   render();
