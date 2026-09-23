@@ -120,8 +120,9 @@ const FAN = [
     check('White opens as a sheet at #light/<id>/white', /\/white$/.test(page.url()) && !!(await page.$('#sheet-root .ws')), page.url());
     await sheetAt('05b White', [
       ['overline', '.sheet-head .t-over', 20, 28, null, 14], ['title', '.sheet-head h2', 20, 48, null, 34], ['close', '.sheet-close', 352, 28, 40, 40],
-      ['White / Colour', '.seg2', 20, 100, 372, 44], ['value', '.ws-val b', 20, 164, null, 64], ['warmth bar', '.ws-track', 20, 280, 372, 40],
-      ['thumb', '.ws-thumb', null, 276, 48, 48], ['end labels', '.ws-ends', 20, 332, 372, null], ['named whites', '.ws-chips', 20, 372, null, 40],
+      // v7 (12816:94): the bar is a sky card, the white a sun on a path over it (its drag band is the path, x 24 to 348)
+      ['White / Colour', '.seg2', 20, 100, 372, 44], ['value', '.ws-val b', 20, 154, null, 56], ['sky', '.ws-sky', 20, 214, 372, 200], ['warmth path', '.ws-track', 44, 214, 324, 200],
+      ['sun', '.ws-thumb .disc', null, null, 28, 28], ['end labels', '.ws-ends', 20, 424, 372, null], ['named whites', '.ws-chips', 20, 448, null, 40],
     ]);
     const tr = await page.locator('.ws-track').boundingBox();
     const at = k => tr.x + tr.width * (1e6 / 1900 - 1e6 / k) / (1e6 / 1900 - 1e6 / 6500);
@@ -148,11 +149,15 @@ const FAN = [
     await sheetAt('06b Sleep timer', [['first duration', '.dur:first-child', 20, 98, 68, 64], ['Custom', '.dur.more', 324, 98, 68, 64]]);
     await page.click('.dur[data-m="15"]'); await wait(1600);
     check('15 min starts a timer and the ring shows', !!(await page.$('.ts-run')) && /Timer set · 15 min/.test(await page.textContent('#toast-root')));
-    await sheetAt('06b running', [['ring', '.ts-run .ring', 20, 182, 116, 116]]);
-    const t1 = await page.textContent('[data-left]'); await wait(2100);
-    check('the countdown ticks', t1 !== (await page.textContent('[data-left]')));
+    // v7 (12817:49023): running, the sheet is a candle on a stage, the time left under it
+    await sheetAt('06b running', [['candle stage', '.ts-run .tc-stage', 20, 98, 372, 300], ['time left', '.tc-left', 20, 418, 372, 44]]);
+    check('the candle says the time left', (await page.textContent('[data-left]')) === '15 min left', await page.textContent('[data-left]'));
+    // it still counts down while the sheet is up: the candle burns a little shorter every second
+    const burnt = () => C(() => Number(document.querySelector('.tc-stage').style.getPropertyValue('--f')));
+    const f1 = await burnt(); await wait(2100);
+    check('the countdown ticks: the candle burns down', (await burnt()) < f1, { before: f1, after: await burnt() });
     await page.click('[data-act="timer-cancel"]'); await wait(1400);
-    check('Cancel timer stops it', !(await page.$('.ts-run')));
+    check('Stop the timer stops it', !(await page.$('.ts-run')));
     await page.click('#sheet-root .scrim', { position: { x: 200, y: 40 } }); await wait(700);
     check('the scrim closes it', !/\/timer$/.test(page.url()));
   }

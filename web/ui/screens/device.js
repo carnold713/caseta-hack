@@ -3,10 +3,11 @@
 // pages hang off a light as #light/<id>/<page>.
 import { track } from '/ui/gesture.js';
 import { CasetaDaylight } from '/data/index.js';
+import { glowHTML, setGlow, whiteStops, colourStops } from '/ui/glow.js';
 import { endsMs } from '/ui/screens/parts.js';
 import { sheets as lookSheets, actions as lookActions } from '/ui/screens/looks.js';
 import { about, actions as aboutActions } from '/ui/screens/about.js';
-import { view as followView, alsoSheet, actions as followActions } from '/ui/screens/follow.js';
+import { view as followView, alsoSheet, actions as followActions, after as followAfter } from '/ui/screens/follow.js';
 
 export const noTabs = true;
 // White, Colour, the sleep timer and About are sheets over this page (looks.js, about.js); Follow the day is a
@@ -29,19 +30,72 @@ const TILE_SWATCHES = ['#FF5A4E', '#FFC24A', '#4FD39A', '#4C8DFF', '#A66BFF'];
 const CX = 170, CY = 170, R = 150;
 function arcPoint(p) { const a = Math.PI * (1 - p / 100); return [CX + R * Math.cos(a), CY - R * Math.sin(a)]; }
 function arcPath(p) { const [x, y] = arcPoint(p); return `M20 170 A150 150 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)}`; }
-function dialHTML(c, lv) {
+const rgba = (h, a) => { const x = String(h).replace('#', ''); return `rgba(${[0, 2, 4].map(i => parseInt(x.slice(i, i + 2), 16)).join(',')},${a})`; };
+
+// ---------- the lamp's own light (v7 screen 3) ----------
+// What colour a lamp's light is: its white on the ramp, or its colour. A lamp that has never said (a Caseta dimmer)
+// is a warm incandescent white.
+export function toneOf(c, id) {
+  const col = (c.S.states[id] || {}).color || {};
+  return col.mode === 'xy' && col.hex ? { hex: col.hex } : { kelvin: col.mode === 'ct' && col.kelvin ? col.kelvin : 2700 };
+}
+// Night as the app's own look reckons it (app.js): the glows are capped at night, the lamps' colours are not.
+export function nightNow(c) {
+  const s = (c.S.config && c.S.config.settings) || {};
+  const look = s.night_look || 'auto';
+  if (look === 'always') return true;
+  if (look !== 'auto') return false;
+  const hm = c.RT.nowHm(), ns = s.night_start || '22:00', ne = s.night_end || '06:30';
+  return ns < ne ? hm >= ns && hm < ne : hm >= ns || hm < ne;
+}
+// The strength of a light at level v, over its strength at 75%: the filament and the floor pool follow the halo's
+// own curve (A lighting system, 3), so at 20% everything is at the 0.57 the file's dial demo shows.
+const strength = v => Math.min(1, (0.35 + 0.65 * Math.max(0, v) / 100) / 0.84);
+// The halo (three layers, hero scale), the pool of light on the floor under the lamp, and the filament that lights
+// the bulb from inside. All three are drawn from the light's real level and colour; off draws none of them.
+function lampLight(c, id, lv, tone) {
+  const st = tone.hex ? colourStops(tone.hex) : whiteStops(tone.kelvin);
+  const glow = glowHTML({ level: lv, ...tone, ctx: 'hero', y: 112, name: 'lamp', night: nightNow(c) })
+    // a new colour crossfades, it never slides (motion.js carries data-xf over the dimmer)
+    .replace('<span class="glow', '<span data-xf="" class="glow');
+  return `<span class="halo lamp-halo" aria-hidden="true">${glow}<i class="lamp-pool" style="${poolStyle(lv, st)}"></i></span>`;
+}
+function poolStyle(lv, st) { return `--pool-w:${Math.round(120 + 180 * lv / 100)}px;--pool-c:${rgba(st.body, (0.5 * strength(lv)).toFixed(3))}`; }
+function filamentHTML(lv, tone) {
+  const core = tone.hex ? colourStops(tone.hex).core : '#FFF1DC';
+  return `<i class="lamp-filament" aria-hidden="true" style="--fil-c:${rgba(core, 0.45)};--fil-o:${lv > 0 ? strength(lv).toFixed(3) : 0}"></i>`;
+}
+// Repaint the light for level v in place, so its layers ride their own transitions (and none at all under a finger,
+// where the light is locked to it: light.css).
+function paintLight(page, v) {
+  if (!page) return;
+  const tone = page.dataset.hex ? { hex: page.dataset.hex } : { kelvin: Number(page.dataset.kelvin) || 2700 };
+  setGlow(page.querySelector('[data-glow="lamp"]'), { level: v, ...tone, ctx: 'hero', night: page.dataset.night === '1' });
+  const st = tone.hex ? colourStops(tone.hex) : whiteStops(tone.kelvin);
+  const pool = page.querySelector('.lamp-pool'); if (pool) pool.setAttribute('style', poolStyle(v, st));
+  const fil = page.querySelector('.lamp-filament'); if (fil) fil.style.setProperty('--fil-o', v > 0 ? strength(v).toFixed(3) : 0);
+}
+function dialHTML(c, lv, tone, label) {
   const { icon } = c;
   const [kx, ky] = arcPoint(lv);
-  return `<div class="dial shifted" data-drag="dial" role="slider" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}">
+  // The arc is the lamp's own light: copper for a white, as built; a colour lamp's arc runs from its tint's glow
+  // through the colour to its deep stop, so the dial is lit by the lamp it sets.
+  const st = tone.hex ? colourStops(tone.hex) : null;
+  const stops = st ? [st.core, tone.hex, st.wash] : ['#F6E3CF', '#E8A774', '#D98A4E'];
+  const body = st ? tone.hex : whiteStops(tone.kelvin).body;
+  return `<div class="dial shifted ${lv >= 50 ? 'bright' : ''}" data-drag="dial" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}"
+    style="--kx:${kx.toFixed(1)}px;--ky:${ky.toFixed(1)}px;--kglow:${rgba(body, 0.3)};--numglow:${rgba(body, 0.25)}">
+    <span class="kglow" aria-hidden="true"></span>
     <svg viewBox="0 0 340 190" width="340" height="190" aria-hidden="true">
       <defs><linearGradient id="dialgrad" x1="20" y1="170" x2="150.919" y2="-53.421" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#F6E3CF"/><stop offset=".45" stop-color="#E8A774"/><stop offset="1" stop-color="#D98A4E"/></linearGradient></defs>
+        <stop stop-color="${stops[0]}"/><stop offset=".45" stop-color="${stops[1]}"/><stop offset="1" stop-color="${stops[2]}"/></linearGradient></defs>
       <path class="trk" d="M20 170 A150 150 0 0 1 320 170"/>
       <path class="fil" d="${arcPath(lv)}" stroke="url(#dialgrad)" ${lv > 0 ? '' : 'visibility="hidden"'}/>
       <circle class="kn" cx="${kx.toFixed(2)}" cy="${ky.toFixed(2)}" r="12"/>
     </svg>
-    <span class="kgrab" style="--kx:${kx.toFixed(1)}px;--ky:${ky.toFixed(1)}px" aria-hidden="true"></span>
-    <div class="lbl">Brightness</div>
+    <span class="ktouch" aria-hidden="true"></span>
+    <span class="kgrab" aria-hidden="true"></span>
+    <div class="lbl">${c.esc(label || 'Brightness')}</div>
     <div class="num"><b>${lv}</b><span>%</span></div>
     <button class="nudge minus" data-act="nudge" data-by="-5" aria-label="Dimmer">${icon('minus', 20, 1.7)}</button>
     <span class="lo">${icon('moon', 22, 1.7)}</span><span class="hi">${icon('sun', 22, 1.7)}</span>
@@ -98,6 +152,11 @@ function lightView(c, d) {
   const tl = on ? timerLine(c, id) : null;
   const follow = c.DAY.canFollow(d);
   const following = follow && c.DAY.isFollowing(id);
+  const tone = toneOf(c, id);
+  // Off, the dial still shows where the light will come back to, greyed (the level On gives it: the evening's, at night)
+  const dialAt = on ? lv : Math.max(1, Math.min(100, Math.round(c.onLevel(id, `d:${id}`)) || 100));
+  // following the day, the halo is the curve's white right now, and the line under Brightness says which
+  const followLine = on && following && !c.DAY.followPaused(id) && col && col.mode === 'ct' && col.kelvin ? `Following the day · ${Math.round(col.kelvin / 100) * 100}K now` : '';
   const looks = [];
   if (d.ct) {
     const k = showingWhite ? Math.round(col.kelvin / 100) * 100 : null;
@@ -115,9 +174,12 @@ function lightView(c, d) {
   feats.push(feature(c, { go: `light/${id}/timer`, glyph: 'timer', title: 'Sleep timer', sub: tl || 'Off', on: !!tl, disabled: !on && !tl }));
   // the page closes up where a lamp has no white or colour: the pills and the dial sit under the switch instead
   const shift = looks.length ? 0 : -144;
-  return `<div class="dev ${on ? 'on' : ''}" style="--shift:${shift}px">
-    <span class="halo"></span>
+  // an on-or-off switch has no level: its light is either whole or none
+  const shown = dim ? lv : on ? 100 : 0;
+  return `<div class="dev ${on ? 'on' : ''}" style="--shift:${shift}px" ${tone.hex ? `data-hex="${esc(tone.hex)}"` : `data-kelvin="${Math.round(tone.kelvin)}"`} data-night="${nightNow(c) ? 1 : 0}">
+    ${lampLight(c, id, shown, tone)}
     <img class="hero-art" src="${c.artSrc(c.deviceArt(c, d))}" alt="">
+    ${filamentHTML(shown, tone)}
     ${header(c, d)}
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
     <h1 class="t-hero">${esc(d.name)}</h1>
@@ -128,7 +190,7 @@ function lightView(c, d) {
     </div>
     ${looks.length ? `<div class="looks">${looks.join('')}</div>` : ''}
     <div class="feats shifted">${feats.join('')}</div>
-    ${dim ? dialHTML(c, lv) : ''}
+    ${dim ? dialHTML(c, dialAt, tone, followLine) : ''}
   </div>`;
 }
 
@@ -196,8 +258,9 @@ function shadeView(c, d) {
 // ---------- dragging ----------
 export function after(c, r, root) {
   const d = c.data.dev(r.id); if (!d) return;
+  if (r.sub === 'follow') followAfter(c, r, root);
   const id = d.device_id;
-  if (d.domain === 'light') { const el = root.querySelector('[data-drag="dial"]'); wireDial(c, id, el); glide(c, id, el); }
+  if (d.domain === 'light') { const el = root.querySelector('[data-drag="dial"]'); const set = wireDial(c, id, el); glide(c, id, el); wireNudges(c, id, el, set); }
   if (d.domain === 'cover') wireShade(c, id, root.querySelector('[data-drag="shade"]'));
 }
 
@@ -214,15 +277,17 @@ function glide(c, id, el) {
   const to = Number(el.getAttribute('aria-valuenow')) || 0;
   const from = shown[id];
   shown[id] = to;
-  if (from == null || from === to || c.ui.dragging || reduced()) return;
+  // a light turned off does not swing its dial: it greys where it stands and shows where it will come back to
+  if (from == null || from === to || c.ui.dragging || reduced() || !el.closest('.dev.on')) return;
   const ms = document.body.classList.contains('scene-arriving') ? 1000 : 400;
   const t0 = performance.now();
-  paintDial(el, from); shown[id] = from;
+  // the light itself fades on the dimmer by its own transitions; only the dial is stepped here
+  paintDial(el, from, false); shown[id] = from;
   const step = now => {
     if (!el.isConnected) return;
     const t = Math.min(1, (now - t0) / ms);
     const v = Math.round(from + (to - from) * easeInOut(t));
-    paintDial(el, v); shown[id] = v;
+    paintDial(el, v, false); shown[id] = v;
     if (t < 1) tween = requestAnimationFrame(step);
   };
   tween = requestAnimationFrame(step);
@@ -231,15 +296,18 @@ const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-r
 // Leaving a light's page forgets what its dial showed, so coming back does not glide from an old level.
 export function leave() { cancelAnimationFrame(tween); for (const k of Object.keys(shown)) delete shown[k]; }
 
-function paintDial(el, v) {
+function paintDial(el, v, light = true) {
   const [kx, ky] = arcPoint(v);
   const fil = el.querySelector('.fil'), kn = el.querySelector('.kn');
   fil.setAttribute('d', arcPath(v)); fil.setAttribute('visibility', v > 0 ? 'visible' : 'hidden');
   kn.setAttribute('cx', kx.toFixed(2)); kn.setAttribute('cy', ky.toFixed(2));
-  const kg = el.querySelector('.kgrab'); if (kg) { kg.style.setProperty('--kx', `${kx.toFixed(1)}px`); kg.style.setProperty('--ky', `${ky.toFixed(1)}px`); }
+  el.style.setProperty('--kx', `${kx.toFixed(1)}px`); el.style.setProperty('--ky', `${ky.toFixed(1)}px`);
+  el.classList.toggle('bright', v >= 50);
+  // the number steps with the finger (M6: no easing, it is the finger's)
   el.querySelector('.num b').textContent = v;
   el.setAttribute('aria-valuenow', v);
   const lvl = document.querySelector('.dev [data-lv]'); if (lvl) lvl.textContent = v;
+  if (light) paintLight(el.closest('.dev'), v);
 }
 
 function wireDial(c, id, el) {
@@ -253,18 +321,52 @@ function wireDial(c, id, el) {
     return Math.round((1 - a / Math.PI) * 100);
   };
   const near = e => { const b = svg.getBoundingClientRect(); const s = b.width / 340; const dx = e.clientX - (b.left + CX * s), dy = e.clientY - (b.top + CY * s); const r = Math.hypot(dx, dy) / s; return r > 100 && r < 200 && dy < 20 * s; };
+  // The dial bottoms out at 1%: a slip can dim a light but never switch it off mid-drag. Off is the pill's Off
+  // half, one deliberate tap (design-v7-ux.md, 3; the dial used to reach 0).
   const set = v => {
-    v = Math.max(0, Math.min(100, v));
+    v = Math.max(1, Math.min(100, v));
     cancelAnimationFrame(tween);
+    const page = el.closest('.dev');
+    page.classList.add('on');
     paintDial(el, v); shown[id] = v;
     c.assume([id], v, { held: true });
     c.gate.sendLevel(`d:${id}`, v);
-    el.closest('.dev').classList.toggle('on', v > 0);
   };
   // The knob takes a finger straight away, in any direction. Anywhere else on the arc only a sideways drag
   // moves it, so a thumb scrolling the page over the dial scrolls the page. A tap sets nothing: the - and +
-  // beside it are for that.
-  track(el, { c, axis: 'x', accept: e => e.target.classList.contains('kgrab') || near(e), grab: e => e.target.classList.contains('kgrab'), move: e => set(at(e)) });
+  // beside it are for that. While a finger is on it the light is locked to the finger (light.css, .held).
+  const hold = on => el.closest('.dev').classList.toggle('held', on);
+  track(el, { c, axis: 'x', accept: e => e.target.classList.contains('kgrab') || near(e), grab: e => e.target.classList.contains('kgrab'), start: () => hold(true), end: () => hold(false), move: e => set(at(e)) });
+  el.addEventListener('lostpointercapture', () => hold(false));
+  return set;
+}
+
+// Holding minus dims steadily down to 1%, never to off; holding plus brightens steadily. A tap is still a nudge.
+let nudgeHeldAt = 0;
+function wireNudges(c, id, el, set) {
+  if (!el || !set) return;
+  for (const b of el.querySelectorAll('.nudge')) {
+    let wait = 0, rep = 0;
+    const stop = () => {
+      clearTimeout(wait); wait = 0;
+      if (!rep) return;
+      clearInterval(rep); rep = 0; nudgeHeldAt = Date.now();
+      el.closest('.dev').classList.remove('held');
+      c.endDrag();
+    };
+    b.addEventListener('pointerdown', e => {
+      if (e.button > 0) return;
+      const by = Number(b.dataset.by) > 0 ? 1 : -1;
+      wait = setTimeout(() => {
+        // a lamp that is off is not brought on by holding minus
+        if (by < 0 && !el.closest('.dev.on')) return;
+        c.ui.dragging = true;
+        el.closest('.dev').classList.add('held');
+        rep = setInterval(() => set((Number(el.getAttribute('aria-valuenow')) || 0) + by * 2), 70);
+      }, 450);
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, stop);
+  }
 }
 
 function wireShade(c, id, el) {
@@ -300,6 +402,7 @@ export const actions = {
     c.run({ type: 'level', target: `d:${r.id}`, level: 'off' });
   },
   nudge(c, el, r) {
+    if (Date.now() - nudgeHeldAt < 500) return;   // the lift that ends a hold is not a tap as well
     const v = Math.max(1, Math.min(100, (c.data.level(r.id) || 0) + Number(el.dataset.by)));
     c.assume([r.id], v); c.soon();
     c.gate.sendLevel(`d:${r.id}`, v);

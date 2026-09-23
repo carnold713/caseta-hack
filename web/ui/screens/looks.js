@@ -1,15 +1,25 @@
 // The sheets over a light's page: 05b White (12732:49220), 05 Colour (12732:48591) and 06b Sleep timer
-// (12733:49235). Each is a sub route of the light (#light/<id>/white) so Back and a shared link land on it, and each
-// is laid out from the file's numbers in the sheet's own coordinates (screens.css, "sheets over a light").
+// (12733:49235), as v7 takes them further: White as the time of day (12816:94), Colour as painting with light
+// (12815:50658), and the running timer as a candle burning down (12817:49023, 12818:257). Each is a sub route of the
+// light (#light/<id>/white) so Back and a shared link land on it, and each is laid out from the file's numbers in the
+// sheet's own coordinates (screens.css, "sheets over a light"; v7/light.css for what v7 adds).
 import { track } from '/ui/gesture.js';
-import { K_MIN, K_MAX, KELVIN_GRADIENT, kelvinAt, posOfKelvin, kelvinHex, WHITES, LAMP_COLOURS, hexHsv, hsvHex, colourName, sameHex } from '/ui/colour.js';
+import { K_MIN, K_MAX, kelvinAt, posOfKelvin, kelvinHex, WHITES, LAMP_COLOURS, hexHsv, hsvHex, colourName, sameHex } from '/ui/colour.js';
 import { CasetaDaylight } from '/data/index.js';
 import { endsMs } from '/ui/screens/parts.js';
+import { glowHTML, setGlow, whiteStops, colourStops } from '/ui/glow.js';
 
-// The track runs the sheet's width less the gutters; the thumb (48 across) is centred on the value.
-const thumbAt = k => `calc(${posOfKelvin(k).toFixed(4)} * (100% - 40px) - 4px)`;
 const lampRange = d => (d.ct_range && d.ct_range.length === 2 ? d.ct_range : [2000, 6500]).map(Number);
 const colOf = (c, id) => (c.S.states[id] || {}).color || {};
+const rgba = (h, a) => { const x = String(h).replace('#', ''); return `rgba(${[0, 2, 4].map(i => parseInt(x.slice(i, i + 2), 16)).join(',')},${a})`; };
+const isOn = (c, id) => (c.data.level(id) || 0) > 0;
+// A lamp that is off and is given a white or a colour comes on in it, at the level On would give it: the evening's
+// at night, not 100% (design-v7-ux.md, 4). The connector sets the colour while it is still dark, so it arrives in it.
+const comeOnAt = (c, id) => Math.max(1, Math.min(100, Math.round(c.onLevel(id, `d:${id}`)) || 100));
+
+// The wash: the lamp's light falling on the sheet from its top edge, deepest there, so the whole sheet is lit by
+// the lamp. A new colour crossfades over the dimmer (data-xf, motion.js): colour never slides.
+const washHTML = hexA => `<span class="lk-wash" data-xf="" aria-hidden="true" style="--wash:${hexA}"></span>`;
 
 // White and Colour on one sheet, for a lamp that can do both: the segmented control swaps between them.
 function segmented(c, d, which) {
@@ -34,33 +44,71 @@ function followRow(c, d) {
   </div></div>`;
 }
 
-// ---------- 05b White ----------
+// What a pick replaced, so its toast can put it back: the colour or white it showed, and whether it was on.
+function before(c, id) { const col = colOf(c, id); return { level: c.data.level(id) || 0, kelvin: col.mode === 'ct' ? col.kelvin : null, hex: col.mode === 'xy' ? col.hex : null }; }
+function undoTo(c, d, was) {
+  return async () => {
+    const id = d.device_id, t = `d:${id}`;
+    if (!(was.level > 0)) { c.assume([id], 0); c.soon(); await c.run({ type: 'level', target: t, level: 'off' }); return; }
+    if (was.kelvin) setWhite(c, d, was.kelvin);
+    else if (was.hex) setColour(c, d, was.hex);
+    c.soon();
+  };
+}
+
+// ---------- 05b White · the time of day ----------
+// The white bar becomes a sky, candle to daylight laid left to right as dusk to noon, still in mireds so equal steps
+// look equal. The lamp's white is a sun on a path over it that the finger drags (a grip); the day's white right now
+// rides the same path as "Now outside", so following and picking explain each other.
+// The sky card is 372 x 200 in the file; the path runs from card x 24 to 348 (t = 0 at 1900K, 1 at 6500K), rising
+// from the horizon at y 168 to y 40: y = 168 - 128 sin(t pi / 2).
+const skyY = t => 168 - 128 * Math.sin(t * Math.PI / 2);
+const skyX = t => `calc(24px + ${t.toFixed(4)} * (100% - 48px))`;
+// noon brightens as the sun climbs: nothing at t 0.3, all of it at daylight
+const noonAt = t => Math.max(0, Math.min(1, (t - 0.3) / 0.7)).toFixed(3);
+function sunStyle(k) { const t = posOfKelvin(k); return `left:${skyX(t)};top:${skyY(t).toFixed(1)}px;--sun:${whiteStops(k).body}`; }
+function whiteSub(d, k) { return `${d.name} · ${k}K · ${CasetaDaylight.warmthName(k)}`; }
 function white(c, r) {
   const d = c.data.dev(r.id); if (!d || !d.ct) return null;
+  const id = d.device_id;
   const [kmin, kmax] = lampRange(d);
-  const col = colOf(c, d.device_id);
+  const col = colOf(c, id);
   const k = Math.round(col.mode === 'ct' && col.kelvin ? col.kelvin : 2700);
   const lim = kmax < K_MAX ? posOfKelvin(kmax) : null;
   const low = kmin > K_MIN ? posOfKelvin(kmin) : null;
-  const showing = (c.data.level(d.device_id) || 0) > 0 && col.mode === 'ct';
+  const lit = isOn(c, id);
+  const showing = lit && col.mode === 'ct';
   const chips = WHITES.map(([n, wk]) => {
     const out = wk > kmax || wk < kmin;
     const cur = showing && Math.abs(k - Math.max(kmin, Math.min(kmax, wk))) <= 60;
-    return `<button class="chip ${cur ? 'current' : ''} ${out ? 'out' : ''}" data-act="white-pick" data-k="${wk}">${n}</button>`;
+    return `<button class="chip ${cur ? 'current' : ''} ${out ? 'out' : ''}" data-act="white-pick" data-k="${wk}" data-n="${n}">${n}</button>`;
   }).join('');
   const clamp = WHITES.some(([, wk]) => wk > kmax) ? `<p class="ws-note">Asking for cooler than ${kmax}K sets it to ${kmax}K.</p>` : '';
+  // the five named whites as moments on the path
+  const moments = WHITES.map(([n, wk]) => { const t = posOfKelvin(wk); return `<i class="ws-moment" style="left:${skyX(t)};top:${skyY(t).toFixed(1)}px" title="${n}"></i>`; }).join('');
+  const path = Array.from({ length: 41 }, (_, i) => { const t = i / 40; return `${(24 + 324 * t).toFixed(1)},${skyY(t).toFixed(1)}`; }).join(' ');
+  // where the day is now: the Follow the day white for this minute, clamped to the lamp
+  const dayK = c.DAY.followKelvinFor(id);
+  const now = dayK != null ? (() => { const t = posOfKelvin(dayK); return `<button class="ws-now" data-act="white-now" data-hold="white-follow" data-ms="600" data-k="${dayK}" style="left:${skyX(t)};top:${skyY(t).toFixed(1)}px" aria-label="Now outside, ${dayK}K. Tap to set it, hold to follow the day"><span class="l">Now outside</span>${c.icon('sun', 22, 1.7)}</button>`; })()
+    : `<button class="ws-loc linkish" data-go="light/${c.esc(id)}/follow">Add where home is to see today’s light here</button>`;
+  const sun = glowHTML({ level: lit ? 100 : 0, kelvin: k, ctx: 'tile', name: 'sun', cls: 'ws-sunglow' }).replace('<span class="glow', '<span data-xf="" class="glow');
   return {
-    over: 'Light colour', title: d.name,
-    body: `<div class="sheet-abs ws">
+    over: whiteSub(d, k), title: 'White',
+    body: `<div class="sheet-abs ws lk-sheet">
+      ${washHTML(rgba(whiteStops(k).body, lit ? 0.16 : 0.06))}
       ${segmented(c, d, 'white')}
-      <div class="ws-val"><b data-k>${k}K</b><i class="dot" style="background:${kelvinHex(k)}"></i><span data-kname>${c.esc(CasetaDaylight.warmthName(k))}</span></div>
-      ${lim != null ? `<span class="ws-limit" style="right:calc(${(1 - lim).toFixed(4)} * (100% - 40px) + 19px)">Beyond this lamp · max ${kmax}K</span><span class="ws-conn" style="left:calc(${lim.toFixed(4)} * (100% - 40px) + 40px)"></span>` : ''}
-      <div class="ws-track" data-drag="kelvin" role="slider" aria-label="Warmth" aria-valuemin="${kmin}" aria-valuemax="${kmax}" aria-valuenow="${k}" style="background:${KELVIN_GRADIENT}">
-        ${low != null ? `<span class="beyond lo" style="width:${(low * 100).toFixed(2)}%"></span>` : ''}
-        ${lim != null ? `<span class="beyond" style="left:${(lim * 100).toFixed(2)}%"></span><span class="tick" style="left:calc(${(lim * 100).toFixed(2)}% - 1px)"></span>` : ''}
+      <div class="ws-val"><b data-k>${k}K</b><i class="dot" style="background:${whiteStops(k).body}"></i><span data-kname>${c.esc(CasetaDaylight.warmthName(k))}</span></div>
+      <div class="ws-sky" style="--noon:${noonAt(posOfKelvin(k))}">
+        <i class="sky-dusk"></i><i class="sky-noon"></i><i class="sky-night"></i><i class="sky-ground"></i><i class="sky-horizon"></i>
+        ${low != null ? `<i class="beyond lo" style="width:${skyX(low)}"></i><i class="sky-tick" style="left:${skyX(low)}"></i>` : ''}
+        ${lim != null ? `<i class="beyond" style="left:${skyX(lim)}"></i><i class="sky-tick" style="left:${skyX(lim)}"></i><span class="ws-limit">Beyond this lamp · max ${kmax}K</span>` : ''}
+        <svg class="sky-path" viewBox="0 0 372 200" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}"/></svg>
+        ${moments}
+        <div class="ws-track" data-drag="kelvin" role="slider" aria-label="Warmth" aria-valuemin="${kmin}" aria-valuemax="${kmax}" aria-valuenow="${k}"></div>
+        ${now}
+        <span class="ws-thumb ${lit ? '' : 'unlit'}" style="${sunStyle(k)}">${sun}<i class="disc"></i><i class="touch"></i></span>
       </div>
-      <span class="ws-thumb" style="left:${thumbAt(k)};--ring:${kelvinHex(k)}"></span>
-      <div class="ws-ends"><span><b>Candle</b> ${K_MIN}K</span><span><b>Daylight</b> ${K_MAX}K</span></div>
+      <div class="ws-ends"><span>Candle · dusk</span><span>Daylight · noon</span></div>
       <div class="ws-chips">${chips}</div>
       ${clamp}
       ${followRow(c, d)}
@@ -74,33 +122,60 @@ function setWhite(c, d, k, root) {
   k = Math.round(Math.max(kmin, Math.min(kmax, k)) / 50) * 50;
   const id = d.device_id;
   c.S.states[id] = { ...(c.S.states[id] || {}), color: { ...colOf(c, id), mode: 'ct', kelvin: k, hex: kelvinHex(k) } };
-  // a white turns the lamp on (the connector sends on with it); show it lit until the bridge says otherwise
-  if (!(c.data.level(id) > 0)) c.S.states[id].level = 100;
+  const extra = {};
+  // a white turns the lamp on in that white, at the level On would give it; shown lit until the bridge says otherwise
+  if (!isOn(c, id)) { const lv = comeOnAt(c, id); c.S.states[id].level = lv; extra.level = lv; }
   c.data.hold([id]);   // the bridge's echoes of the colours passed on the way do not pull it back
-  c.gate.sendColor(`d:${id}`, { kelvin: k });
-  if (root) paintKelvin(root, k);
+  c.gate.sendColor(`d:${id}`, { kelvin: k, ...extra });
+  if (root) paintKelvin(root, d, k);
   return k;
 }
-function paintKelvin(root, k) {
+// Under a finger the sun, its light, the sky's noon and the sheet's wash all follow it: the one place a white slides,
+// because it is a lamp being dragged live. The readout steps with it.
+function paintKelvin(root, d, k) {
   const t = root.querySelector('.ws-thumb'); if (!t) return;
-  t.style.left = thumbAt(k);
-  t.style.setProperty('--ring', kelvinHex(k));
+  t.setAttribute('style', sunStyle(k));
+  t.classList.remove('unlit');
+  setGlow(t.querySelector('[data-glow="sun"]'), { level: 100, kelvin: k, ctx: 'tile' });
+  const sky = root.querySelector('.ws-sky'); if (sky) sky.style.setProperty('--noon', noonAt(posOfKelvin(k)));
   root.querySelector('[data-k]').textContent = `${k}K`;
   root.querySelector('[data-kname]').textContent = CasetaDaylight.warmthName(k);
-  root.querySelector('.ws-val .dot').style.background = kelvinHex(k);
+  root.querySelector('.ws-val .dot').style.background = whiteStops(k).body;
   root.querySelector('.ws-track').setAttribute('aria-valuenow', k);
+  const w = root.querySelector('.lk-wash'); if (w) w.style.setProperty('--wash', rgba(whiteStops(k).body, 0.16));
+  const o = root.querySelector('.sheet-head .t-over'); if (o) o.textContent = whiteSub(d, k);
 }
 function wireKelvin(c, d, root) {
   const tr = root.querySelector('[data-drag="kelvin"]'); if (!tr) return;
+  const sky = root.querySelector('.ws-sky');
   const at = e => { const b = tr.getBoundingClientRect(); return kelvinAt((e.clientX - b.left) / b.width); };
   const zone = root.querySelector('.ws');
-  // a sideways drag on the track (or just above or below it); a swipe down the sheet is the sheet's
-  const onTrack = e => { const b = tr.getBoundingClientRect(); return e.clientY >= b.top - 12 && e.clientY <= b.bottom + 12; };
-  track(zone, { c, axis: 'x', accept: onTrack, move: e => setWhite(c, d, at(e), root) });
+  // A sideways drag anywhere on the sky moves the white; an up or down swipe that starts on it scrolls the sheet.
+  // The sun is a grip and takes the finger at once. "Now outside" is its own button (tap and hold), not the slider.
+  const onSky = e => { const b = sky.getBoundingClientRect(); return e.clientY >= b.top - 12 && e.clientY <= b.bottom + 12 && !e.target.closest('.ws-now, .ws-loc'); };
+  let was = null, k = null;
+  track(zone, {
+    c, axis: 'x', accept: onSky, grab: e => !!e.target.closest('.ws-thumb'),
+    start: () => { was = before(c, d.device_id); sky.classList.add('held'); },
+    move: e => { k = setWhite(c, d, at(e), root); },
+    end: () => {
+      sky.classList.remove('held');
+      if (was && k) c.toast(`${d.name} · ${whiteName(k)}`, { undo: undoTo(c, d, was) });
+      was = null;
+    },
+  });
 }
+const whiteName = k => { const n = CasetaDaylight.warmthName(k); return /white/i.test(n) ? n : `${n} white`; };
 
-// ---------- 05 Colour ----------
+// ---------- 05 Colour · painting with light ----------
 const WHEEL = 236;   // the disc; the wheel's box is 260 with 12 round it for the handle to sit over the edge
+// The sheet's sub names the colour: one of the twelve by its name, anything picked on the wheel "Custom".
+const pickName = hex => { const f = LAMP_COLOURS.find(([, x]) => sameHex(x, hex)); return f ? f[0] : 'Custom'; };
+// A bead of lit glass: the tint's glow, the colour, the tint's deep stop, lit from the upper left.
+function bead(n, x, sel) {
+  const st = colourStops(x);
+  return `<button class="sw ${sel ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="--b:${x};--b-glow:${st.core};--b-deep:${st.wash};--b-shadow:${rgba(x, 0.3)}" aria-label="${n}"></button>`;
+}
 function colour(c, r) {
   const d = c.data.dev(r.id); if (!d || !d.color) return null;
   const id = d.device_id;
@@ -108,22 +183,26 @@ function colour(c, r) {
   const hex = (col.mode === 'xy' && col.hex ? col.hex : '#4C8DFF').toUpperCase();
   const { h, s } = hexHsv(hex);
   const [hx, hy] = wheelPoint(h, s);
-  const showing = (c.data.level(id) || 0) > 0 && col.mode === 'xy';
+  const lit = isOn(c, id);
+  const showing = lit && col.mode === 'xy';
   const follows = c.DAY.canFollow(d) && c.DAY.isFollowing(id);
+  const paused = follows && c.DAY.followPaused(id);
   return {
-    over: 'Light colour', title: d.name,
-    body: `<div class="sheet-abs cs">
+    over: `${d.name} · ${pickName(hex)}`, title: 'Colour',
+    body: `<div class="sheet-abs cs lk-sheet ${paused ? 'paused' : ''}">
+      ${washHTML(rgba(hex, showing ? 0.2 : 0.06))}
       ${segmented(c, d, 'colour')}
       <div class="wheel" data-drag="wheel" role="slider" aria-label="Colour">
         <span class="disc"></span>
-        <span class="handle" style="left:${hx.toFixed(1)}px;top:${hy.toFixed(1)}px;background:${hex}"></span>
+        <span class="handle" data-xf="standard" style="left:${hx.toFixed(1)}px;top:${hy.toFixed(1)}px;background:${hex};--hc:${rgba(hex, 0.35)}"></span>
       </div>
       <div class="cs-val" data-cval>
-        <i class="dot" style="background:${hex}"></i><b data-xf="standard">${c.esc(colourName(hex))}</b><span data-xf="standard">· ${hex}</span>
+        <i class="dot" data-xf="standard" style="background:${hex}"></i><b data-xf="standard">${c.esc(colourName(hex))}</b><span data-xf="standard">· ${hex}</span>
         <button class="link" data-act="colour-exact">Enter exact</button>
       </div>
-      <div class="cs-sw" data-keep="swatches">${LAMP_COLOURS.map(([n, x]) => `<button class="sw ${showing && sameHex(x, hex) ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="background:${x}" aria-label="${n}"></button>`).join('')}${ring(showing ? hex : null)}</div>
-      ${follows ? `<p class="cs-note">${c.icon('sunrise', 20, 1.7)}<span>Picking a colour pauses Follow the day. The lamp keeps your colour, off and on, until you resume it.</span></p>` : ''}
+      <div class="cs-sw" data-keep="swatches">${LAMP_COLOURS.map(([n, x]) => bead(n, x, showing && sameHex(x, hex))).join('')}${ring(showing ? hex : null)}</div>
+      ${follows && !paused ? `<p class="cs-note">${c.icon('sunrise', 20, 1.7)}<span>Picking a colour pauses Follow the day. The lamp keeps your colour, off and on, until you resume it.</span></p>` : ''}
+      ${paused ? `<p class="cs-note cs-paused">${c.icon('sunrise', 20, 1.7)}<span>Keeping your colour · <button class="link" data-act="follow-resume">Follow the day again</button></span></p>` : ''}
     </div>`,
     after: (c2, r2, root) => wireWheel(c2, d, root),
   };
@@ -137,23 +216,32 @@ function setColour(c, d, hex, root) {
   const id = d.device_id;
   hex = hex.toUpperCase();
   c.S.states[id] = { ...(c.S.states[id] || {}), color: { ...colOf(c, id), mode: 'xy', hex } };
-  if (!(c.data.level(id) > 0)) c.S.states[id].level = 100;
+  const extra = {};
+  // a lamp that is off comes on in this colour from the first moment, at the level On would give it (not 100%)
+  if (!isOn(c, id)) { const lv = comeOnAt(c, id); c.S.states[id].level = lv; extra.level = lv; }
   c.data.hold([id]);   // the bridge's echoes of the colours passed on the way do not pull it back
-  c.gate.sendColor(`d:${id}`, { hex });
-  if (root) paintColour(root, hex);
+  c.gate.sendColor(`d:${id}`, { hex, ...extra });
+  if (root) paintColour(root, d, hex);
 }
-// The ring round the chosen swatch is one element that slides to the next choice (M1, 42 px a swatch).
+// The ring round the chosen swatch is one element that slides to the next choice (M1, 42 px a swatch), and the bead's
+// own light goes with it, crossfading from the old colour to the new.
 function ringAt(hex) { const i = LAMP_COLOURS.findIndex(([, x]) => sameHex(x, hex)); return i; }
-function ring(hex) { const i = hex ? ringAt(hex) : -1; return `<i class="sw-ring" aria-hidden="true" style="transform:translateX(${Math.max(0, i) * 42}px)" ${i < 0 ? 'hidden' : ''}></i>`; }
-function paintColour(root, hex) {
+function ring(hex) {
+  const i = hex ? ringAt(hex) : -1;
+  const g = hex ? glowHTML({ level: 100, hex, ctx: 'dot', name: 'bead' }).replace('<span class="glow', '<span data-xf="" class="glow') : '';
+  return `<i class="sw-ring" aria-hidden="true" style="transform:translateX(${Math.max(0, i) * 42}px)" ${i < 0 ? 'hidden' : ''}>${g}</i>`;
+}
+function paintColour(root, d, hex) {
   const { h, s } = hexHsv(hex); const [x, y] = wheelPoint(h, s);
   const hd = root.querySelector('.wheel .handle'); if (!hd) return;
-  hd.style.left = `${x.toFixed(1)}px`; hd.style.top = `${y.toFixed(1)}px`; hd.style.background = hex;
+  hd.style.left = `${x.toFixed(1)}px`; hd.style.top = `${y.toFixed(1)}px`; hd.style.background = hex; hd.style.setProperty('--hc', rgba(hex, 0.35));
   const v = root.querySelector('[data-cval]');
   v.querySelector('.dot').style.background = hex; v.querySelector('b').textContent = colourName(hex); v.querySelector('span').textContent = `· ${hex}`;
   root.querySelectorAll('.cs-sw .sw').forEach(b => b.classList.toggle('sel', sameHex(b.dataset.hex, hex)));
   const rg = root.querySelector('.cs-sw .sw-ring'), i = ringAt(hex);
-  if (rg) { rg.hidden = i < 0; if (i >= 0) rg.style.transform = `translateX(${i * 42}px)`; }
+  if (rg) { rg.hidden = i < 0; if (i >= 0) { rg.style.transform = `translateX(${i * 42}px)`; setGlow(rg.querySelector('.glow'), { level: 100, hex, ctx: 'dot' }); } }
+  const w = root.querySelector('.lk-wash'); if (w) w.style.setProperty('--wash', rgba(hex, 0.2));
+  const o = root.querySelector('.sheet-head .t-over'); if (o) o.textContent = `${d.name} · ${pickName(hex)}`;
 }
 function wireWheel(c, d, root) {
   const w = root.querySelector('[data-drag="wheel"]'); if (!w) return;
@@ -165,10 +253,16 @@ function wireWheel(c, d, root) {
     return hsvHex(h, s, 1);
   };
   // the wheel is a colour picker and nothing else: a finger on it is picking (it takes the finger at once)
-  track(w, { c, grab: () => true, start: () => w.classList.add('held'), move: e => setColour(c, d, at(e), root) });
+  let was = null, last = null;
+  track(w, {
+    c, grab: () => true,
+    start: () => { was = before(c, d.device_id); w.classList.add('held'); },
+    move: e => { last = at(e); setColour(c, d, last, root); },
+    end: () => { if (was && last) c.toast(`${d.name} · ${colourName(last)}`, { undo: undoTo(c, d, was) }); was = null; },
+  });
 }
 
-// ---------- 06b Sleep timer ----------
+// ---------- 15 · the sleep timer, a candle burning down ----------
 const DURATIONS = [5, 15, 30, 60];
 const MORE = [10, 20, 45, 90, 120];
 // The timer running over any of these devices, if there is one.
@@ -176,10 +270,25 @@ function timerFor(c, ids) {
   for (const [t, v] of Object.entries(c.S.timers || {})) {
     if (!v || !v.ends_at) continue;
     const target = t.includes('|') ? t.split('|') : t;
-    if (c.data.targetDevices(target).some(x => ids.includes(x))) return { key: t, target, ends: endsMs(v.ends_at) };
+    if (c.data.targetDevices(target).some(x => ids.includes(x))) return { key: t, target, ends: endsMs(v.ends_at), level: Number(v.level) || 0, minutes: Number(v.minutes) || 0 };
   }
   return null;
 }
+// How long a timer was set for, which is the candle's full height. This phone remembers the ones it set (and what
+// Add 15 min made of them); the hub notes the rest as they start, whoever started them (a remote, a routine). A timer
+// neither knows about draws its candle from the time left the first time it is seen, so it starts whole.
+function fullMinutes(c, t) {
+  const mine = (c.ui.timerTotal || {})[t.key];
+  if (mine && typeof mine === 'object' && Math.abs(mine.until - t.ends) < 90000) return mine.m;
+  if (t.minutes) return t.minutes;
+  const seen = c.ui.timerSeen = c.ui.timerSeen || {};
+  const s = seen[t.key];
+  if (s && Math.abs(s.ends - t.ends) < 2000) return s.m;
+  const m = Math.max(1, Math.ceil((t.ends - Date.now()) / 60000));
+  seen[t.key] = { ends: t.ends, m };
+  return m;
+}
+function remember(c, key, m, until) { c.ui.timerTotal = { ...(c.ui.timerTotal || {}), [key]: { m, until } }; }
 function reaches(c, d) {
   const aid = c.data.devArea(d);
   const lit = c.H.litLights().map(x => `d:${x.device_id}`);
@@ -188,62 +297,161 @@ function reaches(c, d) {
   if (lit.length > 1) out.push(['all', 'Everything that’s on', lit]);
   return out;
 }
-const fmtLeft = ms => { const s = Math.max(0, Math.round(ms / 1000)); const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}`; };
+const minsLeft = ms => Math.max(1, Math.ceil(ms / 60000));
+const clockAt = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 function timer(c, r) {
   const d = c.data.dev(r.id); if (!d) return null;
-  return timerSheet(c, { over: d.name, opts: reaches(c, d), covers: [d.device_id] });
+  return timerSheet(c, { over: d.name, name: d.name, opts: reaches(c, d), covers: [d.device_id] });
 }
 // The same sheet for a room (Room setup's "Sleep timer for this room").
 export function roomTimer(c, aid) {
-  return timerSheet(c, { over: c.data.areaName(aid), opts: [['room', 'This room', `a:${aid}`]], covers: c.H.roomLights(aid).map(x => x.device_id) });
+  return timerSheet(c, { over: c.data.areaName(aid), name: c.data.areaName(aid), opts: [['room', 'This room', `a:${aid}`]], covers: c.H.roomLights(aid).map(x => x.device_id) });
+}
+// The flame is the lamp's own colour: the first light it covers that is lit, or a warm white.
+function flameTone(c, covers) {
+  const id = covers.find(x => isOn(c, x)) || covers[0];
+  const col = id ? colOf(c, id) : {};
+  if (col.mode === 'xy' && col.hex) { const st = colourStops(col.hex); return { hex: col.hex, core: st.core, body: col.hex }; }
+  const st = whiteStops(col.mode === 'ct' && col.kelvin ? col.kelvin : 2700);
+  return { kelvin: col.mode === 'ct' && col.kelvin ? col.kelvin : 2700, core: '#FFF1DC', body: st.body };
+}
+// The candle on its stage: its height is the time left over the time it was set for (--f, 1 whole to 0 a stub), the
+// flame and its warm pool shrink with it, and `out` gutters it (the flame shrinks and goes, a wisp of smoke rises).
+function candleHTML(tone, f, { out = false, stays = false } = {}) {
+  const pool = glowHTML({ level: 40, ...(tone.hex ? { hex: tone.hex } : { kelvin: tone.kelvin }), ctx: 'card', name: 'candle' });
+  return `<div class="tc-stage ${out ? 'out' : ''} ${stays ? 'stays' : ''}" style="--f:${f.toFixed(4)};--flame:${tone.body};--flame-core:${tone.core};--flame-halo:${rgba(tone.body, 0.5)};--table:${rgba(tone.body, 0.22)}" aria-hidden="true">
+    <span class="tc-pool">${pool}</span>
+    <i class="tc-table"></i><i class="tc-dish"></i><i class="tc-rim"></i>
+    <span class="tc-candle"><i class="tc-wax"></i></span>
+    <i class="tc-waxpool"></i><i class="tc-wick"></i>
+    <span class="tc-flame"><i class="tc-halo"></i><svg class="tc-fl" viewBox="0 0 18 42" width="18" height="42"><defs><radialGradient id="tcfl" cx=".5" cy=".72" r=".6"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="var(--flame-core)"/><stop offset="1" stop-color="var(--flame)"/></radialGradient></defs><path d="M9 0C9 0 1 16 1 28a8 8 0 0 0 16 0C17 16 9 0 9 0Z" fill="url(#tcfl)"/></svg></span>
+    <svg class="tc-smoke" viewBox="0 0 6 60" width="6" height="60"><path d="M3 60c-3-8 3-14 0-22s3-14 0-22 2-10 0-16" fill="none" stroke="rgba(209,209,209,.35)" stroke-width="1.2" stroke-linecap="round"/></svg>
+  </div>`;
 }
 // `opts` are the reaches offered ([key, label, target]); `covers` the devices whose running timer it shows.
-function timerSheet(c, { over, opts, covers }) {
+function timerSheet(c, { over, name, opts, covers }) {
   const t = timerFor(c, covers);
   const ui = c.ui.timer = c.ui.timer || { reach: 'lamp', more: false };
   c.ui.timerReaches = opts;
   if (!opts.some(o => o[0] === ui.reach)) ui.reach = opts[0][0];
   const cur = opts.find(o => o[0] === ui.reach);
-  const total = t && c.ui.timerTotal && c.ui.timerTotal[t.key];
-  const left = t ? t.ends - Date.now() : 0;
-  const mins = t ? Math.round(left / 60000) : null;
-  const sel = total || (t ? [...DURATIONS, ...MORE].reduce((a, b) => (Math.abs(b - mins) < Math.abs(a - mins) ? b : a)) : null);
-  const chip = m => `<button class="dur ${sel === m ? 'sel' : ''}" data-act="timer-set" data-m="${m}"><b>${m}</b><span>min</span></button>`;
-  const frac = t ? Math.max(0, Math.min(1, left / ((total || Math.max(mins, 1)) * 60000))) : 0;
-  const offAt = t ? new Date(t.ends).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase() : '';
-  const C = 2 * Math.PI * 54;
+  const coverKey = covers.join('|');
+  if (t) {
+    const total = fullMinutes(c, t);
+    const left = t.ends - Date.now();
+    const f = Math.max(0, Math.min(1, left / (total * 60000)));
+    const tone = flameTone(c, covers);
+    // what the candle was, so the moment the timer ends it can gutter rather than vanish
+    c.ui.candle = { cover: coverKey, ends: t.ends, level: t.level, tone };
+    const says = t.level > 0 ? `${name} goes down to ${t.level}% at ${clockAt(t.ends)}` : `${name} fades out at ${clockAt(t.ends)}`;
+    return {
+      over, title: 'Sleep timer',
+      body: `<div class="sheet-abs tc ts-run">
+        ${candleHTML(tone, f, { stays: t.level > 0 })}
+        <div class="tc-left" data-left data-ends="${t.ends}" data-total="${total}">${minsLeft(left)} min left</div>
+        <p class="tc-says">${c.esc(says)}</p>
+        <div class="tc-btns">
+          <button class="pill ghost" data-act="timer-add" data-t="${c.esc(t.key)}">Add 15 min</button>
+          <button class="pill ghost" data-act="timer-cancel" data-t="${c.esc(t.key)}">Stop the timer</button>
+          <button class="pill solid" data-act="timer-offnow" data-t="${c.esc(t.key)}">Off now</button>
+        </div>
+        ${c.conn() === 'off' ? '<p class="tc-off">The house keeps the timer. It will still go out.</p>' : ''}
+      </div>`,
+      after: (c2, r2, root) => burn(c2, root),
+    };
+  }
+  // It has just run out: the candle gutters as the lamp's state arrives (or, set to a level, stays a lit stub), and
+  // a moment later the sheet offers the choices again. A timer stopped by hand ends early and simply goes.
+  const k = c.ui.candle;
+  if (k && k.cover === coverKey && Date.now() >= k.ends - 4000 && Date.now() - k.ends < 6000) {
+    if (!k.shown) { k.shown = Date.now(); setTimeout(() => { if (c.ui.candle === k) c.ui.candle = null; c.render(); }, 3400); }
+    return {
+      over, title: 'Sleep timer',
+      body: `<div class="sheet-abs tc ts-run ended">
+        ${candleHTML(k.tone, 0, { out: !(k.level > 0), stays: k.level > 0 })}
+        <div class="tc-left">${k.level > 0 ? `Down to ${k.level}%` : 'Out'}</div>
+        <p class="tc-says">${c.esc(k.level > 0 ? `${name} is at ${k.level}%` : `${name} has faded out`)}</p>
+      </div>`,
+      after: (c2, r2, root) => gutter(root, k.shown),
+    };
+  }
+  const chip = m => `<button class="dur" data-act="timer-set" data-m="${m}"><b>${m}</b><span>min</span></button>`;
   return {
     over, title: 'Sleep timer',
     body: `<div class="sheet-abs ts">
       <div class="durs">${DURATIONS.map(chip).join('')}<button class="dur more ${ui.more ? 'open' : ''}" data-act="timer-more">${c.icon('plus', 18, 1.8)}<span>Custom</span></button></div>
-      ${ui.more ? `<div class="chip-row durs-more">${MORE.map(m => `<button class="chip ${sel === m ? 'current' : ''}" data-act="timer-set" data-m="${m}">${m} min</button>`).join('')}</div>` : ''}
-      ${t ? `<div class="ts-run">
-        <div class="ring"><span class="glow"></span><svg width="116" height="116" viewBox="0 0 116 116"><defs><linearGradient id="tsg" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#E6A06A"/><stop offset="1" stop-color="#B86C35"/></linearGradient></defs>
-          <circle cx="58" cy="58" r="54" class="trk"/><circle cx="58" cy="58" r="54" class="arc" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}" transform="rotate(-90 58 58)"/></svg>
-          <span class="moon">${c.icon('moon', 30, 1.6)}</span></div>
-        <div class="ts-txt"><div class="left"><b data-left data-ends="${t.ends}">${fmtLeft(left)}</b><span>left</span></div>
-          <p>Fades out, it won’t snap</p><p class="q">Off at ${c.esc(offAt)}</p>
-          <button class="pill ghost sm" data-act="timer-cancel" data-t="${c.esc(t.key)}">${c.icon('x', 16, 1.8)}Cancel timer</button></div>
-      </div>` : `<p class="ts-idle">Pick how long. The light fades out at the end, it won’t snap off.</p>`}
+      ${ui.more ? `<div class="chip-row durs-more">${MORE.map(m => `<button class="chip" data-act="timer-set" data-m="${m}">${m} min</button>`).join('')}</div>` : ''}
+      <p class="ts-idle">Pick how long. The light fades out at the end, it won’t snap off.</p>
       <div class="ts-applies"><span class="t">Applies to</span><span class="v">${c.esc(cur[1])}</span></div>
-      <div class="chip-row ts-reach">${opts.map(([k, n]) => `<button class="chip ${ui.reach === k ? '' : ''}" aria-pressed="${ui.reach === k}" data-act="timer-reach" data-k="${k}">${c.esc(n)}</button>`).join('')}</div>
+      <div class="chip-row ts-reach">${opts.map(([key, n]) => `<button class="chip" aria-pressed="${ui.reach === key}" data-act="timer-reach" data-k="${key}">${c.esc(n)}</button>`).join('')}</div>
     </div>`,
-    after: (c2, r2, root) => tick(root),
   };
 }
-// The countdown ticks by itself while the sheet is up; it stops the moment the sheet is gone.
-function tick(root) {
+// The candle burns down by itself while the sheet is up, smoothly (it is the app deciding: slow and quiet), and the
+// words step each minute. It stops the moment the sheet is gone.
+function burn(c, root) {
   const el = root.querySelector('[data-left]'); if (!el) return;
+  const stage = root.querySelector('.tc-stage');
   clearInterval(root._tick);
-  root._tick = setInterval(() => { if (!el.isConnected) { clearInterval(root._tick); return; } el.textContent = fmtLeft(Number(el.dataset.ends) - Date.now()); }, 1000);
+  const step = () => {
+    if (!el.isConnected) { clearInterval(root._tick); return; }
+    const left = Number(el.dataset.ends) - Date.now();
+    const f = Math.max(0, Math.min(1, left / (Number(el.dataset.total) * 60000)));
+    if (stage) stage.style.setProperty('--f', f.toFixed(4));
+    el.textContent = `${minsLeft(left)} min left`;
+  };
+  root._tick = setInterval(step, 1000);
+}
+
+// The flame gutters over the night fade's 1.6 s (it shrinks to a quarter and sinks as it goes, EASE_IN_AND_OUT), the
+// light it cast goes with it, and a wisp of smoke rises 18 px a second later. Played from `since`, so a redraw halfway
+// (the lamp's own state arriving as it fades) carries on from there. Reduced motion: the flame only fades.
+function gutter(root, since) {
+  const st = root.querySelector('.tc-stage.out'); if (!st || typeof st.animate !== 'function') return;
+  const at = Date.now() - since;
+  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const play = (sel, kf, o) => { for (const n of st.querySelectorAll(sel)) { const a = n.animate(kf, { fill: 'backwards', ...o }); a.currentTime = at; } };
+  play('.tc-flame', still ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'scale(.85)' }, { opacity: 0, transform: 'translateY(16px) scale(.25)' }], { duration: 1600, easing: 'ease-in-out' });
+  play('.tc-pool > .glow, .tc-table, .tc-rim, .tc-wax, .tc-waxpool', [{ opacity: 1 }, { opacity: 0 }], { duration: 1600, easing: 'ease-in-out' });
+  if (!still) play('.tc-smoke', [{ opacity: 0, transform: 'translateY(0)' }, { opacity: 1, offset: 0.35 }, { opacity: 1, offset: 0.59, easing: 'ease-in' }, { opacity: 0, transform: 'translateY(-18px)' }], { duration: 1700, delay: 1000, easing: 'ease-out' });
 }
 
 export const sheets = { white, colour, timer };
 
+const targetOf = key => (key.includes('|') ? key.split('|') : key);
+// Start (or start again) a timer on a target: the connector replaces any running on the same target.
+function startTimer(c, key, minutes, level, full) {
+  remember(c, key, full || minutes, Date.now() + minutes * 60000);
+  return c.run({ type: 'timer', target: targetOf(key), minutes, fade: 5, ...(level ? { level } : {}) });
+}
+function running(c, key) { const v = (c.S.timers || {})[key]; return v && v.ends_at ? { ends: endsMs(v.ends_at), level: Number(v.level) || 0 } : null; }
+
 export const actions = {
   'look-swap'(c, el) { c.swap(el.dataset.to); },
-  'white-pick'(c, el, r) { const d = c.data.dev(r.id); if (!d) return; setWhite(c, d, Number(el.dataset.k)); c.soon(); },
-  'colour-pick'(c, el, r) { const d = c.data.dev(r.id); if (!d) return; setColour(c, d, el.dataset.hex); c.soon(); },
+  'white-pick'(c, el, r) {
+    const d = c.data.dev(r.id); if (!d) return;
+    const was = before(c, d.device_id);
+    setWhite(c, d, Number(el.dataset.k)); c.soon();
+    c.toast(`${d.name} · ${whiteName(Number(el.dataset.k))}`, { undo: undoTo(c, d, was) });
+  },
+  // "Now outside": a tap sets the day's white as a one-off; it does not start following, and the toast says so
+  'white-now'(c, el, r) {
+    const d = c.data.dev(r.id); if (!d) return;
+    const was = before(c, d.device_id);
+    const k = setWhite(c, d, Number(el.dataset.k)); c.soon();
+    c.toast(`${d.name} · ${k}K, the day’s white now. Hold the sun to follow it.`, { undo: undoTo(c, d, was) });
+  },
+  // held for 0.6 s, the sun fills with light and the lamp follows the day
+  'white-follow'(c, el, r) {
+    c.DAY.setFollowIds([r.id], true);
+    c.save('Following the day');
+  },
+  'colour-pick'(c, el, r) {
+    const d = c.data.dev(r.id); if (!d) return;
+    const was = before(c, d.device_id);
+    setColour(c, d, el.dataset.hex); c.soon();
+    c.toast(`${d.name} · ${colourName(el.dataset.hex)}`, { undo: undoTo(c, d, was) });
+  },
   'colour-exact'(c, el, r) {
     const row = el.closest('[data-cval]'); if (!row) return;
     const cur = (colOf(c, r.id).hex || '#4C8DFF').toUpperCase();
@@ -270,13 +478,40 @@ export const actions = {
     const reach = opts.find(o => o[0] === ((c.ui.timer || {}).reach)) || opts[0];
     const target = reach[2];
     const key = Array.isArray(target) ? target.join('|') : target;
-    c.ui.timerTotal = { ...(c.ui.timerTotal || {}), [key]: m };
-    const ok = await c.run({ type: 'timer', target, minutes: m, fade: 5 });
+    const ok = await startTimer(c, key, m, 0);
     if (ok) c.toast(`Timer set · ${m} min`, { undo: () => c.run({ type: 'cancel_timer', target }) });
   },
+  // the candle grows back by a quarter of an hour: it now burns for what it was set for, plus 15
+  async 'timer-add'(c, el) {
+    const key = el.dataset.t; const t = running(c, key); if (!t) return;
+    const was = { ends: t.ends, full: fullMinutes(c, { key, ends: t.ends, minutes: Number(((c.S.timers || {})[key] || {}).minutes) || 0 }) };
+    const left = minsLeft(t.ends - Date.now());
+    const ok = await startTimer(c, key, left + 15, t.level, was.full + 15);
+    if (ok) c.toast(`Timer · ${left + 15} min left`, { undo: () => startTimer(c, key, minsLeft(was.ends - Date.now()), t.level, was.full) });
+  },
+  // stopping the timer never turns anything on or up: the light stays as it is
   async 'timer-cancel'(c, el) {
-    const t = el.dataset.t; const target = t.includes('|') ? t.split('|') : t;
-    const ok = await c.run({ type: 'cancel_timer', target });
-    if (ok) c.toast('Timer cancelled');
+    const key = el.dataset.t; const t = running(c, key);
+    const full = t ? fullMinutes(c, { key, ends: t.ends, minutes: Number(((c.S.timers || {})[key] || {}).minutes) || 0 }) : 0;
+    const ok = await c.run({ type: 'cancel_timer', target: targetOf(key) });
+    if (ok) c.toast('Timer stopped', { undo: t ? () => startTimer(c, key, minsLeft(t.ends - Date.now()), t.level, full) : null });
+  },
+  // off at once; Undo puts the lights back as they were and lets the candle burn on
+  async 'timer-offnow'(c, el) {
+    const key = el.dataset.t; const t = running(c, key); if (!t) return;
+    const full = fullMinutes(c, { key, ends: t.ends, minutes: Number(((c.S.timers || {})[key] || {}).minutes) || 0 });
+    const ids = c.data.targetDevices(targetOf(key));
+    const lit = ids.filter(id => isOn(c, id)).map(id => [id, c.data.level(id)]);
+    c.assume(ids, 0); c.soon();
+    await c.run({ type: 'cancel_timer', target: targetOf(key) });
+    const ok = await c.run({ type: 'level', target: targetOf(key), level: 'off' });
+    if (ok) c.toast('Off now', {
+      undo: async () => {
+        for (const [id, lv] of lit) c.assume([id], lv);
+        c.soon();
+        for (const [id, lv] of lit) await c.run({ type: 'level', target: `d:${id}`, level: lv });
+        await startTimer(c, key, minsLeft(t.ends - Date.now()), t.level, full);
+      },
+    });
   },
 };

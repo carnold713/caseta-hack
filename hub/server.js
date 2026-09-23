@@ -369,7 +369,8 @@ function handleAgentMessage(ws, msg) {
       }
       if (msg.inventory) setInventory(msg.inventory);
       if (msg.states) mergeStates(msg.states);
-      timers = msg.timers || {};
+      // a connector coming back lists its timers again without saying how long each was set for; keep what we knew
+      timers = keepMinutes(msg.timers || {}, timers);
       sun = msg.sun || null; nextRuns = msg.next_runs || {};
       follow = msg.follow || null;
       broadcast({ type: 'sun', sun, next_runs: nextRuns });
@@ -391,7 +392,9 @@ function handleAgentMessage(ws, msg) {
       broadcast({ type: 'follow', follow });
       break;
     case 'timer':
-      if (msg.ends_at) timers[msg.target] = { ends_at: msg.ends_at, level: msg.level || 0 };
+      // `minutes` is how long it was set for, noted as it starts (the connector says so the moment it does), so the
+      // sleep timer's candle knows its full height whoever started it: this app, a remote or a routine
+      if (msg.ends_at) timers[msg.target] = { ends_at: msg.ends_at, level: msg.level || 0, minutes: sameTimer(timers[msg.target], msg) ? timers[msg.target].minutes : Math.max(1, Math.round((msg.ends_at * 1000 - Date.now()) / 60000)) };
       else delete timers[msg.target];
       broadcast({ type: 'timers', timers });
       break;
@@ -481,6 +484,11 @@ function mergeStates(s) {
   const merged = {};
   for (const k of Object.keys(s || {})) merged[k] = states[k];
   history.record(merged, id => ((inventory.devices || {})[id] || {}).domain);
+}
+const sameTimer = (was, now) => !!(was && was.minutes && Math.abs(was.ends_at - now.ends_at) < 2);
+function keepMinutes(next, was) {
+  for (const [k, v] of Object.entries(next)) if (v && sameTimer(was[k], v)) v.minutes = was[k].minutes;
+  return next;
 }
 function snapshot() {
   return { inventory, states, config, timers, sun, follow, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo }, add: addSession };

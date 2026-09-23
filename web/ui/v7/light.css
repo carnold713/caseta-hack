@@ -1,1 +1,190 @@
-/* Copper Night v7 · light. Owned by one builder; see docs/design-v7-ui.md for the light and the motion. */
+/* Copper Night v7 · light. Owned by one builder; see docs/design-v7-ui.md for the light and the motion.
+   Screens 3 (a light, the lamp's own glow), 4 (Colour, painting with light), 5 (White, the time of day) and 15 (the
+   sleep timer, a candle burning down). Every light here is drawn from a lamp's real level and colour. */
+
+/* ---- 3 · the lamp's own glow ----------------------------------------------------------------------------------
+   The v6 halo (one 560 disc at 0.10) becomes the three-layer hero glow, centred on the bulb at (206, 112), plus a pool
+   of light on the floor under the lamp and a filament lighting the bulb from inside. The halo box still fades and
+   scales on the dimmer as a whole (0.85 to 1, the pair), so off is the light going, not a grey glow. */
+.dev .halo.lamp-halo {
+  left: 0; top: 0; width: 100%; height: 260px; border-radius: 0; background: none; transform-origin: 50% 112px;
+}
+.lamp-pool {
+  position: absolute; left: 50%; top: 236px; width: var(--pool-w, 255px); height: 36px; border-radius: 50%;
+  transform: translate(-50%, -50%); pointer-events: none; mix-blend-mode: screen; filter: blur(8px);
+  background: radial-gradient(closest-side, var(--pool-c, transparent), transparent);
+  transition: width var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both);
+}
+.lamp-filament {
+  position: absolute; left: calc(50% - 32px); top: 72px; width: 64px; height: 72px; border-radius: 50%; pointer-events: none;
+  mix-blend-mode: screen; background: radial-gradient(closest-side, var(--fil-c, transparent), transparent);
+  opacity: var(--fil-o, 0); transition: opacity var(--dimmer) var(--ease-both);
+}
+.dev:not(.on) .lamp-filament { opacity: 0; }
+
+/* Under a finger the light is locked to it: LINEAR, no easing, no lag (M6). The dimmer's transitions are for the
+   light arriving from the bridge, not for a thumb. */
+.dev.held .glow > i, .dev.held .lamp-pool, .dev.held .lamp-filament { transition-duration: 0s; }
+
+/* The knob holds the light: a 72 radial of the lamp's body tone under it, and while a finger is on it a 44 disc of
+   white 22% (in on the standard 0.12, out EASE_IN 0.2, as the file's touch mark). */
+.dial .kglow, .dial .ktouch {
+  position: absolute; left: calc(50% - 170px + var(--kx)); top: var(--ky); border-radius: 50%; pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.dial .kglow { width: 96px; height: 96px; mix-blend-mode: screen; background: radial-gradient(closest-side, var(--kglow), transparent); transition: opacity var(--dimmer) var(--ease-both); }
+.dev:not(.on) .dial .kglow { opacity: 0; }
+.dial .ktouch { width: 44px; height: 44px; background: #fff; opacity: 0; transition: opacity var(--exit) var(--ease-in); }
+.dev.held .dial .ktouch { opacity: .22; transition: opacity var(--tap) var(--ease); }
+.dial.bright .num b { text-shadow: 0 0 24px var(--numglow); }
+
+/* Off: the dial is still there, greyed, at the level On will bring back. */
+.dial .fil, .dial .kn, .dial .num b { transition: stroke var(--dimmer) var(--ease-both), fill var(--dimmer) var(--ease-both), color var(--dimmer) var(--ease-both); }
+.dev:not(.on) .dial .fil { stroke: #3A3633; }
+.dev:not(.on) .dial .kn { fill: #9E9E9E; }
+.dev:not(.on) .dial .num b { color: var(--text-3); }
+
+/* ---- 4 and 5 · the sheets are lit by the lamp ------------------------------------------------------------------
+   A wash of the lamp's light falls on the sheet from its top edge: 560 x 380 centred on the sheet's top, deepest there,
+   blended screen. The sheet body starts 100 below the sheet's top (82 of head, 18 of margin), 56 on a white-only lamp. */
+.lk-wash {
+  position: absolute; left: calc(50% - 280px); top: -290px; width: 560px; height: 380px; border-radius: 50%; pointer-events: none;
+  mix-blend-mode: screen; background: radial-gradient(closest-side, var(--wash), transparent);
+}
+.ws:not(:has(.seg2)) .lk-wash { top: -246px; }
+.sheet:has(.lk-sheet) .sheet-head { z-index: 1; }
+/* the sub under the grabber names the light and what it is showing, in sentence case: "Floor lamp · 2700K · Warm" */
+.sheet:has(.lk-sheet) .sheet-head .t-over { text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 400; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 56px; }
+
+/* ---- 5 · White, the time of day ----
+   Readout at 154, the sky card (20, 214, 372 x 200) at 214, its two ends at 424, the named whites at 448, the note at
+   500 and Follow the day at 532, all from the sheet's top (12816:94). */
+.ws.lk-sheet { height: 520px; }
+.ws.lk-sheet:not(:has(.ws-note)) { height: 488px; }
+.ws.lk-sheet .ws-val { top: 54px; }
+.ws.lk-sheet .ws-val b { font-size: 48px; line-height: 56px; }
+.ws.lk-sheet .ws-val .dot { width: 12px; height: 12px; border-radius: 6px; margin: 4px 0 0 14px; }
+.ws.lk-sheet .ws-val span { margin: 4px 0 0 8px; }
+.ws-sky {
+  position: absolute; left: var(--gutter); right: var(--gutter); top: 114px; height: 200px; border-radius: var(--r-card);
+  overflow: hidden; background: #171411; touch-action: pan-y; isolation: isolate;
+}
+.ws-sky > i { position: absolute; pointer-events: none; }
+.sky-dusk { inset: 0; background: linear-gradient(90deg, rgba(255, 138, 31, .55) 0%, rgba(255, 174, 94, .4) 30%, rgba(255, 215, 176, .24) 60%, rgba(255, 246, 240, .16) 100%); }
+/* noon brightens as the sun climbs: none of it at t 0.3, all of it at daylight */
+.sky-noon {
+  left: calc(100% - 252px); top: -150px; width: 360px; height: 360px; border-radius: 50%; mix-blend-mode: screen;
+  background: radial-gradient(closest-side, rgba(244, 241, 234, .18), rgba(244, 241, 234, 0)); opacity: var(--noon, 0);
+  transition: opacity var(--dimmer) var(--ease-both);
+}
+.sky-night { inset: 0; background: linear-gradient(180deg, rgba(18, 18, 18, .72) 0%, rgba(18, 18, 18, 0) 84%); }
+.sky-ground { left: 0; right: 0; top: 168px; height: 32px; background: rgba(18, 18, 18, .55); }
+.sky-horizon { left: 0; right: 0; top: 168px; height: 1px; background: rgba(255, 255, 255, .1); }
+/* beyond this lamp is night haze: 45 degree lines, white 6%, 6 apart, and a tick where the lamp stops */
+.ws-sky .beyond { top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .06) 0 1px, transparent 1px 6px), rgba(18, 18, 18, .3); }
+.ws-sky .beyond.lo { left: 0; right: auto; }
+.ws-sky .sky-tick { top: 0; height: 168px; width: 1px; background: rgba(255, 255, 255, .18); }
+.ws-sky .ws-limit { left: auto; right: 16px; top: 178px; font-size: 12px; font-weight: 500; line-height: 14px; color: var(--text-3); pointer-events: none; }
+.sky-path { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sky-path polyline { fill: none; stroke: rgba(255, 255, 255, .16); stroke-width: 1; stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
+.ws-moment { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, .32); transform: translate(-50%, -50%); pointer-events: none; }
+/* the band a sideways finger drags the white along: the sun's path, card x 24 to 348, the sky's whole height */
+.ws.lk-sheet .ws-track { left: 24px; right: 24px; top: 0; bottom: 0; height: auto; border-radius: 0; overflow: visible; background: none; touch-action: pan-y; }
+/* the lamp's own white, a sun on the path: a 28 disc of it with a 1 px rim, its light doubled round it, and a grip */
+.ws.lk-sheet .ws-thumb {
+  width: 0; height: 0; border-radius: 0; background: none; box-shadow: none; pointer-events: none; z-index: 2;
+  transition: left var(--standard) var(--ease), top var(--standard) var(--ease);
+}
+.ws-sky.held .ws-thumb { transition: none; }
+.ws-thumb .disc, .ws-thumb .touch { position: absolute; left: 0; top: 0; border-radius: 50%; transform: translate(-50%, -50%); }
+.ws-thumb .disc { width: 28px; height: 28px; background: var(--sun); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .4), 0 2px 10px rgba(0, 0, 0, .35); }
+.ws-thumb.unlit .disc { background: #3A3633; }
+.ws-thumb .touch { width: 48px; height: 48px; background: #fff; opacity: 0; pointer-events: auto; cursor: grab; touch-action: none; transition: opacity var(--exit) var(--ease-in); }
+.ws-sky.held .ws-thumb .touch { opacity: .22; transition: opacity var(--tap) var(--ease); }
+.ws-thumb .ws-sunglow { transform: scale(.83); }
+.ws-sky.held .ws-thumb .glow > i { transition-duration: 0s; }
+/* where the day is now: "Now outside" over a sun glyph. A tap sets that white once; a hold (0.6 s) fills it with light
+   and starts following the day. */
+.ws-now {
+  position: absolute; width: 84px; height: 60px; transform: translate(-50%, -42px); border: 0; padding: 0; background: none; z-index: 1;
+  color: var(--text-2); display: flex; flex-direction: column; align-items: center; justify-content: space-between; font: inherit;
+}
+.ws-now .l { font-size: 12px; font-weight: 500; line-height: 14px; white-space: nowrap; }
+.ws-now .ic { position: relative; }
+.ws-now::before {
+  content: ''; position: absolute; left: calc(50% - 18px); bottom: -7px; width: 36px; height: 36px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(250, 229, 201, .55), rgba(250, 229, 201, 0)); transform: scale(0); opacity: 0;
+  transition: transform var(--exit) var(--ease-in), opacity var(--exit) var(--ease-in);
+}
+.ws-now[data-holding='1']::before { transform: scale(1); opacity: 1; transition: transform var(--land) linear, opacity var(--land) linear; }
+.ws-loc { position: absolute; left: 20px; right: 20px; top: 16px; border: 0; padding: 0; background: none; text-align: left; font: inherit; font-size: 13px; line-height: 16px; color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; z-index: 1; }
+.ws.lk-sheet .ws-ends { top: 324px; font-size: 12px; font-weight: 500; line-height: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.ws.lk-sheet .ws-chips { top: 348px; }
+.ws.lk-sheet .ws-note { top: 400px; }
+.ws.lk-sheet .ws-follow { top: 432px; }
+.ws.lk-sheet:not(:has(.ws-note)) .ws-follow { top: 400px; }
+
+/* ---- 4 · Colour, painting with light ---- */
+/* the wheel sits on its own faint light, and its handle glows with the colour under it */
+.cs.lk-sheet .wheel::before { content: ''; position: absolute; left: -20px; top: -20px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none; background: radial-gradient(closest-side, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0)); }
+.cs.lk-sheet .wheel .handle { box-shadow: inset 0 0 0 3px #fff, 0 4px 12px rgba(0, 0, 0, .45), 0 0 26px 12px var(--hc, transparent); }
+/* the controls move on the standard 0.24 s because the person moved them; the colour crossfades (data-xf), never slides */
+.cs.lk-sheet .wheel:not(.held) .handle { transition: left var(--standard) var(--ease), top var(--standard) var(--ease); }
+.cs.lk-sheet .cs-val .dot { transition: none; }
+/* the twelve colours as beads of lit glass: glow, colour, deep, lit from the upper left, with a specular spot */
+.cs.lk-sheet .cs-sw .sw {
+  position: relative; background: radial-gradient(circle at 35% 30%, var(--b-glow) 0%, var(--b) 45%, var(--b-deep) 100%);
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, .25), 0 4px 12px var(--b-shadow);
+}
+.cs.lk-sheet .cs-sw .sw::after { content: ''; position: absolute; left: 7px; top: 5px; width: 12px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .55); filter: blur(2px); }
+.cs.lk-sheet .cs-sw:has(.sw-ring) .sw.sel { box-shadow: inset 0 -2px 4px rgba(0, 0, 0, .25), 0 4px 12px var(--b-shadow); }
+.cs.lk-sheet .cs-sw .sw-ring .glow { z-index: -1; }
+.cs-paused .link { font-size: 14px; }
+
+/* ---- 15 · the sleep timer, a candle burning down ---------------------------------------------------------------
+   Running, the timer sheet is a candle on a stage (20, 98, 372 x 300 from the sheet's top), the time left at 418, what
+   happens at the end at 468 and the three buttons at 510 (12817:49023). The candle's height is the time left over the
+   time it was set for, --f, from whole (95) to a stub (12); its flame and its warm pool shrink with it. It burns down
+   smoothly, a second at a time, because it is the app deciding: slow and quiet. */
+.tc.ts-run { display: block; margin-top: 16px; gap: 0; height: 470px; }
+.tc.ts-run.ended { height: 404px; }
+.tc.ts-run:has(.tc-off) { height: 500px; }
+.tc-stage {
+  --top: calc(245px - 83px * var(--f, 1));   /* the candle's top edge: 162 whole, 245 a stub */
+  position: absolute; left: var(--gutter); right: var(--gutter); top: 0; height: 300px; border-radius: var(--r-card); overflow: hidden;
+  border: 1px solid var(--surface-2); background: linear-gradient(180deg, #141110 0%, #1B1714 100%); isolation: isolate;
+}
+.tc-stage > * { position: absolute; pointer-events: none; }
+.tc-pool { left: 50%; top: 136px; width: 0; height: 0; transform: translateY(calc((1 - var(--f)) * 83px)) scale(calc(.72 + .28 * var(--f))); transition: transform 1s linear, opacity var(--night-fade) var(--ease-both); }
+.tc-table { left: calc(50% - 130px); top: 227px; width: 260px; height: 56px; border-radius: 50%; mix-blend-mode: screen; background: radial-gradient(closest-side, var(--table), transparent); transform: scale(calc(.8 + .2 * var(--f))); transition: transform 1s linear, opacity var(--night-fade) var(--ease-both); }
+.tc-dish { left: calc(50% - 62px); top: 249px; width: 124px; height: 24px; border-radius: 50%; background: radial-gradient(ellipse at 50% 40%, #2A231E 0%, #16120F 70%, #0C0A09 100%); box-shadow: 0 2px 6px rgba(0, 0, 0, .5); }
+.tc-rim { left: calc(50% - 62px); top: 249px; width: 124px; height: 24px; border-radius: 50%; mix-blend-mode: screen; box-shadow: inset 0 1px 0 rgba(255, 190, 130, .35); transition: opacity var(--night-fade) var(--ease-both); }
+.tc-candle {
+  left: calc(50% - 22px); top: var(--top); height: calc(257px - var(--top)); width: 44px; overflow: hidden; border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(90deg, #2E241D 0%, #5E4838 30%, #4A392D 62%, #221B16 100%); transition: top 1s linear, height 1s linear;
+}
+.tc-wax { position: absolute; left: 0; top: 0; width: 44px; height: 34px; mix-blend-mode: screen; background: linear-gradient(180deg, rgba(255, 180, 107, .42), rgba(255, 180, 107, 0)); transition: opacity var(--night-fade) var(--ease-both); }
+.tc-waxpool { left: calc(50% - 19px); top: calc(var(--top) - 3px); width: 38px; height: 8px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 214, 160, .55), rgba(120, 90, 66, .9) 70%, #3C2E24); transition: top 1s linear, opacity var(--night-fade) var(--ease-both); }
+.tc-wick { left: calc(50% - 1px); top: calc(var(--top) - 10px); width: 2px; height: 11px; border-radius: 1px; background: #1A1410; transition: top 1s linear; }
+/* the flame is the lamp's own colour, white at its heart */
+.tc-flame {
+  left: calc(50% - 15px); top: calc(var(--top) - 58px); width: 30px; height: 56px; transform-origin: 50% 100%;
+  transform: scale(calc(.85 + .15 * var(--f))); transition: top 1s linear, transform 1s linear;
+}
+.tc-halo { position: absolute; left: 2px; top: 2px; width: 26px; height: 52px; border-radius: 50%; mix-blend-mode: screen; filter: blur(4px); background: radial-gradient(closest-side, var(--flame-halo), transparent); }
+.tc-fl { position: absolute; left: 6px; top: 12px; }
+.tc-smoke { left: calc(50% - 3px); top: calc(var(--top) - 70px); opacity: 0; }
+/* At the end the flame gutters (it shrinks, sinks and goes, the night fade's 1.6 s), the light it cast goes with it,
+   and a wisp of smoke rises a second later. A timer set to a level ends as a stub that stays lit.
+   This is where it ends; looks.js plays the way there (gutter()) from the moment the timer ran out, so a redraw on the
+   way (the lamp's state arriving as it fades) picks the guttering up where it had got to rather than starting again. */
+.tc-stage.out .tc-flame { opacity: 0; transform: translateY(16px) scale(.25); transition: none; }
+.tc-stage.out .tc-pool > .glow, .tc-stage.out .tc-table, .tc-stage.out .tc-rim, .tc-stage.out .tc-wax, .tc-stage.out .tc-waxpool { opacity: 0; }
+.tc-left { position: absolute; left: var(--gutter); right: var(--gutter); top: 320px; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.tc-says { position: absolute; left: var(--gutter); right: var(--gutter); top: 370px; margin: 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
+.tc-btns { position: absolute; left: var(--gutter); right: var(--gutter); top: 412px; display: flex; gap: 10px; }
+.tc-btns .pill { height: 48px; padding: 0 12px; font-size: 14px; flex: 0 0 auto; white-space: nowrap; }
+.tc-btns .pill:nth-child(1) { flex-basis: 112px; }
+.tc-btns .pill:nth-child(2) { flex-basis: 130px; }
+.tc-btns .pill:nth-child(3) { flex: 1 1 auto; }
+.tc-off { position: absolute; left: var(--gutter); right: var(--gutter); top: 474px; margin: 0; font-size: 13px; line-height: 17px; color: var(--text-3); }
