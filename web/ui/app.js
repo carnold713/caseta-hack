@@ -48,6 +48,8 @@ async function run(action) {
   if (data.connState() === 'off') { toast(OFFLINE_TAP, { icon: 'wifi' }); return false; }
   // a scene arriving crossfades every light it touches over the scene's 1.0 s, not one light's 0.4 s
   if (action && (action.type === 'preset' || action.type === 'scene')) motion.sceneArriving();
+  // the scene run last in a room is the one it is showing, when more than one would fit (home.js sceneMatch)
+  if (action && action.type === 'preset') H.noteSceneRun(action.preset_id);
   try { await data.run(action); return true; }
   catch (e) { toast(e.message, { err: true }); return false; }
 }

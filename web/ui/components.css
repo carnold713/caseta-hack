@@ -330,6 +330,11 @@
    content, a sheet stops 80 from the top of the screen, so the page it came from always shows above it: it reads
    as something over the page, not a new page. */
 .sheet { max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+/* The rounded top cuts everything inside the sheet, always. overflow alone does not: a phone's WebView draws some
+   layers on their own (a glow or a wash with a blend or a blur, anything animating, the sheet itself rising), and
+   those escaped the round corners as square flecks. clip-path clips them all. It also clips the sheet's own
+   shadow, which the black overlay behind it makes unnecessary. */
+.sheet { clip-path: inset(0 round var(--r-card) var(--r-card) 0 0); }
 .sheet::-webkit-scrollbar { display: none; }
 .sheet .grab {
   width: 40px; height: 4px; border-radius: 2px; margin: 8px auto 0;

@@ -167,6 +167,12 @@
 
 /* The room's scenes at 504: 16 under the photograph; the grid at 560, 16 under the chips. */
 .room-chips { margin-top: 16px; }
+/* Scenes, with Edit on the right, over the chips once a room has any; the chips then sit 10 under it */
+.room-sec { display: flex; align-items: center; justify-content: space-between; margin: 20px var(--gutter) 0; min-height: 24px; }
+.room-sec .t-over { line-height: 14px; }
+.room-sec .link { min-height: 32px; padding: 0 2px; }
+.room-chips.headed { margin-top: 10px; }
+.chip.editing .ic { color: var(--copper); }
 .room-grid { margin-top: 16px; padding-bottom: 8px; }
 .room-empty { margin-top: 16px; }
 .room-setup-row { margin-top: 24px; }

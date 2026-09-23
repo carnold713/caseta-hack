@@ -20,6 +20,7 @@ export const PATHS = {
   user:    '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.2-3.6 4-5.5 7.5-5.5s6.3 1.9 7.5 5.5"/>',
   plus:    '<path d="M12 5v14M5 12h14"/>',
   minus:   '<path d="M5 12h14"/>',
+  pencil:  '<path d="M4.5 19.5h4l10-10a2.8 2.8 0 0 0-4-4l-10 10z"/><path d="M13 7l4 4"/>',
   x:       '<path d="M6 6l12 12M18 6L6 18"/>',
   check:   '<path d="M5 12.5l4.5 4.5L19 7"/>',
   sun:     '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',

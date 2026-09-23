@@ -132,7 +132,20 @@
     const roomHasSuggested = aid => roomSuggested(aid).length > 0;
     // The scene the room is in, by id. A room with no scenes of its own is still matched against the five
     // it would be offered, so the row that offers them can say which one the lights are already showing.
-    function sceneMatch(aid) { const p = roomScenes(aid).find(x => levelsMatch(x.levels)); return p ? p.id : null; }
+    // Which scene a room is showing. A scene only speaks for the lights it names, so more than one can fit: Relax
+    // that dims the lamp still fits after Default leaves the lamp alone and lights the ceiling. So the scene run
+    // last in the room wins while it still fits; then one that accounts for every light that is on; then the first
+    // that fits. (The owner found Relax still marked, and "already showing", after running Default.)
+    const lastRun = {};   // room id -> the scene this phone ran there last
+    function noteSceneRun(id) { const p = D.presets().find(x => x.id === id); if (p && p.area) lastRun[p.area] = id; }
+    function sceneMatch(aid) {
+      const fits = roomScenes(aid).filter(x => levelsMatch(x.levels));
+      if (!fits.length) return null;
+      if (lastRun[aid] && fits.some(p => p.id === lastRun[aid])) return lastRun[aid];
+      const lit = roomLights(aid).filter(d => (D.level(d.device_id) || 0) > 0).map(d => d.device_id);
+      const whole = fits.find(p => lit.every(id => id in (p.levels || {})));
+      return (whole || fits[0]).id;
+    }
     function suggestedMatch(aid) { for (const m of MOODS) if (levelsMatch(moodLevels(aid, m))) return m.id; return null; }
     // A scene filed under a room carries the room in its name ("Kitchen · Relax"), which is right in a list
     // of every scene and repetition on the room's own page. Strip it there, and leave a name that never had
@@ -303,7 +316,7 @@
       lightKind, lightRole, kindLabel,
       roomLights, roomDimmers, meanLevel, roomMean, litLights, houseLevel, timerOn, rowLights,
       shortenSuggestedFades, moodLevels, levelsMatch, roomScenes, roomHasScenes, roomSuggested, roomHasSuggested,
-      sceneMatch, suggestedMatch, sceneShortName, presetMax, suggestScenes, keepMoodScene, sceneEntryNow, saveRoomLook,
+      sceneMatch, noteSceneRun, suggestedMatch, sceneShortName, presetMax, suggestScenes, keepMoodScene, sceneEntryNow, saveRoomLook,
       fileable, roomById, bridgeTag, ensureRooms, pruneRooms,
       autoOnLights, powerOnAll, powerOnAction, powerLabel, houseOnLabel, houseOnAction, houseLevelTargets, goodnightActions, roomPhotoURL,
     };

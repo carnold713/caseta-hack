@@ -121,6 +121,9 @@
         if (D.isOn(d.device_id)) p.levels[d.device_id] = H.sceneEntryNow(d, 100);
       }
       if (aid) { p.area = aid; p.name = `${D.areaName(aid)} · New scene`.slice(0, 60); }
+      // a second new scene is New scene 2, so two are never the same name on a room's chips
+      const taken = new Set(D.presets().map(x => x.name));
+      for (let n = 2, base = p.name; taken.has(p.name) && n < 100; n++) p.name = `${base} ${n}`.slice(0, 60);
       S.config.presets.push(p);
       return p;
     }

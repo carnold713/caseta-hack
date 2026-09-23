@@ -196,3 +196,18 @@ test("a room's photograph, only when it has one", () => {
   assert.equal(h.roomPhotoURL('r1'), '/api/roomphoto/r1?token=t%20k&v=v2');
   assert.equal(h.roomPhotoURL('r2'), null);
 });
+
+// The owner ran Relax, then Default, and Relax stayed marked and said "already showing": Relax only names the lamp,
+// Default leaves the lamp where it was and lights the ceiling, so both fit and Relax came first.
+test('the scene a room is showing: the one run last wins, and one that leaves out a lit light loses', () => {
+  const presets = [
+    { id: 'relax', name: 'Living room · Relax', area: 'a1', levels: { 2: 40 } },
+    { id: 'default', name: 'Living room · Default', area: 'a1', levels: { 1: 100, 2: 40 } },
+  ];
+  const { h } = setup({}, { 1: { level: 100 }, 2: { level: 40 } }, { presets });
+  assert.equal(h.sceneMatch('a1'), 'default', 'Relax says nothing of the lit ceiling, so it is not what the room is showing');
+  h.noteSceneRun('relax');
+  assert.equal(h.sceneMatch('a1'), 'relax', 'run last, and still fitting, it wins');
+  h.noteSceneRun('default');
+  assert.equal(h.sceneMatch('a1'), 'default', 'Default run after it takes over');
+});

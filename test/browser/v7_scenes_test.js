@@ -99,13 +99,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await C(async l => { for (const [id, lv] of l) await window.__copper.run({ type: 'level', target: `d:${id}`, level: lv || 'off' }); }, lit0); await wait(1500);
   const back = await C(a => window.__copper.H.roomLights(a).map(d => [d.device_id, window.__copper.data.level(d.device_id) || 0]), aid);
   check('6: set back directly, every light it touched is as it was', JSON.stringify(back) === JSON.stringify(lit0), { back, lit0 });
-  // already showing: one soft ring, nothing sent
+  // already showing: one soft ring and the scene sent again quietly, so the room is surely in it; no notice
   await page.tap(chip); await wait(2600);
   await clearCmds();
-  await page.tap(chip); await wait(80);
+  await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
+  await page.tap(chip); await wait(300);
   const same = await C(() => ({ soft: !!document.querySelector('.wv-soft'), wave: !!document.querySelector('.wv-wave') }));
-  check('6: tapped again, it is already showing: one soft ring and nothing else moves', same.soft && !same.wave && !(await cmds()).length, { same, cmds: await cmds() });
-  check('6: and says so', /Already showing/.test(await toastText()), await toastText());
+  const sent = (await cmds()).filter(a => a.type === 'preset');
+  check('6: tapped again when already showing: one soft ring, and the scene is sent again', same.soft && !same.wave && sent.length === 1, { same, cmds: await cmds() });
+  check('6: with no "already showing" notice', !/Already showing/.test(await toastText()), await toastText());
   await wait(900);
   // hold the chip: it opens for changing
   const cb = await page.locator(chip).first().boundingBox();

@@ -8,11 +8,27 @@
 import { tile, roomPicture } from '/ui/screens/parts.js';
 import { roomTone, roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
+import { sceneSheet, actions as sceneActions, LIST_ACTS } from '/ui/screens/scenes.js';
 import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
 import { reduced } from '/ui/motion.js';
 
-// Room setup and the room's sleep timer are sheets over it (setup.js).
+// Room setup and the room's sleep timer are sheets over it (setup.js), and so is a scene's editor
+// (#room/<id>/scene/<scene id>, the same sheet All scenes opens), so changing a scene never leaves the room.
 export const sheets = setupSheets;
+export function sheetFor(c, r) {
+  if (!r.sub) return null;
+  const m = /^scene\/(.+)$/.exec(r.sub);
+  if (m) {
+    const p = c.data.presets().find(x => x.id === m[1]);
+    return p ? { spec: sceneSheet(c, p), parent: `room/${r.id}` } : null;
+  }
+  const make = setupSheets[r.sub];
+  return make ? { spec: make(c, r), parent: `room/${r.id}` } : null;
+}
+// The scene sheet's own taps, told which scene from the room's address
+const sceneRoute = r => ({ name: 'scenes', id: (/^scene\/(.+)$/.exec(r.sub || '') || [])[1] || null, parent: `room/${r.id}` });
+const sheetActs = Object.fromEntries(Object.entries(sceneActions).filter(([k]) => !LIST_ACTS.includes(k))
+  .map(([k, fn]) => [k, (c, el, r, v) => fn(c, el, sceneRoute(r), v)]));
 
 // Fans and shades after the lights: a grid is never re-sorted by state, so a tile never moves under the thumb that
 // just turned it on.
@@ -76,6 +92,8 @@ export function view(c, r) {
   const ds = data.controllable().filter(d => data.devArea(d) === aid)
     .sort((x, y) => (DOMAIN_LAST[x.domain] || 0) - (DOMAIN_LAST[y.domain] || 0) || x.name.localeCompare(y.name));
   const lights = H.roomLights(aid);
+  // with no scene open, the next one opens with "Show it on the room" off again (as All scenes does)
+  if (!/^scene\//.test(r.sub || '')) { c.ui.stageFor = null; c.ui.sceneShow = false; }
   const litN = lights.filter(d => (data.level(d.device_id) || 0) > 0).length;
   const onN = ds.filter(d => data.isOn(d.device_id) && d.domain !== 'cover').length;
   const photo = !!H.roomPhotoURL(aid);
@@ -84,6 +102,9 @@ export function view(c, r) {
 
   // the room's scenes: the one the lights are showing now is copper, and "Save this look" keeps what they are showing.
   // A chip just tapped is copper at once, before its lights have said they have arrived: the press landed.
+  // Edit (over the chips) turns every chip into a way into its scene, with a pencil, until Done; holding a chip
+  // does the same at any time. New scene, last, starts one from the room as it is and opens it.
+  const editing = c.ui.roomScenesEdit === aid;
   const cur = H.sceneMatch(aid);
   const scenes = H.roomScenes(aid).map(p => {
     const arriving = w && w.kind === 'run' && w.id === p.id;
@@ -91,10 +112,13 @@ export function view(c, r) {
     const now = p.id === cur || arriving || long;
     const g = now ? 'check' : MOOD_GLYPH[p.mood];
     const sub = long ? `<span class="ch-sub">Arriving · ${esc(c.EDIT.fadeText(wave.fade))}</span><i class="wv-prog" data-wvp="prog" style="animation-duration:${wave.fade}s"></i>` : '';
+    if (editing) return `<button class="chip lead editing" data-act="scene-edit" data-id="${esc(p.id)}" aria-label="Change ${esc(H.sceneShortName(p))}">${icon('pencil', 16, 1.8)}${esc(H.sceneShortName(p))}</button>`;
     return `<button class="chip ${g ? 'lead' : ''} ${now ? 'current' : ''} ${long ? 'long' : ''}" data-act="scene" data-t="p:${esc(p.id)}" data-hold="scene-edit" data-ms="500" data-id="${esc(p.id)}">${g ? icon(g, 16, 1.8) : ''}${esc(H.sceneShortName(p))}${sub}</button>`;
   });
-  const saveLook = litN && !cur && !w ? `<button class="chip lead" data-act="save-look" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}Save this look</button>` : '';
-  const suggest = !scenes.length && H.roomDimmers(aid).length ? `<button class="chip lead" data-act="suggest-five" data-id="${esc(aid)}">${icon('sparkle', 16, 1.8)}Suggest five scenes</button>` : '';
+  const newScene = canToggle ? `<button class="chip lead" data-act="room-scene-new" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}New scene</button>` : '';
+  const scenesHead = scenes.length ? `<div class="room-sec"><span class="t-over">Scenes</span><button class="link" data-act="room-scenes-edit" data-id="${esc(aid)}" aria-pressed="${editing}">${editing ? 'Done' : 'Edit'}</button></div>` : '';
+  const saveLook = litN && !cur && !w && !editing ? `<button class="chip lead" data-act="save-look" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}Save this look</button>` : '';
+  const suggest = !editing && !scenes.length && H.roomDimmers(aid).length ? `<button class="chip lead" data-act="suggest-five" data-id="${esc(aid)}">${icon('sparkle', 16, 1.8)}Suggest five scenes</button>` : '';
 
   // While a wave is out, the count and the badge hold what they said before the tap and settle to what is true now
   // at their own time; the stylesheet's keyframes do it, timed from the tap in after().
@@ -126,7 +150,8 @@ export function view(c, r) {
         <button class="glass" data-act="room-off" data-id="${esc(aid)}">${icon('power', 22, 2)}All off</button>
       </div>` : ''}
     </div>
-    ${scenes.length || saveLook || suggest ? `<div class="chip-row room-chips" data-keep="room-scenes">${scenes.join('')}${saveLook}${suggest}</div>` : ''}
+    ${scenesHead}
+    ${scenes.length || saveLook || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${saveLook}${suggest}${newScene}</div>` : ''}
     ${ds.length
       ? `<div class="tile-grid room-grid">${ds.map(d => tile(c, d)).join('')}</div>`
       : `<div class="group room-empty"><button class="row sub has-ic" data-go="room/${esc(aid)}/setup"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Nothing in this room yet</span><span class="d">Move a light or a remote in here.</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>`}
@@ -234,11 +259,12 @@ async function runWave(c, el, r, p) {
   const rb = room ? room.getBoundingClientRect() : { left: 0, top: 0 }, cb = el.getBoundingClientRect();
   const x = cb.left + cb.width / 2 - rb.left, y = cb.top + cb.height / 2 - rb.top;
   const t0 = performance.now();
-  // already there: one soft ring from the chip, and nothing else moves
+  // already there: one soft ring from the chip, and nothing else moves. It is still sent, quietly: the lights may
+  // not be what this phone last heard, and a tap on a scene should always put the room in it. No toast.
   if (c.H.sceneMatch(aid) === p.id && !fading(wave, p.id)) {
     wave = { kind: 'same', id: p.id, aid, t0, x, y };
     c.render();
-    c.toast(`Already showing ${name}`);
+    c.run({ type: 'preset', preset_id: p.id });
     return;
   }
   const lights = c.H.roomLights(aid);
@@ -276,6 +302,7 @@ function gone(c) {
 
 export const actions = {
   ...setupActions,
+  ...sheetActs,
   'room-on'(c, el) { roomPower(c, el.dataset.id, true); },
   'room-off'(c, el) { roomPower(c, el.dataset.id, false); },
   // a scene chip: one tap runs it, with Put back; hold it to change it, as a scene tile does on All scenes
@@ -285,7 +312,21 @@ export const actions = {
     const p = c.data.presets().find(x => x.id === t.slice(2)); if (!p) return;
     runWave(c, el, r, p);
   },
-  'scene-edit'(c, el) { if (el.dataset.id) c.go(`scenes/${el.dataset.id}`); },
+  // a scene's editor opens over the room, and closing it is the room again
+  'scene-edit'(c, el, r) { if (el.dataset.id) c.go(`room/${r.id}/scene/${el.dataset.id}`); },
+  'room-scenes-edit'(c, el) { const aid = el.dataset.id; c.ui.roomScenesEdit = c.ui.roomScenesEdit === aid ? null : aid; c.render(); },
+  // a new scene is the room as it is now (every light in it, so the ones that are off stay off), opened to change
+  'room-scene-new'(c, el) {
+    const aid = el.dataset.id;
+    const p = c.EDIT.newScene(aid);
+    for (const d of c.data.controllable()) {
+      if (d.domain === 'cover' || c.data.devArea(d) !== aid || d.device_id in p.levels) continue;
+      p.levels[d.device_id] = c.H.sceneEntryNow(d, 0);
+    }
+    c.ui.roomScenesEdit = null;
+    c.save('', { quiet: true });
+    c.go(`room/${aid}/scene/${p.id}`);
+  },
   'save-look'(c, el) {
     const p = c.H.saveRoomLook(el.dataset.id); if (!p) return;
     c.save(`Saved as ${c.H.sceneShortName(p)}`);

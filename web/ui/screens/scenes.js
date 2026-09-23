@@ -273,7 +273,7 @@ function wireStage(c, p, root) {
   });
 }
 
-function sceneSheet(c, p) {
+export function sceneSheet(c, p) {
   const { esc, icon, H, EDIT, data } = c;
   const ds = EDIT.sceneDevices(p);
   // "Show it on the room" is off each time the editor opens, so moving an orb never surprises the room
@@ -383,6 +383,8 @@ async function runScene(c, p) {
   } });
 }
 
+// The actions the list itself has; every other one belongs to the scene's sheet, which a room opens too.
+export const LIST_ACTS = ['scene-run', 'scene-edit', 'scene-run-lutron', 'scene-lutron', 'scene-new', 'scenes-five', 'scenes-notnow'];
 export const actions = {
   'scene-run'(c, el) { const p = c.data.presets().find(x => x.id === el.dataset.id); if (p) runScene(c, p); },
   'scene-edit'(c, el) { c.go(`scenes/${el.dataset.id}`); },
@@ -451,7 +453,9 @@ export const actions = {
     const p = c.EDIT.deleteScene(r.id); if (!p) return;
     c.closePicker(); c.closeSheet();
     await c.save('', { quiet: true });
-    history.replaceState(null, '', '#scenes'); c.render();
+    // opened over a room (room.js), it steps back to the room; opened from All scenes, it is the list again
+    if (r.parent && history.state && history.state.sheet) history.back();
+    else { history.replaceState(r.parent ? history.state : null, '', '#' + (r.parent || 'scenes')); c.render(); }
     c.toast(`${c.H.sceneShortName(p)} deleted`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };
