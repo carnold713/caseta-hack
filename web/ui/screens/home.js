@@ -32,7 +32,7 @@ export function view(c) {
 
   return `<div class="home">
     <header class="home-head">
-      <button class="greet ${st === 'off' ? 'off' : ''}" data-act="conn-open" aria-label="Connection">${greet}</button>
+      <button class="greet ${st === 'off' ? 'off' : ''}" data-act="conn-open" aria-label="Connection" data-xf="standard">${greet}</button>
       <h1 class="t-h1">${esc(name)}</h1>
       <button class="hdr-btn a2" data-go="activity" aria-label="Recent activity">${icon('clock', 20, 1.7)}</button>
       <button class="hdr-btn a1" data-go="settings" aria-label="Settings">${icon('gear', 20, 1.7)}</button>
@@ -42,7 +42,7 @@ export function view(c) {
 
     <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
-      <div class="house-head">${lit.length ? `${lit.length} on · ${lv}%` : 'Everything is off'}</div>
+      <div class="house-head" data-xf>${lit.length ? `${lit.length} on · ${lv}%` : 'Everything is off'}</div>
       <div class="hbar" data-drag="house" style="--pct:${lit.length ? lv : 0}%" role="slider" aria-label="House brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
         <span class="fill"></span>
         <span class="lo">${icon('sun', 22, 1.8)}</span>
@@ -67,7 +67,7 @@ export function view(c) {
     ${favScenes.length ? `<div class="chip-row" data-keep="scenes">${favScenes.join('')}<button class="chip more" data-go="scenes">All scenes</button></div>` : ''}
 
     ${rooms.length ? `<div class="t-over sec">Rooms</div><div class="tile-strip rooms" data-keep="rooms">${rooms.map(a => `
-      <button class="room-card" data-go="room/${esc(a.id)}">
+      <button class="room-card" data-go="room/${esc(a.id)}" data-xf>
         ${roomPicture(c, a.id, a.name, false)}
         <span class="nm">${esc(a.name)}</span><span class="vl">${esc(roomStatus(c, a.id))}</span>
       </button>`).join('')}</div>` : ''}

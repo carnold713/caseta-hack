@@ -70,10 +70,15 @@
   --dimmer: 400ms;
   --scene: 1000ms;
   --breathe: 1600ms;
+  /* The four curves every token is built from, as get_motion_context returns them for the file's
+     "Easing reference" (12761:76): standard cubic, EASE_IN for exits, EASE_IN_AND_OUT for the dimmer, the scene
+     and the breathing dot, and two springs. GENTLE is the sheet's (it overshoots 2.8% and settles); QUICK is a
+     press (scale to .96 and back). */
   --ease: cubic-bezier(.2, .8, .2, 1);
-  --ease-in: cubic-bezier(.4, 0, 1, 1);
-  --ease-both: cubic-bezier(.4, 0, .2, 1);
-  --spring: linear(0, .3 8%, .72 17%, .94 25%, 1.04 32%, 1.06 40%, 1.02 55%, 1);
+  --ease-in: ease-in;
+  --ease-both: ease-in-out;
+  --spring: linear(0, 0.0188, 0.0679, 0.1374, 0.2195, 0.308, 0.3978, 0.4856, 0.5686, 0.6452, 0.7142, 0.7753, 0.8283, 0.8735, 0.9113, 0.9423, 0.9671, 0.9866, 1.0014, 1.0123, 1.0198, 1.0247, 1.0274, 1.0283, 1.0281, 1.0268, 1.025, 1.0227, 1.0202, 1.0177, 1.0152, 1.0128, 1.0106, 1.0085, 1.0068, 1.0052, 1.0039, 1.0028, 1.0018, 1.0011, 1.0005, 1, 0.9997, 0.9995, 0.9993, 0.9992, 0.9992, 0.9992, 0.9992, 0.9993, 0.9993);
+  --spring-quick: linear(0, 0.03, 0.1077, 0.2165, 0.342, 0.4728, 0.6001, 0.7175, 0.8208, 0.9077, 0.9776, 1.0307, 1.0684, 1.0925, 1.1051, 1.1084, 1.1047, 1.096, 1.084, 1.0703, 1.0561, 1.0424, 1.0297, 1.0187, 1.0094, 1.0019, 0.9963, 0.9923, 0.9898, 0.9885, 0.9882, 0.9887, 0.9897, 0.991, 0.9925, 0.994, 0.9955, 0.9969, 0.9981, 0.9991, 0.9998, 1.0004, 1.0009, 1.0011, 1.0012, 1.0013, 1.0012, 1.0011, 1.001, 1.0008, 1.0006);
 }
 
 /* The face the whole app is set in. Three weights ship, not eight: the file's generator drew in

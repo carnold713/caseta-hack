@@ -122,6 +122,7 @@ function lightView(c, d) {
     <div class="onoff">
       <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}<span>${on && dim ? `On · <span data-lv>${lv}</span>%` : 'On'}</span></button>
       <button data-act="dev-off" aria-pressed="${!on}">${icon('power', 22, 2)}Off</button>
+      <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>
     </div>
     ${looks.length ? `<div class="looks">${looks.join('')}</div>` : ''}
     <div class="feats shifted">${feats.join('')}</div>
@@ -147,6 +148,7 @@ function fanView(c, d) {
     <div class="onoff blue">
       <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}${on ? `On · ${FAN_WORD[sp]}` : 'On'}</button>
       <button data-act="dev-off" aria-pressed="${!on}">${icon('power', 22, 2)}Off</button>
+      <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>
     </div>
     <div class="feats fan-feats">
       ${feature(c, { go: `light/${id}/timer`, glyph: 'timer', title: 'Sleep timer', sub: tl || 'Off', on: !!tl, disabled: !on && !tl })}

@@ -122,10 +122,10 @@ function colour(c, r) {
         <span class="handle" style="left:${hx.toFixed(1)}px;top:${hy.toFixed(1)}px;background:${hex}"></span>
       </div>
       <div class="cs-val" data-cval>
-        <i class="dot" style="background:${hex}"></i><b>${c.esc(colourName(hex))}</b><span>· ${hex}</span>
+        <i class="dot" style="background:${hex}"></i><b data-xf="standard">${c.esc(colourName(hex))}</b><span data-xf="standard">· ${hex}</span>
         <button class="link" data-act="colour-exact">Enter exact</button>
       </div>
-      <div class="cs-sw" data-keep="swatches">${LAMP_COLOURS.map(([n, x]) => `<button class="sw ${showing && sameHex(x, hex) ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="background:${x}" aria-label="${n}"></button>`).join('')}</div>
+      <div class="cs-sw" data-keep="swatches">${LAMP_COLOURS.map(([n, x]) => `<button class="sw ${showing && sameHex(x, hex) ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="background:${x}" aria-label="${n}"></button>`).join('')}${ring(showing ? hex : null)}</div>
       ${follows ? `<p class="cs-note">${c.icon('sunrise', 20, 1.7)}<span>Picking a colour pauses Follow the day until the lamp is next turned on.</span></p>` : ''}
     </div>`,
     after: (c2, r2, root) => wireWheel(c2, d, root),
@@ -144,6 +144,9 @@ function setColour(c, d, hex, root) {
   c.gate.sendColor(`d:${id}`, { hex });
   if (root) paintColour(root, hex);
 }
+// The ring round the chosen swatch is one element that slides to the next choice (M1, 42 px a swatch).
+function ringAt(hex) { const i = LAMP_COLOURS.findIndex(([, x]) => sameHex(x, hex)); return i; }
+function ring(hex) { const i = hex ? ringAt(hex) : -1; return `<i class="sw-ring" aria-hidden="true" style="transform:translateX(${Math.max(0, i) * 42}px)" ${i < 0 ? 'hidden' : ''}></i>`; }
 function paintColour(root, hex) {
   const { h, s } = hexHsv(hex); const [x, y] = wheelPoint(h, s);
   const hd = root.querySelector('.wheel .handle'); if (!hd) return;
@@ -151,6 +154,8 @@ function paintColour(root, hex) {
   const v = root.querySelector('[data-cval]');
   v.querySelector('.dot').style.background = hex; v.querySelector('b').textContent = colourName(hex); v.querySelector('span').textContent = `· ${hex}`;
   root.querySelectorAll('.cs-sw .sw').forEach(b => b.classList.toggle('sel', sameHex(b.dataset.hex, hex)));
+  const rg = root.querySelector('.cs-sw .sw-ring'), i = ringAt(hex);
+  if (rg) { rg.hidden = i < 0; if (i >= 0) rg.style.transform = `translateX(${i * 42}px)`; }
 }
 function wireWheel(c, d, root) {
   const w = root.querySelector('[data-drag="wheel"]'); if (!w) return;
@@ -161,7 +166,7 @@ function wireWheel(c, d, root) {
     const s = Math.min(1, Math.hypot(dx, dy) / (WHEEL / 2));
     return hsvHex(h, s, 1);
   };
-  w.addEventListener('pointerdown', e => { e.preventDefault(); c.ui.dragging = true; w.setPointerCapture(e.pointerId); setColour(c, d, at(e), root); });
+  w.addEventListener('pointerdown', e => { e.preventDefault(); c.ui.dragging = true; w.classList.add('held'); w.setPointerCapture(e.pointerId); setColour(c, d, at(e), root); });
   w.addEventListener('pointermove', e => { if (c.ui.dragging && w.hasPointerCapture(e.pointerId)) setColour(c, d, at(e), root); });
   const end = () => { if (c.ui.dragging) c.endDrag(); };
   w.addEventListener('pointerup', end); w.addEventListener('pointercancel', end);

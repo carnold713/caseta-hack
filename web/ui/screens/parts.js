@@ -64,7 +64,7 @@ export function tile(c, d) {
   }
   const t = lit ? timerFor(c, id) : null;
   const timer = t ? `<span class="tile-timer">${icon('timer', 14, 1.8)}${minutesLeft(t.ends_at)} min</span>` : '';
-  return `<div class="${cls}"${style} data-go="light/${esc(id)}" role="link" aria-label="${esc(d.name)}">
+  return `<div class="${cls}"${style} data-go="light/${esc(id)}" role="link" aria-label="${esc(d.name)}" data-xf>
     ${lit ? '<span class="glow"></span>' : ''}${lead}${d.domain === 'fan' || d.domain === 'cover' ? '' : art}${extra}${timer}
     <span class="nm">${esc(d.name)}</span><span class="vl">${esc(valueLine(c, d))}</span></div>`;
 }
@@ -107,7 +107,7 @@ export function roomPicture(c, aid, name, big) {
 // em dash.
 export function offlineCard(c) {
   const since = c.S.troubleSince ? new Date(c.S.troubleSince).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase() : null;
-  return `<div class="offline-card">
+  return `<div class="offline-card" data-enter="drop">
     ${c.icon('wifi', 24, 1.7)}
     <p>Can't reach your house computer${since ? ` since ${c.esc(since)}` : ''}. You're seeing the last known state, and your remotes still work.</p>
     <button class="pill ghost" data-act="what-now">What can I do?</button></div>`;

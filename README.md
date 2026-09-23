@@ -418,7 +418,10 @@ sleep timer, Follow the day, About), a fan, a shade, every scene, Remotes and
 what each press does, Routines and the guided setups, Activity, Settings (Hue
 and Nanoleaf pairing, light sets, hidden devices, the connector, backup and
 restore), adding a Lutron device, and a short onboarding before the password.
-`docs/data-layer.md` covers the data layer it runs on.
+`docs/data-layer.md` covers the data layer it runs on. Its motion is the file's
+own: the sheet and press springs, page pushes, the load stagger, the dimmer and
+scene crossfades and the add-device sonar were read from the file's keyframe
+timelines (M1 to M7) and are played by `web/ui/motion.js`.
 
 **The previous app is kept at `/classic/`**, unchanged and linked from
 Settings, This app. Everything below about its look describes that one.
@@ -446,7 +449,7 @@ web/              the PWA: index.html (the new app, same as web/ui/index.html), 
 web/data/         the data layer, no DOM: state, socket, api and command gate, save and undo, inventory and
                   targets (caseta-data.js), roles and suggested scenes (home.js), Follow the day (daylight.js).
                   One file for every host: a script tag, a require, or an import through index.js
-web/ui/           Copper Night: index.html + app.js (the app at /, also served at /ui/), screens/, screens.css, tokens.css,
+web/ui/           Copper Night: index.html + app.js (the app at /, also served at /ui/), motion.js, screens/, screens.css, tokens.css,
                   components.css, icons.js, colour.js, art/ (exported from Figma), gallery.html
 agent/agent.py    bridge connection, event fan-out, hub link with reconnect
 agent/engine.py   gesture state machine, action runner, timers (pylutron-caseta underneath)

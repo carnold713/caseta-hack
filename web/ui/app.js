@@ -9,6 +9,7 @@ import { create, CasetaHome, CasetaDaylight, CasetaEdit, CasetaRemotes, CasetaRo
 import { icon } from '/ui/icons.js';
 import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
+import * as motion from '/ui/motion.js';
 import * as homeScreen from '/ui/screens/home.js';
 import * as roomsScreen from '/ui/screens/rooms.js';
 import * as roomScreen from '/ui/screens/room.js';
@@ -37,6 +38,8 @@ const $ = s => document.querySelector(s);
 // ---------- commands and saving ----------
 // Run one action now. A failure is said in a toast and never thrown at the screen.
 async function run(action) {
+  // a scene arriving crossfades every light it touches over the scene's 1.0 s, not one light's 0.4 s
+  if (action && (action.type === 'preset' || action.type === 'scene')) motion.sceneArriving();
   try { await data.run(action); return true; }
   catch (e) { toast(e.message, { err: true }); return false; }
 }
@@ -66,7 +69,7 @@ function toast(msg, opts = {}) {
   root.innerHTML = `<div class="toast ${opts.err ? 'err' : ''}" role="status">${icon(opts.err ? 'x' : 'check', 20, 1.8)}<span class="msg">${esc(msg)}</span>${undo}</div>`;
   root._undo = opts.undo || null;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { root.innerHTML = ''; root._undo = null; }, 5000);
+  toastTimer = setTimeout(() => { root._undo = null; const t = root.firstElementChild; if (t) motion.leave(t); }, 5000);
 }
 
 // ---------- the sheet ----------
@@ -83,8 +86,10 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
     // someone typing in the sheet (a name) is never redrawn out from under
     const a = document.activeElement;
     if (a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return root;
+    const snap = motion.snap(root.querySelector('.sheet'));
     const h = root.querySelector('.sheet-head'); if (h) h.outerHTML = headHTML;
     const b = root.querySelector('.sheet-body'); if (b) b.innerHTML = body;
+    motion.carry(snap, root.querySelector('.sheet'));
     return root;
   }
   // one sheet replacing another (White to Colour) swaps in place rather than rising again
@@ -98,7 +103,9 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
   root.hidden = false;
   return root;
 }
-function closeSheet() { const root = $('#sheet-root'); root.innerHTML = ''; root.hidden = true; root.dataset.key = ''; root._onClose = null; }
+// It drops rather than vanishing (0.28 s EASE_IN, the scrim fading with it); what falls is a copy, and the sheet
+// itself is gone at once, so nothing on it can be tapped on the way down.
+function closeSheet() { const root = $('#sheet-root'); motion.sheetOut(root); root.innerHTML = ''; root.hidden = true; root.dataset.key = ''; root._onClose = null; }
 function dismissSheet() { const root = $('#sheet-root'); const f = root._onClose; closeSheet(); if (f) f(); }
 
 // ---------- the route ----------
@@ -146,16 +153,23 @@ const ctx = {
 // sideways scroll of each strip. While a finger is on a control nothing is redrawn at all, so the control is never
 // pulled out from under it; the redraw it missed happens when the finger lifts.
 let pending = false;
+// How the next redraw arrives: 'push', 'back' or 'load' when the page has changed (motion.js), else nothing and
+// each element's own transitions carry it from the last redraw.
+let arriving = null, wasScreen = false;
 function render() {
   if (ctx.ui.dragging) { pending = true; return; }
   pending = false;
   const app = $('#app'), scr = $('#screen'), tabs = $('#tabs');
-  if (!S.token) { app.className = onboarded() ? 'plain' : 'plain onboarding'; tabs.hidden = true; scr.innerHTML = loginHTML(); return; }
-  if (!S.ready || !S.config) { app.className = 'plain'; tabs.hidden = true; scr.innerHTML = loadingHTML(); return; }
+  if (!S.token) { wasScreen = false; app.className = onboarded() ? 'plain' : 'plain onboarding'; tabs.hidden = true; scr.innerHTML = loginHTML(); return; }
+  if (!S.ready || !S.config) { wasScreen = false; app.className = 'plain'; tabs.hidden = true; scr.innerHTML = loadingHTML(); return; }
   const r = route();
   const screen = screenFor(r);
   const keep = {};
   scr.querySelectorAll('[data-keep]').forEach(el => { keep[el.dataset.keep] = el.scrollLeft; });
+  // the app opening on a screen is a load, like a tab
+  const how = arriving || (wasScreen ? null : 'load');
+  arriving = null; wasScreen = true;
+  const snap = how ? null : motion.snap(scr);
   scr.innerHTML = screen.view(ctx, r);
   scr.querySelectorAll('[data-keep]').forEach(el => { if (keep[el.dataset.keep] != null) el.scrollLeft = keep[el.dataset.keep]; });
   const st = data.connState();
@@ -170,6 +184,8 @@ function render() {
   const tab = TAB_OF[r.name] || 'home';
   tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
   if (screen.after) screen.after(ctx, r, scr);
+  if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
+  motion.settle(scr);
   routedSheet(screen, r);
 }
 // A sheet that is a page's sub route (#light/<id>/white): drawn over the page, redrawn with it, and dismissing it
@@ -199,7 +215,12 @@ function routedSheet(screen, r) {
 function openPicker(name, spec) { ctx.ui.picker = { key: location.hash.replace(/^#/, ''), name, spec }; render(); }
 function closePicker() { ctx.ui.picker = null; render(); }
 let frame = 0;
-function soon() { if (frame) return; frame = requestAnimationFrame(() => { frame = 0; render(); }); }
+// A redraw asked for by the socket waits while a page is still arriving; a tap redraws at once.
+function soon() {
+  if (frame) return;
+  const wait = motion.busyFor();
+  frame = wait ? setTimeout(() => { frame = 0; render(); }, wait) : requestAnimationFrame(() => { frame = 0; render(); });
+}
 ctx.soon = soon;
 ctx.endDrag = () => { ctx.ui.dragging = false; if (pending) render(); };
 
@@ -328,11 +349,19 @@ document.addEventListener('submit', async e => {
 // A new address closes whatever sheet was up; one that only swaps the sheet over the same page (White to Colour)
 // keeps the page's scroll.
 let lastPage = '', lastName = route().name;
+// How deep each page sits: a tab is 0, what a tab opens is 1, a page opened from those is 2. Deeper is a push,
+// shallower is back, and one tab to another is a load with its stagger (M4).
+const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 1, light: 2, timing: 2, add: 2 };
 window.addEventListener('hashchange', () => {
   closeSheet();
   const r = route(); const page = `${r.name}/${r.id}`;
   // a page that holds something open while it is shown (the bridge listening) lets go of it when it is left
   if (r.name !== lastName && SCREENS[lastName] && SCREENS[lastName].leave) SCREENS[lastName].leave(ctx);
+  if (page !== lastPage && S.ready && S.config) {
+    const was = DEPTH[lastName] ?? 1, now = DEPTH[r.name] ?? 1;
+    arriving = !was && !now ? 'load' : now < was ? 'back' : 'push';
+    motion.capture($('#screen'));
+  }
   lastName = r.name;
   if (page !== lastPage) window.scrollTo(0, 0);
   lastPage = page;

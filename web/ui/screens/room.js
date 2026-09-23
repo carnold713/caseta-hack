@@ -43,11 +43,11 @@ export function view(c, r) {
     </header>
     <div class="room-title">
       <h1 class="t-h1">${esc(a.name)}</h1>
-      <span class="count">${ds.length === 1 ? '1 device' : `${ds.length} devices`}${onN ? ` · ${onN} on` : ''}</span>
+      <span class="count" data-xf>${ds.length === 1 ? '1 device' : `${ds.length} devices`}${onN ? ` · ${onN} on` : ''}</span>
     </div>
     <div class="room-photo-card ${photo ? '' : roomTone(aid)}">
       ${roomPicture(c, aid, a.name, false)}
-      ${litN ? `<span class="badge" aria-label="${litN} on">${litN}</span>` : ''}
+      ${litN ? `<span class="badge" data-xf aria-label="${litN} on">${litN}</span>` : ''}
       ${photo ? '' : `<button class="add-photo" data-go="room/${esc(aid)}/setup">${icon('camera', 16, 1.8)}Add a photo</button>`}
       ${canToggle ? `<div class="room-acts">
         <button class="glass" data-act="room-on" data-id="${esc(aid)}">${icon('sun', 22, 2)}All on</button>

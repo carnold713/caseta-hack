@@ -36,20 +36,20 @@ export function view(c) {
   // the card that slides up: one device heard, or a choice of several, or the one just made
   let card = '';
   if (a.created) {
-    card = `<div class="ad-card done"><span class="grab"></span><span class="ic-c">${icon('check', 24, 2)}</span><p class="t">Added ${esc(a.created.name)}</p>
+    card = `<div class="ad-card done" data-enter="sheet"><span class="grab"></span><span class="ic-c">${icon('check', 24, 2)}</span><p class="t">Added ${esc(a.created.name)}</p>
       <p class="t-cap muted">It is in ${esc(a.created.room)} and shows up there in a moment.${a.created.where ? ` Your Lutron bridge keeps it under ${esc(a.created.where)}; this app has it in ${esc(a.created.room)}, which is the one that counts here.` : ''} A dimmer or switch works right away; a remote is ready to set up on the Remotes tab.</p>
       <div class="sheet-btns"><button class="pill solid" data-act="ad-again">Add another</button><button class="pill ghost" data-go="${a.created.room_id ? `room/${esc(a.created.room_id)}` : 'home'}">Done</button></div></div>`;
   } else if (!pick && list.length > 1) {
-    card = `<div class="ad-card"><span class="grab"></span><p class="t">Heard ${list.length} devices</p><div class="group">${list.map(h => `<button class="row" data-act="ad-pick" data-serial="${esc(h.serial)}"><span class="row-txt"><span class="t">${esc(EDIT.addTypeName(h.device_type))}</span><span class="d">${h.model ? esc(h.model) + ' · ' : ''}serial ${esc(h.serial)}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`).join('')}</div></div>`;
+    card = `<div class="ad-card" data-enter="sheet"><span class="grab"></span><p class="t">Heard ${list.length} devices</p><div class="group">${list.map(h => `<button class="row" data-act="ad-pick" data-serial="${esc(h.serial)}"><span class="row-txt"><span class="t">${esc(EDIT.addTypeName(h.device_type))}</span><span class="d">${h.model ? esc(h.model) + ' · ' : ''}serial ${esc(h.serial)}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`).join('')}</div></div>`;
   } else if (pick) {
     const rooms = EDIT.addRooms();
     const room = a.room || (rooms.length === 1 ? rooms[0].id : null);
     const home = room ? EDIT.lutronHomeFor(room) : null;
-    card = `<div class="ad-card"><span class="grab"></span>
+    card = `<div class="ad-card" data-enter="sheet"><span class="grab"></span>
       <span class="illo"><img src="${c.artSrc(art(pick.device_type))}" alt=""></span>
       <p class="t hd">Heard: ${esc(EDIT.addTypeName(pick.device_type))}</p><p class="t-cap muted sub">Caséta · ${pick.model ? esc(pick.model) : 'just now'}</p>
-      <label class="ad-field"><span>Name</span><input data-input="ad-name" value="${esc(a.name)}" placeholder="${esc(EDIT.addDefaultName(pick.device_type))}" maxlength="60" autocomplete="off"></label>
-      <div class="chip-row ad-rooms" data-keep="adrooms">${rooms.map(r => `<button class="chip" aria-pressed="${room === r.id}" data-act="ad-room" data-id="${esc(r.id)}">${esc(r.name)}</button>`).join('')}<button class="chip lead" data-act="ad-newroom">${icon('plus', 16, 1.4)}New room</button></div>
+      <label class="ad-field" data-enter data-enter-at="200"><span>Name</span><input data-input="ad-name" value="${esc(a.name)}" placeholder="${esc(EDIT.addDefaultName(pick.device_type))}" maxlength="60" autocomplete="off"></label>
+      <div class="chip-row ad-rooms" data-keep="adrooms">${rooms.map((r, i) => `<button class="chip" aria-pressed="${room === r.id}" data-act="ad-room" data-id="${esc(r.id)}" data-enter data-enter-at="280" data-enter-i="${i}">${esc(r.name)}</button>`).join('')}<button class="chip lead" data-act="ad-newroom" data-enter data-enter-at="280" data-enter-i="${rooms.length}">${icon('plus', 16, 1.4)}New room</button></div>
       ${home && !home.own ? `<p class="t-cap muted ad-note">Your Lutron bridge has no ${esc(c.data.areaName(room))} of its own, so it keeps the device under ${esc(home.name)}. This app files it in ${esc(c.data.areaName(room))}, where every button, scene and routine will find it.</p>` : ''}
       <button class="next-btn" data-act="ad-create" ${room && !a.busy ? '' : 'disabled'}>${a.busy ? 'Adding…' : room ? 'Add to my home' : 'Pick a room'}</button></div>`;
   }
@@ -58,7 +58,7 @@ export function view(c) {
     <h1 class="t-h1 page-h1">Add a device</h1>
     <p class="t-cap muted ad-sub">Caséta · experimental</p>
     <div class="ad-steps">${steps}</div>
-    <div class="radar ${active(c) ? 'on' : ''}"><i class="g"></i><i class="r1"></i><i class="r2"></i><i class="r3"></i><img src="${c.artSrc('lutron-wireless')}" alt=""></div>
+    <div class="radar ${active(c) && !pick ? 'on' : ''}"><i class="g"></i><i class="r1"></i><i class="r2"></i><i class="p p1"></i><i class="p p2"></i><i class="p p3"></i><i class="r3"></i>${pick && !a.created ? '<i class="ping" data-enter="ping"></i>' : ''}<img data-xf="standard" src="${c.artSrc(pick ? art(pick.device_type) : 'lutron-wireless')}" alt=""></div>
     <p class="ad-status">${esc(status)}${active(c) ? ` <span class="left">${clock(left)}</span>` : ''}</p>
     <p class="ad-say">${say}</p>
     <div class="ad-btns">${active(c) || a.busy ? '<button class="pill ghost" data-act="ad-stop">Stop listening</button>' : `<button class="pill blue" data-act="ad-start">${a.error ? 'Try again' : 'Listen'}</button>`}</div>

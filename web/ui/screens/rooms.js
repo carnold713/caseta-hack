@@ -16,7 +16,7 @@ export function view(c) {
     const lit = H.roomLights(a.id).some(d => (data.level(d.device_id) || 0) > 0);
     const photo = !!H.roomPhotoURL(a.id);
     const canToggle = data.controllable().some(d => data.devArea(d) === a.id && d.domain !== 'cover');
-    return `<div class="room-big ${photo ? 'photo' : roomTone(a.id)} ${lit ? 'lit' : ''}" data-go="room/${esc(a.id)}" role="link" aria-label="${esc(a.name)}">
+    return `<div class="room-big ${photo ? 'photo' : roomTone(a.id)} ${lit ? 'lit' : ''}" data-go="room/${esc(a.id)}" role="link" aria-label="${esc(a.name)}" data-xf>
       ${!photo && lit ? '<span class="glow"></span>' : ''}
       ${roomPicture(c, a.id, a.name, true)}
       <span class="nm nm-cut">${esc(a.name)}</span><span class="vl">${esc(roomStatus(c, a.id))}</span>

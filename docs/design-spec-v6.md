@@ -630,6 +630,86 @@ brightness. That is already what the connector does (`_before_on`, `ON_FADE_SECO
 0.4); the UI must not fight it. Honour the OS reduce-motion setting by swapping
 movement for plain fades.
 
+### Read from the file's own animations
+
+The Pico App page has a motion board, **M · Motion principles** (12761:76, a
+6 s timeline with the token table and twelve specimens), and seven worked
+interactions beside it on real screens: **M1** sheet up and down (colour
+sheet), **M2** light turns off, **M3** scene arrives, **M4** screen load
+stagger and push, **M5** connection drops, **M6** brightness drag, **M7** add a
+device. They are keyframe timelines, so `get_motion_context` returns each
+animated node's keyframes, easing and timing exactly (the figma-implement-motion
+skill), and everything below was taken from there rather than from the table
+above.
+
+What that settled:
+
+- **The two springs are exact.** GENTLE (the sheet, and M7's result card)
+  overshoots 2.8% and settles; QUICK (every press) overshoots 10.8%. Both are in
+  `tokens.css` as the `linear()` curves the file exports, not approximations.
+  EASE_IN is CSS `ease-in` and EASE_IN_AND_OUT is `ease-in-out`.
+- **M1**: the sheet rises from off-screen in 0.42 s GENTLE while the scrim fades
+  in over 0.24 s standard; it drops in 0.28 s EASE_IN with the scrim. Picking a
+  swatch slides one selection ring 42 px (a swatch and its gap), moves the
+  wheel's handle, recolours the value dot and crossfades the colour's name, all
+  0.24 s standard; the swatch itself gets the press.
+- **M2**: the copper pill slides to the other half in 0.24 s standard while the
+  labels change colour; the glow fades and scales 1 to 0.85, and the lamp art dims,
+  over the dimmer's 0.4 s EASE_IN_AND_OUT. On is the reverse.
+- **M3**: the chip is pressed, the selected chip crossfades in 0.24 s, then every
+  affected tile, the room's count and the badge crossfade together over the
+  scene's 1.0 s EASE_IN_AND_OUT. The undo toast comes in over 0.32 s (fade and
+  rise 12), its bar drains linearly, and it leaves in 0.2 s EASE_IN.
+- **M4**: on load the title and its button arrive together, then each card
+  0.04 s after the last (fade from 0 and rise 12, 0.32 s standard). Opening a
+  room brings the new page in from +24 px with a fade while the list drifts
+  -24 px and fades, 0.3 s standard.
+- **M5**: nothing for the first ten seconds but the breathing dot (0.3 to 0.8,
+  1.6 s EASE_IN_AND_OUT). Then the greeting crossfades to Offline, the page dims
+  to 80% and moves down to make room while the card comes down 12 px into it.
+  When the connection returns the card leaves in 0.2 s EASE_IN and the page
+  rises back into its room.
+- **M6**: the arc, the knob and the glow are locked to the finger and the number
+  steps (HOLD), with no easing. That is what the dial already did.
+- **M7**: while listening, three sonar rings go out from the inner ring a third
+  of a beat apart (scale 0.6 to 1.6, opacity 0.6 to 0, 1.6 s ease-out) and the
+  glow and inner ring breathe on the same 1.6 s. When a device is heard the
+  rings fade, one ping goes out (scale 1 to 1.7, 0.4 s ease-out), the icon
+  crossfades to the device's, the step dots change colour, and the result card
+  slides up 360 px on GENTLE with the name field and the room chips rising in
+  after it, 0.04 s apart.
+
+### How the app plays them
+
+The app draws each screen whole from its state, so the element a CSS transition
+would animate is replaced by every redraw. `web/ui/motion.js` makes the
+stylesheets' transitions real anyway:
+
+- **carry**: before a redraw it notes every transitioning element's values
+  (and `::before` / `::after`, where a toggle's knob lives); after, it pairs
+  each new element with the one that stood in its place and plays that
+  element's own `transition` from the old value to the new. Anything still
+  moving is handed to the new element at the same point, so the bridge's
+  confirmation arriving 20 ms after a tap does not cut the animation short.
+- **crossfade** (`data-xf`): what cannot be interpolated, a copper gradient or a
+  line of words, fades from a copy of the old over the new: 0.4 s for one
+  light, 1.0 s while a scene arrives, 0.24 s standard with `data-xf="standard"`.
+- **coming and going** (`data-enter`): an element drawn for the first time
+  rises, drops, slides up like a sheet or pings once, as the attribute says,
+  and only on the redraw that first draws it. What leaves goes in 0.2 s EASE_IN.
+- **push, back and load** follow how deep the page sits: a tab is 0, what a tab
+  opens is 1, a page opened from those is 2. A redraw asked for by the socket
+  waits while a page is still arriving; a tap redraws at once.
+- **loops** (the breathing dot, the sonar) are kept on the document's clock, so
+  a redraw never starts one over.
+- **reduced motion**: none of this runs, and the stylesheet cuts every CSS
+  animation to nothing.
+
+`test/browser/copper_motion_test.js` reads each of these off the running app
+with `document.getAnimations()` and checks the file's duration, curve and
+values, then walks the same screens with reduced motion on and checks that
+nothing moves.
+
 ## What does not change
 
 The hub, the connector, the protocol between them and the phone, the config

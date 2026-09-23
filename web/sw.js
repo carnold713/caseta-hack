@@ -4,7 +4,7 @@
    Two shells since the cutover: the Copper Night app at / (web/index.html, web/ui/, web/data/) and the previous
    design kept at /classic/ (web/classic/index.html and web/js/). An offline navigation lands on whichever it asked
    for. Network first throughout, so a deploy shows up on the next open. */
-const VERSION = 'v34';
+const VERSION = 'v35';
 const APP = [
   '/', '/index.html', '/ui/', '/ui/index.html', '/ui/app.js', '/ui/art.js', '/ui/art/light-arc-lamp.svg',
   '/ui/art/light-bedside-lamp.svg', '/ui/art/light-ceiling-fan.svg', '/ui/art/light-chandelier.svg',
@@ -17,7 +17,7 @@ const APP = [
   '/ui/art/lutron-sunrise.svg', '/ui/art/lutron-wireless.svg', '/ui/art/room-bathroom.svg',
   '/ui/art/room-bedroom.svg', '/ui/art/room-dining-room.svg', '/ui/art/room-entry.svg', '/ui/art/room-garage.svg',
   '/ui/art/room-garden.svg', '/ui/art/room-kitchen.svg', '/ui/art/room-living-room.svg', '/ui/art/room-office.svg',
-  '/ui/art/room-porch.svg', '/ui/colour.js', '/ui/components.css', '/ui/icons.js', '/ui/photo.js', '/ui/pico.js',
+  '/ui/art/room-porch.svg', '/ui/colour.js', '/ui/components.css', '/ui/icons.js', '/ui/motion.js', '/ui/photo.js', '/ui/pico.js',
   '/ui/screens.css', '/ui/screens/about.js', '/ui/screens/activity.js', '/ui/screens/add.js', '/ui/screens/conn.js',
   '/ui/screens/device.js', '/ui/screens/follow.js', '/ui/screens/guided.js', '/ui/screens/home.js',
   '/ui/screens/looks.js', '/ui/screens/next.js', '/ui/screens/parts.js', '/ui/screens/pickers.js',
