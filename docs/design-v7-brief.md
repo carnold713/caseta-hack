@@ -89,3 +89,42 @@ number counting (as built); the tab switch slide (as built).
 - **Builders** (Figma): one frame per screen on the page **Copper Night · v7 concepts**, each with its
   animation as real keyframes (the figma-use-motion skill), a caption under it naming the screen and its
   animation, in the house voice.
+
+## In the file
+
+Page **Copper Night · v7 concepts** (`12813:48927`), four sections of five screens. Each main frame carries its
+animation as keyframes (loops of 4 to 10 s); a second frame beside it, where there is one, is a still of another
+state. The caption under every frame names what moves, on which token.
+
+| # | Screen | Main frame | Still |
+|---|---|---|---|
+| 1 | Home · the house, lit | `12814:126` | 01b all off `12817:96` |
+| 2 | Rooms · light that pools | `12814:49603` | |
+| 3 | A light · the lamp's own glow | `12815:49080` | |
+| 4 | Colour · painting with light | `12815:50658` | |
+| 5 | White · the time of day | `12816:94` | |
+| 6 | A scene arriving | `12814:48798` | |
+| 7 | Scene editor · a stage | `12815:48891` | |
+| 8 | Follow the day | `12815:51423` | |
+| 9 | Evening wind-down | `12816:580` | |
+| 10 | Goodnight house | `12817:49280` | |
+| 11 | Wake-up light | `12814:49052` | `12814:49334` |
+| 12 | Welcome lights, coming up | `12815:169` | `12815:49652` |
+| 13 | A remote, pressed | `12815:50218` | `12815:50442` |
+| 14 | Activity as a light log (with Today in light) | `12815:51909` | `12815:52130` |
+| 15 | Sleep timer · a candle burning down | `12817:49023` | `12818:257` |
+| 16 | Onboarding | `12814:49907` | |
+| 17 | A device added | `12815:49995` | |
+| 18 | Offline, calmly | `12815:50887` | |
+| 19 | Nightstand mode | `12815:51683` | `12815:51718` |
+| 20 | Beyond the app | `12816:49515` | 20b widget, if it ever goes native `12817:49222` |
+
+Where the builders chose between the two docs: the UX doc's copy and behaviour everywhere; 15 is the sleep timer
+candle and Today in light heads 14 (the UX doc's change); 18 has no red dot (offline stays calm); 20 is the icon's
+shortcuts and a lock-screen notification, with the widget only as a labelled "if it ever goes native" still;
+glow alphas were raised a little over the UI doc's so the light reads on screen, still under its 0.55 cap.
+Invented placeholder values (the Relax levels in 6 and 7, the shelf lights in 7) are marked in their captions.
+
+The as-built changes to the v6 screens are on the Pico App page, section "Revisions · the whole-house card as
+built" (`12806:125`): the four card states, M8 hold to turn the house on, M9 the level counting with the finger,
+and 06b Follow the day paused and resumed.
