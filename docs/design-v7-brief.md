@@ -9,7 +9,7 @@ people who then build the frames in Figma. Read it whole before starting.
 
 ## What exists
 
-- The Figma file `jhFLTG342sNF9LyGll8LDf`, page **Pico App** (`12728:20`): the v6 frames 01 to 25, the foundations
+- The Figma file `jhFLTG342sNF9LyGll8LDf`, page **Pico App** (`12728:20`, since renamed **Copper Night**): the v6 frames 01 to 25, the foundations
   board 00 (Copper Night foundations and map), the icon set `00b`, the motion board `M · Motion principles`
   (`12761:76`) and the seven worked animations M1 to M7, and the section **Revisions · the whole-house card as
   built** (the Home card as it now works). Screens to know first: 02 Home (`12732:48971`), 03 Room
@@ -86,15 +86,19 @@ number counting (as built); the tab switch slide (as built).
   sizes worth stating), the lighting treatment (gradients, glows, blend, how warmth and colour are drawn), and
   one animation example as a keyframe script: which layers move, from what to what, over which token, with
   times. Reuse Copper Night tokens; invent a new one only with a reason.
-- **Builders** (Figma): one frame per screen on the page **Copper Night · v7 concepts**, each with its
+- **Builders** (Figma): one frame per screen on a page of their own (since merged into **Copper Night**), each with its
   animation as real keyframes (the figma-use-motion skill), a caption under it naming the screen and its
   animation, in the house voice.
 
 ## In the file
 
-Page **Copper Night · v7 concepts** (`12813:48927`), four sections of five screens. Each main frame carries its
-animation as keyframes (loops of 4 to 10 s); a second frame beside it, where there is one, is a still of another
-state. The caption under every frame names what moves, on which token.
+Everything for the app is on one page, **Copper Night** (`12728:20`), in five sections from the top:
+Foundations (`12831:224`), Component library (`12831:228`), App · current screens (`12831:229`), Motion
+(`12831:233`) and Archive · earlier versions (`12836:224`). The v7 frames sit in App · current screens in app-flow
+order, beside the v6 frames that have no v7 counterpart; each v6 frame a v7 frame replaced is in Archive with a
+note naming its successor. Each main v7 frame carries its animation as keyframes (loops of 4 to 10 s); a second
+frame beside it, where there is one, is a still of another state. The caption under every frame names what moves,
+on which token.
 
 | # | Screen | Main frame | Still |
 |---|---|---|---|
@@ -125,6 +129,5 @@ shortcuts and a lock-screen notification, with the widget only as a labelled "if
 glow alphas were raised a little over the UI doc's so the light reads on screen, still under its 0.55 cap.
 Invented placeholder values (the Relax levels in 6 and 7, the shelf lights in 7) are marked in their captions.
 
-The as-built changes to the v6 screens are on the Pico App page, section "Revisions · the whole-house card as
-built" (`12806:125`): the four card states, M8 hold to turn the house on, M9 the level counting with the finger,
+The as-built changes to the v6 screens are in the Motion section: the four whole-house card states, M8 hold to turn the house on, M9 the level counting with the finger,
 and 06b Follow the day paused and resumed.

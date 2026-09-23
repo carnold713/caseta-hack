@@ -1,7 +1,7 @@
 # Copper Night · build spec (v6)
 
 The design the phone UI is being rebuilt to. Source of truth is the Figma file
-"Collin's Sandbox", page **Pico App**
+"Collin's Sandbox", page **Copper Night** (it was called Pico App until v7)
 ([12728:20](https://www.figma.com/design/jhFLTG342sNF9LyGll8LDf/Collin-s-Sandbox?node-id=12728-20)).
 This document is the file digested for building: it repeats only what an
 implementer needs, and records every place the file and the dev handoff doc
@@ -661,20 +661,19 @@ What changed, on purpose, against the file:
   from dark): just "Lights back on", held, which brings back what was on before
   (or every light, as Settings says).
 
-**Back in the file.** These changes are now drawn on the Pico App page, so the
-file matches the build again. 02 Home's card was updated in place (the v6
-original is kept in "Archive · v6 frames as they were before the build",
-`12805:118`), and the section "Revisions · the whole-house card as built"
-(`12806:125`) holds the four states (A two lamps on, B a tap on All on, C
-holding, D everything off) and three worked animations in the style of M1 to
-M7: **M8** hold to turn the house on (`12810:125`), **M9** the house level
-counting with the finger (`12811:281`), and **06b** Follow the day paused by a
-picked colour and resumed (`12813:48703`). 06's own copy was corrected to the
-built behaviour: a picked colour pauses it until you resume, through off and on.
+**Back in the file.** These changes are drawn in the file, so it matches the
+build again. The v6 original of 02 Home is kept in the Archive section, and the
+Motion section holds the four whole-house card states (A two lamps on, B a tap
+on All on, C holding, D everything off) and three worked animations in the
+style of M1 to M7: **M8** hold to turn the house on (`12810:125`), **M9** the
+house level counting with the finger (`12811:281`), and **06b** Follow the day
+paused by a picked colour and resumed (`12813:48703`). 06's own copy was
+corrected to the built behaviour: a picked colour pauses it until you resume,
+through off and on.
 
 **Next: v7.** The pass after this one lives in `design-v7-brief.md`,
 `design-v7-ux.md` (flows and copy) and `design-v7-ui.md` (layout, the lighting
-system, keyframe scripts), drawn on the page "Copper Night · v7 concepts". It
+system, keyframe scripts), drawn in the file's App · current screens section. It
 is concept work: nothing in it is built yet, and this spec stays the source of
 truth for what is.
 
@@ -712,7 +711,7 @@ movement for plain fades.
 
 ### Read from the file's own animations
 
-The Pico App page has a motion board, **M · Motion principles** (12761:76, a
+The Copper Night page has a motion board, **M · Motion principles** (12761:76, a
 6 s timeline with the token table and twelve specimens), and seven worked
 interactions beside it on real screens: **M1** sheet up and down (colour
 sheet), **M2** light turns off, **M3** scene arrives, **M4** screen load
