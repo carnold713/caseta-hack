@@ -199,6 +199,13 @@
       if (!res.ok) throw new Error(friendlyError(body.error || `${res.status}`));
       return body;
     }
+    // The light history the hub keeps (hub/history.js): each light's level and colour at each change, between two
+    // instants in epoch ms (at most the last seven days). Resolves to {from, to, lights: {id: [[t, level, tone]]}}, tone
+    // a kelvin number, a '#rrggbb' or null, each light led by what it was doing at `from`.
+    function lightHistory(from, to) {
+      const q = [from != null ? `from=${Math.round(from)}` : '', to != null ? `to=${Math.round(to)}` : ''].filter(Boolean).join('&');
+      return api(`/api/history${q ? '?' + q : ''}`);
+    }
     // Run one action now. Throws with a message fit to show when it cannot.
     function run(action) { return api('/api/command', { method: 'POST', body: JSON.stringify(action) }); }
 
@@ -462,7 +469,7 @@
       // connection
       connState, connOk, connLost, noteConn, noteSunClock,
       // the socket and the wire
-      apply, noteLive, api, run, gate, hold, saveConfig, restoreConfig, connectWS,
+      apply, noteLive, api, lightHistory, run, gate, hold, saveConfig, restoreConfig, connectWS,
       // inventory and rooms
       hiddenDevices, devices, dev, appRooms, appRoom, roomIndex, devArea, devAreaName, areaName, areas,
       controllable, remotes, byName, level, isOn, buttonsOf, groups, presets, lutronScenes,

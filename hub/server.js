@@ -12,6 +12,7 @@ const express = require('express');
 const { WebSocketServer, WebSocket } = require('ws');
 const store = require('./store');
 const { validateConfig, validateAction } = require('./validate');
+const lightHistory = require('./history');
 
 const PORT = Number(process.env.PORT) || 4400;
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
@@ -46,6 +47,8 @@ let nextRuns = {}; // schedule id -> next ISO time
 let follow = null;
 let addSession = { active: false, until: 0, heard: [], log: [] }; // the app's "Add a device" session, mirrored from the connector
 let activity = store.read('activity', () => []); // newest first, capped
+// Seven days of each light's level and colour, written from the state updates below (hub/history.js)
+const history = lightHistory.create(store.read('history', null));
 let agent = null;   // the single connected agent socket
 let updating = false;
 let agentInfo = null;
@@ -93,6 +96,14 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/snapshot', requireAuth, (req, res) => res.json(snapshot()));
 app.get('/api/activity', requireAuth, (req, res) => res.json({ activity }));
+// The light history between two instants (epoch ms), a day at a time: the last 24 hours when none are given.
+app.get('/api/history', requireAuth, (req, res) => {
+  const now = Date.now();
+  const to = Math.min(Number(req.query.to) || now, now);
+  const from = Math.max(Number(req.query.from) || to - 86400000, now - lightHistory.DAYS * 86400000);
+  if (!(from < to)) return res.status(400).json({ error: 'from must be before to' });
+  res.json({ from, to, since: history.since(), lights: history.slice(from, to) });
+});
 
 app.put('/api/config', requireAuth, (req, res) => {
   try {
@@ -466,6 +477,10 @@ function setInventory(inv) {
 }
 function mergeStates(s) {
   for (const [k, v] of Object.entries(s || {})) states[k] = { ...(states[k] || {}), ...v };
+  // each light as it now stands, so a partial update is still written down whole
+  const merged = {};
+  for (const k of Object.keys(s || {})) merged[k] = states[k];
+  history.record(merged, id => ((inventory.devices || {})[id] || {}).domain);
 }
 function snapshot() {
   return { inventory, states, config, timers, sun, follow, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo }, add: addSession };
@@ -479,6 +494,9 @@ function record(entry) {
   broadcast({ type: 'activity', entry: e });
 }
 setInterval(() => { if (activityDirty) { activityDirty = false; store.write('activity', activity); } }, 5000).unref();
+// The light history is written down less often: losing half a minute of it to a crash costs nothing anyone sees.
+const saveHistory = () => { history.prune(); if (history.takeDirty()) store.write('history', history.toJSON()); };
+setInterval(() => { try { saveHistory(); } catch (e) { log('history not saved:', e.message); } }, 30000).unref();
 function broadcast(msg) {
   const data = JSON.stringify(msg);
   for (const c of appClients) if (c.readyState === WebSocket.OPEN) c.send(data);
@@ -517,6 +535,7 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {
     console.log(`[hub] ${sig}, shutting down`);
     if (activityDirty) { try { store.write('activity', activity); } catch (_) { /* ignore */ } }
+    try { saveHistory(); } catch (_) { /* ignore */ }
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   });

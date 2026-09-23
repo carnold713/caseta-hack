@@ -259,6 +259,44 @@ setTimeout(() => {
 }, 3000);
 setInterval(() => { if (ws.readyState === 1) send({ type: 'sun', sun: sun(), next_runs: nextRuns() }); followConfig(); }, 60000);
 
+// A test drives the pretend house through a file: fake-do.json in DATA_DIR (the run's cwd), read and removed within
+// a fifth of a second. {"press": {device_id, button_number, gesture: single|double|hold, ms}} presses a real remote
+// the way the connector reports one (the raw press and release, the gesture, then what its setting does, run like
+// any command, so the state that comes back is the press's own); {"states": {id: {level}}} is a change at the wall.
+const DO_FILE = require('path').join(process.env.DATA_DIR || process.cwd(), 'fake-do.json');
+function boundActions(pid, n, g) {
+  const b = ((config && config.bindings) || []).find(x => x.device_id === pid && x.button_number === n && x.gesture === g && x.enabled !== false);
+  return (b && b.actions) || [];
+}
+function fakePress({ device_id: pid, button_number: n, gesture: g = 'single', ms = 1200 }) {
+  // the gesture is reported first, then what is set for it runs, as agent.py _on_gesture does
+  const gesture = name => {
+    const acts = boundActions(pid, n, name);
+    send({ type: 'gesture', device_id: pid, button_number: n, gesture: name, bound: acts.length > 0 });
+    for (const action of acts) ws.emit('message', JSON.stringify({ type: 'command', id: `press-${Math.random().toString(36).slice(2)}`, action }));
+  };
+  send({ type: 'button', device_id: pid, button_number: n, event: 'Press' });
+  if (g === 'hold') {
+    // as the engine resolves one: hold_start once it has been held long enough, then hold_end and hold on release,
+    // each running whatever is set for it (a hold is stored as hold, or as hold_start with hold_end)
+    setTimeout(() => gesture('hold_start'), 500);
+    setTimeout(() => { send({ type: 'button', device_id: pid, button_number: n, event: 'Release' }); gesture('hold_end'); gesture('hold'); }, Math.max(600, ms));
+    return;
+  }
+  send({ type: 'button', device_id: pid, button_number: n, event: 'Release' });
+  if (g === 'double') { send({ type: 'button', device_id: pid, button_number: n, event: 'Press' }); send({ type: 'button', device_id: pid, button_number: n, event: 'Release' }); }
+  gesture(g);
+}
+setInterval(() => {
+  let todo;
+  try { todo = JSON.parse(fsx.readFileSync(DO_FILE, 'utf8')); fsx.unlinkSync(DO_FILE); } catch (_) { return; }
+  if (ws.readyState !== 1) return;
+  for (const d of [].concat(todo)) {
+    if (d.press) fakePress(d.press);
+    if (d.states) { for (const [id, st] of Object.entries(d.states)) states[id] = { ...(states[id] || {}), ...st }; send({ type: 'state', states: d.states }); }
+  }
+}, 200);
+
 // ----- "Add a device": pretend the bridge hears a Pico 2.5 s after listening starts -----
 let addState = { active: false, until: 0, heard: [], log: [] };
 const addNote = (kind, url, extra) => { const entry = { at: Date.now() / 1000, kind, url, ...extra }; addState.log.push(entry); send({ type: 'add_log', entry }); };
