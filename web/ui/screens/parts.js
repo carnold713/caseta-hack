@@ -103,12 +103,5 @@ export function roomPicture(c, aid, name, big) {
   return `${art ? `<img class="room-art" src="${c.artSrc(art)}" alt="">` : ''}${big ? `<span class="add-photo">${c.icon('camera', 16, 1.8)}Add a photo</span>` : ''}`;
 }
 
-// The offline card, after ten quiet seconds: what happened, and one thing to do about it. The file's copy, less its
-// em dash.
-export function offlineCard(c) {
-  const since = c.S.troubleSince ? new Date(c.S.troubleSince).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase() : null;
-  return `<div class="offline-card" data-enter="drop">
-    ${c.icon('wifi', 24, 1.7)}
-    <p>Can't reach your house computer${since ? ` since ${c.esc(since)}` : ''}. You're seeing the last known state, and your remotes still work.</p>
-    <button class="pill ghost" data-act="what-now">What can I do?</button></div>`;
-}
+// The offline card, after ten quiet seconds. v7: the card says which link is out in one calm sentence (conn.js, 18 · Offline, calmly).
+export { offlineCard } from '/ui/screens/conn.js';

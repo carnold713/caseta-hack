@@ -74,6 +74,29 @@ export function remotesSheet(c) {
     </div>`,
   };
 }
+// 18 · Offline, calmly (v7, 12815:50887). Ten seconds into a drop Home says, in one sentence, which link is out and
+// what, if anything, to do, and that the remotes still work. Never an alarm: no red, and the card opens the same
+// connection sheet as the dot.
+const WIFI_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 5.2-2.8"/><path d="M13.8 10.1A10 10 0 0 1 19 12.9"/><path d="M2 9.3a15 15 0 0 1 4.3-2.6"/><path d="M10.7 5.6A15 15 0 0 1 22 9.3"/><circle cx="12" cy="20" r=".6" fill="currentColor"/></svg>';
+// The first link that is out, from this phone outwards, as the card's two lines.
+export function offlineCause(c) {
+  const bad = links(c).find(x => x[1] === false);
+  const which = bad ? bad[0] : 'House computer';
+  if (which === 'Phone') return ['This phone is offline.', 'Your remotes still work.'];
+  if (which === 'Server') return ["Can't reach the app's server.", 'Your remotes still work.'];
+  if (which === 'Lutron bridge') return ["The Lutron bridge isn't answering.", 'Check it has power.'];
+  return ["The house computer isn't answering.", 'It may be restarting. Your remotes still work.'];
+}
+export function offlineCard(c) {
+  const [head, sub] = offlineCause(c);
+  return `<button class="offline-card v7" data-act="conn-open" data-enter="drop" aria-label="Connection">
+    <span class="oc-ic">${WIFI_OFF}</span><span class="oc-txt"><span class="t">${c.esc(head)}</span><span class="d">${c.esc(sub)}</span></span>
+    <span class="oc-chev">${c.icon('chev', 20, 1.8)}</span></button>`;
+}
+// What a tap says while the house cannot be reached. Nothing is queued: a light changing by itself half an hour after
+// the tap would be worse than the tap failing.
+export const OFFLINE_TAP = "Can't reach the house right now. Your remotes still work.";
+
 export const connActions = {
   'conn-open'(c) { c.openSheet({ ...connSheet(c), key: 'conn', onClose: () => c.render() }); },
   'conn-remotes'(c) {
