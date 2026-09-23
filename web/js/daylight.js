@@ -106,9 +106,9 @@ function openFollowSheet(id) {
   if (!followReady()) {
     h += `<p class="d" style="margin:12px 0 0">Tell the app where the home is and the white will follow your own sunrise and sunset. <a data-act="loc-use" href="#">Use my location</a></p>`;
   } else if (on) {
-    h += followCardHTML(id, paused ? { line: 'You set this one by hand. Following again when you next turn it on.' } : {});
+    h += followCardHTML(id, paused ? { line: 'You set this one by hand, so it keeps that colour, off and on. Switch this off and on again to follow the day once more.' } : {});
     h += `<div class="card pad0 list" style="margin-top:16px"><div class="item"><div class="grow"><div class="t">Dim towards the evening too</div><div class="d">Brightness comes down with the evening wind-down.</div></div>${sw('follow-bright', 'Dim towards the evening too', followBright())}</div></div>`;
-    h += `<p class="d" style="margin:12px 0 0">Set a colour or a warmth on this lamp by hand and it stops following until you next turn it on.</p>`;
+    h += `<p class="d" style="margin:12px 0 0">Set a colour or a warmth on this lamp by hand and it stops following, and keeps that colour when it is turned off and on, until you switch this off and on again.</p>`;
   } else {
     h += followCardHTML(id, { line: followWouldText(id) ? `Right now that would be ${followWouldText(id)}` : '' });
   }
@@ -132,7 +132,7 @@ function openFollowRoomSheet(aid) {
   const lamps = roomFollowLamps(aid); if (!lamps.length) return;
   const others = controllable().filter(d => devArea(d) === aid && !canFollow(d) && (d.domain === 'light' || d.domain === 'switch'));
   let h = `<p class="body" style="margin:0 0 16px">Cool and bright around midday, warm in the evening, like daylight. It applies to the lamps here that can change their warmth.</p>`;
-  h += `<div class="card pad0 list">${lamps.map(d => `<div class="item">${lampHTML(level(d.device_id) || 0, 28, ICON(lightIcon(d), 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${isFollowing(d.device_id) ? (followPaused(d.device_id) ? 'Set by hand, following again when you next turn it on' : 'Following the day') : 'Not following'}</div></div><button class="sw ${isFollowing(d.device_id) ? 'on' : ''}" data-act="follow-toggle" data-id="${d.device_id}" data-area="${aid}" aria-label="${esc(d.name)} follows the day"></button></div>`).join('')}</div>`;
+  h += `<div class="card pad0 list">${lamps.map(d => `<div class="item">${lampHTML(level(d.device_id) || 0, 28, ICON(lightIcon(d), 'sm'))}<div class="grow"><div class="t">${esc(d.name)}</div><div class="d">${isFollowing(d.device_id) ? (followPaused(d.device_id) ? 'Set by hand: keeping that colour' : 'Following the day') : 'Not following'}</div></div><button class="sw ${isFollowing(d.device_id) ? 'on' : ''}" data-act="follow-toggle" data-id="${d.device_id}" data-area="${aid}" aria-label="${esc(d.name)} follows the day"></button></div>`).join('')}</div>`;
   h += followCardHTML(lamps[0].device_id, { line: `Right now: ${followWouldText(lamps[0].device_id)}` });
   if (others.length) h += `<p class="d" style="margin:12px 0 0">${esc(others.map(d => d.name).join(', '))} cannot change warmth, so ${others.length === 1 ? 'it is' : 'they are'} left out.</p>`;
   // it is opened from the Room setup page, so the way out is the X, not a back arrow to a sheet that is not there

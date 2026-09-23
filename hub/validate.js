@@ -54,8 +54,10 @@ function validateAction(a, where) {
       if (a.ceiling != null && !isLevel(a.ceiling)) fail(`${where}: ceiling must be 0-100`);
       break;
     case 'color':
-      // white temperature or a colour for the Hue lamps in the target that can do it (the connector skips the rest)
+      // white temperature or a colour for the Hue lamps in the target that can do it (the connector skips the rest),
+      // or {follow: true}: a lamp paused by a colour set by hand follows the day again
       if (!isTarget(a.target)) fail(`${where}: color needs a target`);
+      if (a.follow === true) { if (a.kelvin != null || a.hex != null) fail(`${where}: follow the day or a colour, one of them`); break; }
       checkColorPair(a, where);
       if (a.level != null && !isLevel(a.level)) fail(`${where}: color level must be 0-100`);
       if (a.fade != null && !(typeof a.fade === 'number' && a.fade >= 0 && a.fade <= 60)) fail(`${where}: fade must be 0-60 seconds`);

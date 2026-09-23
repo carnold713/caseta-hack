@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.20.0"
+VERSION = "0.21.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -189,8 +189,9 @@ class Agent:
         self.runner.local_time = self.local_time
         self.runner.sunset_hm = self.sunset_hm
         # Follow the day (daylight.py): the lamps whose white follows the sun, and what has happened to them.
-        #   _follow_paused   set by hand since it was last switched on, so it has stopped following until it is
-        #                    turned off and on again
+        #   _follow_paused   set by hand (a colour or a warmth), so it has stopped following, through off and on
+        #                    and a restart, until somebody asks for it to follow again ({"type": "color",
+        #                    "follow": true}) or takes it off the list and puts it back
         #   _follow_scene    switched on by a scene that said "follow the day", which cannot write the config
         #   _follow_cfg      what the config listed last time, so a lamp taken off the list stops following
         #   _follow_sent     device id -> the mireds last sent, so an invisible change is never sent
@@ -198,7 +199,8 @@ class Agent:
         self.runner.color_watch = self._color_by_hand
         self.runner.follow_start = self._follow_start
         self.runner.before_on = self._before_on
-        self._follow_paused: set = set()
+        self.runner.follow_resume = self._follow_resume
+        self._follow_paused: set = self._load_paused()
         self._follow_scene: set = set()
         self._follow_cfg: set = set()
         self._follow_sent: Dict[str, float] = {}
@@ -734,15 +736,38 @@ class Agent:
         ids = list(dict.fromkeys(list(s["ids"]) + sorted(self._follow_scene)))
         return [d for d in ids if d not in self._follow_paused]
 
+    # The lamps paused by hand are kept on disk: a colour somebody chose outlives a restart of this connector.
+    PAUSED_FILE = DATA_DIR / "follow.state.json"
+
+    def _load_paused(self) -> set:
+        try:
+            return set(str(d) for d in json.loads(self.PAUSED_FILE.read_text()).get("paused", []))
+        except Exception:  # noqa: BLE001
+            return set()
+
+    def _save_paused(self) -> None:
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            self.PAUSED_FILE.write_text(json.dumps({"paused": sorted(self._follow_paused)}))
+        except OSError as exc:
+            LOG.warning("could not save which lamps are paused: %s", exc)
+
     def _follow_config_changed(self) -> None:
         cfg = set(self._follow_settings()["ids"])
+        before = set(self._follow_paused)
+        # (on the first config after a start the old list is empty: what was paused before the restart stays so)
+        first = not self._follow_cfg
         for did in self._follow_cfg - cfg:      # taken off the list in the app: it stops following, scene or not
             self._follow_scene.discard(did)
             self._follow_paused.discard(did)
             self._follow_sent.pop(did, None)
-        for did in cfg - self._follow_cfg:      # switched on in the app: a lamp paused earlier starts again
-            self._follow_paused.discard(did)
+        if not first:
+            for did in cfg - self._follow_cfg:  # switched on in the app: a lamp paused earlier starts again
+                self._follow_paused.discard(did)
+        self._follow_paused &= cfg | self._follow_scene
         self._follow_cfg = cfg
+        if self._follow_paused != before:
+            self._save_paused()
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -771,13 +796,26 @@ class Agent:
         self.send({"type": "follow", "follow": self.follow_state()})
 
     def _color_by_hand(self, device_id: str) -> None:
-        """A colour or a warmth set by a person, a button or a scene: that lamp stops following until it is next
-        turned off and on again. The follow loop itself never comes through here."""
+        """A colour or a warmth set by a person, a button or a scene: that lamp stops following, and stays
+        stopped when it is turned off and on again, so it comes back on in the colour that was chosen. It
+        follows again only when asked to (_follow_resume). The follow loop itself never comes through here."""
         if device_id not in self.following():
             return
-        LOG.info("%s was set by hand, so it stops following the day until it is next switched on", device_id)
+        LOG.info("%s was set by hand, so it stops following the day until it is asked to follow again", device_id)
         self._follow_paused.add(device_id)
         self._follow_sent.pop(device_id, None)
+        self._save_paused()
+        self._send_follow()
+
+    async def _follow_resume(self, device_id: str) -> None:
+        """{"type": "color", "follow": true}: a lamp paused by hand follows the day again, from the white for now."""
+        was = device_id in self._follow_paused
+        self._follow_paused.discard(device_id)
+        if was:
+            self._save_paused()
+        self._follow_sent.pop(device_id, None)
+        if device_id in self.following() and self._follow_lit.get(device_id):
+            await self._follow_apply([device_id], fade=daylight.SCENE_FADE_SECONDS)
         self._send_follow()
 
     async def _before_on(self, device_id: str) -> None:
@@ -806,15 +844,17 @@ class Agent:
     async def _follow_start(self, device_id: str) -> None:
         """A scene entry that says "follow the day": from now on it follows, starting at the white for right now."""
         self._follow_scene.add(device_id)
-        self._follow_paused.discard(device_id)
+        if device_id in self._follow_paused:
+            self._follow_paused.discard(device_id)
+            self._save_paused()
         self._follow_sent.pop(device_id, None)
         await self._follow_apply([device_id], fade=daylight.SCENE_FADE_SECONDS)
         self._send_follow()
 
     def _follow_zone(self, device_id: str, level: Optional[int]) -> None:
         """Every state change passes here: an off-to-on sets the white at once (ON_FADE_SECONDS, not the
-        slow drift the five minute look uses), and going off lets a lamp that was set by hand start
-        following again the next time it comes on."""
+        slow drift the five minute look uses). A lamp that was set by hand stays paused through off and on,
+        so it comes back in the colour that was chosen for it."""
         lit = bool(level and level > 0)
         was = self._follow_lit.get(device_id)
         self._follow_lit[device_id] = lit
@@ -822,9 +862,6 @@ class Agent:
             return
         if not lit:
             self._follow_sent.pop(device_id, None)
-            if device_id in self._follow_paused:
-                self._follow_paused.discard(device_id)
-                self._send_follow()
             return
         if device_id in self.following():
             asyncio.create_task(self._follow_apply([device_id], fade=daylight.ON_FADE_SECONDS))

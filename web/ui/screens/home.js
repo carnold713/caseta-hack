@@ -1,6 +1,7 @@
 // 02 · Home. The whole house, the starred lights and scenes, the rooms. Read from the Figma frame (12732:48971).
 // Under the rooms: what is coming up within the hour, and the one suggestion or problem (next.js). The dot beside
 // the greeting, and the offline card, open the connection sheet (conn.js).
+import { track } from '/ui/gesture.js';
 import { tile, sceneChip, roomStatus, roomPicture, offlineCard } from '/ui/screens/parts.js';
 import { homeCards, greetingSheet, shouldGreet, nextActions } from '/ui/screens/next.js';
 import { connActions } from '/ui/screens/conn.js';
@@ -43,7 +44,7 @@ export function view(c) {
     <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
       <div class="house-head" data-xf>${lit.length ? `${lit.length} on · ${lv}%` : 'Everything is off'}</div>
-      <div class="hbar" data-drag="house" style="--pct:${lit.length ? lv : 0}%" role="slider" aria-label="House brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
+      <div class="hbar ${lit.length && lv >= 30 ? '' : 'low'}" data-drag="house" style="--pct:${lit.length ? lv : 0}%" role="slider" aria-label="House brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
         <span class="fill"></span>
         <span class="lo">${icon('sun', 22, 1.8)}</span>
         <span class="hi">${icon('sun', 26, 1.6)}</span>
@@ -86,18 +87,19 @@ export function after(c, r, root) {
   const bar = root.querySelector('[data-drag="house"]'); if (!bar) return;
   const set = x => {
     const b = bar.getBoundingClientRect();
-    // the knob sits inside the fill, so the fill's end is where the finger is plus the knob's reach
-    const v = Math.max(1, Math.min(100, Math.round((x - b.left) / b.width * 100)));
+    // The knob sits inside the end of the fill (its centre 28 short of it), so the finger is kept on the knob:
+    // the fill ends 28 past the finger. Left of where the knob stops, the level keeps going down to 1.
+    const v = Math.max(1, Math.min(100, Math.round((x - b.left + 28) / b.width * 100)));
     bar.style.setProperty('--pct', v + '%');
+    // the sun at the dim end steps aside when the knob comes over it
+    bar.classList.toggle('low', v / 100 * b.width < 100);
     bar.setAttribute('aria-valuenow', v);
     const ids = c.H.houseLevelTargets(); if (!ids.length) return;
-    c.assume(ids, v);
+    c.assume(ids, v, { held: true });
     c.gate.sendLevel(ids.map(id => `d:${id}`), v);
   };
-  bar.addEventListener('pointerdown', e => { c.ui.dragging = true; bar.setPointerCapture(e.pointerId); set(e.clientX); });
-  bar.addEventListener('pointermove', e => { if (c.ui.dragging && bar.hasPointerCapture(e.pointerId)) set(e.clientX); });
-  const end = () => { if (c.ui.dragging) c.endDrag(); };
-  bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
+  // a sideways drag only: a finger passing over it on the way up or down the page scrolls the page (gesture.js)
+  track(bar, { c, axis: 'x', move: e => set(e.clientX) });
 }
 
 export const actions = {

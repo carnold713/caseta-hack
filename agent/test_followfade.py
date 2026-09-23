@@ -43,6 +43,7 @@ def fresh_agent():
     a._follow_sent, a._follow_lit = {}, {}
     a.send = lambda msg: None
     a._send_follow = lambda: None
+    a._save_paused = lambda: None
     a.local_time = lambda: A.datetime(2026, 6, 21, 14, 0)
     a._day_of = lambda: (lambda d: Day(sunrise=A.datetime(d.year, d.month, d.day, 5, 30),
                                        noon=A.datetime(d.year, d.month, d.day, 13, 15),
@@ -103,6 +104,24 @@ async def main():
         if a.fades:
             break
     check("off and on again asks again, quickly", a.fades, [0.4])
+
+    # 6. a colour picked by hand holds through off and on: the lamp comes back in that colour, not the day's white
+    a = fresh_agent()
+    a.following = lambda: [d for d in ["nanoleaf_A"] if d not in a._follow_paused]   # the real rule: paused is not following
+    a._follow_lit["nanoleaf_A"] = True
+    a._color_by_hand("nanoleaf_A")
+    check("a colour by hand pauses it", sorted(a._follow_paused), ["nanoleaf_A"])
+    a._follow_zone("nanoleaf_A", 0)
+    a._follow_zone("nanoleaf_A", 70)
+    for _ in range(5):
+        await asyncio.sleep(0)
+    check("off and on again keeps the colour: still paused", sorted(a._follow_paused), ["nanoleaf_A"])
+    check("and nothing sends the day's white over it", a.fades, [])
+
+    # 7. asked to follow again, it does, from the white for now
+    await a._follow_resume("nanoleaf_A")
+    check("follow the day again: no longer paused", sorted(a._follow_paused), [])
+    check("and the white comes back with a scene's fade", a.fades, [1.0])
 
 
 asyncio.run(main())

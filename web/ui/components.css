@@ -16,9 +16,10 @@
 
 .screen {
   position: relative;
-  width: 100%; max-width: 412px; min-height: 100dvh;
+  width: 100%; max-width: 600px; min-height: 100dvh;
   margin: 0 auto;
-  padding: 0 0 calc(92px + env(safe-area-inset-bottom));
+  /* the tab bar floats 40 above the bottom and is 72 tall: the page ends 24 above its top edge */
+  padding: 0 0 calc(136px + env(safe-area-inset-bottom));
   overflow-x: hidden;
 }
 
@@ -42,7 +43,7 @@
 .tabbar {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(40px + env(safe-area-inset-bottom));
-  width: min(372px, calc(100vw - 40px)); height: 72px;
+  width: calc(min(100vw, 600px) - 40px); height: 72px;
   border-radius: 36px;
   background: rgba(18, 18, 18, .72);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -222,14 +223,16 @@
    off tile, full on a lit one. */
 .tile .art { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; opacity: .2; display: block; }
 .tile .nm { position: absolute; left: 16px; top: 94px; width: calc(var(--tile-w, 168px) - 32px); font-size: 16px; font-weight: 500; }
-.tile-grid { display: grid; grid-template-columns: 180px 180px; gap: var(--gap); padding: 0 var(--gutter); --tile-w: 180px; }
+.tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); padding: 0 var(--gutter); }
+.tile-grid .tile { width: auto; }
+.tile-grid .tile .nm { width: auto; right: 16px; }
 /* hand placed in the file, not a rule of the width: 104, -7 on the room grid's 180 tile */
-.tile-grid .tile .glow { left: 104px; top: -7px; }
+.tile-grid .tile .glow { right: -10px; top: -7px; }
 .tile .vl { position: absolute; left: 16px; top: 116px; font-size: 14px; color: var(--text-2); }
 /* The glow is a soft disc bleeding off the top right corner, not a box shadow. 89,-9 from the tile's
    outer edge: the export says 88,-10, which is the border trap again. */
 .tile .glow {
-  position: absolute; top: -9px; left: 89px; width: 86px; height: 86px; border-radius: 50%;
+  position: absolute; top: -9px; right: -7px; width: 86px; height: 86px; border-radius: 50%;
   background: radial-gradient(closest-side, rgba(255, 241, 220, .55), rgba(255, 241, 220, 0));
   pointer-events: none;
 }
@@ -314,7 +317,8 @@
 }
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0;
-  max-width: 412px; margin: 0 auto;
+  /* full width of the screen, whatever the phone: the sheet is the bottom of the screen come up */
+  width: 100%;
   border-radius: var(--r-card) var(--r-card) 0 0;
   background: var(--surface-1);
   box-shadow: var(--shadow-sheet);
@@ -358,7 +362,7 @@
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(124px + env(safe-area-inset-bottom));
-  width: min(372px, calc(100vw - 40px)); height: 56px;
+  width: calc(min(100vw, 600px) - 40px); height: 56px;
   border-radius: var(--r-group); background: var(--surface-2);
   box-shadow: var(--shadow-lift);
   display: flex; align-items: center; gap: 12px; padding: 0 20px;
@@ -391,7 +395,8 @@
   position: absolute; inset: 0 auto 0 0; border-radius: 28px; background: var(--arc-fill);
   width: max(56px, var(--pct));
 }
-.hbar .lo { position: absolute; left: 17px; top: 17px; color: var(--bg); }
+.hbar .lo { position: absolute; left: 17px; top: 17px; color: var(--bg); transition: opacity var(--standard) var(--ease); }
+.hbar.low .lo { opacity: 0; }
 .hbar .hi { position: absolute; right: 15px; top: 15px; color: var(--icon-2); }
 /* The knob sits inside the end of the fill, 8 from it on every side, the same rule as every other
    circle in a track. It is not centred on the fill's edge: at 52% the fill ends at 173 and the knob's

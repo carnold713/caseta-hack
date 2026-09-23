@@ -10,6 +10,7 @@ import { icon } from '/ui/icons.js';
 import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
 import * as motion from '/ui/motion.js';
+import { wireSheetDrag } from '/ui/sheetdrag.js';
 import * as homeScreen from '/ui/screens/home.js';
 import * as roomsScreen from '/ui/screens/rooms.js';
 import * as roomScreen from '/ui/screens/room.js';
@@ -59,7 +60,8 @@ async function save(msg, opts = {}) {
 let saveTimer = null;
 function saveSoon(ms = 700) { clearTimeout(saveTimer); saveTimer = setTimeout(() => save('', { quiet: true }), ms); }
 // Show a light's new level before the bridge confirms it, so a tap feels like it landed.
-function assume(ids, level) { for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; }
+// A slider held by a finger also holds that level against the bridge's echoes of the values it passed through.
+function assume(ids, level, { held = false } = {}) { for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; if (held) data.hold(ids); }
 
 // ---------- the toast ----------
 let toastTimer = null;
@@ -105,8 +107,11 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
 }
 // It drops rather than vanishing (0.28 s EASE_IN, the scrim fading with it); what falls is a copy, and the sheet
 // itself is gone at once, so nothing on it can be tapped on the way down.
-function closeSheet() { const root = $('#sheet-root'); motion.sheetOut(root); root.innerHTML = ''; root.hidden = true; root.dataset.key = ''; root._onClose = null; }
-function dismissSheet() { const root = $('#sheet-root'); const f = root._onClose; closeSheet(); if (f) f(); }
+// (A sheet swiped down has already fallen: `dropped` closes it without a second drop.)
+function closeSheet({ dropped = false } = {}) { const root = $('#sheet-root'); if (!dropped) motion.sheetOut(root); root.innerHTML = ''; root.hidden = true; root.dataset.key = ''; root._onClose = null; }
+function dismissSheet(o) { const root = $('#sheet-root'); const f = root._onClose; closeSheet(o); if (f) f(); }
+// Swiping a sheet down puts it away, as the close button does (sheetdrag.js).
+wireSheetDrag($('#sheet-root'), () => dismissSheet({ dropped: true }));
 
 // ---------- the route ----------
 // #home, #rooms, #room/<id>, #light/<id>, #remotes, #remote/<id>, #routines, #settings, #activity, #scenes. The old
@@ -359,7 +364,9 @@ window.addEventListener('hashchange', () => {
   if (r.name !== lastName && SCREENS[lastName] && SCREENS[lastName].leave) SCREENS[lastName].leave(ctx);
   if (page !== lastPage && S.ready && S.config) {
     const was = DEPTH[lastName] ?? 1, now = DEPTH[r.name] ?? 1;
-    arriving = !was && !now ? 'load' : now < was ? 'back' : 'push';
+    // one tab to another slides the way the tab bar reads: a tab to the right comes in from the right
+    const order = TABS.map(t => t[0]);
+    arriving = !was && !now ? (order.indexOf(r.name) < order.indexOf(lastName) ? 'back' : 'push') : now < was ? 'back' : 'push';
     motion.capture($('#screen'));
   }
   lastName = r.name;

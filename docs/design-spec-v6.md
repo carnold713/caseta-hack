@@ -598,6 +598,48 @@ What reading frames 01, 11, 12 and 20 settled:
   one the address asked for. `/ui/` still serves the new app, so old links
   keep working.
 
+### On a real phone: widths, touch and sheets
+
+The file's frames are 412 wide; phones are 375 to 430. What that settled:
+
+- **The page is the phone's width** (up to 600) with the file's 20 gutter on
+  each side, not a 412 column in the middle. Two-up grids (tiles, the White and
+  Colour cards, the remotes, choices) share the width between the gutters;
+  artwork and controls the file centres (the lamp, the dial, the fan's speeds,
+  the shade's window, the colour wheel, the radar) stay centred; what the file
+  pins to an edge stays 20 from that edge. The tab bar, the toast and every
+  sheet run edge to edge less the gutters (a sheet, the full width).
+- **Nothing ends behind the tab bar.** It floats 40 above the bottom and is 72
+  tall, so every page ends 24 above its top edge (136 plus the safe area).
+- **A slider never steals a scroll** (`web/ui/gesture.js`). A finger landing on
+  one does nothing; a sideways drag moves the house bar, the White track and the
+  dial, an up-or-down swipe that starts on them scrolls the page natively
+  (`touch-action: pan-y`), a tap sets nothing, and a touch that lands while the
+  page is still moving only stops the scroll. The dial's knob and the shade's
+  hem are grips that take a finger at once in any direction; the colour wheel is
+  a picker and takes it at once too.
+- **The knob stays under the finger.** The house bar's knob sits 28 inside the
+  end of its fill, as the file draws it, so the fill ends 28 past the finger;
+  the sun at the dim end steps aside when the knob reaches it.
+- **What a finger set is what shows.** For 1.5 s after a slider moves, the
+  bridge's echoes of the values it passed through do not pull it back
+  (`S.held`, `hold()` in the data layer).
+- **Sheets swipe away** (`web/ui/sheetdrag.js`): from the grab bar and the
+  header, or from the body when it is scrolled to the top. The sheet follows the
+  finger and the scrim thins; past a quarter of the sheet or a flick it drops
+  the rest of the way on EASE_IN, short of that it springs back on GENTLE.
+- **A tab slides the way the tab bar reads**: a tab to the right comes in from
+  +24 and the old one drifts -24, the push's 0.3 s standard; to the left, the
+  other way. The load stagger is for the app opening.
+- **Follow the day, paused by a colour, stays paused.** Picking a colour or a
+  warmth by hand pauses it, and the lamp comes back on in that colour after
+  being off, and after the connector restarts (it keeps the paused lamps in
+  `follow.state.json`). "Follow the day again" on the Follow the day page
+  resumes it (`{type: "color", target, follow: true}`). Connector 0.21.0.
+
+`test/browser/copper_touch_test.js` checks the gestures, the sheet swipe, and
+every main page at 390 and 430 for width, gutters and the tab bar.
+
 **Open: the webfont.** `tokens.css` declares Lutron Sans Screen at
 `/ui/font/LutronSansScreen-{Light,Regular,Medium}.woff2`. Those three files are
 not in the repo, because whether the face can ship as a webfont in the PWA is

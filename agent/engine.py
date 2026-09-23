@@ -172,6 +172,9 @@ class ActionRunner:
         # is awaited for a scene entry that says "follow the day": it turns following on and sets the white for now.
         self.color_watch: Optional[Callable[[str], None]] = None
         self.follow_start: Optional[Callable[[str], Awaitable[None]]] = None
+        # `follow_resume` is awaited for {"type": "color", "follow": true}: a lamp paused by hand follows the day
+        # again, from the white for right now.
+        self.follow_resume: Optional[Callable[[str], Awaitable[None]]] = None
         # What the house looked like just before it went dark: every light lit within the two minutes
         # before the last one went off, at its level then. The power button brings it back.
         # How each light was the last time it was on: the level it was at, the colour it was showing, and
@@ -684,6 +687,15 @@ class ActionRunner:
             else:
                 await asyncio.gather(*(self._set_level(d, self.on_level_for(d, a["target"]), fade) for d in targets))
             return {"restored": sorted(d for d, _ in picks)}
+
+        if t == "color" and a.get("follow"):
+            # "follow the day again": a lamp that was paused by a colour set by hand goes back to the day's white
+            lamps = [d for d in targets if self._color_can(d, "ct")]
+            if not lamps:
+                raise RuntimeError(f"none of {a.get('target')} can follow the day")
+            if self.follow_resume:
+                await asyncio.gather(*(self.follow_resume(d) for d in lamps))
+            return None
 
         if t == "color":
             # white temperature or a colour, only for the Hue lamps in the target that can do it; the rest are left alone

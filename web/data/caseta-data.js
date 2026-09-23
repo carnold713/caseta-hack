@@ -72,6 +72,7 @@
       token: (storage && storage.getItem('token')) || '',
       inv: { devices: {}, buttons: {}, scenes: {}, areas: {}, bridge: null, updated: null },
       states: {}, timers: {}, activity: [],
+      held: {},   // device id -> until when this phone's own level and colour for it beat the bridge's echoes
       config: null,
       agent: { online: false, info: null },
       ready: false, ws: null,
@@ -139,7 +140,17 @@
           if (!hasDevices(m.inventory) && hasDevices(S.inv)) return { type: 'inventory', changed: false, keptHome: true };
           S.inv = m.inventory; return { type: 'inventory', changed: true };
         }
-        case 'state': Object.assign(S.states, m.states); return { type: 'state', changed: true };
+        case 'state': {
+          // A light a finger is moving (or just let go of) keeps the level and colour this phone gave it: the
+          // bridge's echoes of the values it passed through on the way would pull the slider back.
+          const t = now();
+          for (const [id, st] of Object.entries(m.states || {})) {
+            const cur = S.states[id];
+            if (cur && S.held[id] > t) S.states[id] = { ...st, level: cur.level, ...(cur.color ? { color: cur.color } : {}) };
+            else S.states[id] = st;
+          }
+          return { type: 'state', changed: true };
+        }
         case 'timers': S.timers = m.timers || {}; return { type: 'timers', changed: true };
         // The hub broadcasts every save to every phone, including the one that made it. That echo is not news.
         case 'config': {
@@ -190,6 +201,9 @@
     }
     // Run one action now. Throws with a message fit to show when it cannot.
     function run(action) { return api('/api/command', { method: 'POST', body: JSON.stringify(action) }); }
+
+    // Hold what this phone just set for these lights against the bridge's echoes for a moment (S.held).
+    function hold(ids, ms = ECHO_QUIET) { const until = now() + ms; for (const id of [].concat(ids)) S.held[id] = until; }
 
     // While a finger is moving: one command in flight per target and kind (brightness, colour), the newest value
     // always goes next and everything between is dropped. Echoes from the bridge are ignored for a moment after.
@@ -448,7 +462,7 @@
       // connection
       connState, connOk, connLost, noteConn, noteSunClock,
       // the socket and the wire
-      apply, noteLive, api, run, gate, saveConfig, restoreConfig, connectWS,
+      apply, noteLive, api, run, gate, hold, saveConfig, restoreConfig, connectWS,
       // inventory and rooms
       hiddenDevices, devices, dev, appRooms, appRoom, roomIndex, devArea, devAreaName, areaName, areas,
       controllable, remotes, byName, level, isOn, buttonsOf, groups, presets, lutronScenes,

@@ -74,13 +74,14 @@ export function view(c, r, d) {
     <p class="t-cap muted fd-sub">${esc(d.name)} · ${esc(c.data.devAreaName(d) || '')}</p>
     ${card}
     <div class="group fd-rows">
-      <div class="row has-ic"><span class="row-ic sunrise">${icon('sunrise', 20, 1.7)}</span><span class="row-txt"><span class="t">${on ? (c.DAY.followPaused(id) ? 'Paused for now' : 'Following now') : 'Follow the day'}</span>${on && c.DAY.followPaused(id) ? '<span class="d">You set it by hand. It follows again when you next turn it on.</span>' : ''}</span>
+      <div class="row has-ic"><span class="row-ic sunrise">${icon('sunrise', 20, 1.7)}</span><span class="row-txt"><span class="t">${on ? (c.DAY.followPaused(id) ? 'Paused for now' : 'Following now') : 'Follow the day'}</span>${on && c.DAY.followPaused(id) ? '<span class="d">You picked a colour, so it keeps that colour, off and on, until you resume.</span>' : ''}</span>
         <button class="toggle" role="switch" aria-checked="${on}" data-act="follow-toggle" aria-label="Follow the day"></button></div>
+      ${on && c.DAY.followPaused(id) ? `<button class="row has-ic fd-resume" data-act="follow-resume"><span class="row-ic">${icon('sunrise', 20, 1.7)}</span><span class="row-txt"><span class="t blue">Follow the day again</span><span class="d">Goes back to the day's white now</span></span></button>` : ''}
       <div class="row sub tall has-ic"><span class="row-ic">${icon('moon', 20, 1.7)}</span><span class="row-txt"><span class="t">Dim in the evening too</span><span class="d q">Uses the same curve as the evening wind-down</span></span>
         <button class="toggle" role="switch" aria-checked="${c.DAY.followBright()}" data-act="follow-bright" aria-label="Dim in the evening too"></button></div>
       ${others.length ? `<button class="row has-ic" data-act="follow-also"><span class="row-ic">${icon('bulb', 20, 1.7)}</span><span class="row-txt"><span class="t">Also for</span></span><span class="row-val">${others.filter(x => c.DAY.isFollowing(x.device_id)).length} of ${others.length} other lamp${others.length === 1 ? '' : 's'} in ${esc(c.data.devAreaName(d))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
     </div>
-    <div class="fd-info">${icon('hand', 22, 1.6)}<p>Picking a colour by hand pauses this until the lamp is next turned on.</p></div>
+    <div class="fd-info">${icon('hand', 22, 1.6)}<p>Picking a colour by hand pauses this. The lamp keeps your colour when it is turned off and on again, until you resume.</p></div>
     <p class="fd-drift">${icon('clock', 16, 1.7)}Drifts slowly (about 30 s), so you won’t notice it changing.</p>
   </div>`;
 }
@@ -91,12 +92,20 @@ export function alsoSheet(c, d) {
   return {
     over: c.data.devAreaName(d), title: 'Follow the day',
     body: `<p class="t-body muted sheet-p">The lamps here that can change their warmth.</p><div class="group">${lamps.map(x => `
-      <div class="row sub"><span class="row-txt"><span class="t">${c.esc(x.name)}</span><span class="d">${c.DAY.isFollowing(x.device_id) ? (c.DAY.followPaused(x.device_id) ? 'Set by hand, following again when next turned on' : 'Following the day') : 'Not following'}</span></span>
+      <div class="row sub"><span class="row-txt"><span class="t">${c.esc(x.name)}</span><span class="d">${c.DAY.isFollowing(x.device_id) ? (c.DAY.followPaused(x.device_id) ? 'Paused: keeping a colour you picked' : 'Following the day') : 'Not following'}</span></span>
         <button class="toggle" role="switch" aria-checked="${c.DAY.isFollowing(x.device_id)}" data-act="follow-one" data-id="${c.esc(x.device_id)}" aria-label="${c.esc(x.name)} follows the day"></button></div>`).join('')}</div>`,
   };
 }
 
 export const actions = {
+  // a lamp a picked colour paused goes back to the day's white (the connector's {type: color, follow: true})
+  async 'follow-resume'(c, el, r) {
+    const id = r.id;
+    const f = c.S.follow || {};
+    c.S.follow = { ...f, paused: (f.paused || []).filter(x => x !== id), ids: [...new Set([...(f.ids || []), id])] };
+    c.render();
+    if (await c.run({ type: 'color', target: `d:${id}`, follow: true })) c.toast('Following the day again');
+  },
   'follow-toggle'(c, el, r) {
     const on = el.getAttribute('aria-checked') !== 'true';
     c.DAY.setFollowIds([r.id], on);

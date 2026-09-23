@@ -1,6 +1,7 @@
 // A device's own page, pushed from a tile: 04 Light (12731:22), 17 Fan (12744:111211), 18 Shade (12744:111298).
 // No tab bar on any of them, as the file draws them. The white, colour, sleep timer, Follow the day and "about"
 // pages hang off a light as #light/<id>/<page>.
+import { track } from '/ui/gesture.js';
 import { CasetaDaylight } from '/data/index.js';
 import { endsMs } from '/ui/screens/parts.js';
 import { sheets as lookSheets, actions as lookActions } from '/ui/screens/looks.js';
@@ -39,6 +40,7 @@ function dialHTML(c, lv) {
       <path class="fil" d="${arcPath(lv)}" stroke="url(#dialgrad)" ${lv > 0 ? '' : 'visibility="hidden"'}/>
       <circle class="kn" cx="${kx.toFixed(2)}" cy="${ky.toFixed(2)}" r="12"/>
     </svg>
+    <span class="kgrab" style="--kx:${kx.toFixed(1)}px;--ky:${ky.toFixed(1)}px" aria-hidden="true"></span>
     <div class="lbl">Brightness</div>
     <div class="num"><b>${lv}</b><span>%</span></div>
     <button class="nudge minus" data-act="nudge" data-by="-5" aria-label="Dimmer">${icon('minus', 20, 1.7)}</button>
@@ -137,8 +139,8 @@ function fanView(c, d) {
   const idx = Math.max(0, FAN.findIndex(([k]) => k === sp));
   const on = idx > 0;
   const tl = on ? timerLine(c, id) : null;
-  const bars = FAN.map(([k, label], i) => `<button class="step ${i <= idx ? 'fill' : ''} ${i === idx ? 'sel' : ''}" data-act="fan-speed" data-speed="${k}" style="left:${60 + i * 62}px;top:${250 - i * 32}px;height:${40 + i * 32}px" aria-label="${FAN_WORD[k]}" aria-pressed="${i === idx}"></button>
-    <span class="steplbl ${i === idx ? 'sel' : ''}" style="left:${82 + i * 62}px">${label}</span>`).join('');
+  const bars = FAN.map(([k, label], i) => `<button class="step ${i <= idx ? 'fill' : ''} ${i === idx ? 'sel' : ''}" data-act="fan-speed" data-speed="${k}" style="left:calc(50% - 146px + ${i * 62}px);top:${250 - i * 32}px;height:${40 + i * 32}px" aria-label="${FAN_WORD[k]}" aria-pressed="${i === idx}"></button>
+    <span class="steplbl ${i === idx ? 'sel' : ''}" style="left:calc(50% - 124px + ${i * 62}px)">${label}</span>`).join('');
   return `<div class="dev is-fan ${on ? 'on' : ''}">
     <span class="halo"></span>
     <img class="hero-art" src="${c.artSrc('light-ceiling-fan')}" alt="">
@@ -179,7 +181,7 @@ function shadeView(c, d) {
     <div class="window" data-drag="shade" role="slider" aria-label="How far open" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${open}">
       <span class="sun"></span><span class="sill"></span>
       <span class="fabric"><span class="hem"></span></span><span class="roller"></span>
-      <span class="handle"><i></i></span>
+      <span class="handle"><i></i></span><span class="hem-grab" aria-hidden="true"></span>
     </div>
     <div class="readout"><span class="tick"></span><b data-open>${open}%</b><span>open</span></div>
     <div class="shade-btns">
@@ -204,6 +206,7 @@ function paintDial(el, v) {
   const fil = el.querySelector('.fil'), kn = el.querySelector('.kn');
   fil.setAttribute('d', arcPath(v)); fil.setAttribute('visibility', v > 0 ? 'visible' : 'hidden');
   kn.setAttribute('cx', kx.toFixed(2)); kn.setAttribute('cy', ky.toFixed(2));
+  const kg = el.querySelector('.kgrab'); if (kg) { kg.style.setProperty('--kx', `${kx.toFixed(1)}px`); kg.style.setProperty('--ky', `${ky.toFixed(1)}px`); }
   el.querySelector('.num b').textContent = v;
   el.setAttribute('aria-valuenow', v);
   const lvl = document.querySelector('.dev [data-lv]'); if (lvl) lvl.textContent = v;
@@ -223,14 +226,14 @@ function wireDial(c, id, el) {
   const set = v => {
     v = Math.max(0, Math.min(100, v));
     paintDial(el, v);
-    c.assume([id], v);
+    c.assume([id], v, { held: true });
     c.gate.sendLevel(`d:${id}`, v);
     el.closest('.dev').classList.toggle('on', v > 0);
   };
-  svg.addEventListener('pointerdown', e => { if (!near(e)) return; e.preventDefault(); c.ui.dragging = true; svg.setPointerCapture(e.pointerId); set(at(e)); });
-  svg.addEventListener('pointermove', e => { if (c.ui.dragging && svg.hasPointerCapture(e.pointerId)) set(at(e)); });
-  const end = () => { if (c.ui.dragging) c.endDrag(); };
-  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+  // The knob takes a finger straight away, in any direction. Anywhere else on the arc only a sideways drag
+  // moves it, so a thumb scrolling the page over the dial scrolls the page. A tap sets nothing: the - and +
+  // beside it are for that.
+  track(el, { c, axis: 'x', accept: e => e.target.classList.contains('kgrab') || near(e), grab: e => e.target.classList.contains('kgrab'), move: e => set(at(e)) });
 }
 
 function wireShade(c, id, el) {
@@ -241,13 +244,11 @@ function wireShade(c, id, el) {
     page.style.setProperty('--down', 100 - v);
     page.querySelector('[data-open]').textContent = `${v}%`;
     el.setAttribute('aria-valuenow', v);
-    c.assume([id], v);
+    c.assume([id], v, { held: true });
     c.gate.sendLevel(`d:${id}`, v);
   };
-  el.addEventListener('pointerdown', e => { e.preventDefault(); c.ui.dragging = true; el.setPointerCapture(e.pointerId); set(at(e)); });
-  el.addEventListener('pointermove', e => { if (c.ui.dragging && el.hasPointerCapture(e.pointerId)) set(at(e)); });
-  const end = () => { if (c.ui.dragging) c.endDrag(); };
-  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  // the shade moves by its hem: a finger on the hem takes it up or down; anywhere else on the window scrolls
+  track(el, { c, grab: e => !!e.target.closest('.hem-grab'), move: e => set(at(e)) });
 }
 
 // ---------- taps ----------

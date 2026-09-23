@@ -134,7 +134,7 @@ function followApply(only) {
   if (Object.keys(upd).length) { send({ type: 'state', states: upd }); sendFollow(); }
   return Object.keys(upd).length;
 }
-// A colour or a warmth set by hand pauses that lamp until it is next turned off and on again.
+// A colour or a warmth set by hand pauses that lamp, through off and on, until it is asked to follow again.
 function followByHand(ids) {
   let hit = false;
   for (const id of ids) if (followingIds().includes(id)) { FOLLOW.paused.add(id); delete FOLLOW.sent[id]; hit = true; }
@@ -143,7 +143,7 @@ function followByHand(ids) {
 function followZone(id, lv) {
   const lit = (lv || 0) > 0; const was = FOLLOW.lit[id]; FOLLOW.lit[id] = lit;
   if (was === lit) return;
-  if (!lit) { delete FOLLOW.sent[id]; if (FOLLOW.paused.delete(id)) sendFollow(); return; }
+  if (!lit) { delete FOLLOW.sent[id]; return; }   // a lamp paused by hand stays paused through off and on
   if (followingIds().includes(id)) setTimeout(() => followApply([id]), 20);
 }
 function followConfig() {
@@ -192,7 +192,12 @@ ws.on('message', raw => {
       for (const id of ids) { const cur = (states[id] || {}).level || 0; const v = a.level === 'toggle' ? (ids.some(x => ((states[x] || {}).level || 0) > 0) ? 0 : 100) : a.level === 'on' ? 100 : a.level === 'off' ? 0 : Number(a.level); states[id] = { ...(states[id] || {}), level: v }; upd[id] = states[id]; if (cur === v) continue; }
       if (Object.keys(upd).length) setTimeout(() => { send({ type: 'state', states: upd }); for (const id of Object.keys(upd)) followZone(id, upd[id].level); }, lag);
     }
-    if (a.type === 'color') {
+    if (a.type === 'color' && a.follow) {
+      // follow the day again: a lamp a colour set by hand had paused
+      const ids = resolve(a.target).filter(id => inventory.devices[id] && inventory.devices[id].ct);
+      for (const id of ids) { FOLLOW.paused.delete(id); delete FOLLOW.sent[id]; }
+      followApply(ids); sendFollow();
+    } else if (a.type === 'color') {
       // only the Hue lamps that can do what is asked; the echo carries the new colour like the real connector's state does
       const want = a.kelvin != null ? 'ct' : 'color';
       const ids = resolve(a.target).filter(id => inventory.devices[id] && inventory.devices[id][want]);

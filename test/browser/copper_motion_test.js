@@ -47,15 +47,26 @@ const running = () => document.getAnimations().map(a => {
   check('standard, EASE_IN and EASE_IN_AND_OUT', tok[2].replace(/\s/g, '') === 'cubic-bezier(.2,.8,.2,1)' && tok[3] === 'ease-in' && tok[4] === 'ease-in-out', tok.slice(2, 5));
   check('durations: tap .12, sheet .42 / .28, push .3, dimmer .4, scene 1.0', tok.slice(5).join() === '120ms,420ms,280ms,300ms,400ms,1000ms', tok.slice(5));
 
-  // ---- M4 · a tab is a load: its blocks fade in and rise 12 px, 0.32 s, 0.04 s apart
-  await C(() => { location.hash = 'rooms'; }); await wait(60);
+  // ---- M4 · the app opening is a load: its blocks fade in and rise 12 px, 0.32 s, 0.04 s apart
+  await page.goto(root + '#rooms'); await ready(); await wait(30);
   let a = await anims();
   const rise = a.filter(x => x.dur === 320 && x.props.includes('transform') && /translateY\(12px\)/.test(x.from.transform || ''));
   const delays = [...new Set(rise.map(x => x.delay))].sort((p, q) => p - q);
-  check('M4: a tab\'s blocks rise 12 px over 0.32 s', rise.length >= 3, a.slice(0, 6));
+  check('M4: opening the app, its blocks rise 12 px over 0.32 s', rise.length >= 3, a.slice(0, 6));
   check('M4: 0.04 s apart', delays.slice(0, 4).join() === '0,40,80,120', delays);
   check('M4: on the standard curve', rise.every(x => x.ease === 'cubic-bezier(0.2, 0.8, 0.2, 1)'), rise.map(x => x.ease));
   await wait(900);
+
+  // ---- a tab: the page slides the way the tab bar reads, 0.3 s standard
+  await C(() => { location.hash = 'remotes'; }); await wait(60);
+  a = await anims();
+  check('a tab to the right comes in from the right', a.some(x => x.dur === 300 && !x.ghost && /translateX\(24px\)/.test(x.from.transform || '')), a.filter(x => x.dur === 300));
+  check('and the tab it left drifts out to the left', a.some(x => x.dur === 300 && x.ghost && /translateX\(-24px\)/.test(x.to.transform || '')));
+  await wait(500);
+  await C(() => { location.hash = 'rooms'; }); await wait(60);
+  a = await anims();
+  check('a tab to the left comes in from the left', a.some(x => x.dur === 300 && !x.ghost && /translateX\(-24px\)/.test(x.from.transform || '')), a.filter(x => x.dur === 300));
+  await wait(600);
 
   // ---- M4 · push: the room comes in from +24 px, the list drifts -24 px, 0.3 s
   const roomId = await C(() => document.querySelector('[data-go^="room/"]').dataset.go);

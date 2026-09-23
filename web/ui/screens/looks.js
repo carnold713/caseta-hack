@@ -1,11 +1,13 @@
 // The sheets over a light's page: 05b White (12732:49220), 05 Colour (12732:48591) and 06b Sleep timer
 // (12733:49235). Each is a sub route of the light (#light/<id>/white) so Back and a shared link land on it, and each
 // is laid out from the file's numbers in the sheet's own coordinates (screens.css, "sheets over a light").
+import { track } from '/ui/gesture.js';
 import { K_MIN, K_MAX, KELVIN_GRADIENT, kelvinAt, posOfKelvin, kelvinHex, WHITES, LAMP_COLOURS, hexHsv, hsvHex, colourName, sameHex } from '/ui/colour.js';
 import { CasetaDaylight } from '/data/index.js';
 import { endsMs } from '/ui/screens/parts.js';
 
-const TRACK = 372;
+// The track runs the sheet's width less the gutters; the thumb (48 across) is centred on the value.
+const thumbAt = k => `calc(${posOfKelvin(k).toFixed(4)} * (100% - 40px) - 4px)`;
 const lampRange = d => (d.ct_range && d.ct_range.length === 2 ? d.ct_range : [2000, 6500]).map(Number);
 const colOf = (c, id) => (c.S.states[id] || {}).color || {};
 
@@ -14,7 +16,7 @@ function segmented(c, d, which) {
   if (!(d.ct && d.color)) return '';
   const id = c.esc(d.device_id);
   return `<div class="seg2" role="tablist">
-    <span class="pill-bg" style="left:${which === 'white' ? 4 : 188}px"></span>
+    <span class="pill-bg" style="left:${which === 'white' ? '4px' : 'calc(50% + 2px)'}"></span>
     <button role="tab" aria-selected="${which === 'white'}" data-act="look-swap" data-to="light/${id}/white">White</button>
     <button role="tab" aria-selected="${which === 'colour'}" data-act="look-swap" data-to="light/${id}/colour">Colour</button>
   </div>`;
@@ -24,7 +26,7 @@ function followRow(c, d) {
   if (!c.DAY.canFollow(d)) return '';
   const id = d.device_id;
   const on = c.DAY.isFollowing(id);
-  const sub = on ? (c.DAY.followPaused(id) ? 'Paused until the lamp is next turned on' : c.DAY.followNowText(id)) : 'Cool and bright at midday, warm in the evening';
+  const sub = on ? (c.DAY.followPaused(id) ? 'Paused: keeping a colour you picked' : c.DAY.followNowText(id)) : 'Cool and bright at midday, warm in the evening';
   return `<div class="group ws-follow"><div class="row sub has-ic">
     <span class="row-ic sunrise">${c.icon('sunrise', 20, 1.7)}</span>
     <button class="row-txt linkish" data-go="light/${c.esc(id)}/follow"><span class="t">Follow the day</span><span class="d">${c.esc(sub)}</span></button>
@@ -52,12 +54,12 @@ function white(c, r) {
     body: `<div class="sheet-abs ws">
       ${segmented(c, d, 'white')}
       <div class="ws-val"><b data-k>${k}K</b><i class="dot" style="background:${kelvinHex(k)}"></i><span data-kname>${c.esc(CasetaDaylight.warmthName(k))}</span></div>
-      ${lim != null ? `<span class="ws-limit" style="right:${Math.round((1 - lim) * TRACK) + 20 - 1}px">Beyond this lamp · max ${kmax}K</span><span class="ws-conn" style="left:${20 + Math.round(lim * TRACK) + 20}px"></span>` : ''}
+      ${lim != null ? `<span class="ws-limit" style="right:calc(${(1 - lim).toFixed(4)} * (100% - 40px) + 19px)">Beyond this lamp · max ${kmax}K</span><span class="ws-conn" style="left:calc(${lim.toFixed(4)} * (100% - 40px) + 40px)"></span>` : ''}
       <div class="ws-track" data-drag="kelvin" role="slider" aria-label="Warmth" aria-valuemin="${kmin}" aria-valuemax="${kmax}" aria-valuenow="${k}" style="background:${KELVIN_GRADIENT}">
         ${low != null ? `<span class="beyond lo" style="width:${(low * 100).toFixed(2)}%"></span>` : ''}
         ${lim != null ? `<span class="beyond" style="left:${(lim * 100).toFixed(2)}%"></span><span class="tick" style="left:calc(${(lim * 100).toFixed(2)}% - 1px)"></span>` : ''}
       </div>
-      <span class="ws-thumb" style="left:${(20 + posOfKelvin(k) * TRACK - 24).toFixed(1)}px;--ring:${kelvinHex(k)}"></span>
+      <span class="ws-thumb" style="left:${thumbAt(k)};--ring:${kelvinHex(k)}"></span>
       <div class="ws-ends"><span><b>Candle</b> ${K_MIN}K</span><span><b>Daylight</b> ${K_MAX}K</span></div>
       <div class="ws-chips">${chips}</div>
       ${clamp}
@@ -74,13 +76,14 @@ function setWhite(c, d, k, root) {
   c.S.states[id] = { ...(c.S.states[id] || {}), color: { ...colOf(c, id), mode: 'ct', kelvin: k, hex: kelvinHex(k) } };
   // a white turns the lamp on (the connector sends on with it); show it lit until the bridge says otherwise
   if (!(c.data.level(id) > 0)) c.S.states[id].level = 100;
+  c.data.hold([id]);   // the bridge's echoes of the colours passed on the way do not pull it back
   c.gate.sendColor(`d:${id}`, { kelvin: k });
   if (root) paintKelvin(root, k);
   return k;
 }
 function paintKelvin(root, k) {
   const t = root.querySelector('.ws-thumb'); if (!t) return;
-  t.style.left = `${(20 + posOfKelvin(k) * TRACK - 24).toFixed(1)}px`;
+  t.style.left = thumbAt(k);
   t.style.setProperty('--ring', kelvinHex(k));
   root.querySelector('[data-k]').textContent = `${k}K`;
   root.querySelector('[data-kname]').textContent = CasetaDaylight.warmthName(k);
@@ -91,15 +94,9 @@ function wireKelvin(c, d, root) {
   const tr = root.querySelector('[data-drag="kelvin"]'); if (!tr) return;
   const at = e => { const b = tr.getBoundingClientRect(); return kelvinAt((e.clientX - b.left) / b.width); };
   const zone = root.querySelector('.ws');
-  const down = e => {
-    const b = tr.getBoundingClientRect();
-    if (e.clientY < b.top - 12 || e.clientY > b.bottom + 12) return;
-    e.preventDefault(); c.ui.dragging = true; zone.setPointerCapture(e.pointerId); setWhite(c, d, at(e), root);
-  };
-  zone.addEventListener('pointerdown', down);
-  zone.addEventListener('pointermove', e => { if (c.ui.dragging && zone.hasPointerCapture(e.pointerId)) setWhite(c, d, at(e), root); });
-  const end = () => { if (c.ui.dragging) c.endDrag(); };
-  zone.addEventListener('pointerup', end); zone.addEventListener('pointercancel', end);
+  // a sideways drag on the track (or just above or below it); a swipe down the sheet is the sheet's
+  const onTrack = e => { const b = tr.getBoundingClientRect(); return e.clientY >= b.top - 12 && e.clientY <= b.bottom + 12; };
+  track(zone, { c, axis: 'x', accept: onTrack, move: e => setWhite(c, d, at(e), root) });
 }
 
 // ---------- 05 Colour ----------
@@ -126,7 +123,7 @@ function colour(c, r) {
         <button class="link" data-act="colour-exact">Enter exact</button>
       </div>
       <div class="cs-sw" data-keep="swatches">${LAMP_COLOURS.map(([n, x]) => `<button class="sw ${showing && sameHex(x, hex) ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="background:${x}" aria-label="${n}"></button>`).join('')}${ring(showing ? hex : null)}</div>
-      ${follows ? `<p class="cs-note">${c.icon('sunrise', 20, 1.7)}<span>Picking a colour pauses Follow the day until the lamp is next turned on.</span></p>` : ''}
+      ${follows ? `<p class="cs-note">${c.icon('sunrise', 20, 1.7)}<span>Picking a colour pauses Follow the day. The lamp keeps your colour, off and on, until you resume it.</span></p>` : ''}
     </div>`,
     after: (c2, r2, root) => wireWheel(c2, d, root),
   };
@@ -141,6 +138,7 @@ function setColour(c, d, hex, root) {
   hex = hex.toUpperCase();
   c.S.states[id] = { ...(c.S.states[id] || {}), color: { ...colOf(c, id), mode: 'xy', hex } };
   if (!(c.data.level(id) > 0)) c.S.states[id].level = 100;
+  c.data.hold([id]);   // the bridge's echoes of the colours passed on the way do not pull it back
   c.gate.sendColor(`d:${id}`, { hex });
   if (root) paintColour(root, hex);
 }
@@ -166,10 +164,8 @@ function wireWheel(c, d, root) {
     const s = Math.min(1, Math.hypot(dx, dy) / (WHEEL / 2));
     return hsvHex(h, s, 1);
   };
-  w.addEventListener('pointerdown', e => { e.preventDefault(); c.ui.dragging = true; w.classList.add('held'); w.setPointerCapture(e.pointerId); setColour(c, d, at(e), root); });
-  w.addEventListener('pointermove', e => { if (c.ui.dragging && w.hasPointerCapture(e.pointerId)) setColour(c, d, at(e), root); });
-  const end = () => { if (c.ui.dragging) c.endDrag(); };
-  w.addEventListener('pointerup', end); w.addEventListener('pointercancel', end);
+  // the wheel is a colour picker and nothing else: a finger on it is picking (it takes the finger at once)
+  track(w, { c, grab: () => true, start: () => w.classList.add('held'), move: e => setColour(c, d, at(e), root) });
 }
 
 // ---------- 06b Sleep timer ----------

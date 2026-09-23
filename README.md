@@ -210,7 +210,8 @@ Pico bindings from its cached config.
   that can do warmth, or a **scene** entry that says "follow the day" instead of
   a fixed colour. The light's page shows what the lamp is set to right now and
   the day's shape. Set a colour or a warmth by hand and that lamp stops
-  following until you next turn it on. Brightness is an option, off by default:
+  following, and keeps that colour through off and on and a connector restart,
+  until you tap "Follow the day again" (or switch it off and on in the list). Brightness is an option, off by default:
   switched on, a following lamp dims towards the evening on the evening
   wind-down's own curve, so the two never disagree. A Caseta dimmer has no
   colour, so it is never offered it.

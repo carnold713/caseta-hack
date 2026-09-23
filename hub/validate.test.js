@@ -58,6 +58,9 @@ test('colour is a white temperature or a colour, never both and never neither', 
   assert.ok(validateAction({ type: 'color', target: 'd:1', kelvin: 4000 }, 'x'));
   bad(() => validateAction({ type: 'color', target: 'd:1' }, 'x'), 'neither');
   bad(() => validateAction({ type: 'color', target: 'd:1', kelvin: 4000, hex: '#ff0000' }, 'x'), 'both');
+  // follow the day again, for a lamp a colour set by hand has paused
+  assert.ok(validateAction({ type: 'color', target: 'd:1', follow: true }, 'x'));
+  bad(() => validateAction({ type: 'color', target: 'd:1', follow: true, kelvin: 4000 }, 'x'), 'one of them');
   bad(() => validateAction({ type: 'color', target: 'd:1', kelvin: 999 }, 'x'), 'kelvin below the range');
   bad(() => validateAction({ type: 'color', target: 'd:1', kelvin: 10001 }, 'x'), 'kelvin above the range');
   bad(() => validateAction({ type: 'color', target: 'd:1', hex: 'ff0000' }, 'x'), 'a hex with no hash');

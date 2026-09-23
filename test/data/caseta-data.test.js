@@ -280,3 +280,17 @@ test('remote words', () => {
   assert.equal(d.modelName(d.dev('9')), '3-button remote with dimming');
   assert.equal(CD.userGestureOf({ gesture: 'hold_start' }), 'hold');
 });
+
+test('a light a finger just set keeps its level and colour against the bridge echoing the values it passed', () => {
+  let t = 1000;
+  const d = CD.create({ now: () => t });
+  d.apply(snapshot());
+  d.S.states[1] = { level: 90, color: { mode: 'xy', hex: '#FF0000' } };
+  d.hold(['1']);
+  d.apply({ type: 'state', states: { 1: { level: 60, color: { mode: 'xy', hex: '#00FF00' }, fan_speed: null } } });
+  assert.equal(d.S.states[1].level, 90, 'an echo of a level passed on the way does not pull it back');
+  assert.equal(d.S.states[1].color.hex, '#FF0000', 'nor a colour');
+  t += 2000;
+  d.apply({ type: 'state', states: { 1: { level: 60 } } });
+  assert.equal(d.S.states[1].level, 60, 'once the moment has passed, the bridge is the truth again');
+});
