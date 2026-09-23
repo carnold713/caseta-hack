@@ -35,6 +35,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 });
   await wait(900);
   await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
+  // the sizes and strengths below are the day's: at night (from 10 pm, by the home's clock) every glow is capped, so a
+  // run in the evening read a 450 glow as 405. The day look is pinned for this test and put back after it.
+  const look0 = await C(async () => { const s = window.__copper.S.config.settings; const was = s.night_look ?? null; s.night_look = 'never'; await window.__copper.save('', { quiet: true }); return was; });
   // every level and colour this phone sends
   await C(() => {
     const c = window.__copper; window.__lv = []; window.__col = [];
@@ -260,6 +263,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await wait(600);
   }
 
+  await C(async was => { const s = window.__copper.S.config.settings; if (was == null) delete s.night_look; else s.night_look = was; await window.__copper.save('', { quiet: true }); }, look0);
   check('no errors on the page', !errors.length, errors);
   await ctx.close();
   await browser.close();

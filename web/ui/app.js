@@ -10,7 +10,7 @@ import { icon } from '/ui/icons.js';
 import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
 import * as motion from '/ui/motion.js';
-import * as roomOpen from '/ui/roomopen.js';
+import * as opening from '/ui/opening.js';
 import * as swipeBack from '/ui/predictiveback.js';
 import { wireSheetDrag } from '/ui/sheetdrag.js';
 import * as homeScreen from '/ui/screens/home.js';
@@ -245,9 +245,9 @@ function render() {
   const r = route();
   // the page the app opened on, known once the home has loaded (hashchange compares against it)
   if (lastPage === null) lastPage = pageOf(r);
-  // a redraw while a room is still opening (or closing) waits for the window to land, so nothing is drawn out from
-  // under it
-  if (!arriving && wasScreen && roomOpen.flying()) { roomOpen.whenLanded(render); return; }
+  // a redraw while a page is still opening out of what was tapped (or closing back into it) waits for it to land,
+  // so nothing is drawn out from under it
+  if (!arriving && wasScreen && opening.flying()) { opening.whenLanded(render); return; }
   const screen = screenFor(r);
   const keep = {};
   scr.querySelectorAll('[data-keep]').forEach(el => { keep[el.dataset.keep] = el.scrollLeft; });
@@ -265,10 +265,10 @@ function render() {
   const tab = TAB_OF[r.name] || 'home';
   tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
   if (screen.after) screen.after(ctx, r, scr);
-  // Rooms comes back where it was scrolled when a card opened the room being left
-  const y = roomOpen.takeScroll();
+  // a page comes back where it was scrolled when something on it opened the page being left
+  const y = opening.takeScroll();
   if (y != null) window.scrollTo(0, y);
-  if (how === 'room-open' || how === 'room-close') roomOpen.arrive(how, scr);
+  if (opening.plays(how)) opening.arrive(how, scr);
   else if (how === 'swipe-back') swipeBack.arrive(scr);
   else if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
   motion.settle(scr);
@@ -393,11 +393,11 @@ data.hooks.signedOut = () => { beyond.signedOut(); render(); };
 document.addEventListener('click', e => {
   // the tap that ends a press and hold is not a tap as well
   if (Date.now() - heldAt < 700) { e.preventDefault(); return; }
-  // while a room card is opening into its room (or closing back into it), a second tap does nothing
-  if (roomOpen.busy()) { e.preventDefault(); return; }
+  // while a page is opening out of what was tapped (or closing back into it), a second tap does nothing
+  if (opening.busy()) { e.preventDefault(); return; }
   // the innermost target wins: a tile navigates, the power circle inside it toggles
   const el = e.target.closest('[data-act], [data-go]'); if (!el) return;
-  if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs')) goTab(el.dataset.go); else { roomOpen.tap(el); go(el.dataset.go); } return; }
+  if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs')) goTab(el.dataset.go); else { opening.tap(el); go(el.dataset.go); } return; }
   const act = el.dataset.act;
   if (act === 'sheet-close') { dismissSheet(); return; }
   if (act === 'picker-back') { closePicker(); return; }
@@ -488,10 +488,11 @@ window.addEventListener('hashchange', e => {
     // one tab to another slides the way the tab bar reads: a tab to the right comes in from the right
     const order = TABS.map(t => t[0]);
     arriving = !was && !now ? (order.indexOf(r.name) < order.indexOf(lastName) ? 'back' : 'push') : now < was ? 'back' : 'push';
-    // a room card tapped on Rooms opens into its room, and leaving that room for Rooms closes it back (M10); a back
-    // swipe let go (M13) hands its page over from where the finger left it, to that close or to its own slide off
+    // a room card opens into its room (M10), a tile into its light (M11), a remote's card into its page (M14), and
+    // leaving the page for the one it opened from closes it back into what was tapped; a back swipe let go (M13)
+    // hands its page over from where the finger left it, to that close or to its own slide off
     const screen = $('#screen'), pose = swipeBack.letGo();
-    const shared = roomOpen.prepare({ from: lastPage, to: page, r, depth: now, screen, pose }) || swipeBack.prepare(screen, pose);
+    const shared = opening.prepare({ from: lastPage, to: page, r, depth: now, screen, pose }) || swipeBack.prepare(screen, pose);
     if (shared) arriving = shared; else motion.capture(screen);
   }
   lastName = r.name; lastDepth = depthOf(r);

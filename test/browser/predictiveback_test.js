@@ -1,8 +1,9 @@
 // M13 · Swiping back (web/ui/predictiveback.js): Android's predictive back, driven the way the Android side drives it,
 // through window.__caseta.back (start, a run of progress values, then cancel or commit). The page follows the
 // progress, the page Back would show waits behind it, a cancel puts everything back exactly, and a commit steps back
-// from where the finger left it: a room reached from its card closes into the card (M10), another page slides off,
-// and with a sheet up only the sheet goes. Screenshots are taken with every animation paused at a moment.
+// from where the finger left it: a room reached from its card closes into the card (M10), a light from its tile into
+// the tile (M11), another page slides off, and with a sheet up only the sheet goes. Screenshots are taken with every
+// animation paused at a moment.
 const { chromium } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
@@ -158,27 +159,39 @@ const SHOTS = process.env.SHOTS || '';
   check('with nothing of either left', clean(afterRoom), afterRoom);
   await shot('m13-room-after');
 
-  // ---- another page: a light over its room slides off toward the far side, and the room comes up
+  // ---- a light opened from its tile on the room closes back into its tile (M11), from where the finger left it
   await page.click(card); await wait(1300);
   const tile = await C(() => { const t = document.querySelector('#screen .room-grid .tile[data-go^="light/"]'); return t && t.dataset.go; });
-  await C(s => document.querySelector(`#screen [data-go="${s}"]`).click(), tile); await wait(900);
+  await C(s => document.querySelector(`#screen [data-go="${s}"]`).click(), tile); await wait(1600);
   const onLight = await state();
   check('a light opened over the room', onLight.hash === `#${tile}` && onLight.n === inRoom.n + 1, onLight);
   await drag('right', [0.1, 0.2, 0.3]);
   const lp = await pose();
-  const lb = await C(() => { const L = document.querySelector('.pb-behind'); return { room: !!(L && L.querySelector('.room .room-photo-card')), tabs: !!(L && L.querySelector('.tabbar')), chevRight: (() => { const c = document.querySelector('.pb-chev'); return c && c.getBoundingClientRect().right > innerWidth - 100; })() }; });
+  const lb = await C(t => { const L = document.querySelector('.pb-behind'); const tl = L && L.querySelector(`.room-grid .tile[data-go="${t}"]`); return { room: !!(L && L.querySelector('.room .room-photo-card')), tabs: !!(L && L.querySelector('.tabbar')), tile: tl && tl.style.visibility, chevRight: (() => { const c = document.querySelector('.pb-chev'); return c && c.getBoundingClientRect().right > innerWidth - 100; })() }; }, tile);
   check('a swipe from the right edge moves the page left', lp.x < -15 && Math.abs(lp.s - 0.9) < 0.004, lp);
-  check('behind the light is its room, with the tab bar it comes back to, and the chevron is on the right', lb.room && lb.tabs && lb.chevRight, lb);
+  check('behind the light is its room with the tab bar it comes back to and its tile not there, and the chevron is on the right', lb.room && lb.tabs && lb.tile === 'hidden' && lb.chevRight, lb);
   await still('m13-light-drag-30');
   check('a commit is taken', (await B('commit')) === true);
   await wait(40);
-  check('the light slides off as its own ghost, over the room', !!(await page.$('.pb-leaving')) && (await C(() => location.hash)) === `#room/${aid}`);
+  const lc = await C(() => ({ surface: !!document.querySelector('.m11-surface'), leaving: !!document.querySelector('.pb-leaving'), ghost: !!document.querySelector('.page-ghost .dev'), hash: location.hash }));
+  check('the light closes into its tile from the shrunk page, over the room', lc.surface && !lc.leaving && lc.ghost && lc.hash === `#room/${aid}`, lc);
   await still('m13-light-commit-100', 60);
   await still('m13-light-commit-220', 120);
   await wait(700);
   const afterLight = await leftovers();
-  check('it ends on the room, with nothing left', (await state()).hash === `#room/${aid}` && (await state()).n === inRoom.n && clean(afterLight), { st: await state(), afterLight });
+  check('it ends on the room, with nothing left and the tile itself again', (await state()).hash === `#room/${aid}` && (await state()).n === inRoom.n && clean(afterLight) && !(await page.$('.m11-surface, .m11-top')) && (await C(t => getComputedStyle(document.querySelector(`#screen [data-go="${t}"]`)).visibility, tile)) === 'visible', { st: await state(), afterLight });
   await shot('m13-light-after');
+
+  // ---- another page: a light reached by its address slides off toward the far side, and the room comes up
+  await C(t => { location.hash = t; }, tile); await wait(900);
+  await drag('right', [0.1, 0.2, 0.3]);
+  check('a commit is taken', (await B('commit')) === true);
+  await wait(40);
+  check('the light slides off as its own ghost, over the room', !!(await page.$('.pb-leaving')) && !(await page.$('.m11-surface')) && (await C(() => location.hash)) === `#room/${aid}`);
+  await still('m13-plain-commit-100', 60);
+  await wait(700);
+  const afterPlain = await leftovers();
+  check('it ends on the room, with nothing left', (await state()).hash === `#room/${aid}` && (await state()).n === inRoom.n && clean(afterPlain), { st: await state(), afterPlain });
 
   // ---- a sheet up: the gesture drives the sheet, and a commit closes the sheet only
   await C(a => { location.hash = `room/${a}/timer`; }, aid); await wait(900);

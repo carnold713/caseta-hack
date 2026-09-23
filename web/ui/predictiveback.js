@@ -24,8 +24,9 @@
 //   the chevron  a back circle at the swiped edge: it fades in by 15%, grows 0.5 to 1 with k and moves in 28 px.
 // CANCEL: all of it springs back in 0.3 s on (0.2, 0.8, 0.2, 1), and the layer behind goes.
 // COMMIT: a page kind that closes its own way takes over from the pose the finger left (a room reached from its card
-//   closes back into it, M10, roomopen.js). Any other page slides off toward the far side and fades, 0.3 s on
-//   (0.4, 0, 0.2, 1), while the page behind comes up to full size and brightness.
+//   closes back into it, M10, roomopen.js; a light or a remote into its tile or card, M11 and M14). Any other page
+//   slides off toward the far side and fades, 0.3 s on (0.4, 0, 0.2, 1), while the page behind comes up to full size
+//   and brightness.
 // A SHEET that is up is what Back closes first, so with one up the gesture drives the sheet: it drops with the
 //   progress, a commit closes it through the app's own close (so the history stays right), a cancel lifts it back.
 //
@@ -47,7 +48,7 @@
 // plays the ordinary back (and M10's close for a room). Edge swipes belong to the system; the page never tries to
 // catch them itself. Nothing is drawn while the phone asks for reduced motion; the step back still happens.
 import { reduced, holdFor } from '/ui/motion.js';
-import * as roomOpen from '/ui/roomopen.js';
+import * as opening from '/ui/opening.js';
 import { icon } from '/ui/icons.js';
 import * as native from '/ui/native.js';
 
@@ -134,7 +135,7 @@ function start(edge, x, y) {
   if (settling) settling.done();
   if (G) drop(G);
   G = null;
-  if (landing || !ready() || !can() || roomOpen.busy()) return false;
+  if (landing || !ready() || !can() || opening.busy()) return false;
   const info = infoNow();
   const kind = kinds.find(k => { try { return !!(k.claims && k.claims(info)); } catch (_) { return false; } }) || null;
   const side = edge === 'right' ? 'right' : 'left';
@@ -278,7 +279,7 @@ function missed() {
 // ---------- handing the page over ----------
 // Called by the app as the address changes after a commit, before anything is measured or drawn. The page gets its
 // own styles back and the pose it was left in is returned, for whoever plays the close: a kind's own close (the
-// room's, which takes it through roomOpen.prepare) or this module's slide off (prepare, then arrive).
+// room's, which takes it through opening.prepare) or this module's slide off (prepare, then arrive).
 export function letGo() {
   const l = landing; if (!l) return null;
   landing = null; clearTimeout(l.timer);
@@ -455,12 +456,12 @@ const ROOMS = { up: -16, down: 64, head: -12 };
 register({
   name: 'room',
   claims(info) {
-    const o = roomOpen.openedFrom();
+    const o = opening.openedFrom('room');
     return !!(o && info.page === `room/${o.aid}` && info.prev && info.prev.page === 'rooms/null');
   },
-  scroll: () => { const o = roomOpen.openedFrom(); return o ? o.y : 0; },
+  scroll: () => { const o = opening.openedFrom('room'); return o ? o.y : 0; },
   dress(copy) {
-    const o = roomOpen.openedFrom(); if (!o) return;
+    const o = opening.openedFrom('room'); if (!o) return;
     const list = copy.querySelector('.rooms-list');
     const card = list && [...list.children].find(k => k.dataset.go === `room/${o.aid}`);
     if (!card) return;
@@ -472,6 +473,26 @@ register({
   },
   hand(pose) { pose.list = { ...ROOMS }; },
 });
+
+// ---------- a light reached from its tile, a remote from its card ----------
+// Leaving it for the page it opened from closes it back into its tile or card (M11 and M14, lightopen.js and
+// remoteopen.js). Behind it that page waits as the close starts from: scrolled where it was, everything in its place
+// and the tile or card not there (it is the page in the finger). The close starts from the shrunk page.
+for (const [name, sel] of [['light', '.room-grid > .tile'], ['remote', '.rgrid > .rcard']]) {
+  register({
+    name,
+    claims(info) {
+      const o = opening.openedFrom(name);
+      return !!(o && info.page === o.to && info.prev && info.prev.page === o.from);
+    },
+    scroll: () => { const o = opening.openedFrom(name); return o ? o.y : 0; },
+    dress(copy) {
+      const o = opening.openedFrom(name);
+      const n = o && copy.querySelector(`${sel}[data-go="${CSS.escape(o.to)}"]`);
+      if (n) n.style.visibility = 'hidden';
+    },
+  });
+}
 
 // ---------- wiring ----------
 // Whether Back has anywhere to go, told to the Android side when it changes (after an address change, and when a

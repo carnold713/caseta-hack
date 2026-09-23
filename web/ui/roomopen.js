@@ -1,5 +1,6 @@
 // M10 · Opening a room: the Figma frame the owner approved for a room card on Rooms opening into its page, and the
-// same run backwards when the room is left for Rooms again. Every other page change is motion.js's push or back.
+// same run backwards when the room is left for Rooms again. opening.js decides when it plays; flight.js holds what it
+// shares with the other pages that open this way.
 //
 // OPEN, from the moment the address changes (T):
 //   the window  the card's picture opens where it is into the room page's photograph, 0.55 s on (0.2, 0, 0, 1). The
@@ -17,125 +18,15 @@
 //   the room    fills in in reading order: the header, the count badge, All on and All off, the count, the scenes,
 //               the tiles (each lit one blooming with its own light as it lands), and a spill of the card's light
 //               over the page as it opens.
-// BACK is the same run the other way, faster (0.45 s on (0.4, 0, 0.2, 1)), with the room's content gone first.
-//
-// A room reached any other way, a card that is not on screen, or a phone asking for reduced motion gets the plain
-// push and back. Transforms, opacity and clip-path only; everything is measured before anything is written.
-import { T, reduced, capture, takeGhost, holdFor, arrive as plainArrive, stagger } from '/ui/motion.js';
+// BACK is the same run the other way, faster (0.45 s on (0.4, 0, 0.2, 1)), with the room's content gone first. A room
+// let go by Android's back swipe (M13) closes from the shrunk pose the finger left (opening.js starts its ghost there).
+import { T } from '/ui/motion.js';
+import { OPEN, CLOSE, CROSS, last, shown, textBox, px, opacityOf, part, copyText, copyButton, topLayer, el, windowGeo, pair, stepAside } from '/ui/flight.js';
 
-const OPEN = { dur: 550, ease: 'cubic-bezier(0.2, 0, 0, 1)' };
-const CLOSE = { dur: 450, ease: 'cubic-bezier(0.4, 0, 0.2, 1)' };
 const FACE = 300;       // the card's face fades over the first (open) or last (back) 0.3 s
-const CROSS = 150;      // the label and the title crossfade only in this much at the card's end
 const RADIUS = 28;      // the card's corners, which the window keeps
 
-let tapped = null;      // a card just tapped: { hash, card, y, until }, until its address changes
-let opened = null;      // the room a card opened, and where Rooms was scrolled then: { aid, y }
-let pending = null;     // what prepare() measured, for arrive() once the new page is drawn
-let flight = null;      // the transition playing: { until, anims, undo }
-let scrollBack = null;  // where Rooms goes back to, for the next redraw
-
-// ---------- the app's side ----------
-// A tap on a room card, before the address changes. Only a card on Rooms opens this way.
-export function tap(el) {
-  if (!el || !el.matches('.room-big[data-go]') || !el.closest('#screen')) return;
-  tapped = { hash: el.dataset.go, card: el, y: window.scrollY, until: performance.now() + 800 };
-}
-// From the tap until the window has opened (or closed) a second tap does nothing, so it can never navigate twice.
-export function busy() {
-  const now = performance.now();
-  return !!((tapped && now < tapped.until) || (flight && now < flight.until));
-}
-// Whether the window is still moving. A redraw then would pull the page out from under it, so the app hands the
-// redraw here instead and it runs the moment the window lands (at most half a second later).
-export const flying = () => !!flight;
-let redraw = null;
-export function whenLanded(fn) { redraw = fn; }
-function landed(f) {
-  if (flight !== f) return;
-  flight = null;
-  for (const u of f.undo.splice(0)) { try { u(); } catch (_) { /* already gone */ } }
-  const r = redraw; redraw = null;
-  if (r) r();
-}
-// Jump whatever is playing to its end, cleanly: the new page as it rests and nothing of the old one. Called when
-// the address changes again mid flight, so the redraw that follows is the new page's own.
-export function finish() {
-  const f = flight; if (!f) return;
-  flight = null; redraw = null;
-  for (const a of f.anims) { try { a.cancel(); } catch (_) { /* already gone */ } }
-  for (const u of f.undo.splice(0)) { try { u(); } catch (_) { /* already gone */ } }
-}
-// Where Rooms was scrolled when a card opened the room it is coming back from, once.
-export function takeScroll() { const y = scrollBack; scrollBack = null; return y; }
-// The room a card opened, and where Rooms was scrolled then ({ aid, y }), or null: a back swipe (M13) draws Rooms
-// behind the room as this close starts from.
-export const openedFrom = () => (opened ? { ...opened } : null);
-
-// Called when the page changes, before the new one is drawn. Says 'room-open' or 'room-close' when this transition
-// plays, and otherwise null (the caller captures the page for the plain push or back). `pose` is where a back swipe
-// left the room (predictiveback.js): the close then starts from there.
-export function prepare({ from, to, r, depth, screen, pose = null }) {
-  finish();
-  const t = tapped; tapped = null; pending = null;
-  if (from === 'rooms/null' && r.name === 'room' && !r.sub && to === `room/${r.id}` && t && t.hash === `room/${r.id}`) {
-    opened = { aid: r.id, y: t.y };
-    if (reduced() || !t.card.isConnected || shown(t.card) < 0.25) return null;
-    const O = readCard(t.card);
-    const g = capture(screen, { live: true }); takeGhost();
-    if (!g) return null;
-    // the old page stays under the new one while it steps aside
-    g.style.zIndex = '';
-    screen.before(g);
-    t.card.style.visibility = 'hidden';
-    pending = { kind: 'open', O, ghost: g };
-    return 'room-open';
-  }
-  if (opened && from === `room/${opened.aid}` && to === 'rooms/null') {
-    const aid = opened.aid;
-    scrollBack = opened.y; opened = null;
-    if (reduced()) return null;
-    const hero = screen.querySelector('.room-photo-card'), h1 = screen.querySelector('.room-title h1');
-    if (!hero || !h1 || shown(hero) <= 0) return null;
-    const art = hero.querySelector('.room-art');
-    const read = { Hr: hero.getBoundingClientRect(), Ht: textBox(h1), Hb: h1.getBoundingClientRect(), artR: art && art.getBoundingClientRect() };
-    // the room's own elements, so its photograph is not decoded again; the plain back plays them if the card is
-    // not on screen when Rooms is drawn
-    capture(screen, { live: true });
-    pending = { kind: 'close', aid, hero, h1, pose, ...read };
-    return 'room-close';
-  }
-  // a room left for anywhere but deeper forgets which card opened it
-  if (opened && (depth === 0 || (r.name === 'room' && r.id !== opened.aid))) opened = null;
-  return null;
-}
-
-// Called by the redraw once the new page is drawn (and Rooms scrolled back), in place of motion.arrive().
-export function arrive(how, screen) {
-  const p = pending; pending = null;
-  if (how === 'room-open' && p && p.kind === 'open') { open(p, screen); return; }
-  if (how === 'room-close' && p && p.kind === 'close') { close(p, screen); return; }
-  plainArrive(how === 'room-close' ? 'back' : 'push', screen);
-}
-
 // ---------- measuring ----------
-// How much of an element's height is on screen, 0 to 1.
-function shown(el) {
-  const b = el.getBoundingClientRect();
-  if (!b.height) return 0;
-  return Math.max(0, Math.min(b.bottom, innerHeight) - Math.max(b.top, 0)) / b.height;
-}
-// The words of a title as they sit in it: a block title is wider than its words, and it is the words that fly.
-function textBox(el) {
-  const b = el.getBoundingClientRect();
-  const rg = document.createRange(); rg.selectNodeContents(el);
-  const t = rg.getBoundingClientRect();
-  const w = Math.min(t.width || b.width, b.width);
-  return { left: t.width ? t.left : b.left, top: b.top, width: w, height: b.height };
-}
-const centre = r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-const px = n => `${Math.round(n * 100) / 100}px`;
-
 // Everything about the card the transition needs, read while it is still where it was drawn. The card may be
 // part way through its press (0.97), so its scale is read too and the window starts exactly where it is.
 function readCard(card) {
@@ -143,10 +34,6 @@ function readCard(card) {
   const k = box.width / (card.offsetWidth || box.width) || 1;
   const q = s => card.querySelector(s);
   const photo = card.classList.contains('photo');
-  const vis = el => (el ? Number(getComputedStyle(el).opacity) : 0);
-  // a part's own size is its box less the card's press (offsetWidth would round it, and a line of words cut short
-  // by a pixel ends in an ellipsis)
-  const part = el => { if (!el) return null; const r = el.getBoundingClientRect(); return { el, r, w: r.width / k, h: r.height / k }; };
   const glows = [...card.querySelectorAll('.glow:not(.off)')].map(g => {
     const cs = getComputedStyle(g); const r = g.getBoundingClientRect();
     return { el: g, x: r.left, y: r.top, transform: cs.transform, opacity: cs.opacity };
@@ -156,51 +43,15 @@ function readCard(card) {
     card, box, k,
     bg: photo ? null : getComputedStyle(card).backgroundImage,
     shade: photo ? getComputedStyle(card, '::after').backgroundImage : null,
-    nm: part(q('.nm')), vl: part(q('.vl')), pwr: part(q('.pwr')), pill: part(q('.add-photo')),
-    art: q('.room-art') && { r: q('.room-art').getBoundingClientRect(), opacity: vis(q('.room-art')) },
-    veil: veil && vis(veil) > 0.01 ? { bg: getComputedStyle(veil).backgroundColor, filter: getComputedStyle(veil).backdropFilter, opacity: vis(veil) } : null,
-    warm: warm && vis(warm) > 0.001 ? { bg: getComputedStyle(warm).backgroundColor, blend: getComputedStyle(warm).mixBlendMode, opacity: vis(warm) } : null,
+    nm: part(q('.nm'), k), vl: part(q('.vl'), k), pwr: part(q('.pwr'), k), pill: part(q('.add-photo'), k),
+    art: q('.room-art') && { r: q('.room-art').getBoundingClientRect(), opacity: opacityOf(q('.room-art')) },
+    veil: veil && opacityOf(veil) > 0.01 ? { bg: getComputedStyle(veil).backgroundColor, filter: getComputedStyle(veil).backdropFilter, opacity: opacityOf(veil) } : null,
+    warm: warm && opacityOf(warm) > 0.001 ? { bg: getComputedStyle(warm).backgroundColor, blend: getComputedStyle(warm).mixBlendMode, opacity: opacityOf(warm) } : null,
     glows,
   };
 }
 
 // ---------- building ----------
-const el = (cls, style = {}) => { const d = document.createElement('div'); d.className = cls; d.setAttribute('aria-hidden', 'true'); Object.assign(d.style, { pointerEvents: 'none', ...style }); return d; };
-// A copy of a line of words from the card, with its look, standing where it stood (at the card's press scale).
-function copyText(part, k) {
-  const cs = getComputedStyle(part.el);
-  const s = document.createElement('span');
-  s.textContent = part.el.textContent;
-  for (const p of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'color', 'textOverflow', 'overflow']) s.style[p] = cs[p];
-  // one line, as it was: a copy is never narrower than the words it carries
-  s.style.whiteSpace = 'nowrap';
-  const node = pin(s, part, k);
-  node.style.width = px(part.w + 0.5);
-  return node;
-}
-function copyButton(part, k) {
-  const cs = getComputedStyle(part.el);
-  const b = part.el.cloneNode(true);
-  b.removeAttribute('data-act'); b.removeAttribute('data-id'); b.removeAttribute('aria-label'); b.removeAttribute('class');
-  for (const p of ['display', 'placeItems', 'backgroundColor', 'color', 'borderRadius', 'boxShadow', 'border', 'padding']) b.style[p] = cs[p];
-  return pin(b, part, k);
-}
-function pin(node, part, k) {
-  const c = centre(part.r);
-  node.setAttribute('aria-hidden', 'true');
-  Object.assign(node.style, {
-    position: 'absolute', left: px(c.x - part.w / 2), top: px(c.y - part.h / 2), width: px(part.w), height: px(part.h),
-    margin: '0', boxSizing: 'border-box', transformOrigin: '50% 50%', transform: `scale(${k})`, pointerEvents: 'none', transition: 'none',
-  });
-  node._c = c;
-  return node;
-}
-// The layer over the new page for the copies, under the tab bar and its fade.
-function topLayer(screen) {
-  const L = el('m10-top', { position: 'fixed', inset: '0', overflow: 'hidden' });
-  screen.after(L);
-  return L;
-}
 // A glow of the card's, standing alone: the card's rules placed it, so its place, scale and strength are copied.
 function glowCopy(g, x, y) {
   const c = g.el.cloneNode(true);
@@ -220,20 +71,8 @@ function spill(O, after) {
 }
 
 // The window's geometry: the photograph card moved and scaled so its middle sits on the card, and clipped to the
-// card's box. `loc` turns a point on screen, as the card was, into the photograph card's own coordinates.
-function geometry(O, Hr) {
-  const k = O.k, W = Hr.width, H = Hr.height;
-  const cardW = O.box.width / k, cardH = O.box.height / k;
-  const iX = (W - cardW) / 2, iY = (H - cardH) / 2;
-  const hc = centre(Hr), cc = centre(O.box);
-  const dx = cc.x - hc.x, dy = cc.y - hc.y;
-  const loc = (x, y) => ({ x: W / 2 + (x - cc.x) / k, y: H / 2 + (y - cc.y) / k });
-  return {
-    k, W, H, iX, iY, cardW, cardH, loc,
-    shut: { transform: `translate(${px(dx)}, ${px(dy)}) scale(${k})`, clipPath: `inset(${px(iY)} ${px(iX)} ${px(iY)} ${px(iX)} round ${px(RADIUS / k)})` },
-    open: { transform: `translate(0px, 0px) scale(1)`, clipPath: `inset(0px 0px 0px 0px round ${px(RADIUS)})` },
-  };
-}
+// card's box.
+const geometry = (O, Hr) => windowGeo(O, Hr, RADIUS / O.k, RADIUS);
 
 // The card's face over the window. Each part is [element, keyframe when shut, keyframe when open]; the caller
 // plays them one way or the other. Only the shade is locked to an edge (the bottom, where the name was); the veil
@@ -282,26 +121,13 @@ function face(hero, O, G) {
 function artFlip(hero, O, G, restR, Hr) {
   const a = hero.querySelector('.room-art');
   if (!a || !restR) return null;
-  const own = Number(getComputedStyle(a).opacity);
+  const own = opacityOf(a);
   if (!O.art) return [a, { opacity: 0 }, { opacity: own }];
   const p = G.loc(O.art.r.left, O.art.r.top);
   const rest = { x: restR.left - Hr.left, y: restR.top - Hr.top };
   const s = (O.art.r.width / G.k) / (restR.width || 1);
   a.style.transformOrigin = '0 0';
   return [a, { transform: `translate(${px(p.x - rest.x)}, ${px(p.y - rest.y)}) scale(${s})`, opacity: O.art.opacity }, { transform: 'translate(0px, 0px) scale(1)', opacity: own }];
-}
-
-// The title's flight: from the label's box to where the title rests, matched on the width of the words and
-// centre to centre. Its origin is the centre of its words, not of its block.
-function titleFlip(h1, Ht, Hb, label) {
-  const lc = centre(label.r), tc = centre(Ht);
-  h1.style.transformOrigin = `${px(tc.x - Hb.left)} ${px(tc.y - Hb.top)}`;
-  return `translate(${px(lc.x - tc.x)}, ${px(lc.y - tc.y)}) scale(${label.r.width / (Ht.width || 1)})`;
-}
-// The label copy's flight to the title's words (its origin is its own centre).
-function labelFlight(copy, label, Ht) {
-  const tc = centre(Ht);
-  return `translate(${px(tc.x - copy._c.x)}, ${px(tc.y - copy._c.y)}) scale(${(Ht.width || 1) / (label.w || 1)})`;
 }
 
 // Rooms' other cards, and which way each steps: those above up 40, those below down 120, nearest first.
@@ -311,10 +137,30 @@ function around(list, card) {
   return kids.map((k, i) => (i === at ? null : { el: k, dy: i < at ? -40 : 120, delay: (Math.abs(i - at) - 1) * 30 })).filter(Boolean);
 }
 
-// ---------- open ----------
-function open({ O, ghost }, screen) {
+// ---------- the kind, for opening.js ----------
+export const name = 'room';
+// Only a card on Rooms opens this way.
+export const source = e => e.matches('.room-big[data-go]');
+export const opens = ({ from, r, to }) => from === 'rooms/null' && r.name === 'room' && !r.sub && to === `room/${r.id}`;
+export const minShown = 0.25;
+export const read = readCard;
+// The room page, read before it is taken off screen, so its photograph closes from where it is.
+export function readClose(screen) {
   const hero = screen.querySelector('.room-photo-card'), h1 = screen.querySelector('.room-title h1');
-  if (!hero || !h1 || !O.nm) { ghost.remove(); stagger(screen); return; }
+  if (!hero || !h1 || shown(hero) <= 0) return null;
+  const art = hero.querySelector('.room-art');
+  return { hero, h1, Hr: hero.getBoundingClientRect(), Ht: textBox(h1), Hb: h1.getBoundingClientRect(), artR: art && art.getBoundingClientRect() };
+}
+// The card on Rooms that the room closes into.
+export function find(screen, entry) {
+  const card = screen.querySelector(`.room-big[data-go="${CSS.escape(entry.to)}"]`);
+  return card && card.querySelector('.nm') ? card : null;
+}
+
+// ---------- open ----------
+export function open({ O, ghost }, screen, F) {
+  const hero = screen.querySelector('.room-photo-card'), h1 = screen.querySelector('.room-title h1');
+  if (!hero || !h1 || !O.nm) return false;
   // read everything first
   const Hr = hero.getBoundingClientRect(), Hb = h1.getBoundingClientRect(), Ht = textBox(h1);
   const artR = (hero.querySelector('.room-art') || { getBoundingClientRect: () => null }).getBoundingClientRect();
@@ -326,46 +172,36 @@ function open({ O, ghost }, screen) {
   const list = ghost.querySelector('.rooms-list');
   const steps = list ? around(list, O.card) : [];
   const head = ghost.querySelector('.rooms-head');
-
-  const f = flight = { until: performance.now() + OPEN.dur, anims: [], undo: [] };
-  const core = (node, kf, o) => { const a = node.animate(kf, o); f.anims.push(a); return a; };
-  const play = (node, kf, o) => (node ? node.animate(kf, { fill: 'backwards', ...o }) : null);
-  const top = topLayer(screen);
-  f.undo.push(() => top.remove(), () => ghost.remove());
+  const play = (node, kf, o) => F.extra(node, kf, { fill: 'backwards', ...o });
+  const top = topLayer(screen, 'm10-top');
+  F.undo(() => top.remove());
 
   // the window
-  const win = core(hero, [G.shut, G.open], { duration: OPEN.dur, easing: OPEN.ease });
+  F.core(hero, [G.shut, G.open], { duration: OPEN.dur, easing: OPEN.ease });
   const parts = face(hero, O, G);
-  f.undo.push(() => parts.forEach(([n]) => n.remove()));
+  F.undo(() => parts.forEach(([n]) => n.remove()));
   for (const [n, a, b] of parts) {
-    const move = 'transform' in a;
-    if (move) core(n, [{ transform: a.transform }, { transform: b.transform }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
-    core(n, [{ opacity: a.opacity }, { opacity: b.opacity }], { duration: FACE, easing: 'linear', fill: 'forwards' });
+    if ('transform' in a) F.core(n, [{ transform: a.transform }, { transform: b.transform }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
+    F.core(n, [{ opacity: a.opacity }, { opacity: b.opacity }], { duration: FACE, easing: 'linear', fill: 'forwards' });
   }
   const light = hero.querySelector('.rp-light');
-  if (light) core(light, [{ opacity: 0 }, { opacity: 1 }], { duration: FACE, easing: 'linear' });
+  if (light) F.core(light, [{ opacity: 0 }, { opacity: 1 }], { duration: FACE, easing: 'linear' });
   const art = artFlip(hero, O, G, artR, Hr);
   if (art) {
-    core(art[0], [art[1], art[2]], { duration: OPEN.dur, easing: OPEN.ease });
-    f.undo.push(() => { art[0].style.transformOrigin = ''; });
+    F.core(art[0], [art[1], art[2]], { duration: OPEN.dur, easing: OPEN.ease });
+    F.undo(() => { art[0].style.transformOrigin = ''; });
   }
 
   // the name: the title flies out of the label, and the two cross only while they are the label's size
-  Object.assign(h1.style, { position: 'relative', zIndex: '1' });
-  core(h1, [{ transform: titleFlip(h1, Ht, Hb, O.nm) }, { transform: 'translate(0px, 0px) scale(1)' }], { duration: OPEN.dur, easing: OPEN.ease });
-  core(h1, [{ opacity: 0 }, { opacity: 1 }], { duration: CROSS, easing: 'linear' });
-  f.undo.push(() => { h1.style.position = ''; h1.style.zIndex = ''; h1.style.transformOrigin = ''; });
-  const label = copyText(O.nm, O.k); top.appendChild(label);
-  core(label, [{ transform: `translate(0px, 0px) scale(${O.k})` }, { transform: labelFlight(label, O.nm, Ht) }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
-  core(label, [{ opacity: 1 }, { opacity: 0 }], { duration: CROSS, easing: 'linear', fill: 'forwards' });
+  pair(F, 'open', { dest: h1, Dt: Ht, Db: Hb, p: O.nm, k: O.k, top });
   // the status line and the power circle go at once
   const out = { duration: T.tap, easing: T.easeIn, fill: 'forwards' };
-  if (O.vl) { const v = copyText(O.vl, O.k); top.appendChild(v); core(v, [{ opacity: 1 }, { opacity: 0 }], out); }
-  if (O.pwr) { const b = copyButton(O.pwr, O.k); top.appendChild(b); core(b, [{ opacity: 1, transform: `scale(${O.k})` }, { opacity: 0, transform: `scale(${0.6 * O.k})` }], out); }
+  if (O.vl) { const v = copyText(O.vl, O.k); top.appendChild(v); F.core(v, [{ opacity: 1 }, { opacity: 0 }], out); }
+  if (O.pwr) { const b = copyButton(O.pwr, O.k); top.appendChild(b); F.core(b, [{ opacity: 1, transform: `scale(${O.k})` }, { opacity: 0, transform: `scale(${0.6 * O.k})` }], out); }
 
   // the list steps aside, and "Rooms" lifts away
-  for (const s of steps) core(s.el, [{ opacity: 1, transform: 'translateY(0px) scale(1)' }, { opacity: 0, transform: `translateY(${s.dy}px) scale(0.96)` }], { duration: 250, easing: T.easeIn, delay: s.delay, fill: 'forwards' });
-  if (head) core(head, [{ opacity: 1, transform: 'translateY(0px)' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: 200, easing: T.easeIn, fill: 'forwards' });
+  stepAside(F, 'open', steps, { fade: 250, move: 250, moveEase: T.easeIn });
+  if (head) F.core(head, [{ opacity: 1, transform: 'translateY(0px)' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: 200, easing: T.easeIn, fill: 'forwards' });
 
   // the light spills over the page as the room opens
   const sp = spill(O, top);
@@ -393,34 +229,19 @@ function open({ O, ghost }, screen) {
       } catch (_) { /* a browser that cannot animate a pseudo-element goes without */ }
     }
   });
-
-  holdFor(OPEN.dur + 50);
-  Promise.all(f.anims.map(a => a.finished)).then(() => landed(f), () => {});
+  return true;
 }
 
 // ---------- back ----------
-function close(p, screen) {
-  const card = screen.querySelector(`.room-big[data-go="room/${CSS.escape(p.aid)}"]`);
-  if (!card || shown(card) < 0.5 || !card.querySelector('.nm')) { if (p.pose) p.pose.plain(screen, takeGhost()); else plainArrive('back', screen); return; }
-  const g = takeGhost();
-  if (!g) return;
-  g.style.zIndex = '';
-  screen.after(g);
-  const pose = p.pose;
-  const O = readCard(card);
+export function close(p, screen, F, { ghost: g, O, el: card }) {
   const { hero, h1, Hr, Ht, Hb, artR } = p;
   const G = geometry(O, Hr);
   const room = g.querySelector('.room');
   const list = card.parentElement;
   const steps = list ? around(list, card) : [];
   const head = screen.querySelector('.rooms-head');
-
-  const f = flight = { until: performance.now() + CLOSE.dur, anims: [], undo: [] };
-  const core = (node, kf, o) => { const a = node.animate(kf, o); f.anims.push(a); return a; };
-  const top = topLayer(g);
-  card.style.visibility = 'hidden';
-  f.undo.push(() => top.remove(), () => g.remove(), () => { card.style.visibility = ''; });
-  const last = (dur, extra = {}) => ({ duration: dur, delay: CLOSE.dur - dur, easing: 'linear', fill: 'both', ...extra });
+  const top = topLayer(g, 'm10-top');
+  F.undo(() => top.remove());
 
   // the room's content goes first, together
   const fade = { duration: 150, easing: T.easeIn, fill: 'forwards' };
@@ -429,45 +250,35 @@ function close(p, screen) {
     ...[...h1.parentElement.children].filter(n => n !== h1),
     ...hero.querySelectorAll('.badge, .room-acts, .add-photo'),
   ];
-  for (const n of going) core(n, [{ opacity: 1 }, { opacity: 0 }], fade);
+  for (const n of going) F.core(n, [{ opacity: 1 }, { opacity: 0 }], fade);
 
-  // a room let go by a back swipe starts shrunk where the finger left it and comes back to full size as it closes
-  if (pose) core(g, pose.from(g), { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
   // the window closes into the card, and the card's face comes back over it
-  core(hero, [G.open, G.shut], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
+  F.core(hero, [G.open, G.shut], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
   for (const [n, a, b] of face(hero, O, G)) {
-    if ('transform' in a) core(n, [{ transform: b.transform }, { transform: a.transform }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
-    core(n, [{ opacity: b.opacity }, { opacity: a.opacity }], last(FACE));
+    if ('transform' in a) F.core(n, [{ transform: b.transform }, { transform: a.transform }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
+    F.core(n, [{ opacity: b.opacity }, { opacity: a.opacity }], last(FACE));
   }
   const light = hero.querySelector('.rp-light');
-  if (light) core(light, [{ opacity: 1 }, { opacity: 0 }], last(FACE));
+  if (light) F.core(light, [{ opacity: 1 }, { opacity: 0 }], last(FACE));
   const art = artFlip(hero, O, G, artR, Hr);
-  if (art) core(art[0], [art[2], art[1]], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
+  if (art) F.core(art[0], [art[2], art[1]], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
 
   // the title shrinks back into the label, crossing only at the label's size
-  Object.assign(h1.style, { position: 'relative', zIndex: '1' });
-  core(h1, [{ transform: 'translate(0px, 0px) scale(1)' }, { transform: titleFlip(h1, Ht, Hb, O.nm) }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
-  core(h1, [{ opacity: 1 }, { opacity: 0 }], last(CROSS));
-  const label = copyText(O.nm, 1); top.appendChild(label);
-  core(label, [{ transform: labelFlight(label, O.nm, Ht) }, { transform: 'translate(0px, 0px) scale(1)' }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
-  core(label, [{ opacity: 0 }, { opacity: 1 }], last(CROSS));
+  pair(F, 'close', { dest: h1, Dt: Ht, Db: Hb, p: O.nm, k: 1, top, cross: CROSS });
   // the status line and the power circle come back over the last 0.2 s
-  if (O.vl) { const v = copyText(O.vl, 1); top.appendChild(v); core(v, [{ opacity: 0 }, { opacity: 1 }], last(200, { easing: T.ease })); }
-  if (O.pwr) { const b = copyButton(O.pwr, 1); top.appendChild(b); core(b, [{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'scale(1)' }], last(200, { easing: T.ease })); }
+  if (O.vl) { const v = copyText(O.vl, 1); top.appendChild(v); F.core(v, [{ opacity: 0 }, { opacity: 1 }], last(200, { easing: T.ease })); }
+  if (O.pwr) { const b = copyButton(O.pwr, 1); top.appendChild(b); F.core(b, [{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'scale(1)' }], last(200, { easing: T.ease })); }
 
   // the list returns from where it stepped to, nearest first; "Rooms" comes down into place. After a back swipe
-  // it returns from where the swipe showed it, already in view.
-  const L = pose && pose.list;
-  for (const s of steps) s.el.animate([L ? { opacity: 1, transform: `translateY(${s.dy < 0 ? L.up : L.down}px) scale(1)` } : { opacity: 0, transform: `translateY(${s.dy}px) scale(0.96)` }, { opacity: 1, transform: 'translateY(0px) scale(1)' }], { duration: 400, easing: T.ease, delay: s.delay, fill: 'backwards' });
-  if (head) head.animate([L ? { opacity: 1, transform: `translateY(${L.head}px)` } : { opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: 400, easing: T.ease, fill: 'backwards' });
+  // (M13) it returns from where the swipe showed it, already in view.
+  const L = p.pose && p.pose.list;
+  if (L) for (const s of steps) F.extra(s.el, [{ opacity: 1, transform: `translateY(${s.dy < 0 ? L.up : L.down}px) scale(1)` }, { opacity: 1, transform: 'translateY(0px) scale(1)' }], { duration: 400, easing: T.ease, delay: s.delay, fill: 'backwards' });
+  else stepAside(F, 'close', steps, { back: 400, backFade: 400 });
+  F.extra(head, [L ? { opacity: 1, transform: `translateY(${L.head}px)` } : { opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: 400, easing: T.ease, fill: 'backwards' });
 
   // a softer spill of light is drawn back into the card
   const sp = spill(O, top);
-  sp.animate([{ opacity: 0, transform: 'scale(1.45)' }, { opacity: 0.35, offset: 0.4 }, { opacity: 0, transform: 'scale(1)' }], { duration: 700, delay: 100, easing: 'ease-in-out', fill: 'both' })
+  F.extra(sp, [{ opacity: 0, transform: 'scale(1.45)' }, { opacity: 0.35, offset: 0.4 }, { opacity: 0, transform: 'scale(1)' }], { duration: 700, delay: 100, easing: 'ease-in-out', fill: 'both' })
     .finished.catch(() => {}).then(() => sp.remove());
-
-  // and Rooms, under it, comes up from where the swipe had it
-  if (pose) pose.handed(screen, g, { dur: CLOSE.dur, ease: CLOSE.ease });
-  holdFor(CLOSE.dur + 50);
-  Promise.all(f.anims.map(a => a.finished)).then(() => landed(f), () => {});
+  return true;
 }
