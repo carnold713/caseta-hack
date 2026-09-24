@@ -21,7 +21,8 @@
 //                corners round to 28 as seen (by 10%). Locked to the finger with no easing, as every drag here.
 //   behind       the page Back would show, drawn from the app's own record of the entry before this one, at 0.96,
 //                under a dark layer that thins from 1 to 0.45 as k grows (the file's list sitting back at 55%).
-//   the chevron  a back circle at the swiped edge: it fades in by 15%, grows 0.5 to 1 with k and moves in 28 px.
+//   no arrow    the app draws no back circle of its own at the edge: the phone's system already draws one there, and
+//               the owner found the two side by side duplicative.
 // CANCEL: all of it springs back in 0.3 s on (0.2, 0.8, 0.2, 1), and the layer behind goes.
 // COMMIT: a page kind that closes its own way takes over from the pose the finger left (a room reached from its card
 //   closes back into it, M10, roomopen.js; a light or a remote into its tile or card, M11 and M14). Any other page
@@ -62,7 +63,6 @@ const RADIUS = 28;       // its corners as seen, by ROUND_AT
 const ROUND_AT = 0.1;
 const BEHIND = 0.96;     // the page behind, while it waits
 const LIT = 0.55;        // how far it comes up while the finger is down
-const CHEV = 28;         // the chevron moves in this far
 const DROP = 0.5;        // a sheet drops by this much of its height over the whole gesture
 const SPRING = { duration: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
 const LEAVE = { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' };
@@ -79,7 +79,7 @@ const stop = anims => { for (const a of anims) { try { a.cancel(); } catch (_) {
 // Everything the gesture shows at a progress p.
 function look(p) {
   const k = ramp(p, FULL), s = 1 - SHRINK * k;
-  return { k, s, tx: SHIFT * ramp(p, SHIFT_AT), r: (RADIUS * ramp(p, ROUND_AT)) / s, dark: 1 - LIT * k, co: ramp(p, 0.15), cs: 0.5 + 0.5 * k, cx: CHEV * ramp(p, SHIFT_AT) };
+  return { k, s, tx: SHIFT * ramp(p, SHIFT_AT), r: (RADIUS * ramp(p, ROUND_AT)) / s, dark: 1 - LIT * k };
 }
 
 // ---------- the app's side ----------
@@ -195,15 +195,12 @@ function lift(g) {
   g.bg = getComputedStyle(document.body).backgroundColor;
   Object.assign(scr.style, { zIndex: '1', backgroundColor: g.bg, transformOrigin: g.origin, willChange: 'transform' });
   g.behind = behind(g);
-  g.chev = chevron(g);
 }
 function paint(g) {
   const L = look(g.p);
   g.scr.style.transform = `translateX(${px(g.dir * L.tx)}) scale(${L.s})`;
   g.scr.style.clipPath = `inset(${g.inset} round ${px(L.r)})`;
   g.behind.dark.style.opacity = String(L.dark);
-  g.chev.style.opacity = String(L.co);
-  g.chev.style.transform = `translateX(${px(g.dir * L.cx)}) scale(${L.cs})`;
 }
 // The page Back would show, drawn from the state as the app draws it, under the page and dark until it comes up.
 function behind(g) {
@@ -233,25 +230,11 @@ function behind(g) {
   g.scr.before(L);
   return { L, pg, dark, sc };
 }
-// The back circle at the swiped edge, where the finger is.
-function chevron(g) {
-  const top = Math.max(72, Math.min(innerHeight - 128, g.y - 28));
-  const c = el('pb-chev', {
-    position: 'fixed', top: px(top), [g.edge]: '4px', width: '56px', height: '56px', borderRadius: '28px',
-    display: 'grid', placeItems: 'center', backgroundColor: 'var(--surface-1)', color: 'var(--icon-1)',
-    boxShadow: 'var(--shadow-lift)', zIndex: '7', opacity: '0', transform: 'scale(0.5)',
-  });
-  c.innerHTML = icon('back', 22, 1.7);
-  if (g.edge === 'right' && c.firstElementChild) c.firstElementChild.style.transform = 'scaleX(-1)';
-  document.body.appendChild(c);
-  return c;
-}
 // Everything of a gesture gone at once, the page as it was.
 function drop(g) {
   if (g.own) { if (g.kind.cancel) { g.kind.cancel(g, true); } return; }
   if (g.scr) restore(g.scr, g.style0);
   if (g.behind) g.behind.L.remove();
-  if (g.chev) g.chev.remove();
   if (app) app.ctx.ui.dragging = false;
 }
 // Cancel: back to where it all was, 0.3 s on the standard curve, and the layer behind goes.
@@ -261,7 +244,6 @@ function springBack(g) {
   const anims = [
     g.scr.animate([{ transform: g.scr.style.transform, clipPath: g.scr.style.clipPath }, { transform: 'translateX(0px) scale(1)', clipPath: `inset(${g.inset} round 0px)` }], o),
     g.behind.dark.animate([{ opacity: L.dark }, { opacity: 1 }], o),
-    g.chev.animate([{ opacity: L.co, transform: g.chev.style.transform }, { opacity: 0, transform: 'translateX(0px) scale(0.5)' }], o),
   ];
   const done = () => {
     if (settling !== s) return;
@@ -318,7 +300,6 @@ function poseOf(g) {
       pose.anims.push(
         screen.animate([{ transform: `scale(${BEHIND})` }, { transform: 'scale(1)' }], o),
         dark.animate([{ opacity: L.dark }, { opacity: 0 }], o),
-        chevOut(g),
       );
       play(pose, dur);
     },
@@ -332,7 +313,7 @@ function poseOf(g) {
       if (pose.screen) restore(pose.screen, pose.style0);
       for (const n of pose.parts) n.remove();
       if (pose.ghost) pose.ghost.remove();
-      g.behind.L.remove(); g.chev.remove();
+      g.behind.L.remove();
     },
   };
   // nothing is left behind if no close ever takes it
@@ -351,7 +332,6 @@ function comeUp(screen, ghost, pose) {
   pose.parts.push(dark);
   return dark;
 }
-const chevOut = g => g.chev.animate([{ opacity: Number(g.chev.style.opacity) || 0 }, { opacity: 0 }], { duration: 150, easing: 'ease-in', fill: 'forwards' });
 function play(pose, dur) {
   holdFor(dur + 50);
   settling = { done: pose.done };
@@ -397,7 +377,6 @@ function slide(screen, pose, ghost) {
   pose.anims.push(
     screen.animate(up, o),
     dark.animate([{ opacity: pose.dark }, { opacity: 0 }], o),
-    chevOut(g),
   );
   if (ghost) {
     // a ghost the app captured (the room's close could not play after all) is dressed as the finger left the page

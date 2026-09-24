@@ -106,7 +106,8 @@ const SHOTS = process.env.SHOTS || '';
   check('scale about 0.9 at 30%', Math.abs(at30.s - 0.9) < 0.004, at30);
   check('it has moved toward the far side (right, for a swipe from the left)', at30.x > 15 && at30.x <= 22, at30.x);
   check('its corners are rounded (28 as seen)', /round 31\.1\dpx/.test(at30.clip), at30.clip);
-  check('the chevron is in and the page behind sits back, dimmed', at30.chev === 1 && Math.abs(at30.dark - 0.45) < 0.01, at30);
+  // the phone's system draws its own back arrow at the edge; the app draws none (the owner found two duplicative)
+  check('no arrow of the app\'s own, and the page behind sits back, dimmed', at30.chev === null && Math.abs(at30.dark - 0.45) < 0.01, at30);
   const behind = await C(a => {
     const L = document.querySelector('.pb-behind');
     const list = L && L.querySelector('.rooms-list');
@@ -167,9 +168,9 @@ const SHOTS = process.env.SHOTS || '';
   check('a light opened over the room', onLight.hash === `#${tile}` && onLight.n === inRoom.n + 1, onLight);
   await drag('right', [0.1, 0.2, 0.3]);
   const lp = await pose();
-  const lb = await C(t => { const L = document.querySelector('.pb-behind'); const tl = L && L.querySelector(`.room-grid .tile[data-go="${t}"]`); return { room: !!(L && L.querySelector('.room .room-photo-card')), tabs: !!(L && L.querySelector('.tabbar')), tile: tl && tl.style.visibility, chevRight: (() => { const c = document.querySelector('.pb-chev'); return c && c.getBoundingClientRect().right > innerWidth - 100; })() }; }, tile);
+  const lb = await C(t => { const L = document.querySelector('.pb-behind'); const tl = L && L.querySelector(`.room-grid .tile[data-go="${t}"]`); return { room: !!(L && L.querySelector('.room .room-photo-card')), tabs: !!(L && L.querySelector('.tabbar')), tile: tl && tl.style.visibility, chev: !!document.querySelector('.pb-chev') }; }, tile);
   check('a swipe from the right edge moves the page left', lp.x < -15 && Math.abs(lp.s - 0.9) < 0.004, lp);
-  check('behind the light is its room with the tab bar it comes back to and its tile not there, and the chevron is on the right', lb.room && lb.tabs && lb.tile === 'hidden' && lb.chevRight, lb);
+  check('behind the light is its room with the tab bar it comes back to and its tile not there, and no arrow of the app\'s own', lb.room && lb.tabs && lb.tile === 'hidden' && !lb.chev, lb);
   await still('m13-light-drag-30');
   check('a commit is taken', (await B('commit')) === true);
   await wait(40);
