@@ -7,9 +7,13 @@
 .scroll-fade { z-index: 5; }
 .tabbar { z-index: 6; }
 #sheet-root { position: relative; z-index: 20; }
+/* a sheet on its way down stays over the tab bar it was over, rather than the bar jumping in front of it */
+.sheet-ghost { position: relative; z-index: 20; }
 #toast-root { position: relative; z-index: 30; }
 #app.notabs .screen { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .nm-cut { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* words that break badly at their hyphen (wind-down) wrap as one */
+.nobr { white-space: nowrap; }
 
 /* ---- 02 Home -------------------------------------------------------------------------------- */
 
@@ -475,7 +479,9 @@
 .sheet-btns { display: flex; gap: 12px; padding: 0 var(--gutter) 8px; }
 .sheet-btns .pill { flex: 1 1 0; }
 .name-form { display: flex; gap: 8px; padding: 0 var(--gutter) 8px; }
-.name-form .field { flex: 1 1 auto; }
+.name-form .field { flex: 1 1 auto; min-width: 0; }
+/* Done or Use beside a field stands as tall as the field */
+.name-form .pill { flex: none; height: 56px; }
 .row-art { width: 24px; height: 24px; opacity: .8; }
 .row-tick { color: var(--blue-hi); flex: none; }
 .row-chev.as-btn { border: 0; background: none; padding: 12px; margin: -12px -12px -12px 0; color: var(--text-3); }
@@ -485,6 +491,14 @@
 .pill.blue { background: var(--blue); color: #fff; }
 .chip.sm { height: 32px; border-radius: 16px; padding: 0 16px; font-size: 13px; }
 .chip.sm.lead { padding-left: 12px; }
+/* Room for a finger. A control drawn under 40 tall (a small chip or pill, a day, a text link) takes a finger over 40 or
+   more around it, without changing how it looks: the rows of chips are 8 apart, so a chip's reach meets the next
+   row's and does not cross it. */
+.chip.sm, .pill.sm, .dd { position: relative; }
+.chip.sm::after, .pill.sm::after, .dd::after { content: ''; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }
+.pill.sm::after, .dd::after { top: -2px; bottom: -2px; }
+:is(.timer-row, .where-line, .pt-row, .ad-links, .st-card, .conn, .sheet-body .row) .link { position: relative; }
+:is(.timer-row, .where-line, .pt-row, .ad-links, .st-card, .conn, .sheet-body .row) .link::after { content: ''; position: absolute; left: -4px; right: -4px; top: -12px; bottom: -12px; }
 .chip.tag { display: inline-flex; height: 22px; border-radius: 11px; padding: 0 8px; font-size: 11px; margin-left: 8px; vertical-align: 2px; color: var(--text-2); }
 .chip-wrap { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 var(--gutter); }
 .cdot { width: 12px; height: 12px; border-radius: 6px; display: inline-block; flex: none; }
@@ -845,7 +859,8 @@
 .upnext .pill { position: absolute; right: 18px; top: 16px; }
 .timer-row { display: flex; align-items: center; gap: 14px; margin: 0 var(--gutter) 12px; height: 64px; padding: 0 20px 0 16px; border-radius: var(--r-group); background: var(--surface-1); }
 .timer-row .ring { position: relative; width: 36px; height: 36px; flex: none; display: grid; place-items: center; color: var(--icon-1); }
-.timer-row .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+/* the ring, not the timer glyph in its middle, which is an svg too */
+.timer-row .ring svg:not(.ic) { position: absolute; inset: 0; transform: rotate(-90deg); }
 .timer-row .trk { fill: none; stroke: #333; stroke-width: 3; }
 .timer-row .arc { fill: none; stroke: var(--copper); stroke-width: 3; stroke-linecap: round; }
 .timer-row .t-row { flex: 1 1 auto; min-width: 0; }
@@ -864,9 +879,13 @@
 .ddots { display: flex; gap: 6px; }
 .ddots i { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; background: var(--blue); color: var(--bg); font-style: normal; font-size: 11px; font-weight: 500; }
 .ddots i:not(.on) { background: var(--surface-2); color: var(--text-4); }
-.rt-days .dt { font-size: 14px; color: var(--text-2); }
+.rt-days .dt { margin-left: 8px; font-size: 14px; color: var(--text-2); white-space: nowrap; }
+/* on a small phone the days close up so "Every day" stays one line beside them */
+@media (max-width: 380px) { .ddots { gap: 4px; } .ddots i { width: 24px; height: 24px; border-radius: 12px; } }
 .rt-card .toggle { position: absolute; right: 20px; top: 18px; }
-.paused-chip { position: absolute; right: 128px; top: 21px; height: 24px; border-radius: 12px; padding: 0 16px; font-size: 12px; margin: 0; }
+/* Paused sits 12 left of the switch, and a paused routine's name stops short of it rather than running under it */
+.paused-chip { position: absolute; right: 84px; top: 21px; height: 24px; border-radius: 12px; padding: 0 16px; font-size: 12px; margin: 0; }
+.rt-card.paused .rt-t { max-width: calc(100% - 156px); }
 .rt-empty { margin: 8px var(--gutter) 0; }
 .gtiles { display: flex; gap: 12px; padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; }
 .gtiles::-webkit-scrollbar { display: none; }
@@ -875,7 +894,7 @@
 .gtile .ic-c { position: absolute; left: 16px; top: 16px; width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--surface-2); color: var(--icon-1); }
 .gtile .t { position: absolute; left: 16px; top: 72px; width: 100px; font-size: 15px; font-weight: 500; line-height: 20px; }
 .habits { margin-top: 28px; }
-.habits .row { min-height: 72px; }
+.habits .row { min-height: 72px; padding-top: 14px; padding-bottom: 14px; }
 .habits .row:disabled { opacity: .5; }
 .routines-page .foot { margin: 16px var(--gutter) 0; line-height: 20px; }
 .wd { padding-bottom: 8px; }
@@ -885,6 +904,12 @@
 .wd-q .chip-wrap { padding: 0; margin-top: 10px; }
 .wd-today { color: var(--text-1); }
 .pt-row { gap: 10px; }
+/* a time field as wide as its own "07:00 PM" and its clock, never cut to "07:00 P"; the level beside it gives way on
+   a narrow phone so Remove stays on the row */
+.pt-row .field.time { width: auto; min-width: 124px; }
+.pt-row .field.sel { flex: 1 1 auto; min-width: 72px; }
+.pt-row .link { flex: none; }
+.wd > .chip-wrap { margin-bottom: 12px; }
 
 /* ---- 23 a routine -------------------------------------------------------------------------------------------------- */
 
@@ -898,19 +923,22 @@
 .dd { width: 36px; height: 36px; border-radius: 18px; border: 0; padding: 0; display: grid; place-items: center; background: var(--blue); color: #fff; font: inherit; font-size: 14px; font-weight: 500; flex: none; }
 .dd:not(.on) { background: var(--surface-3); color: var(--text-3); }
 .dd.big { width: 44px; height: 44px; border-radius: 22px; }
+/* on a small phone the week closes up a little, so "on" stays on the line with its days */
+@media (max-width: 380px) { .tok.days { gap: 2px; } }
 .dd-row { display: flex; justify-content: space-between; padding: 0 var(--gutter); margin: 4px 0 16px; }
 .routine-page .t-over.sec { margin: 36px var(--gutter) 12px; }
-.routine-page .row-val.nm-cut { max-width: 210px; }
 .rt-paused { margin-top: 16px; }
 .rt-btns { display: flex; gap: 12px; margin: 20px var(--gutter) 0; }
 .rt-btns .pill { height: 48px; font-size: 16px; padding: 0 24px; }
 .when { padding-bottom: 8px; }
 .when .chip-wrap { margin-bottom: 12px; }
 .when > .group { margin-bottom: 16px; }
+.when > .where-line, .when > .loc-ask { margin-bottom: 20px; }
 .when-time { display: flex; justify-content: center; margin: 8px 0 16px; }
 .time-big { height: 72px; padding: 0 20px; border: 0; border-radius: var(--r-group); background: var(--surface-2); color: var(--text-1); font: inherit; font-size: 44px; font-weight: 300; letter-spacing: -.02em; color-scheme: dark; }
 .when-say { margin-bottom: 4px; color: var(--text-1); }
 .days-s { padding-bottom: 8px; }
+.days-s .chip-wrap { margin-bottom: 12px; }
 
 /* ---- 22 guided setups ---------------------------------------------------------------------------------------------- */
 
@@ -951,6 +979,7 @@
 
 .act-f { margin-top: 20px; gap: 6px; }
 .act-f .chip { padding: 0 17px; }
+@media (max-width: 380px) { .act-f .chip { padding: 0 13px; } }
 .activity-page .t-over.sec { margin: 28px var(--gutter) 16px; }
 .tl { position: relative; padding: 0 var(--gutter); }
 .tl::before { content: ''; position: absolute; left: 39px; top: 20px; bottom: 44px; width: 2px; border-radius: 1px; background: var(--surface-2); }
@@ -997,6 +1026,8 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 /* ---- 11 Settings ------------------------------------------------------------------------------------------- */
 .settings-page .t-over.sec { margin: 32px var(--gutter) 12px; }
 .settings-page .row.tall { min-height: 88px; }
+/* a row of Settings, or of the wind-down's levels, that runs to three lines keeps the room a two line row has */
+.settings-page .row, .wd .group .row { padding-top: 12px; padding-bottom: 12px; }
 .settings-page .row.tall .row-txt .t { max-width: 66%; }
 .settings-page a.row { text-decoration: none; }
 .settings-page .logout { margin-top: 32px; }
@@ -1022,6 +1053,13 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .ad-steps .as.on { color: var(--text-1); font-weight: 500; }
 .ad-steps .as.on i { background: var(--blue); color: #fff; }
 .ad-steps .as-ln { flex: 1 1 24px; max-width: 24px; height: 1px; background: rgba(255, 255, 255, .16); }
+/* on a small phone the three steps would run off the right edge: the rules between them go and the steps share
+   the width */
+@media (max-width: 380px) {
+  .ad-steps { justify-content: space-between; gap: 8px; margin-left: var(--gutter); margin-right: var(--gutter); }
+  .ad-steps .as-ln { display: none; }
+  .ad-steps .as { gap: 6px; font-size: 13px; }
+}
 .radar { position: relative; width: 340px; height: 300px; margin: 0 auto; }
 .radar i { position: absolute; border-radius: 50%; }
 .radar .g { left: 0; top: -4px; width: 340px; height: 340px; background: radial-gradient(closest-side, rgba(0, 109, 204, .28) 0%, rgba(0, 109, 204, 0.276) 6.2%, rgba(0, 109, 204, 0.265) 12.5%, rgba(0, 109, 204, 0.248) 18.8%, rgba(0, 109, 204, 0.224) 25%, rgba(0, 109, 204, 0.197) 31.2%, rgba(0, 109, 204, 0.167) 37.5%, rgba(0, 109, 204, 0.136) 43.8%, rgba(0, 109, 204, 0.106) 50%, rgba(0, 109, 204, 0.078) 56.2%, rgba(0, 109, 204, 0.054) 62.5%, rgba(0, 109, 204, 0.034) 68.8%, rgba(0, 109, 204, 0.019) 75%, rgba(0, 109, 204, 0.009) 81.2%, rgba(0, 109, 204, 0.003) 87.5%, rgba(0, 109, 204, 0.000) 93.8%, transparent 100%); }
@@ -1083,7 +1121,7 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .ob-dots { right: 20px; top: 72px; display: flex; gap: 8px; }
 .ob-dots i { width: 4px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .45); }
 .ob-dots i.on { width: 24px; background: #fff; }
-.ob-h { left: 20px; right: 20px; bottom: 205px; margin: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; font-size: 56px; font-weight: 300; line-height: 62px; letter-spacing: -.02em; }
+.ob-h { left: 20px; right: 20px; bottom: max(205px, calc(159px + var(--say-h, 46px))); margin: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; font-size: 56px; font-weight: 300; line-height: 62px; letter-spacing: -.02em; }
 .ob-room { position: relative; display: inline-block; width: 96px; height: 48px; border-radius: 24px; overflow: hidden; background: linear-gradient(180deg, #9A8470, #3A2C22); box-shadow: inset 0 0 0 1px var(--line); }
 .ob-room i { position: absolute; display: block; }
 .ob-room .slats { left: 40px; top: 0; width: 40px; height: 35px; background: repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 2px, transparent 2px 3.4px), linear-gradient(180deg, #5A4332, #3A2A1F); }

@@ -117,11 +117,22 @@ export function snap(root) {
       for (const p in t) v[p] = cs.getPropertyValue(p);
       (rec.v || (rec.v = {}))[ps] = v; any = true;
     }
-    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; any = true; }
+    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; rec.box = restBox(el); any = true; }
     if (el.hasAttribute('data-enter')) { rec.enter = el.getAttribute('data-enter') || 'rise'; rec.node = el; rec.rect = el.getBoundingClientRect(); any = true; }
     if (any) s.set(path, rec);
   });
   return s;
+}
+// The box an element's words were laid out in at rest, for a copy of it that has to look exactly the same: its own
+// layout width and height (the used size, which a transform on it or an ancestor does not narrow: a tile pressed to
+// .96, a page still sliding in), where it stood, and whether it was one line of inline words (an inline element has
+// no width of its own, and its copy, taken out of the line, must not wrap where the line never did).
+function restBox(el) {
+  const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+  const inline = cs.display === 'inline';
+  let w = parseFloat(cs.width), h = parseFloat(cs.height);
+  if (inline || !(w >= 0) || !(h >= 0)) { w = r.width; h = r.height; }
+  return { w, h, left: r.left, top: r.top, oneLine: inline && el.getClientRects().length === 1 };
 }
 // the parts of an element that make it look different: its classes, inline style and words
 // (a copy still fading inside it is not part of its look)
@@ -171,7 +182,7 @@ export function carry(s, root) {
     }
     if (rec.copy && rec.look !== look(el)) fades.push([rec, el]);
   });
-  for (const [rec, el] of fades) crossfade(rec.copy, el, rec.xf);
+  for (const [rec, el] of fades) crossfade(rec.copy, el, rec.xf, rec.box);
   // what came in with data-enter and is gone now leaves the way it came
   for (const [path, rec] of s) if (rec.enter && !seen.has(path)) gone(rec, path, made);
 }
@@ -242,7 +253,7 @@ export function settle(root) {
 
 // The old element laid over the new one and faded out: an old tile dissolving into the new, the way the file's
 // "after" tiles fade in over the "before" ones. It sits inside the new element, so it scrolls and clips with it.
-function crossfade(old, el, kind) {
+function crossfade(old, el, kind, box = null) {
   if (!canAnimate(el)) return;
   const dur = kind === 'standard' ? T.standard : document.body.classList.contains('scene-arriving') ? T.scene : T.dimmer;
   const ease = kind === 'standard' ? T.ease : T.easeBoth;
@@ -256,13 +267,19 @@ function crossfade(old, el, kind) {
     .catch(() => {}).then(() => copy.remove());
   // an image holds nothing inside it: its old self goes beside it, placed by the same rules
   if (/^(IMG|INPUT|SVG)$/i.test(el.tagName)) { copy.style.pointerEvents = 'none'; el.after(copy); fade(); return; }
-  const box = el.getBoundingClientRect(), cs = getComputedStyle(el);
-  // the copy keeps its own look but sits exactly on the new element's box
+  const now = el.getBoundingClientRect(), cs = getComputedStyle(el);
+  // The copy keeps its own look in its own box: the old words laid out in the new element's width wrapped
+  // differently whenever the two were not the same length ("3 on" fading over "All off" went to two lines), or
+  // gained an ellipsis. So it takes the old box's size, and where the new one moved along the same line (a value
+  // held to the right that got shorter), the old one's place on it.
+  const was = box || { w: now.width, h: now.height, left: now.left, top: now.top, oneLine: false };
+  const dx = Math.abs(was.top - now.top) < 1 ? was.left - now.left : 0;
   Object.assign(copy.style, {
-    position: 'absolute', left: `${-parseFloat(cs.borderLeftWidth) || 0}px`, top: `${-parseFloat(cs.borderTopWidth) || 0}px`,
-    width: `${box.width}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '3',
+    position: 'absolute', left: `${dx - (parseFloat(cs.borderLeftWidth) || 0)}px`, top: `${-parseFloat(cs.borderTopWidth) || 0}px`,
+    width: `${was.w}px`, height: `${was.h}px`, margin: '0', pointerEvents: 'none', zIndex: '3',
     transform: 'none', animation: 'none',
   });
+  if (was.oneLine) copy.style.whiteSpace = 'nowrap';
   if (cs.position === 'static') el.style.position = 'relative';
   el.appendChild(copy);
   fade();
@@ -281,7 +298,10 @@ export function capture(screen, { live = false } = {}) {
   const box = screen.getBoundingClientRect();
   const g = document.createElement('div');
   g.className = 'page-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
-  Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, pointerEvents: 'none', zIndex: '1' });
+  // the page's own layout width, not its box on screen: a page caught mid-slide or mid-press measures the same, and
+  // its words wrap in the copy exactly as they did on the page
+  const w = parseFloat(getComputedStyle(screen).width) || box.width;
+  Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${w}px`, pointerEvents: 'none', zIndex: '1' });
   for (const k of [...screen.children]) g.appendChild(live ? k : k.cloneNode(true));
   g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
   if (live) g.querySelectorAll('[data-go], [data-act]').forEach(n => { n.removeAttribute('data-go'); n.removeAttribute('data-act'); });
@@ -351,6 +371,9 @@ export function sheetOut(root) {
   g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
   document.body.appendChild(g);
   const sheet = g.querySelector('.sheet'), scrim = g.querySelector('.scrim');
+  // a sheet scrolled down falls as it was, not jumped back to its top
+  const was = root.querySelector('.sheet');
+  if (sheet && was) sheet.scrollTop = was.scrollTop;
   const opts = { duration: T.sheetOut, easing: T.easeIn, fill: 'forwards' };
   const runs = [];
   if (sheet) runs.push(sheet.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }], opts).finished);

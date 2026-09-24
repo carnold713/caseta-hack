@@ -313,9 +313,14 @@ function ribbons(c, m) {
   const marks = [[0, '12 am'], [6, '6 am'], [12, 'noon'], [18, '6 pm']].map(([h, l]) => [m.from + h * 3600000, l]);
   if (!m.today) marks.push([m.to, '12 am']);
   const nowAt = m.today ? m.end : null;
-  const axis = marks.filter(([t]) => t - m.from <= m.span && (nowAt == null || Math.abs(t - nowAt) > m.span * 0.09))
-    .map(([t, l], i, all) => `<span style="left:${pct(m, t)}" class="${!i ? 'first' : t >= m.from + m.span - 1 && i === all.length - 1 ? 'last' : ''}">${l}</span>`).join('')
-    + (nowAt != null ? `<span class="${nowAt >= m.from + m.span - 60000 ? 'last' : ''}" style="left:${pct(m, nowAt)}">now</span>` : '');
+  // a label near either end hangs inward from its mark rather than centred on it, which put half of "6 am" past the
+  // edge of the screen when it was the only mark and fell at the end of a short day
+  const end = t => { const f = (t - m.from) / m.span; return f < 0.05 ? 'first' : f > 0.95 ? 'last' : ''; };
+  // a mark too near now to read beside it gives way to now: about 60 px of the strip, however wide the phone
+  const near = m.span * 60 / Math.max(200, Math.min(innerWidth, 600) - 40);
+  const axis = marks.filter(([t]) => t - m.from <= m.span && (nowAt == null || Math.abs(t - nowAt) > near))
+    .map(([t, l]) => `<span style="left:${pct(m, t)}" class="${end(t)}">${l}</span>`).join('')
+    + (nowAt != null ? `<span class="${end(nowAt)}" style="left:${pct(m, nowAt)}">now</span>` : '');
   const sc = c.ui.logScrub && c.ui.logScrub.date === m.date ? c.ui.logScrub : null;
   const dayName = m.today ? 'Today' : RT.dayRel(m.date) === 'yesterday' ? 'Yesterday' : RT.dayRel(m.date);
   const head = `<div class="ll-head" data-swipe="day">

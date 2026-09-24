@@ -121,7 +121,8 @@
 .rbw { position: relative; margin-top: 14px; }
 .ll-head { display: flex; align-items: center; height: 32px; padding: 0 var(--gutter); touch-action: pan-y; }
 .ll-name { flex: 1; line-height: 14px; }
-.ll-day { width: 32px; height: 32px; border: 0; border-radius: 16px; padding: 0; background: none; color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+/* the day arrows: 40 square to tap each, in the 32 tall head (the chevron is all that shows) */
+.ll-day { width: 40px; height: 40px; margin: -4px 0; border: 0; border-radius: 20px; padding: 0; background: none; color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
 .ll-day[disabled] { opacity: .3; cursor: default; }
 .ll-day:not(.next) { order: 2; }
 .ll-day.next { order: 3; }
@@ -129,6 +130,9 @@
 .rb + .rb { margin-top: 14px; }
 .rb-nm { display: flex; gap: 6px; margin: 0; height: 14px; font-size: 12px; font-weight: 500; line-height: 14px; color: var(--text-2); transition: color var(--standard) var(--ease); }
 .rb-v { color: var(--text-1); }
+/* the now line runs down through every ribbon; a room's name sits over it, so early in the day it does not strike
+   through the words */
+.rb-nm > span { position: relative; z-index: 1; background: var(--bg); }
 .rb.here .rb-nm { color: var(--text-1); }
 .rb-strip { position: relative; margin-top: 4px; height: 24px; border-radius: 12px; background: var(--surface-2); overflow: hidden; }
 .rb-lit { position: absolute; inset: 0; }

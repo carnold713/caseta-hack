@@ -18,12 +18,16 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* fin
 function row(c, t, v, go, opts = {}) {
   const { esc, icon } = c;
   const tag = opts.act ? `data-act="${opts.act}"` : `data-go="${go}"`;
-  return `<button class="row ${opts.ic ? 'has-ic' : ''} ${opts.tall ? 'tall' : ''}" ${tag}>${opts.ic ? `<span class="row-ic">${icon(opts.ic, 20, 1.4)}</span>` : ''}<span class="row-txt"><span class="t">${t}</span>${opts.d ? `<span class="d">${esc(opts.d)}</span>` : ''}</span>${v != null && v !== '' ? `<span class="row-val">${esc(v)}</span>` : ''}<span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`;
+  // a short label with a value keeps its words on one line; the value is what gives way (components.css, kv)
+  const kv = v != null && v !== '' && !opts.tall && !opts.d;
+  return `<button class="row ${opts.ic ? 'has-ic' : ''} ${opts.tall ? 'tall' : ''} ${kv ? 'kv' : ''}" ${tag}>${opts.ic ? `<span class="row-ic">${icon(opts.ic, 20, 1.4)}</span>` : ''}<span class="row-txt"><span class="t">${t}</span>${opts.d ? `<span class="d">${esc(opts.d)}</span>` : ''}</span>${v != null && v !== '' ? `<span class="row-val">${esc(v)}</span>` : ''}<span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`;
 }
 const toggle = (t, on, act, d = '') => `<div class="row"><span class="row-txt"><span class="t">${t}</span>${d ? `<span class="d">${d}</span>` : ''}</span><button class="toggle" role="switch" aria-checked="${!!on}" data-act="${act}" aria-label="${t}"></button></div>`;
 
-export function view(c) {
+export function view(c, r) {
   const { esc, icon, RT, data, DAY, EDIT } = c;
+  // a light set left open when its sheet was closed is not where Light sets opens next time
+  if (!r || r.id !== 'sets') c.ui.setOpen = null;
   const s = c.S.config.settings;
   const i = info(c);
   const lutron = data.devices().filter(d => !/^(hue_|nanoleaf_)/.test(String(d.device_id))).length;
@@ -233,7 +237,7 @@ function restore(c, text) {
   try { cfg = JSON.parse(text); } catch (_) { c.toast('That is not a settings backup', { err: true }); return; }
   if (!cfg || typeof cfg !== 'object' || !cfg.settings) { c.toast('That is not a settings backup', { err: true }); return; }
   c.S.config = cfg; c.ui.restoreText = '';
-  c.closeSheet(); history.replaceState(null, '', '#settings');
+  c.dismiss();
   // the whole configuration replaced: like a deletion, nothing on the page brings the old one back, so it keeps Undo
   c.save('Settings restored', { keepUndo: true });
 }
@@ -322,7 +326,7 @@ export const actions = {
   },
   async 'hue-forget'(c, el) {
     el.disabled = true;
-    try { await hueCall(c, { op: 'forget' }); c.ui.hue = null; c.closeSheet(); history.replaceState(null, '', '#settings'); c.toast('Hue bridge forgotten'); c.render(); }
+    try { await hueCall(c, { op: 'forget' }); c.ui.hue = null; c.dismiss(); c.toast('Hue bridge forgotten'); }
     catch (e) { el.disabled = false; c.toast(e.message, { err: true }); }
   },
   // Nanoleaf

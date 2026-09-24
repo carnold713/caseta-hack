@@ -182,7 +182,7 @@ function screenFor(r) {
   if (r.sub && !screen.sheetFor && !(screen.subs || []).includes(r.sub) && !(screen.sheets && screen.sheets[r.sub])) return soonScreen;
   return screen;
 }
-function go(hash) { if (location.hash === '#' + hash) render(); else location.hash = hash; }
+function go(hash) { if (location.hash === '#' + hash) render(); else { markStep(); location.hash = hash; } }
 // ---------- the back button ----------
 // Every entry this app makes carries its place in the app's own history, { n }: 0 is the entry it opened on, and each
 // page (or sheet) opened on top adds one. Two rules keep Back to one press per step:
@@ -192,17 +192,40 @@ function go(hash) { if (location.hash === '#' + hash) render(); else location.ha
 //     rather than writing the page over the sheet's entry, which left two of the page and a Back that did nothing.
 const place = () => (history.state && typeof history.state.n === 'number' ? history.state.n : 0);
 const stamp = extra => history.replaceState({ ...(history.state || {}), n: place(), ...extra }, '', location.href);
+// A step through the history is in flight from the moment it is asked until the address changes. A redraw asked for
+// meanwhile (a save landing, the socket) would draw the entry being left again: a sheet just closed rose again and
+// dropped a second time, a deleted routine's page showed "deleted" for a frame. It waits for the step instead.
+let stepping = 0, skipped = false;
+// and should the address never change (a step with nowhere to go), the held redraw is drawn after all
+function markStep() {
+  const at = stepping = performance.now();
+  setTimeout(() => { if (stepping !== at) return; stepping = 0; if (skipped) { skipped = false; render(); } }, 650);
+}
+function stepHistory(n) { markStep(); stepTo = place() + n; history.go(n); }
+// Where a step back through the history is going, and whether the entry just arrived at was reached by one: an entry
+// with no number reached by going back is an old one (a page the app opened on before it numbered anything), not a
+// new step above the last, and is given the number the step was going to. Numbered as a new step it made the count
+// one too many, and a tab's button, stepping back that many, stepped out of the app.
+let stepTo = null, navType = null;
+// (the browser says which: a hash set by a tap is a push, Back and history.go are a traverse; without its Navigation
+// API every new entry counts as a step up, as before)
+if (window.navigation && typeof window.navigation.addEventListener === 'function') window.navigation.addEventListener('navigate', e => { navType = e.navigationType; });
 // One step back: the entry under this one, or Home from a tab at the bottom. False on Home at the bottom, where Back
 // leaves the app (Android's back swipe asks this too, predictiveback.js).
 function stepBack() {
-  if (place() > 0) { history.back(); return true; }
-  if (route().name !== 'home') { location.replace('#home'); return true; }
+  if (place() > 0) { stepHistory(-1); return true; }
+  if (route().name !== 'home') { replaceTo('home'); return true; }
   return false;
 }
+// location.replace puts a new entry in this one's place, and a new entry arrives unnumbered; it is this step, not
+// one above it. Numbered as a new step, Home (or a tab) on the bottom entry became step 1, and Back from it left the
+// app instead of going Home, or stepped out of Home instead of leaving.
+let replacing = null;
+function replaceTo(hash) { if (location.hash === '#' + hash) return; replacing = place(); location.replace('#' + hash); }
 let pendingTab = null;
 function goTab(tab) {
   const n = place();
-  if (n > 0) { pendingTab = tab; history.go(-n); return; }
+  if (n > 0) { pendingTab = tab; stepHistory(-n); return; }
   if (!landTab(tab)) render();
 }
 // On the bottom entry: Home is the floor; another tab sits one above it. True when the address changes (its own
@@ -210,9 +233,26 @@ function goTab(tab) {
 function landTab(tab) {
   const here = location.hash.replace(/^#/, '') || 'home';
   if (here === tab) return false;
-  if (tab === 'home' || route().name !== 'home') location.replace('#' + tab);
+  markStep();
+  if (tab === 'home' || route().name !== 'home') replaceTo(tab);
   else location.hash = tab;
   return true;
+}
+
+// Put another page in this entry's place: a finished walk hands over to what it made, and Back then goes where it
+// would have gone from the walk rather than back into it. The entry keeps its step and its tab.
+function replacePage(hash) {
+  const oldURL = location.href;
+  history.replaceState({ n: place(), tab: history.state && history.state.tab }, '', '#' + hash);
+  window.dispatchEvent(new HashChangeEvent('hashchange', { oldURL, newURL: location.href }));
+}
+// The thing a page shows is gone (a routine deleted from its own sheet): close the sheet and leave the page the way
+// Back would, rather than writing the list over the sheet's entry and leaving the page and its sheet under it.
+function leavePage(fallback) {
+  const steps = (history.state && history.state.sheet ? 1 : 0) + 1;
+  closeSheet(); ctx.ui.picker = null;
+  if (place() >= steps) { stepHistory(-steps); return; }
+  history.replaceState(history.state, '', '#' + fallback); render();
 }
 
 // ---------- what every screen is handed ----------
@@ -220,6 +260,12 @@ const ctx = {
   data, H, DAY, EDIT, REM, RT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
   openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
   run, gate, save, saveSoon, assume, onLevel, toast, go, openSheet, closeSheet, render: () => render(),
+  // the history's own steps, for a page that finishes something: dismiss closes a sheet as its X does (a step back
+  // when it was opened as one), back is the back circle, goTab is a tab's button, replace and leave are above,
+  dismiss: () => dismissSheet(), back: () => stepBack(), goTab: t => goTab(t), replace: h => replacePage(h), leave: f => leavePage(f),
+  // a walk that is done goes back the way it came in (to Routines, where it was started), or, when the app opened on
+  // it with nothing under it, puts `hash` in its place
+  finish: h => { if (place() > 0) stepBack(); else replacePage(h); },
   // whether toasts are on at all, so copy that points at one (Undo from the toast) can leave that out while they are off
   toasts: TOASTS,
   // swap the page's sub route in place (White to Colour on the same sheet): no new step for the back button
@@ -237,9 +283,15 @@ const ctx = {
 let pending = false;
 // How the next redraw arrives: 'push', 'back' or 'load' when the page has changed (motion.js), else nothing and
 // each element's own transitions carry it from the last redraw.
-let arriving = null, wasScreen = false;
+let arriving = null, wasScreen = false, shownTab = null;
+// Where each step of the history was scrolled when it was left, by its number: Back returns to a list where it was
+// left (the tenth routine, the foot of Settings) rather than at its top. A page opened forward starts at the top.
+const scrolledAt = {};
+let restoreY = null;
 function render() {
   if (ctx.ui.dragging) { pending = true; return; }
+  if (stepping && performance.now() - stepping < 600) { skipped = true; return; }
+  stepping = 0;
   pending = false;
   const app = $('#app'), scr = $('#screen'), tabs = $('#tabs');
   native.credentials(S.token);
@@ -267,12 +319,17 @@ function render() {
   // a pushed detail page (a light, a fan, a shade) has no tab bar in the file; everything else does
   app.className = [st === 'off' ? 'offline' : '', screen.noTabs ? 'notabs' : ''].filter(Boolean).join(' ');
   tabs.hidden = !!screen.noTabs;
-  const tab = TAB_OF[r.name] || 'home';
+  // A tab's own page lights its tab. A page opened from it keeps the tab it was opened from (Activity from Settings
+  // is still under Settings, a room opened from Home still under Home), as each tab is its own stack and Back
+  // returns there; a page the app opened on, with nothing under it, falls back to the tab it belongs to.
+  const tab = shownTab = (depthOf(r) > 0 && history.state && history.state.tab) || TAB_OF[r.name] || 'home';
   tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
   if (screen.after) screen.after(ctx, r, scr);
   // a page comes back where it was scrolled when something on it opened the page being left
   const y = opening.takeScroll();
   if (y != null) window.scrollTo(0, y);
+  else if (restoreY != null) window.scrollTo(0, restoreY);
+  restoreY = null;
   if (opening.plays(how)) opening.arrive(how, scr);
   else if (how === 'swipe-back') swipeBack.arrive(scr);
   else if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
@@ -329,7 +386,7 @@ function routedSheet(screen, r) {
   const key = location.hash.replace(/^#/, '');
   const close = () => {
     ctx.ui.picker = null;
-    if (history.state && history.state.sheet && place() > 0) { history.back(); return; }
+    if (history.state && history.state.sheet && place() > 0) { stepHistory(-1); return; }
     history.replaceState(history.state, '', '#' + got.parent); render();
   };
   const pk = ctx.ui.picker && ctx.ui.picker.key === key ? ctx.ui.picker : null;
@@ -406,7 +463,8 @@ document.addEventListener('click', e => {
   // the innermost target wins: a tile navigates, the power circle inside it toggles
   const el = e.target.closest('[data-act], [data-go]'); if (!el) return;
   chipOpen.tap(el);
-  if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs')) goTab(el.dataset.go); else { opening.tap(el); go(el.dataset.go); } return; }
+  // a link to a tab's own page (Settings' Rooms row, the Nightstand's Home) is that tab's button: tabs never stack
+  if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs') || TABS.some(t => t[0] === el.dataset.go)) goTab(el.dataset.go); else { opening.tap(el); go(el.dataset.go); } return; }
   const act = el.dataset.act;
   if (act === 'sheet-close') { dismissSheet(); return; }
   if (act === 'picker-back') { closePicker(); return; }
@@ -474,17 +532,26 @@ function pageOf(r) {
 // Stepping back to the bottom entry fires hashchange only when its address differs; when it does not, popstate is
 // all there is, and the tab switch finishes from here.
 window.addEventListener('popstate', () => {
+  // the step has landed; a redraw it held back is drawn now unless the address changed, whose hashchange draws it
+  if (stepping) { stepping = 0; setTimeout(() => { if (skipped) { skipped = false; render(); } }, 0); }
   if (pendingTab && place() === 0) setTimeout(() => { if (pendingTab) { const t = pendingTab; pendingTab = null; if (!landTab(t)) render(); } }, 0);
 });
 window.addEventListener('hashchange', e => {
+  stepping = 0; skipped = false;
+  let leftN = 0; try { leftN = Number(sessionStorage.getItem('navN')) || 0; } catch (_) { /* fine */ }
+  if (lastPage) scrolledAt[leftN] = { page: lastPage, y: window.scrollY };
   closeSheet();
   // an entry this app has not numbered yet is a new step: one above the page it was opened from, and a sheet if it
   // is a sheet over that same page
+  if ((!history.state || typeof history.state.n !== 'number') && replacing != null) history.replaceState({ n: replacing }, '', location.href);
+  replacing = null;
+  if ((!history.state || typeof history.state.n !== 'number') && navType === 'traverse') history.replaceState({ n: stepTo != null ? Math.max(0, stepTo) : Math.max(0, leftN - 1) }, '', location.href);
+  navType = null; stepTo = null;
   if (!history.state || typeof history.state.n !== 'number') {
     let from = 0; try { from = (JSON.parse(sessionStorage.getItem('navN') || '0')) || 0; } catch (_) { /* fine */ }
     const oldPage = pageOf(parseRoute(new URL(e.oldURL).hash));
     const r0 = route();
-    history.replaceState({ n: from + 1, sheet: pageOf(r0) === oldPage && `${r0.name}/${r0.id}${r0.sub ? '/' + r0.sub : ''}` !== oldPage }, '', location.href);
+    history.replaceState({ n: from + 1, sheet: pageOf(r0) === oldPage && `${r0.name}/${r0.id}${r0.sub ? '/' + r0.sub : ''}` !== oldPage, tab: shownTab }, '', location.href);
   }
   try { sessionStorage.setItem('navN', String(place())); } catch (_) { /* fine */ }
   // a tab switch that stepped back to the bottom entry now goes to its tab
@@ -505,7 +572,11 @@ window.addEventListener('hashchange', e => {
     if (shared) arriving = shared; else motion.capture(screen);
   }
   lastName = r.name; lastDepth = depthOf(r);
-  if (page !== lastPage) window.scrollTo(0, 0);
+  if (page !== lastPage) {
+    const was = scrolledAt[place()];
+    restoreY = place() < leftN && was && was.page === page ? was.y : null;
+    window.scrollTo(0, 0);
+  }
   lastPage = page;
   render();
 });
@@ -612,6 +683,8 @@ render();
 swipeBack.wire({
   ctx, route, parseRoute, pageOf, depthOf, place, stepBack,
   draw: r => screenFor(r).view(ctx, r), hasTabs: r => !screenFor(r).noTabs, dismissSheet: o => dismissSheet(o),
+  // where the page under this one was left scrolled, so the page waiting behind a swipe is drawn where Back puts it
+  scrollOf: prev => { const was = scrolledAt[place() - 1]; return prev && was && was.page === prev.page ? was.y : 0; },
 });
 // a slow minute tick keeps anything that says a time (the greeting, "since 9:41 pm") honest
 setInterval(() => { if (!ctx.ui.dragging && !document.hidden) soon(); }, 60000);

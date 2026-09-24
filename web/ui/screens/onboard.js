@@ -146,12 +146,21 @@ function push(el, html, dir) {
   if (reduced() || typeof el.animate !== 'function') { el.innerHTML = html; return; }
   const ghost = el.cloneNode(true);
   ghost.classList.add('ob-ghost'); ghost.removeAttribute('data-act'); ghost.setAttribute('aria-hidden', 'true');
+  // the old words leave from exactly where they stood, whatever the new ones change about the heading's place
+  ghost.style.bottom = getComputedStyle(el).bottom;
   el.after(ghost);
   const e = 'cubic-bezier(.2, .8, .2, 1)';
   ghost.animate([{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: `translateX(${-24 * dir}px)` }], { duration: 300, easing: e, fill: 'forwards' })
     .finished.catch(() => {}).then(() => ghost.remove());
   el.innerHTML = html;
   el.animate([{ opacity: 0, transform: `translateX(${24 * dir}px)` }, { opacity: 1, transform: 'translateX(0)' }], { duration: 300, easing: e });
+}
+
+// The heading stands on the line under it: 18 above it, where the file has two lines of it, and higher when the line
+// runs to three (a narrow phone, page 3), which otherwise ran into the heading's last line.
+function fitWords(root) {
+  const say = root && root.querySelector('.ob-say:not(.ob-ghost)');
+  if (say) root.style.setProperty('--say-h', `${say.offsetHeight}px`);
 }
 
 // Draw the signed-out page into the screen: the onboarding pages on a phone that has not seen them, else the
@@ -170,6 +179,7 @@ export function draw(scr) {
   if (!root) {
     scr.innerHTML = pagesHTML();
     const fresh = scr.querySelector('.onboard');
+    fitWords(fresh);
     light(fresh, null, { now: true });
     wireSwipe(fresh);
     // two frames so the dark house is on screen before its first window lights
@@ -183,6 +193,7 @@ export function draw(scr) {
   root.querySelectorAll('.ob-dots i').forEach((d, i) => d.classList.toggle('on', i === page));
   push(root.querySelector('.ob-h'), heading(PAGES[page]), dir);
   push(root.querySelector('.ob-say'), PAGES[page].say, dir);
+  fitWords(root);
   const go = root.querySelector('.ob-go'); if (go) go.innerHTML = goLabel();
   const back = root.querySelector('.ob-back'); if (back) back.disabled = !page;
   light(root, page);

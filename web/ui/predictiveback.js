@@ -218,7 +218,7 @@ function behind(g) {
     try { sc.innerHTML = app.draw(info.prev.r); } catch (_) { sc.innerHTML = ''; }
     sc.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
     let y = 0;
-    try { y = (g.kind && g.kind.scroll && g.kind.scroll(info)) || 0; } catch (_) { y = 0; }
+    try { y = (g.kind && g.kind.scroll && g.kind.scroll(info)) || (app.scrollOf ? app.scrollOf(info.prev) : 0) || 0; } catch (_) { y = 0; }
     if (y) sc.style.transform = `translateY(${px(-y)})`;
     if (g.kind && g.kind.dress) { try { g.kind.dress(sc, info); } catch (_) { /* drawn plain */ } }
     pg.appendChild(sc);

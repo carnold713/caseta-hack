@@ -110,7 +110,9 @@ html:has(.ns-page) .sheet .radio.on { background: #B86C35; border-color: #B86C35
    The Figma timeline, mapped from its 1.0 to 5.0 s scrub onto 0 to 1: first light 0 to .35, sunrise .3 to .7,
    morning .65 to 1, the window's morning and the sun's climb across the whole of it, the stars gone by .6. It is
    locked to the finger, so nothing here eases. */
-.sunrise { position: relative; margin: 0 var(--gutter); --f: 0; }
+/* the preview itself, by its attribute: a row's sunrise icon circle (.row-ic.sunrise) shares the class name and took
+   this margin, which pushed its row's words 20 px over and squeezed its value to an ellipsis */
+.sunrise[data-sunrise] { position: relative; margin: 0 var(--gutter); --f: 0; }
 .sunrise .dawn { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .sunrise .dawn i { position: absolute; inset: 0; mix-blend-mode: screen; }
 .sunrise .dawn .d1 { background: radial-gradient(circle 450px at 50% calc(100% + 85px), var(--dawn-1) 0%, color-mix(in srgb, var(--dawn-1) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--dawn-1) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--dawn-1) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--dawn-1) 80.1%, transparent) 25%, color-mix(in srgb, var(--dawn-1) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--dawn-1) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--dawn-1) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--dawn-1) 37.9%, transparent) 50%, color-mix(in srgb, var(--dawn-1) 28%, transparent) 56.2%, color-mix(in srgb, var(--dawn-1) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--dawn-1) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--dawn-1) 6.8%, transparent) 75%, color-mix(in srgb, var(--dawn-1) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--dawn-1) 1%, transparent) 87.5%, color-mix(in srgb, var(--dawn-1) 0.1%, transparent) 93.8%, transparent 100%); opacity: clamp(0, calc(var(--f) / .35), 1); }

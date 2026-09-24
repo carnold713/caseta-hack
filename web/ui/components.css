@@ -71,7 +71,9 @@
 .row {
   position: relative;
   display: flex; align-items: center; gap: 12px;
-  width: 100%; min-height: 64px; padding: 0 16px;
+  /* The height is the min-height; the 6 above and below only shows when the words run past it (three lines and
+     more), which otherwise sat on the row's very edges */
+  width: 100%; min-height: 64px; padding: 6px 16px;
   border: 0; background: none; color: inherit; text-align: left;
   font: inherit;
 }
@@ -92,6 +94,12 @@
 .row-txt .t { display: block; font-size: 16px; font-weight: 500; line-height: 22px; }
 .row-txt .d { display: block; font-size: 14px; line-height: 18px; color: var(--text-2); }
 .row-val { font-size: 14px; color: var(--text-2); flex: none; }
+/* A label and its value (Name, and the home's name): the label keeps its words on one line and the value gives way,
+   ending in an ellipsis, rather than the value pushing the label into a column one word wide or over it. The label
+   stops short of the room a short value needs (Never, 100%) and the chevron, and wraps if it must. */
+.row.kv .row-txt { flex: 0 0 auto; max-width: calc(100% - 104px); }
+.row.kv.has-ic .row-txt { max-width: calc(100% - 156px); }
+.row.kv .row-val { flex: 1 1 auto; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-chev { color: var(--text-3); flex: none; }
 
 /* ---- controls ------------------------------------------------------------------------------- */
@@ -108,6 +116,8 @@
 }
 .toggle[aria-checked='true'] { background: var(--blue); }
 .toggle[aria-checked='true']::after { transform: translateX(20px); background: #fff; }
+/* The switch is drawn 32 tall; a finger gets 40 of it, and a little either side, without it looking any bigger */
+.toggle::before { content: ''; position: absolute; inset: -4px; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 8px;
@@ -343,6 +353,8 @@
 /* Overline at 28, title at 48, close circle at 28: the grabber takes the first 12. */
 .sheet-head { position: relative; padding: 16px var(--gutter) 0; }
 .sheet-head .t-over { margin: 0 0 6px; line-height: 14px; }
+/* The overline is often a name (a routine's, a scene's): one line, clear of the close circle, cut short if it must */
+.sheet-head .t-over { padding-right: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A picker inside a sheet carries a back arrow before its overline. */
 .sheet-head.has-back { padding-left: 64px; }
 .sheet-back {
@@ -360,6 +372,9 @@
 .sheet-head h2 { padding-right: 56px; }
 .sheet-head:has(.head-btn) h2 { padding-right: 108px; }
 .sheet-head h2 { margin: 0; }
+.sheet-head:has(.head-btn) .t-over { padding-right: 108px; }
+/* A title that is a name someone typed stops at three lines rather than filling the sheet */
+.sheet-head h2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 .sheet-close {
   position: absolute; top: 16px; right: var(--gutter);
   width: 40px; height: 40px; border-radius: 20px; border: 0;
