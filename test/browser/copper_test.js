@@ -19,9 +19,11 @@ const ROOM = [
   ['On and Off', '.room-onoff', 32, 412, 348, 64],
   ['On half', '.room-onoff button:first-child', 38, 418, 165, 52],
   ['Off half', '.room-onoff button:nth-child(2)', 209, 418, 165, 52],
-  ['scene chips', '.room-chips', 0, 504, null, 40],
-  ['first tile', '.room-grid .tile:nth-child(1)', 20, 560, 180, 150],
-  ['second tile', '.room-grid .tile:nth-child(2)', 212, 560, 180, 150],
+  // the room's brightness (Home's 56 tall bar, 16 under the picture, at 504) pushes the rest down 72 from the file's
+  ['brightness', '.room-bright .hbar', 20, 504, null, 56],
+  ['scene chips', '.room-chips', 0, 504 + 72, null, 40],
+  ['first tile', '.room-grid .tile:nth-child(1)', 20, 560 + 72, 180, 150],
+  ['second tile', '.room-grid .tile:nth-child(2)', 212, 560 + 72, 180, 150],
   ['header dots', '.hdr .a1', 336, 52, 56, 56],
 ];
 // The light page as the calm-and-flat pass left it: the drawing at the top sized to the kind of light (a bulb, a lamp

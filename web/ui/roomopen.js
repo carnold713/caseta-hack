@@ -199,6 +199,7 @@ export function open({ O, ghost }, screen, F) {
   play(hero.querySelector('.add-photo'), [{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay: 350 });
   rise(hero.querySelector('.room-onoff'), 400);
   rise(q('.room-title .count'), 500);
+  rise(q('.room > .room-bright'), 420);
   rise(q('.room-sec'), 400);
   chips.forEach((c, i) => rise(c, 400 + i * T.stagger));
   tiles.forEach((t, i) => {
