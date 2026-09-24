@@ -117,22 +117,20 @@ export function snap(root) {
       for (const p in t) v[p] = cs.getPropertyValue(p);
       (rec.v || (rec.v = {}))[ps] = v; any = true;
     }
-    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; rec.box = restBox(el); any = true; }
+    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; rec.size = sizeOf(el); any = true; }
     if (el.hasAttribute('data-enter')) { rec.enter = el.getAttribute('data-enter') || 'rise'; rec.node = el; rec.rect = el.getBoundingClientRect(); any = true; }
     if (any) s.set(path, rec);
   });
   return s;
 }
-// The box an element's words were laid out in at rest, for a copy of it that has to look exactly the same: its own
-// layout width and height (the used size, which a transform on it or an ancestor does not narrow: a tile pressed to
-// .96, a page still sliding in), where it stood, and whether it was one line of inline words (an inline element has
-// no width of its own, and its copy, taken out of the line, must not wrap where the line never did).
-function restBox(el) {
+// An element's own laid out size (not as a press or a flight has it scaled) and where its edges were on screen, so a
+// copy of it can keep its words laid out exactly as they were. An inline element has no size of its own: its box on
+// screen stands in, and if its words made one line, its copy (taken out of the line) must not wrap where it never did.
+function sizeOf(el) {
   const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+  const w = parseFloat(cs.width), h = parseFloat(cs.height);
   const inline = cs.display === 'inline';
-  let w = parseFloat(cs.width), h = parseFloat(cs.height);
-  if (inline || !(w >= 0) || !(h >= 0)) { w = r.width; h = r.height; }
-  return { w, h, left: r.left, top: r.top, oneLine: inline && el.getClientRects().length === 1 };
+  return { w: Number.isFinite(w) && !inline ? w : r.width, h: Number.isFinite(h) && !inline ? h : r.height, left: r.left, right: r.right, oneLine: inline && el.getClientRects().length === 1 };
 }
 // the parts of an element that make it look different: its classes, inline style and words
 // (a copy still fading inside it is not part of its look)
@@ -182,7 +180,7 @@ export function carry(s, root) {
     }
     if (rec.copy && rec.look !== look(el)) fades.push([rec, el]);
   });
-  for (const [rec, el] of fades) crossfade(rec.copy, el, rec.xf, rec.box);
+  for (const [rec, el] of fades) crossfade(rec.copy, el, rec.xf, rec.size);
   // what came in with data-enter and is gone now leaves the way it came
   for (const [path, rec] of s) if (rec.enter && !seen.has(path)) gone(rec, path, made);
 }
@@ -253,7 +251,7 @@ export function settle(root) {
 
 // The old element laid over the new one and faded out: an old tile dissolving into the new, the way the file's
 // "after" tiles fade in over the "before" ones. It sits inside the new element, so it scrolls and clips with it.
-function crossfade(old, el, kind, box = null) {
+function crossfade(old, el, kind, was) {
   if (!canAnimate(el)) return;
   const dur = kind === 'standard' ? T.standard : document.body.classList.contains('scene-arriving') ? T.scene : T.dimmer;
   const ease = kind === 'standard' ? T.ease : T.easeBoth;
@@ -267,15 +265,16 @@ function crossfade(old, el, kind, box = null) {
     .catch(() => {}).then(() => copy.remove());
   // an image holds nothing inside it: its old self goes beside it, placed by the same rules
   if (/^(IMG|INPUT|SVG)$/i.test(el.tagName)) { copy.style.pointerEvents = 'none'; el.after(copy); fade(); return; }
-  const now = el.getBoundingClientRect(), cs = getComputedStyle(el);
-  // The copy keeps its own look in its own box: the old words laid out in the new element's width wrapped
-  // differently whenever the two were not the same length ("3 on" fading over "All off" went to two lines), or
-  // gained an ellipsis. So it takes the old box's size, and where the new one moved along the same line (a value
-  // held to the right that got shorter), the old one's place on it.
-  const was = box || { w: now.width, h: now.height, left: now.left, top: now.top, oneLine: false };
-  const dx = Math.abs(was.top - now.top) < 1 ? was.left - now.left : 0;
+  const box = el.getBoundingClientRect(), cs = getComputedStyle(el);
+  const now = sizeOf(el);
+  was = was || now;
+  // The copy keeps its own look and its own size, so its words stay on the lines they were on: a longer status laid
+  // into the new, shorter one's box would wrap onto a second line as it faded. It sits on the new element's box,
+  // from the left, or from the right for words set against the right (a count that changes length there).
+  let left = -parseFloat(cs.borderLeftWidth) || 0;
+  if (Math.abs(was.right - box.right) < 1 && Math.abs(was.left - box.left) >= 1) left += now.w - was.w;
   Object.assign(copy.style, {
-    position: 'absolute', left: `${dx - (parseFloat(cs.borderLeftWidth) || 0)}px`, top: `${-parseFloat(cs.borderTopWidth) || 0}px`,
+    position: 'absolute', left: `${left}px`, top: `${-parseFloat(cs.borderTopWidth) || 0}px`,
     width: `${was.w}px`, height: `${was.h}px`, margin: '0', pointerEvents: 'none', zIndex: '3',
     transform: 'none', animation: 'none',
   });

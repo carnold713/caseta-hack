@@ -15,8 +15,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const ROOM = [
   ['room H1', '.room-title h1', 20, 128, null, 44],
   ['room photo card', '.room-photo-card', 20, 188, 372, 300],
-  ['All on', '.room-acts .glass:first-child', 32, 412, 168, 64],
-  ['All off', '.room-acts .glass:last-child', 212, 412, 168, 64],
+  // the room's On and Off, in the place and size of the file's All on and All off pair, with 52 tall halves
+  ['On and Off', '.room-onoff', 32, 412, 348, 64],
+  ['On half', '.room-onoff button:first-child', 38, 418, 165, 52],
+  ['Off half', '.room-onoff button:nth-child(2)', 209, 418, 165, 52],
   ['scene chips', '.room-chips', 0, 504, null, 40],
   ['first tile', '.room-grid .tile:nth-child(1)', 20, 560, 180, 150],
   ['second tile', '.room-grid .tile:nth-child(2)', 212, 560, 180, 150],
@@ -209,14 +211,20 @@ const FAN = [
   // ---- 03 Room: the Kitchen
   await go('room/20');
   await page.click('[data-act="room-on"]'); await wait(1600);
-  check('All on', (await C(() => window.__copper.H.roomLights('20').every(d => window.__copper.data.level(d.device_id) > 0))));
+  check('On turns on every light in the room', (await C(() => window.__copper.H.roomLights('20').every(d => window.__copper.data.level(d.device_id) > 0))));
+  const pill = async () => C(() => { const o = document.querySelector('.room-onoff'); return { on: o.querySelector('[data-act="room-on"]').getAttribute('aria-pressed'), off: o.querySelector('.onoff-pill').classList.contains('off'), word: o.querySelector('[data-act="room-on"]').textContent.trim(), count: document.querySelector('.room-title .count').textContent.trim() }; });
+  const lit = await pill();
+  const cm = /^(\d+) devices? · (\d+) on$/.exec(lit.count);
+  check('the pill sits under On, which says how much is on in the count line\'s numbers', lit.on === 'true' && !lit.off && !!cm && lit.word === `On · ${cm[2]} of ${cm[1]}`, lit);
   await measure('03 Room', ROOM);
   const n0 = await C(() => window.__copper.data.presets().length);
   await page.click('[data-act="save-look"]'); await wait(1400);
   check('Save this look makes a scene', (await C(() => window.__copper.data.presets().length)) === n0 + 1);
   check('and it is the current one, in copper', (await page.textContent('.chip.current').catch(() => '')).trim() === 'My look');
   await page.click('[data-act="room-off"]'); await wait(1600);
-  check('All off', (await C(() => window.__copper.H.roomLights('20').every(d => !window.__copper.data.level(d.device_id)))));
+  check('Off turns off every light in the room', (await C(() => window.__copper.H.roomLights('20').every(d => !window.__copper.data.level(d.device_id)))));
+  const dark = await pill();
+  check('and the pill is under Off, with On just saying On', dark.on === 'false' && dark.off && dark.word === 'On', dark);
   check('nothing current once it changes', !(await page.$('.chip.current')));
   await page.click('.chip[data-t^="p:"]'); await wait(1600);
   check('the saved look runs', (await C(() => window.__copper.H.roomLights('20').every(d => window.__copper.data.level(d.device_id) > 0))));

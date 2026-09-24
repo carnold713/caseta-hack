@@ -177,12 +177,12 @@ function instrument() {
   check('the room starts at the top', (await C(() => window.scrollY)) === 0, await C(() => window.scrollY));
 
   // ---- fully usable after: nothing over it, its buttons answer, and a sheet over it is a sheet, not this
-  const clear = await C(() => ['.room-acts [data-act="room-off"]', '.hdr-btn.back', '.room-grid .tile'].map(s => { const e = document.querySelector('#screen ' + s); if (!e) return s + ' missing'; const b = e.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return e.contains(hit) ? 'ok' : `${s} covered by ${hit && hit.className}`; }));
+  const clear = await C(() => ['.room-onoff [data-act="room-off"]', '.hdr-btn.back', '.room-grid .tile'].map(s => { const e = document.querySelector('#screen ' + s); if (!e) return s + ' missing'; const b = e.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return e.contains(hit) ? 'ok' : `${s} covered by ${hit && hit.className}`; }));
   check('everything on the room is where a finger finds it', clear.every(x => x === 'ok'), clear);
-  await page.click('#screen .room-acts [data-act="room-off"]'); await wait(1200);
-  check('All off answers', (await C(() => document.querySelectorAll('#screen .room-grid .tile.on').length)) === 0, await C(() => document.querySelectorAll('#screen .room-grid .tile.on').length));
-  await page.click('#screen .room-acts [data-act="room-on"]'); await wait(1200);
-  check('All on answers', (await C(() => document.querySelectorAll('#screen .room-grid .tile.on').length)) > 0);
+  await page.click('#screen .room-onoff [data-act="room-off"]'); await wait(1200);
+  check('Off answers', (await C(() => document.querySelectorAll('#screen .room-grid .tile.on').length)) === 0, await C(() => document.querySelectorAll('#screen .room-grid .tile.on').length));
+  await page.click('#screen .room-onoff [data-act="room-on"]'); await wait(1200);
+  check('On answers', (await C(() => document.querySelectorAll('#screen .room-grid .tile.on').length)) > 0);
   await page.click('#screen .hdr-btn.a1'); await wait(700);
   check('room setup opens as a sheet over the room, not a page', (await C(() => location.hash)) === `#room/${aid}/setup` && !!(await page.$('#sheet-root .sheet')) && !(await page.$('.page-ghost, .m10-top')), await C(() => location.hash));
   await C(() => history.back()); await wait(700);
