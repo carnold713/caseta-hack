@@ -39,7 +39,7 @@ export function about(c, r) {
   }
   const hiddenNow = c.EDIT.hidden().includes(id);
   body += `<div class="group about-rows">
-    <button class="row" data-act="about-move"><span class="row-txt"><span class="t">Move to room</span></span><span class="row-val">${esc(c.data.devAreaName(d) || 'No room')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+    <button class="row" data-act="about-move"><span class="row-txt"><span class="t">Move to room</span></span><span class="row-val nm-cut">${esc(c.data.devAreaName(d) || 'No room')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     <div class="row"><span class="row-txt"><span class="t">Hide from the app</span></span><button class="toggle" role="switch" aria-checked="${hiddenNow}" data-act="about-hide" aria-label="Hide from the app"></button></div>
     ${c.EDIT.canRemove(id) ? `<button class="row" data-act="about-remove"><span class="row-txt"><span class="t">Remove from home</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
   </div>

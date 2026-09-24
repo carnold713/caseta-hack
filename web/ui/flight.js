@@ -108,11 +108,15 @@ export const opacityOf = el => (el ? Number(getComputedStyle(el).opacity) : 0);
 // line of words cut short by a pixel ends in an ellipsis).
 export function part(el, k) { if (!el) return null; const r = el.getBoundingClientRect(); return { el, r, w: r.width / k, h: r.height / k }; }
 // The words in a line, as a part: where the words are (a block is often wider), cut to the block as its ellipsis is.
+// Words that wrap onto a second line are the block itself, so a copy of them can be laid out line for line as they
+// rest (copyText).
 export function words(el, k) {
   if (!el) return null;
   const rg = document.createRange(); rg.selectNodeContents(el);
   const b = el.getBoundingClientRect(), t = rg.getBoundingClientRect();
   if (!t.width) return null;
+  const rs = [...rg.getClientRects()].filter(x => x.width > 0);
+  if (rs.some(x => x.top - rs[0].top > x.height / 2)) return { el, r: b, w: b.width / k, h: b.height / k, text: el.textContent, lines: true };
   const left = Math.max(t.left, b.left), right = Math.min(t.right, b.right);
   const r = { left, top: b.top, width: right - left, height: b.height, right, bottom: b.bottom };
   return { el, r, w: r.width / k, h: r.height / k, text: el.textContent };
@@ -144,6 +148,14 @@ export function copyText(p, k) {
   const s = document.createElement('span');
   s.textContent = p.text != null ? p.text : p.el.textContent;
   for (const q of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'color', 'textOverflow', 'overflow']) s.style[q] = cs[q];
+  // words on more than one line keep their block's own width and wrapping, and its ellipsis after the last line, so
+  // the copy breaks exactly where they do and never becomes one line in flight
+  if (p.lines) {
+    for (const q of ['webkitBoxOrient', 'webkitLineClamp', 'whiteSpace', 'overflowWrap', 'wordBreak', 'textAlign']) s.style[q] = cs[q];
+    // a clamped block reads back as flow-root, and only a -webkit-box draws the clamp's ellipsis
+    s.style.display = cs.webkitLineClamp && cs.webkitLineClamp !== 'none' ? '-webkit-box' : cs.display;
+    return pin(s, p, k);
+  }
   // one line, as it was: a copy is never narrower than the words it carries
   s.style.whiteSpace = 'nowrap';
   const node = pin(s, p, k);
@@ -229,6 +241,10 @@ export function copyFlight(copy, p, Dt) {
 // the opacities each rests at (a drawing of a light that is off is faint on both pages).
 export function pair(F, dir, { dest, Dt, Db, p, k = 1, top, copy = null, cross = CROSS, crossEase = 'linear', to = 1, from = 1, raise = true }) {
   const R = dir === 'open' ? OPEN : CLOSE;
+  // Two lines of words that do not read the same (one cut short by its ellipsis where the other is not, or on two
+  // lines where the other is on one) are laid over each other as briefly as can be: each keeps its own lines, and
+  // the moment where both show is half as long.
+  if (!copy && p.el && (p.lines || cutShort(p.el) || cutShort(dest))) cross = Math.min(cross, CROSS / 2);
   const node = copy || copyText(p, k); top.appendChild(node);
   const was = { position: dest.style.position, zIndex: dest.style.zIndex, origin: dest.style.transformOrigin };
   if (raise) { if (getComputedStyle(dest).position === 'static') dest.style.position = 'relative'; dest.style.zIndex = '1'; }
@@ -248,6 +264,9 @@ export function pair(F, dir, { dest, Dt, Db, p, k = 1, top, copy = null, cross =
   }
   return node;
 }
+
+// Words ended early by their ellipsis (one line) or their clamp (a few).
+const cutShort = el => !!el && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
 
 // ---------- aside ----------
 // The rest of the old page around the thing tapped (box), and which way each part steps: above up, below down,

@@ -37,7 +37,7 @@ export function setup(c, r) {
   const where = whereLine(c, aid);
   const body = `<div class="setup">
     <div class="group">
-      <button class="row" data-act="setup-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val">${esc(a.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row" data-act="setup-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val nm-cut">${esc(a.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <div class="row photo-row"><span class="row-txt"><span class="t">Photo</span></span>
         ${photo ? `<button class="link blue" data-act="setup-photo-remove">Remove</button><button class="link blue" data-act="setup-photo">Change</button><img class="ph-thumb" src="${esc(photo)}" alt="">`
           : `<button class="link blue" data-act="setup-photo">Add a photo</button>`}</div>
@@ -48,7 +48,7 @@ export function setup(c, r) {
     </div>
     <div class="group">
       <button class="row" data-act="setup-lights"><span class="row-txt"><span class="t">Lights in this room</span></span><span class="row-val">${esc(c.EDIT.roomContents(aid))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-      <button class="row" data-go="remotes"><span class="row-txt"><span class="t">Remotes</span></span><span class="row-val">${esc(remotes.length ? remotes.map(x => x.name).join(', ') : 'None')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row" data-go="remotes"><span class="row-txt"><span class="t">Remotes</span></span><span class="row-val nm-cut">${esc(remotes.length ? remotes.map(x => x.name).join(', ') : 'None')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
     ${where && !seen(aid) ? `<div class="info-card"><span class="ic-c">${icon('home', 18, 1.7)}</span><p>${esc(where)}</p><button class="link blue" data-act="setup-seen">Got it</button></div>` : ''}
     <div class="group"><button class="row" data-act="setup-delete"><span class="row-txt"><span class="t">Delete room</span></span></button></div>

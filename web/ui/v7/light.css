@@ -181,10 +181,16 @@
 .tc-stage.out .tc-flame { opacity: 0; transform: translateY(16px) scale(.25); transition: none; }
 .tc-stage.out .tc-pool > .glow, .tc-stage.out .tc-table, .tc-stage.out .tc-rim, .tc-stage.out .tc-wax, .tc-stage.out .tc-waxpool { opacity: 0; }
 .tc-left { position: absolute; left: var(--gutter); right: var(--gutter); top: 320px; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.tc-says { position: absolute; left: var(--gutter); right: var(--gutter); top: 370px; margin: 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
+.tc-says { position: absolute; left: var(--gutter); right: var(--gutter); top: 370px; margin: 0; font-size: 14px; line-height: 17px; color: var(--text-2);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* two lines at most: the buttons are 8 under */
 .tc-btns { position: absolute; left: var(--gutter); right: var(--gutter); top: 412px; display: flex; gap: 10px; }
-.tc-btns .pill { height: 48px; padding: 0 12px; font-size: 14px; flex: 0 0 auto; white-space: nowrap; }
+.tc-btns .pill { height: 48px; padding: 0 12px; font-size: 14px; flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-btns .pill:nth-child(1) { flex-basis: 112px; }
 .tc-btns .pill:nth-child(2) { flex-basis: 130px; }
-.tc-btns .pill:nth-child(3) { flex: 1 1 auto; }
+.tc-btns .pill:nth-child(3) { flex: 1 0 auto; }
+/* On a narrow phone the three still fit in the row: the first two give up a little of their width, never Off now */
+@media (max-width: 400px) {
+  .tc-btns { gap: 8px; }
+  .tc-btns .pill { padding: 0 8px; }
+}
 .tc-off { position: absolute; left: var(--gutter); right: var(--gutter); top: 474px; margin: 0; font-size: 13px; line-height: 17px; color: var(--text-3); }
