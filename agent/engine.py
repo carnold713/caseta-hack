@@ -36,6 +36,15 @@ GESTURES = ("single", "double", "hold_start", "hold_end", "hold")
 RAMP_STEP = 4
 RAMP_MS = 160
 
+# Checking an off. A Lutron light is looked at again 1.5 s after its fade and resent up to twice; its state comes
+# from the bridge's own status reports, so reading it is reading the light. A Hue or Nanoleaf lamp is asked
+# directly (hue_verify), which is quick enough to do as soon as the fade is over, so its first look comes
+# OFF_FIRST_LOOK after the fade, then OFF_LATER_LOOKS apart: two resends, then one last look that shows the app
+# the truth if the lamp still will not go off.
+OFF_RESENDS = 2
+OFF_FIRST_LOOK = 0.8
+OFF_LATER_LOOKS = (1.5, 2.5)
+
 
 class ButtonState:
     __slots__ = ("pressed_at", "held", "double_armed", "hold_task", "single_task")
@@ -175,6 +184,10 @@ class ActionRunner:
         self.hue_set: Optional[Callable[[str, int, Optional[float]], Awaitable[None]]] = None
         self.hue_color: Optional[Callable[..., Awaitable[None]]] = None  # (device_id, kelvin=, hex=, fade_s=, level=)
         self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None  # Hue's own scenes only; Nanoleaf has none
+        # (device_id, adopt) -> the level the lamp is really at, asked of its bridge, or None when that cannot be
+        # told. current_state cannot answer it for these lamps: each backend sets it as soon as a command is
+        # accepted, which is what makes the app feel instant, and is also why a lost off used to go unseen.
+        self.hue_verify: Optional[Callable[[str, bool], Awaitable[Optional[int]]]] = None
         # Follow the day (daylight.py). `color_watch` is told the device id whenever a colour or a warmth is set
         # from anywhere but the follow loop itself, which is how a lamp set by hand stops following. `follow_start`
         # is awaited for a scene entry that says "follow the day": it turns following on and sets the white for now.
@@ -354,7 +367,11 @@ class ActionRunner:
         # loop (which talks to each backend directly), so it is what pauses a lamp that was following the day.
         if self.color_watch:
             self.color_watch(device_id)
-        await self.hue_color(device_id, kelvin=kelvin, hex=hex_str, fade_s=float(fs) if fs is not None else None, level=level)
+        try:
+            await self.hue_color(device_id, kelvin=kelvin, hex=hex_str, fade_s=float(fs) if fs is not None else None, level=level)
+        finally:
+            if level is not None and int(level) <= 0:
+                self._make_sure_off([device_id], fade)   # a scene entry at 0 with a colour is an off like any other
 
     async def _follow_entry(self, device_id: str, level: int, fade: Optional[float]) -> None:
         """A scene entry that says "follow the day": the brightness the scene asks for, then the white for right now."""
@@ -384,7 +401,15 @@ class ActionRunner:
         async with self._locks.setdefault(device_id, asyncio.Lock()):
             if self._seq.get(device_id) != seq:
                 return   # a newer command for this light came in while this one waited: it has the last word
-            await self._send_level(device_id, level, fade)
+            try:
+                await self._send_level(device_id, level, fade)
+            finally:
+                # Every off is checked, from wherever it came: a Pico, a toggle, the app's room and house Off,
+                # Goodnight, a scene with lights at 0, a timer running out, a hold dimmed all the way down.
+                # Checking only where an action was a plain "off" left a scene's zeros and a colour at 0 unlooked at.
+                # Even a send that failed is checked, so a light that did not answer is tried again.
+                if int(level) <= 0:
+                    self._make_sure_off([device_id], fade)
 
     async def _send_level(self, device_id: str, level: int, fade: Optional[float]) -> None:
         bridge = self._bridge()
@@ -422,27 +447,59 @@ class ActionRunner:
         A bridge busy with a burst (All off is every light at once) can drop one, and a light somebody pressed
         at the wall in the same second can come back on. Each light is checked by itself, twice more at most,
         and only while nothing newer has been asked of it: a light turned on again on purpose is left alone.
+        _set_level calls this for every off it sends, so every path that turns a light off is covered.
         """
         fs = fade if fade is not None else self._config().get("settings", {}).get("default_fade")
-        wait = (float(fs) if fs is not None else 0.5) + 1.5
+        bridge = self._bridge()
         for d in device_ids:
-            if self._is_fan(d):
+            # a fan has no level to read back, and a shade takes far longer than a fade to arrive: lights only
+            if self._is_fan(d) or ((bridge.devices.get(d) if bridge else None) or {}).get("type") in _COVER_TYPES:
                 continue
+            if d.startswith(BRIDGE_PREFIXES) and self.hue_verify is not None:
+                waits: tuple = ((float(fs) if fs is not None else 0.0) + OFF_FIRST_LOOK, *OFF_LATER_LOOKS)
+            else:
+                wait = (float(fs) if fs is not None else 0.5) + 1.5
+                waits = (wait, wait + 1)
             old = self._offcheck.pop(d, None)
             if old is not None and not old.done():
                 old.cancel()
-            self._offcheck[d] = asyncio.create_task(self._check_off(d, self._seq.get(d, 0), wait))
+            self._offcheck[d] = asyncio.create_task(self._check_off(d, self._seq.get(d, 0), waits))
 
-    async def _check_off(self, device_id: str, seq: int, wait: float) -> None:
+    async def _lit_now(self, device_id: str, adopt: bool) -> int:
+        """How lit a light really is. A Lutron light's current_state is the bridge's own report, so it is the
+        answer. A Hue or Nanoleaf lamp's is not (see hue_verify), so its bridge is asked; if that fails, the
+        last thing the bridge said is what the backend answers with, and failing that current_state."""
+        if device_id.startswith(BRIDGE_PREFIXES) and self.hue_verify is not None:
+            try:
+                got = await self.hue_verify(device_id, adopt)
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("%s: could not look at it: %s", device_id, exc)
+                got = None
+            if got is not None:
+                return int(got)
+        return self._level_of(device_id)
+
+    async def _check_off(self, device_id: str, seq: int, waits: tuple) -> None:
         try:
-            for attempt in range(2):
-                await asyncio.sleep(wait + attempt)
-                if self._seq.get(device_id) != seq or self._level_of(device_id) <= 0:
+            waited = 0.0
+            for attempt, wait in enumerate(waits):
+                await asyncio.sleep(wait)
+                waited += wait
+                if self._seq.get(device_id) != seq:
                     return
-                LOG.warning("%s still on %ss after it was turned off; sending off again", device_id, round(wait + attempt, 1))
+                last = attempt >= OFF_RESENDS
+                # The look happens under the light's lock, so no newer command can land between it and the resend,
+                # and a last look that puts "still on" back in front of the app cannot overwrite a newer command.
                 async with self._locks.setdefault(device_id, asyncio.Lock()):
                     if self._seq.get(device_id) != seq:
                         return
+                    if await self._lit_now(device_id, adopt=last) <= 0:
+                        return
+                    if last:
+                        LOG.warning("%s is still on %ss after it was turned off and sent off %d more times; showing it as on",
+                                    device_id, round(waited, 1), OFF_RESENDS)
+                        return
+                    LOG.warning("%s still on %ss after it was turned off; sending off again", device_id, round(waited, 1))
                     try:
                         await self._send_level(device_id, 0, 0)
                     except Exception as exc:  # noqa: BLE001
@@ -462,16 +519,25 @@ class ActionRunner:
     async def _ramp(self, device_id: str, step: int, edge: int) -> None:
         """Step a lamp towards `edge` until somebody stops it. The fade on each step is the tick itself,
         so the lamp is always moving rather than arriving in jumps, and the loop ends on its own at the
-        edge so a button held past the end costs nothing."""
+        edge so a button held past the end costs nothing.
+
+        Each step is sized by the time it covers rather than one step per tick. Hue commands are paced (hue.py
+        LIGHT_GAP), so with several lamps held at once each lamp's turn comes round less often than a tick, and
+        a fixed step per turn made a hold slower the more lamps it held."""
         try:
+            tick = RAMP_MS / 1000
+            last = time.monotonic()
             while True:
-                await asyncio.sleep(RAMP_MS / 1000)
+                await asyncio.sleep(tick)
+                at = time.monotonic()
+                ticks = max(1.0, (at - last) / tick)
+                last = at
                 now = self._level_of(device_id)
-                nxt = max(0, min(100, now + step))
+                nxt = max(0, min(100, now + int(round(step * ticks))))
                 nxt = max(edge, nxt) if step < 0 else min(edge, nxt)
                 if nxt == now:
                     return
-                await self._set_level(device_id, nxt, RAMP_MS / 1000)
+                await self._set_level(device_id, nxt, tick * ticks)
         except asyncio.CancelledError:
             pass
         except Exception as exc:  # noqa: BLE001
@@ -713,8 +779,8 @@ class ActionRunner:
             if level == "toggle":
                 any_on = any(self._level_of(d) > 0 for d in targets)
                 if any_on:
+                    # each off is checked by _set_level itself
                     await asyncio.gather(*(self._set_level(d, 0, fade) for d in targets), return_exceptions=True)
-                    self._make_sure_off(targets, fade)
                 else:
                     await asyncio.gather(*(self._set_level(d, self.on_level_for(d, a["target"]), fade) for d in targets))
                 return None
@@ -724,8 +790,6 @@ class ActionRunner:
             if level == "off":
                 level = 0
             got = await asyncio.gather(*(self._set_level(d, int(level), fade) for d in targets), return_exceptions=True)
-            if int(level) == 0:
-                self._make_sure_off(targets, fade)
             errs = [(d, e) for d, e in zip(targets, got) if isinstance(e, Exception)]
             if errs:
                 raise RuntimeError(f"{len(errs)} of {len(targets)} didn't answer ({errs[0][0]}: {errs[0][1]})")

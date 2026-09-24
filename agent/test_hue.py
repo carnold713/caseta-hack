@@ -1,8 +1,11 @@
-"""The Hue client against a small fake bridge: pairing, loading, setting a level, colour and white temperature, live events.
+"""The Hue client against a small fake bridge: pairing, loading, setting a level, colour and white temperature, live events,
+and the pacing queue: light commands a tenth of a second apart, newest wins per lamp, a whole room off in one command, and
+reading a lamp back from the bridge to check an off.
 Run: python test_hue.py  (needs aiohttp)"""
 import asyncio
 import json
 import tempfile
+import time
 from pathlib import Path
 
 from aiohttp import web
@@ -34,7 +37,8 @@ def make_app(state):
         if kind == "room":
             return web.json_response({"data": [
                 {"id": rid, "type": "room", "metadata": {"name": r["name"]},
-                 "children": [{"rid": c, "rtype": "device"} for c in r["children"]]}
+                 "children": [{"rid": c, "rtype": "device"} for c in r["children"]],
+                 "services": [{"rid": r["grouped"], "rtype": "grouped_light"}] if r.get("grouped") else []}
                 for rid, r in state["rooms"].items()]})
         if kind == "light":
             # served from state, like the rooms below: a bridge that does not remember what it accepted
@@ -71,8 +75,34 @@ def make_app(state):
     async def put_light(request):
         lid, body = request.match_info["id"], await request.json()
         state["puts"].append((lid, body))
+        state.setdefault("put_times", []).append(time.monotonic())
+        await asyncio.sleep(state.get("put_delay", 0))   # a bridge taking its time to answer
+        lose = state.setdefault("lose", {})
+        if lose.get(lid):
+            # accepted and answered 200, and never reaches the lamp: what a burst over Zigbee can do
+            lose[lid] -= 1
+            return web.json_response({"data": [{"rid": lid, "rtype": "light"}]})
         apply_light(lid, body)
         return web.json_response({"data": [{"rid": lid, "rtype": "light"}]})
+
+    async def get_light(request):
+        lid = request.match_info["id"]
+        state["gets"] = state.get("gets", 0) + 1
+        if state.get("gets_fail"):
+            return web.json_response({"errors": [{"description": "busy"}]}, status=503)
+        if lid not in state["lights"]:
+            return web.json_response({"errors": [{"description": "no such light"}]}, status=404)
+        return web.json_response({"data": [state["lights"][lid]]})
+
+    async def put_grouped(request):
+        gid, body = request.match_info["id"], await request.json()
+        state.setdefault("group_puts", []).append((gid, body))
+        state.setdefault("put_times", []).append(time.monotonic())
+        room = next(r for r in state["rooms"].values() if r.get("grouped") == gid)
+        for L in state["lights"].values():
+            if L["owner"]["rid"] in room["children"]:
+                apply_light(L["id"], body)
+        return web.json_response({"data": [{"rid": gid, "rtype": "grouped_light"}]})
 
     def claim(kids, mine):
         """A real bridge keeps a device in one room only: naming it here takes it out of wherever it was."""
@@ -157,6 +187,8 @@ def make_app(state):
     app.router.add_post("/api", api)
     app.router.add_get("/clip/v2/resource/{kind}", resource)
     app.router.add_put("/clip/v2/resource/light/{id}", put_light)
+    app.router.add_get("/clip/v2/resource/light/{id}", get_light)
+    app.router.add_put("/clip/v2/resource/grouped_light/{id}", put_grouped)
     app.router.add_post("/clip/v2/resource/room", post_room)
     app.router.add_put("/clip/v2/resource/room/{id}", put_room)
     app.router.add_delete("/clip/v2/resource/room/{id}", delete_room)
@@ -321,4 +353,136 @@ async def main():
     print("hue: ok")
 
 
+def lamp(n, room_dev):
+    return {"id": f"lamp-{n}", "type": "light", "owner": {"rid": room_dev, "rtype": "device"}, "metadata": {"name": f"Lamp {n}"},
+            "on": {"on": True}, "dimming": {"brightness": 80}}
+
+
+async def pacing():
+    """Light commands through the pacing queue, a whole room off in one command, and reading a lamp back.
+
+    A Hue bridge answers 200 when it has accepted a command, not when the lamp has acted, and a burst of them at
+    once is what loses one on the way to a lamp. The owner saw exactly that: a Pico Off over several Hue lamps left
+    one on, and a second press turned it off."""
+    # The den has seven lamps, so six of them going off is not the whole room and goes lamp by lamp. The hall has
+    # three and a grouped_light, so all three going off is one command.
+    den = [f"den-{i}" for i in range(7)]
+    hall = [f"hall-{i}" for i in range(3)]
+    lights = {}
+    for i, dev in enumerate(den + hall):
+        L = lamp(i, dev)
+        lights[L["id"]] = L
+    state = {"pair_calls": 0, "puts": [], "scenes": [], "posts": [], "room_puts": [], "deleted": [],
+             "light_reads": 0, "stream_opens": 0, "drop": False, "send_events": False,
+             "rooms": {"den": {"name": "Den", "children": den, "grouped": "gl-den"},
+                       "hall": {"name": "Hall", "children": hall, "grouped": "gl-hall"}},
+             "lights": lights}
+    runner = web.AppRunner(make_app(state))
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # noqa: SLF001
+    bad = 0
+
+    def check(name, ok, got=""):
+        nonlocal bad
+        bad += not ok
+        print(("PASS" if ok else "FAIL"), name, "" if ok else got)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        hue = Hue(Path(tmp), scheme="http")
+        hue.host, hue.key = f"127.0.0.1:{port}", "KEY123"
+        await hue.load()
+        check("a room's grouped_light is read with it", hue.areas[hid("hall")]["grouped"] == "gl-hall", hue.areas)
+        check("what the bridge said at load is kept apart", hue.devices[hid("lamp-0")]["_on"] is True, hue.devices[hid("lamp-0")])
+
+        # ----- a burst of six offs, one lamp asked twice before its first command went out -----
+        state["puts"].clear()
+        state["put_times"] = []
+        order = [hid(f"lamp-{i}") for i in range(6)]
+        asks = [hue.set_level(d, 0, None) for d in order[:3]]
+        asks.append(hue.set_level(order[3], 60, None))      # lamp 3 is asked for 60...
+        asks += [hue.set_level(d, 0, None) for d in order[4:]]
+        asks.append(hue.set_level(order[3], 0, None))       # ...and then off, before the 60 went out
+        t0 = time.monotonic()
+        await asyncio.gather(*asks)
+        took = time.monotonic() - t0
+        sent = [lid for lid, _ in state["puts"]]
+        check("six lamps, six commands: the lamp asked twice is sent once", len(sent) == 6, sent)
+        check("in the order they were asked", sent == [f"lamp-{i}" for i in range(6)], sent)
+        check("the lamp asked twice hears only the newest", state["puts"][3] == ("lamp-3", {"on": {"on": False}}), state["puts"][3])
+        gaps = [b - a for a, b in zip(state["put_times"], state["put_times"][1:])]
+        check("a tenth of a second apart, at the bridge", all(g >= 0.085 for g in gaps), [round(g, 3) for g in gaps])
+        check("no more than ten a second", all(len([t for t in state["put_times"] if s <= t < s + 1.0]) <= 10 for s in state["put_times"]))
+        check("six lamps take about half a second, not a burst", 0.45 <= took < 1.0, round(took, 3))
+        check("every lamp is off at the bridge", all(not lights[f"lamp-{i}"]["on"]["on"] for i in range(6)))
+        check("and the lamp asked twice reads off here", hue.devices[order[3]]["current_state"] == 0, hue.devices[order[3]])
+        check("the den was not grouped: one of its lamps was not asked", not state.get("group_puts"), state.get("group_puts"))
+        check("so the lamp nobody asked about is still on", lights["lamp-6"]["on"]["on"] is True)
+
+        # ----- a new command for a lamp whose command is in flight goes after it, not instead of it -----
+        state["puts"].clear()
+        state["put_delay"] = 0.2
+        first = asyncio.ensure_future(hue.set_level(order[0], 40, None))
+        await asyncio.sleep(0.15)       # the 40 has reached the bridge, which has not answered yet
+        await asyncio.gather(first, hue.set_level(order[0], 0, None))
+        state["put_delay"] = 0
+        check("an in-flight command and a newer one both go, oldest first",
+              [b for _, b in state["puts"]] == [{"on": {"on": True}, "dimming": {"brightness": 40}}, {"on": {"on": False}}], state["puts"])
+
+        # ----- the whole hall off: one grouped command -----
+        await asyncio.sleep(1.05)       # clear of the one-a-second room limit from anything before
+        state["puts"].clear()
+        state["group_puts"] = []
+        hall_ids = [hid(f"lamp-{7 + i}") for i in range(3)]
+        await asyncio.gather(*(hue.set_level(d, 0, 2.0) for d in hall_ids))
+        check("every lamp of a room going off is one grouped_light command",
+              state["group_puts"] == [("gl-hall", {"on": {"on": False}, "dynamics": {"duration": 2000}})] and not state["puts"],
+              (state["group_puts"], state["puts"]))
+        check("and each lamp in it is off, here and at the bridge",
+              all(hue.devices[d]["current_state"] == 0 for d in hall_ids) and all(not lights[f"lamp-{7 + i}"]["on"]["on"] for i in range(3)))
+        # the same again inside a second is not a second room command: Hue asks for one a second at most
+        for i in range(3):
+            lights[f"lamp-{7 + i}"]["on"] = {"on": True}
+        state["group_puts"].clear()
+        await asyncio.gather(*(hue.set_level(d, 0, None) for d in hall_ids))
+        check("a second room off within the second goes lamp by lamp", not state["group_puts"] and len(state["puts"]) == 3,
+              (state["group_puts"], state["puts"]))
+        # two of the three is not the room
+        await asyncio.sleep(1.05)
+        for i in range(3):
+            lights[f"lamp-{7 + i}"]["on"] = {"on": True}
+        state["puts"].clear()
+        await asyncio.gather(*(hue.set_level(d, 0, None) for d in hall_ids[:2]))
+        check("part of a room is never grouped", not state["group_puts"] and len(state["puts"]) == 2, (state["group_puts"], state["puts"]))
+        check("so the third lamp stays on", lights["lamp-9"]["on"]["on"] is True)
+        # an on is never grouped either, even for the whole room
+        state["puts"].clear()
+        await asyncio.gather(*(hue.set_level(d, 50, None) for d in hall_ids))
+        check("a room coming on goes lamp by lamp", not state["group_puts"] and len(state["puts"]) == 3, state["puts"])
+
+        # ----- reading a lamp back: what the bridge says, not what was last sent -----
+        lost = hid("lamp-5")
+        lights["lamp-5"]["on"] = {"on": True}
+        state["lose"] = {"lamp-5": 1}
+        await hue.set_level(lost, 0, None)
+        check("an accepted command reads as off here at once", hue.devices[lost]["current_state"] == 0)
+        check("but the lamp never heard it", lights["lamp-5"]["on"]["on"] is True)
+        check("reading it back says it is still on", await hue.verify(lost) == 80)
+        check("a plain look leaves what the app is shown alone", hue.devices[lost]["current_state"] == 0)
+        check("adopting it puts the truth in front of the app", await hue.verify(lost, adopt=True) == 80 and hue.devices[lost]["current_state"] == 80)
+        await hue.set_level(lost, 0, None)
+        check("a lamp that did go off reads off", await hue.verify(lost) == 0)
+        # the bridge cannot be asked: the event stream's last word stands in
+        state["gets_fail"] = True
+        hue.devices[lost]["_on"], hue.devices[lost]["_bri"] = True, 30.0
+        check("when the bridge will not answer, the event stream stands in", await hue.verify(lost) == 30)
+        state["gets_fail"] = False
+        await hue.stop()
+    await runner.cleanup()
+    print("hue pacing: ok" if not bad else f"hue pacing: {bad} FAILED")
+    return bad
+
+
 asyncio.run(main())
+raise SystemExit(1 if asyncio.run(pacing()) else 0)

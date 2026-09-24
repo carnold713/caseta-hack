@@ -34,6 +34,15 @@ __all__ = ["Hue", "color_state", "hid"]   # color_state lives in color.py now; r
 LOG = logging.getLogger("hue")
 DISCOVERY_URL = "https://discovery.meethue.com/"
 PAIR_SECONDS = 45
+# Hue asks for no more than about ten light commands a second, and one per second for a room. A bridge answers
+# 200 the moment it accepts a command, not when the lamp has acted, so a burst faster than that (a Pico press over
+# five lamps sent all at once) is accepted in full and can still lose one on the way to the lamp. Light commands
+# therefore go out one at a time, this far apart, in the order they were asked for.
+LIGHT_GAP = 0.1
+GROUP_GAP = 1.0
+# How long a look at one lamp may take when checking an off. The lamp's own lock is held meanwhile, so a bridge
+# that does not answer must not hold up the next press for long.
+VERIFY_TIMEOUT = 2.0
 
 
 def hid(uuid: str) -> str:
@@ -47,7 +56,7 @@ class Hue:
         self.key: Optional[str] = None
         self.scheme = scheme
         self.devices: Dict[str, dict] = {}     # hue_<light> -> pylutron-shaped device dict
-        self.areas: Dict[str, dict] = {}       # hue_<room> -> {name, parent_id}
+        self.areas: Dict[str, dict] = {}       # hue_<room> -> {name, parent_id, children, grouped}
         self.scenes: Dict[str, dict] = {}      # hue_<scene> -> {name}
         self._on_state = on_state
         self._on_loaded = on_loaded
@@ -55,6 +64,12 @@ class Hue:
         self._events: Optional[asyncio.Task] = None
         self.error: Optional[str] = None
         self.loaded_at: float = 0.0
+        # The pacing queue (see LIGHT_GAP). _waiting holds each lamp's command that has not gone out yet, by the
+        # lamp's light id, so a newer command for the same lamp folds into it instead of queueing a second one.
+        self._pace: Optional[asyncio.Lock] = None
+        self._waiting: Dict[str, dict] = {}
+        self._sent_at = 0.0
+        self._group_at = 0.0
         try:
             saved = json.loads(self.file.read_text())
             self.host, self.key = saved.get("host"), saved.get("key")
@@ -205,7 +220,9 @@ class Hue:
         for room in rooms:
             kids = [c["rid"] for c in room.get("children", []) or [] if c.get("rtype") == "device" and c.get("rid")]
             # The children are kept: moving a lamp between rooms is a rewrite of two rooms' children lists.
-            areas[hid(room["id"])] = {"name": (room.get("metadata") or {}).get("name") or "Room", "parent_id": None, "children": kids}
+            # A room's grouped_light is how the whole room is switched in one command (see _send_waiting).
+            grouped = next((sv["rid"] for sv in room.get("services", []) or [] if sv.get("rtype") == "grouped_light" and sv.get("rid")), None)
+            areas[hid(room["id"])] = {"name": (room.get("metadata") or {}).get("name") or "Room", "parent_id": None, "children": kids, "grouped": grouped}
             for rid in kids:
                 device_room[rid] = hid(room["id"])
         devices: Dict[str, dict] = {}
@@ -220,7 +237,13 @@ class Hue:
                 "type": "HueLight" if dimmable else "HueSwitch", "model": "Hue", "serial": lt["id"],
                 "zone": lt["id"], "area": device_room.get(owner), "current_state": int(round(bri)) if on else 0, "fan_speed": None,
                 "hue_owner": owner, "color": _color_of(lt.get("color")), "ct": _ct_of(lt.get("color_temperature")),
+                # What the bridge itself last said, kept apart from current_state, which a command sets the moment
+                # the bridge accepts it. The event stream keeps these up to date; checking an off reads them when
+                # the bridge cannot be asked directly.
+                "_on": on,
             }
+            if dimmable and bri > 0:
+                devices[did]["_bri"] = bri
             devices[did]["color_mode"] = _mode_of(devices[did], bool((lt.get("color_temperature") or {}).get("mirek_valid")))
         sc: Dict[str, dict] = {}
         for s in scenes:
@@ -233,6 +256,129 @@ class Hue:
         if self._on_loaded:
             self._on_loaded()
 
+    # ----- pacing: light commands go out one at a time, LIGHT_GAP apart, in the order asked -----
+    async def _put_light(self, device_id: str, body: dict) -> None:
+        """Send one lamp's command through the pacing queue and return once the bridge has accepted it.
+
+        A lamp that already has a command waiting its turn has this one folded into it (see _fold): it keeps its
+        place in the queue and the bridge hears only the newest thing asked of the lamp. So the queue never sends
+        something older after something newer, and never sends an overtaken command by itself."""
+        d = self.devices.get(device_id)
+        if not d:
+            raise RuntimeError(f"unknown Hue light {device_id}")
+        zone = str(d["zone"])
+        entry = self._waiting.get(zone)
+        if entry is not None and not entry["done"].done():
+            entry["body"] = _fold(entry["body"], body)
+        else:
+            loop = asyncio.get_running_loop()
+            entry = {"device_id": device_id, "zone": zone, "body": dict(body), "done": loop.create_future()}
+            entry["done"].add_done_callback(_retrieved)
+            self._waiting[zone] = entry
+            # The send is a task of its own, so a caller that stops waiting (a hold let go mid-ramp) cannot
+            # take down a command somebody else folded into it.
+            loop.create_task(self._send_waiting(entry))
+        await asyncio.shield(entry["done"])
+
+    async def _send_waiting(self, entry: dict) -> None:
+        if self._pace is None:
+            self._pace = asyncio.Lock()
+        batch = [entry]
+        try:
+            async with self._pace:     # asyncio's lock wakes its waiters first come, first served
+                if entry["done"].done():
+                    return             # it already went out with the rest of its room
+                gap = self._sent_at + LIGHT_GAP - time.monotonic()
+                if gap > 0:
+                    await asyncio.sleep(gap)
+                batch = self._room_batch(entry)
+                for e in batch:
+                    if self._waiting.get(e["zone"]) is e:
+                        del self._waiting[e["zone"]]
+                try:
+                    if len(batch) > 1:
+                        room = self.areas[self.devices[entry["device_id"]]["area"]]
+                        LOG.info("hue: %s off in one command for its %d lamps", room.get("name"), len(batch))
+                        await self._put(f"/clip/v2/resource/grouped_light/{room['grouped']}", entry["body"])
+                        self._group_at = time.monotonic()
+                    else:
+                        await self._put(f"/clip/v2/resource/light/{entry['zone']}", entry["body"])
+                finally:
+                    self._sent_at = time.monotonic()
+        except asyncio.CancelledError:
+            for e in batch:
+                if self._waiting.get(e["zone"]) is e:
+                    del self._waiting[e["zone"]]
+                e["done"].cancel()
+            raise
+        except Exception as exc:  # noqa: BLE001
+            for e in batch:
+                if self._waiting.get(e["zone"]) is e:
+                    del self._waiting[e["zone"]]
+                if not e["done"].done():
+                    e["done"].set_exception(exc)
+            return
+        for e in batch:
+            if not e["done"].done():
+                e["done"].set_result(None)
+
+    def _room_batch(self, entry: dict) -> List[dict]:
+        """The whole room in one command when that is what is being asked: every lamp of one Hue room waiting to
+        be switched off the same way. A room's grouped_light reaches all of them as a single broadcast, the most
+        reliable way to put a room out, where a burst of lamp commands is exactly what loses one.
+
+        Only an off, only when every lamp the room holds is waiting for it (a grouped command switches the whole
+        room, lamps nobody asked about included), and no more than one per GROUP_GAP, Hue's own limit for rooms.
+        Anything else goes lamp by lamp. Each lamp still reports its own state on the event stream, and the check
+        after an off still looks at each one by itself."""
+        body = entry["body"]
+        if set(body) - {"on", "dynamics"} or (body.get("on") or {}).get("on") is not False:
+            return [entry]
+        area = (self.devices.get(entry["device_id"]) or {}).get("area")
+        room = self.areas.get(area) if area else None
+        if not room or not room.get("grouped") or time.monotonic() - self._group_at < GROUP_GAP:
+            return [entry]
+        batch: List[dict] = []
+        for d in self.devices.values():
+            if d.get("area") != area:
+                continue
+            e = self._waiting.get(str(d["zone"]))
+            if e is None or e["done"].done() or e["body"] != body:
+                return [entry]
+            batch.append(e)
+        return batch if len(batch) > 1 else [entry]
+
+    # ----- checking an off against the bridge -----
+    async def verify(self, device_id: str, adopt: bool = False) -> Optional[int]:
+        """The level the lamp is really at, 0 when it is off, asked of the bridge itself.
+
+        current_state cannot answer this. It is set the moment the bridge accepts a command, so the app hears at
+        once, but a command the bridge accepted and then lost on the way to the lamp leaves the lamp as it was
+        and the event stream silent, and current_state goes on saying off. If the bridge cannot be asked, what
+        its event stream last reported stands in. `adopt` also makes the answer what the app is shown, for a
+        lamp that will not go off. None when there is nothing to go on."""
+        d = self.devices.get(device_id)
+        if not d:
+            return None
+        try:
+            data = await asyncio.wait_for(self._get(f"/clip/v2/resource/light/{d['zone']}"), VERIFY_TIMEOUT)
+            lt = ((data or {}).get("data") or [None])[0]
+            if not lt or "on" not in lt:
+                raise RuntimeError("the bridge did not describe it")
+            d["_on"] = bool((lt.get("on") or {}).get("on"))
+            if (lt.get("dimming") or {}).get("brightness") is not None:
+                d["_bri"] = float(lt["dimming"]["brightness"])
+        except Exception as exc:  # noqa: BLE001
+            LOG.info("hue: could not read %s back (%s); going by its event stream", d.get("name"), exc)
+        if d.get("_on") is None:
+            return None
+        level = max(1, int(round(d.get("_bri") or 100))) if d["_on"] else 0
+        if adopt and d.get("current_state") != level:
+            d["current_state"] = level
+            if self._on_state:
+                self._on_state(device_id)
+        return level
+
     # ----- control -----
     async def set_level(self, device_id: str, level: int, fade_s: Optional[float] = None) -> None:
         d = self.devices.get(device_id)
@@ -243,7 +389,7 @@ class Hue:
             body["dimming"] = {"brightness": max(1, min(100, int(level)))}
         if fade_s:
             body["dynamics"] = {"duration": int(float(fade_s) * 1000)}
-        await self._put(f"/clip/v2/resource/light/{d['zone']}", body)
+        await self._put_light(device_id, body)
         d["current_state"] = int(level)
         if self._on_state:
             self._on_state(device_id)
@@ -274,7 +420,7 @@ class Hue:
             raise RuntimeError(f"{d.get('name')} cannot do that colour")
         if fade_s:
             body["dynamics"] = {"duration": int(float(fade_s) * 1000)}
-        await self._put(f"/clip/v2/resource/light/{d['zone']}", body)
+        await self._put_light(device_id, body)
         if level is not None:
             d["current_state"] = int(level)
         elif d["current_state"] <= 0:
@@ -307,7 +453,7 @@ class Hue:
             body["dimming"] = {"brightness": max(1, min(100, int(level)))}
         if fade_s and not while_off:
             body["dynamics"] = {"duration": int(float(fade_s) * 1000)}
-        await self._put(f"/clip/v2/resource/light/{d['zone']}", body)
+        await self._put_light(device_id, body)
         ct["mirek"] = mirek
         d["color_mode"] = "ct"
         if level is not None and not while_off:
@@ -478,6 +624,28 @@ class Hue:
                 d["current_state"] = int(round(bri)) if on else 0
                 if self._on_state:
                     self._on_state(did)
+
+
+# ----- the pacing queue's helpers -----
+def _fold(old: dict, new: dict) -> dict:
+    """Two commands for one lamp, as the one command the bridge needs to hear. The newer wins every field it
+    names, and its timing is the timing. An off leaves nothing older worth sending; a colour replaces a white
+    and a white replaces a colour, as they would on the lamp."""
+    if (new.get("on") or {}).get("on") is False:
+        return dict(new)
+    out = {k: v for k, v in old.items() if k != "dynamics"}
+    if "color" in new:
+        out.pop("color_temperature", None)
+    if "color_temperature" in new:
+        out.pop("color", None)
+    out.update(new)
+    return out
+
+
+def _retrieved(fut: "asyncio.Future") -> None:
+    """Mark a send's outcome as seen, so a command nobody was still waiting for does not log a stray warning."""
+    if not fut.cancelled():
+        fut.exception()
 
 
 # ----- colour and white temperature, as the device dict carries them -----

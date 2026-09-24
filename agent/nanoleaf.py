@@ -69,6 +69,7 @@ POLL_SECONDS = 5          # no event stream here (unlike Hue's CLIP v2) and no L
                           # is ever noticed. Every other backend reports a change the moment it happens, so at 20s
                           # these lights were the one place the app could sit visibly wrong for a third of a
                           # minute. One small LAN GET per panel at 5s is cheap and keeps them in step.
+VERIFY_TIMEOUT = 2.0      # how long a look at one panel may take when checking an off (see verify)
 
 
 def nid(serial: str) -> str:
@@ -321,6 +322,33 @@ class Nanoleaf:
                     raise
                 except Exception as exc:  # noqa: BLE001
                     self.errors[e["serial"]] = str(exc)
+
+    # ----- checking an off against the panel -----
+    async def verify(self, device_id: str, adopt: bool = False) -> Optional[int]:
+        """The level the panel is really at, 0 when it is off, asked of the controller itself.
+
+        set_level writes current_state as soon as the controller accepts a PUT, the same way Hue's does, and there
+        is no event stream here to say otherwise: until the next poll, an off that was accepted and not acted on
+        reads as off. `adopt` also makes the answer what the app is shown, for a panel that will not go off.
+        None when the controller cannot be reached; the caller then has only current_state to go on."""
+        d = self.devices.get(device_id)
+        if d is None:
+            return None
+        try:
+            e = self._entry(device_id)
+            info = await asyncio.wait_for(self._get_info(e["host"], e["token"]), VERIFY_TIMEOUT)
+        except Exception as exc:  # noqa: BLE001
+            LOG.info("nanoleaf: could not read %s back: %s", d.get("name"), exc)
+            return None
+        state = info.get("state") or {}
+        on = bool((state.get("on") or {}).get("value"))
+        bri = (state.get("brightness") or {}).get("value")
+        level = max(1, int(bri if bri is not None else 100)) if on else 0
+        if adopt and d.get("current_state") != level:
+            d["current_state"] = level
+            if self._on_state:
+                self._on_state(device_id)
+        return level
 
     # ----- control -----
     async def _send_on(self, host: str, token: str) -> None:

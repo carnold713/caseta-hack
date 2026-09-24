@@ -338,6 +338,11 @@ rooms the app owns: `a:<room>` may name one of `settings.rooms` (it falls back t
 older connector simply goes on reading the bridge), and it takes the `room_*` commands that ask each bridge to
 keep up. 0.10.0 is the first that understands "Follow the day": it holds `settings.follow_day`, keeps every
 following lamp that is on at the white the day asks for, and reports what it is doing back to the app.
+0.23.0 makes an off stick on Hue and Nanoleaf lamps. A Hue bridge answers as soon as it accepts a command, not
+when the lamp has acted, so a Pico Off sent to several lamps at once could lose one and still read as off. Hue
+light commands now go out about ten a second in the order asked, the newest winning for a lamp asked twice, and a
+whole Hue room going off is one room command. Every off, from any button, scene, timer or screen, is then checked
+by asking the lamp's own bridge, sent again if it is still on, and shown as on in the app if it will not go off.
 
 ## Configure
 
@@ -512,4 +517,6 @@ python3 test_followscene.py a scene that says "follow the day" (needs aiohttp)
 python3 test_followfade.py  how fast the white arrives, and why it is not one answer
 python3 test_beforeon.py    a lamp comes on already the colour it is going to be (needs aiohttp)
 python3 test_restore.py     back the way it was: levels, colours, and which lights belong to the press
+python3 test_offmeansoff.py every off is checked and sent again if it did not take, Hue and Nanoleaf
+                            lamps read back from their bridge (needs aiohttp)
 ```

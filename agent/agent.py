@@ -41,7 +41,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.22.0"
+VERSION = "0.23.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -178,6 +178,7 @@ class Agent:
         self.runner.hue_set = self._level_set_bridge
         self.runner.hue_color = self._color_set
         self.runner.hue_scene = self._scene_recall
+        self.runner.hue_verify = self._level_verify
         self.runner.memory_file = DATA_DIR / "last_on.json"
         self.runner.load_memory()
         self._index_bindings()
@@ -312,6 +313,13 @@ class Agent:
         if backend is None:
             raise RuntimeError(f"no light backend for {device_id}")
         await backend.set_level(device_id, level, fade_s)
+
+    async def _level_verify(self, device_id: str, adopt: bool = False) -> Optional[int]:
+        """Ask a lamp's own backend what it is really doing, for checking an off (engine._check_off)."""
+        backend = self._backend_for(device_id)
+        if backend is None or not hasattr(backend, "verify"):
+            return None
+        return await backend.verify(device_id, adopt)
 
     async def _color_set(self, device_id: str, kelvin: Optional[float] = None, hex: Optional[str] = None, fade_s: Optional[float] = None, level: Optional[int] = None) -> None:  # noqa: A002
         backend = self._backend_for(device_id)
