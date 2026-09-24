@@ -27,7 +27,7 @@ function cardGlow(c, aid, night) {
 export function view(c) {
   const { data, H, S, esc, icon } = c;
   const scenes = data.presets().length + data.lutronScenes().length;
-  const starred = (S.config.favorites || []).filter(t => t.startsWith('p:') || t.startsWith('s:')).length;
+  const pinned = (S.config.favorites || []).filter(t => t.startsWith('p:') || t.startsWith('s:')).length;
   const rooms = data.areas();
   const night = nightNow(c);
   const card = a => {
@@ -56,7 +56,7 @@ export function view(c) {
       <button class="scenes-card" data-go="scenes">
         <span class="ib"><img src="${c.artSrc('lutron-color')}" alt=""></span>
         <span class="t">All scenes</span>
-        <span class="d">${scenes === 1 ? '1 scene' : `${scenes} scenes`}${starred ? ` · ${starred} starred` : ''}</span>
+        <span class="d">${scenes === 1 ? '1 scene' : `${scenes} scenes`}${pinned ? ` · ${pinned} pinned` : ''}</span>
         <span class="ch">${icon('chev', 20, 1.8)}</span>
       </button>
       ${rooms.map(card).join('')}

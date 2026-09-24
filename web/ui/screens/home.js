@@ -1,4 +1,4 @@
-// 02 · Home. The whole house, the starred lights and scenes, the rooms. Read from the Figma frame (12732:48971).
+// 02 · Home. The whole house, what is pinned (lights, rooms, scenes), the rooms. Read from the Figma frame (12732:48971).
 // Under the rooms: what is coming up within the hour, and the one suggestion or problem (next.js). The dot beside
 // the greeting, and the offline card, open the connection sheet (conn.js).
 //
@@ -7,7 +7,8 @@
 import { track } from '/ui/gesture.js';
 import { glowHTML } from '/ui/glow.js';
 import { reduced } from '/ui/motion.js';
-import { tile, sceneChip, roomStatus, roomPicture, offlineCard } from '/ui/screens/parts.js';
+import { sceneChip, roomStatus, roomPicture, offlineCard } from '/ui/screens/parts.js';
+import { pinnedHTML, wirePins, pinActions, pinsLeave } from '/ui/pins.js';
 import { homeCards, greetingSheet, shouldGreet, nextActions } from '/ui/screens/next.js';
 import { connActions } from '/ui/screens/conn.js';
 
@@ -119,7 +120,6 @@ export function view(c) {
     : `${esc(greeting(c))}${st === 'reconnecting' ? '<span class="conn-dot" aria-label="Reconnecting"></span>' : ''}`;
   const empty = !data.devices().length;
 
-  const starred = H.rowLights();
   const favScenes = (S.config.favorites || []).filter(t => t.startsWith('p:') || t.startsWith('s:')).map(t => {
     if (t.startsWith('p:')) { const p = data.presets().find(x => x.id === t.slice(2)); return p ? sceneChip(c, t, H.sceneShortName(p) === p.name ? p.name : p.name, p.levels) : ''; }
     const s = (S.inv.scenes || {})[t.slice(2)]; return s ? sceneChip(c, t, s.name, null) : '';
@@ -156,7 +156,7 @@ export function view(c) {
       </div>
     </section>
 
-    ${starred.length ? `<div class="t-over sec">Starred</div><div class="tile-strip" data-keep="starred">${starred.map(d => tile(c, d)).join('')}</div>` : ''}
+    ${empty ? '' : pinnedHTML(c)}
     ${favScenes.length ? `<div class="chip-row" data-keep="scenes">${favScenes.join('')}<button class="chip more" data-go="scenes">All scenes</button></div>` : ''}
 
     ${rooms.length ? `<div class="t-over sec">Rooms</div><div class="tile-strip rooms" data-keep="rooms">${rooms.map(a => `
@@ -176,6 +176,7 @@ export function after(c, r, root) {
     c.ui.greeted = true;
     c.openSheet({ ...greetingSheet(c), key: 'greet', onClose: () => { c.S.config.settings.greeted = true; c.save('', { quiet: true }); } });
   }
+  wirePins(c, root);
   const bar = root.querySelector('[data-drag="house"]');
   countTo(c, root.querySelector('[data-hlv]'));
   if (!bar) return;
@@ -225,8 +226,8 @@ function countTo(c, el) {
   counting = requestAnimationFrame(step);
 }
 
-// Leaving Home forgets the number shown, so coming back does not count from an old one.
-export function leave() { cancelAnimationFrame(counting); shownHouse = null; }
+// Leaving Home forgets the number shown, so coming back does not count from an old one, and ends editing the pins.
+export function leave(c) { cancelAnimationFrame(counting); shownHouse = null; pinsLeave(c); }
 
 // Under the bar: which lights it moves, by name. A tap on the held button borrows this line to say to hold it.
 function houseCaption(c, lit) {
@@ -254,6 +255,7 @@ function housePills(c, lit) {
 export const actions = {
   ...nextActions,
   ...connActions,
+  ...pinActions,
   // The house on, held: every light when something is already on; from dark, what was on before (the connector
   // remembers) or every light, as Settings says.
   'house-on'(c) { c.ui.houseHint = 0; c.run(c.H.houseOnAction()); },

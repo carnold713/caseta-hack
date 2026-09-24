@@ -4,7 +4,7 @@
 import { track } from '/ui/gesture.js';
 import { CasetaDaylight } from '/data/index.js';
 import { glowHTML, setGlow, whiteStops, colourStops } from '/ui/glow.js';
-import { endsMs } from '/ui/screens/parts.js';
+import { endsMs, pinButton } from '/ui/screens/parts.js';
 import { sheets as lookSheets, actions as lookActions } from '/ui/screens/looks.js';
 import { about, actions as aboutActions } from '/ui/screens/about.js';
 import { view as followView, alsoSheet, actions as followActions, after as followAfter } from '/ui/screens/follow.js';
@@ -109,10 +109,9 @@ const heroFit = name => (name.length > 22 ? 'fit2' : name.length > 14 ? 'fit1' :
 
 function header(c, d) {
   const { icon, esc } = c;
-  const starred = (c.S.config.favorites || []).includes(`d:${d.device_id}`);
   return `<header class="hdr">
     <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
-    <button class="hdr-btn a2 ${starred ? 'starred' : ''}" data-act="star" aria-pressed="${starred}" aria-label="${starred ? 'Starred on Home' : 'Star on Home'}">${icon('star', 22, 1.7)}</button>
+    ${pinButton(c, `d:${d.device_id}`, d.name)}
     <button class="hdr-btn a1" data-go="light/${esc(d.device_id)}/about" aria-label="About this ${d.domain === 'fan' ? 'fan' : d.domain === 'cover' ? 'shade' : 'light'}">${icon('dots', 22, 1.7)}</button>
   </header>`;
 }
@@ -410,12 +409,6 @@ export const actions = {
     const v = Math.max(1, Math.min(100, (c.data.level(r.id) || 0) + Number(el.dataset.by)));
     c.assume([r.id], v); c.soon();
     c.gate.sendLevel(`d:${r.id}`, v);
-  },
-  star(c, el, r) {
-    const t = `d:${r.id}`; const f = c.S.config.favorites || (c.S.config.favorites = []);
-    const i = f.indexOf(t);
-    if (i >= 0) f.splice(i, 1); else f.push(t);
-    c.save(i >= 0 ? 'Taken off Home' : 'Starred on Home');
   },
   'fan-speed'(c, el, r) { fanTo(c, r.id, el.dataset.speed); },
   'fan-step'(c, el, r) {

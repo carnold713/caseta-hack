@@ -28,7 +28,7 @@ function measure() {
   return {
     y: window.scrollY, p: Number(document.getElementById('app').style.getPropertyValue('--hdr-p') || 0),
     bar: r(bar), t: r(t), words, tw: t && t.offsetWidth, th: t && t.offsetHeight, tsw: t && t.scrollWidth, tcw: t && t.clientWidth,
-    back: btn('.back'), a1: btn('.a1'),
+    back: btn('.back'), a1: btn('.a1'), a2: btn('.a2'),
     scrim: cs && { o: Number(cs.opacity), h: parseFloat(cs.height), w: parseFloat(cs.width), mask: cs.maskImage || cs.webkitMaskImage, blur: cs.backdropFilter || cs.webkitBackdropFilter, bg: cs.backgroundColor },
     count: count && { ...r(count), o: Number(getComputedStyle(count).opacity) },
     hscroll: document.documentElement.scrollWidth - innerWidth,
@@ -137,8 +137,10 @@ async function scrollTo(page, y) {
         const c = { x: (m.back.l + m.back.r) / 2, y: m.back.cy, rad: m.back.w / 2 };
         const nx = Math.max(m.t.l, Math.min(c.x, m.t.r)), ny = Math.max(m.t.t, Math.min(c.y, m.t.b));
         worst.back = Math.min(worst.back, Math.hypot(nx - c.x, ny - c.y) - c.rad);
-        // the right circle: where they share any height, the title's box ends before it
-        if (m.t.t < m.a1.b && m.t.b > m.a1.t) worst.right = Math.min(worst.right, m.a1.l - m.t.r);
+        // the nearest circle on the right (a room's pin, beside its ⋯): where they share any height, the title's box
+        // ends before it
+        const rc = m.a2 || m.a1;
+        if (m.t.t < rc.b && m.t.b > rc.t) worst.right = Math.min(worst.right, rc.l - m.t.r);
       }
       check(`${label}: the title never runs under the back circle`, worst.back >= 0, Math.round(worst.back * 10) / 10);
       check(`${label}: nor under the circle on the right`, worst.right >= 0, Math.round(worst.right * 10) / 10);
@@ -161,7 +163,7 @@ async function scrollTo(page, y) {
     await scrollTo(page, 64);
     const lb = await M();
     await shot('room-long-64');
-    check('in the bar it ends before the circle on the right', lb.t.r <= lb.a1.l - 8, { title: lb.t.r, circle: lb.a1.l });
+    check('in the bar it ends before the circles on the right', lb.t.r <= (lb.a2 || lb.a1).l - 8, { title: lb.t.r, circle: (lb.a2 || lb.a1).l });
     // set a size down where it rests (a long name), it still reads 24 in the bar, centred on y 72
     const px24 = await C(() => { const h = document.querySelector('#screen .room-title h1'); return parseFloat(getComputedStyle(h).fontSize) * h.getBoundingClientRect().height / h.offsetHeight; });
     check('and reads 24 px there, centred on y 72, like any title in the bar', near(px24, 24, 0.3) && near(lb.t.cy, 72, 1), { px: px24, cy: lb.t.cy });

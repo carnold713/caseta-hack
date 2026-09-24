@@ -18,14 +18,14 @@
 //   the room     steps aside around the tile, nearest first 0.03 s apart: above up 40, below down 120, beside
 //                sideways 40, fading (0.25 s EASE_IN) and settling to 0.96 (0.32 s EASE_IN_AND_OUT); the tab bar
 //                goes down with it.
-//   the page     arrives in reading order on (0.2, 0.8, 0.2, 1): the star (0.4 s), the room's name (0.5 s), On and Off,
+//   the page     arrives in reading order on (0.2, 0.8, 0.2, 1): the pin (0.4 s), the room's name (0.5 s), On and Off,
 //                the dial (its track, then its arc drawing on, its label and buttons), then the tiles and rows below,
 //                0.05 s apart, rising 24 from 0.96.
 // BACK runs it the other way in 0.45 s on (0.4, 0, 0.2, 1): the page's controls go first (0.13 s EASE_IN), the surface
 // shrinks into the tile and its face comes back only in the last 0.2 s, the halo is drawn back into the tile's glow,
 // the words fly back and cross in the last 0.15 s, and the room returns around it, nearest first.
 import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, last, textBox, centre, px, opacityOf, part, words, chars, span, copyText, copyButton, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim } from '/ui/flight.js';
+import { OPEN, CLOSE, last, textBox, centre, px, opacityOf, part, words, chars, span, copyText, copyButton, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim, homeParts } from '/ui/flight.js';
 
 const FACE_GO = 80;     // the face starts giving way this far into the open (a third of the surface's growth)
 // and gives way quickly at first, so that by the time the surface is most of the screen little copper is left on it
@@ -38,11 +38,12 @@ const OUT = 120;        // what is not carried across goes in this much
 
 // ---------- the kind, for opening.js ----------
 export const name = 'light';
-// A tile on a room's grid; its power circle has its own tap (a toggle), so only the body gets here.
-export const source = e => e.matches('.room-grid > .tile[data-go^="light/"]');
-export const opens = ({ from, r, to }) => /^room\//.test(from) && r.name === 'light' && !r.sub && to === `light/${r.id}`;
+// A tile on a room's grid, or pinned on Home; its power circle has its own tap (a toggle), so only the body gets here.
+const TILE = ':is(.room-grid, .pin-grid > .pin-item) > .tile';
+export const source = e => e.matches(`${TILE}[data-go^="light/"]`);
+export const opens = ({ from, r, to }) => (/^room\//.test(from) || from === 'home/null') && r.name === 'light' && !r.sub && to === `light/${r.id}`;
 export const minShown = 0.25;
-export const find = (screen, entry) => screen.querySelector(`.room-grid > .tile[data-go="${CSS.escape(entry.to)}"]`);
+export const find = (screen, entry) => screen.querySelector(`${TILE}[data-go="${CSS.escape(entry.to)}"]`);
 
 // ---------- measuring ----------
 // Everything about the tile, read while it is still where it was drawn, part way through its press.
@@ -66,7 +67,9 @@ export function read(tile) {
     extras: [...tile.querySelectorAll('.speed, .shade-bar, .tile-timer')].map(n => part(n, k)),
     glow: glow && { el: glow, r: glow.getBoundingClientRect() },
     // the room's tab bar and its fade, which the page has none of: they go down with the room
-    chrome: [visible(tabs) && tabs, visible(fade) && fade].filter(Boolean).map(n => ({ el: n, r: n.getBoundingClientRect() })),
+    // (copied now, as they are: the redraw that follows lights the tab of the page coming, and a light from Home is
+    // under Rooms)
+    chrome: [visible(tabs) && tabs, visible(fade) && fade].filter(Boolean).map(n => ({ el: n, r: n.getBoundingClientRect(), copy: n.cloneNode(true) })),
   };
 }
 
@@ -146,6 +149,8 @@ function glowFlight(sf, D) {
 // The room around the tile: what steps aside for it (only what is on screen). Its header's circles step aside one by
 // one and its scrim fades where it is (flight.js, scrim): the header row itself is never faded.
 function roomParts(root, tile, head) {
+  // a tile pinned on Home: the rest of Home steps aside instead
+  if (tile.closest('.pin-grid')) return homeParts(root, tile, head);
   const on = n => { const b = n.getBoundingClientRect(); return b.bottom > 0 && b.top < innerHeight && b.width > 0; };
   return [...root.querySelectorAll(`${head ? '.room > .hdr > *, ' : ''}.room-title, .room-photo-card, .room-sec, .room-chips, .room-grid > .tile, .room-empty`)]
     .filter(n => n !== tile && on(n));
@@ -250,9 +255,9 @@ export function open({ O, ghost }, screen, F) {
 
   // the room steps aside around the tile; its tab bar and the fade over it go down with it
   stepAside(F, 'open', steps);
-  if (!shared) scrim(F, ghost.querySelector('.room > .hdr'), 1, 0, { duration: 250, easing: T.easeIn, fill: 'forwards' });
+  if (!shared) scrim(F, ghost.querySelector('.room > .hdr, .home > .home-head'), 1, 0, { duration: 250, easing: T.easeIn, fill: 'forwards' });
   for (const c of O.chrome) {
-    const n = c.el.cloneNode(true);
+    const n = c.copy || c.el.cloneNode(true);
     n.removeAttribute('id'); n.hidden = false; n.setAttribute('aria-hidden', 'true'); n.inert = true;
     n.querySelectorAll('[data-go], [data-act]').forEach(b => { b.removeAttribute('data-go'); b.removeAttribute('data-act'); });
     n.style.pointerEvents = 'none';
@@ -363,7 +368,7 @@ export function close(p, screen, F, { ghost, O, el: tile }) {
   // already there, under the page, and comes up with it)
   if (p.pose) return true;
   stepAside(F, 'close', steps, { at: 70, back: 400, backFade: 300 });
-  if (!shared) scrim(F, screen.querySelector('.room > .hdr'), 0, 1, { duration: 300, delay: 70, easing: T.ease, fill: 'backwards' }, 'extra');
+  if (!shared) scrim(F, screen.querySelector('.room > .hdr, .home > .home-head'), 0, 1, { duration: 300, delay: 70, easing: T.ease, fill: 'backwards' }, 'extra');
   if (showTabs) F.extra(tabs, [{ opacity: 0, translate: '0px 120px', scale: '0.96' }, { opacity: 1, translate: '0px 0px', scale: '1' }], { duration: 400, delay: 70, easing: T.ease, fill: 'backwards' });
   if (showTabs && fade) F.extra(fade, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 70, easing: T.ease, fill: 'backwards' });
   return true;

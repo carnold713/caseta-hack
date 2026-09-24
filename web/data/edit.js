@@ -45,10 +45,12 @@
       if (n) r.name = n;
       return r;
     }
-    // Nothing in it is removed from the home: everything goes back to the room its bridge puts it in.
+    // Nothing in it is removed from the home: everything goes back to the room its bridge puts it in. Its pin on Home
+    // goes with it.
     function deleteRoom(id) {
       const r = roomById(id); if (!r) return null;
       settings().rooms = rooms().filter(x => x.id !== id);
+      if (S.config.favorites) S.config.favorites = S.config.favorites.filter(f => f !== 'a:' + id);
       return r;
     }
     // A device into a room (or, with no room, into none of the app's). Returns the room it went to.
@@ -176,7 +178,7 @@
       return true;
     }
     // A scene gone takes its buttons with it (the hub would refuse a button that runs a scene that is not there),
-    // and its star.
+    // and its pin on Home.
     function deleteScene(id) {
       const p = preset(id); if (!p) return null;
       S.config.presets = D.presets().filter(x => x.id !== id);
@@ -214,8 +216,8 @@
     const hidden = () => settings().hidden_devices || [];
     function hideDevice(id) { const s = settings(); const list = s.hidden_devices || (s.hidden_devices = []); if (!list.includes(id)) list.push(id); }
     function unhideDevice(id) { const s = settings(); if (s.hidden_devices) s.hidden_devices = s.hidden_devices.filter(x => x !== id); }
-    // Everything a removed device was part of: its buttons, the automations and scenes that named it, its star, its
-    // kind and role, its room. Undo is the caller keeping the config from before.
+    // Everything a removed device was part of: its buttons, the automations and scenes that named it, its pin on
+    // Home, its kind and role, its room. Undo is the caller keeping the config from before.
     function forgetDevice(id) {
       const t = 'd:' + id; const cfg = S.config;
       cfg.bindings = D.bindings().filter(b => b.device_id !== id);

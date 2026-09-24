@@ -6,8 +6,8 @@
 // frame, never re-wrapping or gaining or losing an ellipsis on the way. And the room's On and Off: the pill under
 // whichever half is true, On saying how much is on in the count line's numbers.
 //
-// It renames and moves rooms, makes two and gives two a photograph, through the app's own config, and puts all of it
-// back on the way out. Device names, a shade and a running timer are only this page's (nothing saves them).
+// It renames and moves rooms, makes two and gives two a photograph, pins lights and rooms to Home, through the app's
+// own config, and puts all of it back on the way out. Device names, a shade and a running timer are only this page's (nothing saves them).
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -223,6 +223,9 @@ function badFrames(before, after, frames) {
       c.data.appRoom(aid).photo = String(out.stamp);
     };
     await photo(busy.id, ['#d9c8b0', '#f2e6d6', '#b8a58c']);
+    // Home's Pinned grid: lights and rooms with long names, lit and off, a photograph and a drawing, a fan and a shade
+    // (lr_colour and lr_shade are this page's own, put on it by dress below)
+    c.S.config.favorites = [long && `d:${long.device_id}`, `a:${busy.id}`, `d:${colour ? colour.device_id : 'lr_colour'}`, `a:${one.id}`, fan && `d:${fan.device_id}`, 'd:lr_shade', `a:${empty.id}`, sw && `d:${sw.device_id}`].filter(Boolean);
     await c.save('', { quiet: true });
     // the levels: dimmed, a colour, a white, a switch on, a fan going, one off
     if (long) await c.run({ type: 'level', target: `d:${long.device_id}`, level: 60 });
@@ -298,6 +301,10 @@ function badFrames(before, after, frames) {
       const u = await C(underTabs); if (u) p.push(u);
       for (const x of p) found.push(`${r}: ${x}`);
     }
+    // Home's Pinned grid in edit mode, each item with its x
+    await to('home'); await dress(); await C(() => { const c = window.__copper; c.closeSheet(); c.ui.pinEdit = true; c.render(); }); await wait(400);
+    for (const x of await C(layoutProblems)) found.push(`home editing the pins: ${x}`);
+    await C(() => { const c = window.__copper; c.ui.pinEdit = false; c.render(); });
     for (const [r, act] of pickers) {
       await to(r); await dress(); await wait(300);
       await C(a => { const b = document.querySelector(`#sheet-root [data-act="${a}"]`); if (b) b.click(); }, act); await wait(700);
@@ -344,6 +351,24 @@ function badFrames(before, after, frames) {
       found.push(...await flight(`M11 open ${id}`, () => page.click(`${tile} .nm`)));
       found.push(...await flight(`M11 back ${id}`, () => page.click('#screen .hdr-btn.back')));
     }
+    // and from Home's Pinned grid: a room from its pinned card (a photograph, a drawing), a light from its pinned tile
+    // (on a fresh home, Home greets it once with a sheet: that is not what is being looked at here)
+    await to('home'); await C(() => window.__copper.closeSheet()); await dress(); await wait(600);
+    for (const aid of [plan.busy, plan.one]) {
+      const card = `#screen .pin-grid .pin-room[data-go="room/${aid}"]`;
+      if (!(await page.$(card))) { found.push(`no pinned card for ${aid}`); continue; }
+      await into(card); await wait(300);
+      found.push(...await flight(`M10 from Home open ${aid}`, () => page.click(`${card} .nm`)));
+      found.push(...await flight(`M10 from Home back ${aid}`, () => page.click('#screen .hdr-btn.back')));
+    }
+    for (const id of [plan.long, plan.colour]) {
+      const tile = `#screen .pin-grid .tile[data-go="light/${id}"]`;
+      if (!(await page.$(tile))) { found.push(`no pinned tile for ${id}`); continue; }
+      await into(tile); await wait(300);
+      found.push(...await flight(`M11 from Home open ${id}`, () => page.click(`${tile} .nm`)));
+      found.push(...await flight(`M11 from Home back ${id}`, () => page.click('#screen .hdr-btn.back')));
+    }
+    await to(`room/${plan.busy}`); await wait(600);
     // M13: the back swipe held part way (a pose per step), then let go
     const tile = `#screen .room-grid .tile[data-go="light/${plan.long}"]`;
     await into(tile); await wait(300);

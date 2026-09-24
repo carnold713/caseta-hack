@@ -112,10 +112,12 @@ everything that is currently lit.
 closed. This is deliberately a separate, slightly harder action than "lights off", because it
 is a bedtime gesture rather than a leaving-the-room one.
 
-**Mark the handful of lights worth reaching fastest.** A user can star any light, and starred
-lights get a shortcut that does not involve going through their room. Most homes have three or
-four lights that account for most of the day's taps, and they are rarely in the same room. A
-home with nothing starred should show no trace of the feature rather than an empty shelf.
+**Pin the handful of lights and rooms worth reaching fastest.** A user can pin any light or room
+from its own page, and what is pinned sits on Home right under the whole house, in the order it
+was pinned, which the user can change. A pinned light switches and opens as it does in its room;
+a pinned room shows how much is on and switches the room. Most homes have three or four lights
+that account for most of the day's taps, and they are rarely in the same room. A home with
+nothing pinned gets one small, calm card saying how to pin something, not an empty shelf.
 
 ---
 
@@ -175,8 +177,8 @@ taking up to eight seconds, which read as the app ignoring the press.
 **Lutron's own scenes appear alongside**, runnable, but not editable here, since they live in
 Lutron's app.
 
-**A scene can be starred too**, which brings it to the front wherever scenes are listed. The
-same idea as starring a light: a home usually has one or two scenes that get run constantly and
+**A scene can be pinned too**, which brings it to the front wherever scenes are listed. The
+same idea as pinning a light: a home usually has one or two scenes that get run constantly and
 a dozen that do not.
 
 ---

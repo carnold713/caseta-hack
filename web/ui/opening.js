@@ -1,6 +1,6 @@
 // Pages that open out of what was tapped to reach them, and close back into it: the owner's frames M10 (a room card
-// on Rooms into its room, roomopen.js), M11 (a tile on a room into its light, fan or shade, lightopen.js) and M14 (a
-// remote's card on Remotes into its page, remoteopen.js). This module decides which one plays and keeps the list of
+// on Rooms, or pinned on Home, into its room, roomopen.js), M11 (a tile on a room or pinned on Home into its light,
+// fan or shade, lightopen.js) and M14 (a remote's card on Remotes into its page, remoteopen.js). This module decides which one plays and keeps the list of
 // what is open; the pieces they share are flight.js. Every other page change is motion.js's push or back, and so is
 // any of these when the page is reached another way, when the thing it closes into is not on screen, or when the
 // phone asks for reduced motion.

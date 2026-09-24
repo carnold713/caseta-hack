@@ -1,6 +1,6 @@
 // 14 · All scenes (12744:111043) and 15 · the scene sheet (12744:111378). Tap a scene to run it; press and hold, or
 // its chevron, to change it. #scenes is the list; #scenes/<id> is the list with that scene's sheet over it, and
-// #scenes/lutron-<id> a Lutron scene's (which is run and starred here, and changed in the Lutron app).
+// #scenes/lutron-<id> a Lutron scene's (which is run and pinned here, and changed in the Lutron app).
 import { roomPicker, confirmSheet, nameSheet } from '/ui/screens/pickers.js';
 import { kelvinHex, WHITES, LAMP_COLOURS, sameHex } from '/ui/colour.js';
 import { glowHTML, setGlow, whiteStops, colourStops, isNight } from '/ui/glow.js';
@@ -37,13 +37,13 @@ export function view(c, r) {
   if (!r || !r.id) { c.ui.stageFor = null; c.ui.sceneShow = false; }
   const all = data.presets(), theirs = data.lutronScenes();
   const favs = (c.S.config.favorites || []);
-  const starred = favs.map(t => (t.startsWith('p:') ? all.find(p => p.id === t.slice(2)) : null)).filter(Boolean);
+  const pinned = favs.map(t => (t.startsWith('p:') ? all.find(p => p.id === t.slice(2)) : null)).filter(Boolean);
   const tile = p => {
     const cur = showing(c, p);
     const n = Object.keys(p.levels).length;
     return `<div class="scene-tile ${cur ? 'current' : ''}" data-act="scene-run" data-hold="scene-edit" data-ms="500" data-id="${esc(p.id)}" role="button" tabindex="0" aria-label="Run ${esc(H.sceneShortName(p))}">
       ${cur ? '<span class="glow"></span>' : ''}${dots(c, p, 16, cur ? '#D98A4E' : 'var(--surface-1)')}
-      <span class="st">${icon('star', 20, 1.8)}</span>
+      <span class="st pin pinned">${icon('pin', 20, 1.8)}</span>
       <span class="nm">${esc(H.sceneShortName(p))}</span>
       <span class="vl">${esc([p.area ? data.areaName(p.area) : null, EDIT.lightsText(n)].filter(Boolean).join(' · '))}</span>
       <span class="ar">Arrives in ${EDIT.fadeText(p.fade)}</span></div>`;
@@ -73,7 +73,7 @@ export function view(c, r) {
     </header>
     <h1 class="t-h1 page-h1 bar-t bar-pin">Scenes</h1>
     <p class="t-cap muted fd-sub">Tap to run · press and hold to edit</p>
-    ${starred.length ? `<div class="t-over sec first">Starred</div><div class="tile-grid scene-grid">${starred.map(tile).join('')}</div>` : ''}
+    ${pinned.length ? `<div class="t-over sec first">Pinned</div><div class="tile-grid scene-grid">${pinned.map(tile).join('')}</div>` : ''}
     ${groups}
     ${loose.length ? `<div class="t-over sec">Not in a room</div><div class="group">${loose.map(row).join('')}</div>` : ''}
     ${lutron ? `<div class="t-over sec">From Lutron app</div><div class="group">${lutron}</div><p class="t-cap muted foot">Edit these in the Lutron app</p>` : ''}
@@ -280,7 +280,7 @@ export function sceneSheet(c, p) {
   if (c.ui.stageFor !== p.id) { c.ui.stageFor = p.id; c.ui.sceneShow = false; c.ui.sceneOpen = null; }
   const open = c.ui.sceneOpen;
   const atStage = c.ui.sceneOpenAt === 'stage';
-  const starred = (c.S.config.favorites || []).includes('p:' + p.id);
+  const pinned = (c.S.config.favorites || []).includes('p:' + p.id);
   const lights = ds.map(d => {
     const v = p.levels[d.device_id];
     const off = !(typeof v === 'object' && v ? Number(v.level) : typeof v === 'number' ? v : v && v !== 'Off');
@@ -303,7 +303,7 @@ export function sceneSheet(c, p) {
   return {
     over: p.area ? `Scene · ${data.areaName(p.area)}` : 'Scene',
     title: H.sceneShortName(p),
-    head: `<button class="head-btn" data-act="scene-star" aria-pressed="${starred}" aria-label="${starred ? 'Starred' : 'Star'}">${icon('star', 18, 1.7)}</button>`,
+    head: `<button class="head-btn pin" data-act="scene-pin" aria-pressed="${pinned}" aria-label="${pinned ? 'Pinned to Home' : 'Pin to Home'}">${icon('pin', 18, 1.7)}</button>`,
     body: `<div class="scene-sheet">
       <p class="sc-cap">${esc([EDIT.lightsText(ds.length), p.area ? data.areaName(p.area) : null].filter(Boolean).join(' · '))}</p>
       ${stageHTML(c, p, ds)}
@@ -348,10 +348,10 @@ function wireRanges(c, p, root) {
 }
 function lutronSheet(c, sc) {
   const t = 's:' + sc.scene_id;
-  const starred = (c.S.config.favorites || []).includes(t);
+  const pinned = (c.S.config.favorites || []).includes(t);
   return {
     over: 'From the Lutron app', title: sc.name,
-    head: `<button class="head-btn" data-act="lutron-star" aria-pressed="${starred}" aria-label="${starred ? 'Starred' : 'Star'}">${c.icon('star', 18, 1.7)}</button>`,
+    head: `<button class="head-btn pin" data-act="lutron-pin" aria-pressed="${pinned}" aria-label="${pinned ? 'Pinned to Home' : 'Pin to Home'}">${c.icon('pin', 18, 1.7)}</button>`,
     body: `<p class="t-body muted sheet-p">This look was made in the Lutron app. Change it there and it changes here too.</p>
       <div class="sheet-btns"><button class="pill solid" data-act="scene-run-lutron" data-sid="${c.esc(sc.scene_id)}">Try it</button></div>`,
   };
@@ -398,8 +398,9 @@ export const actions = {
   'scenes-five'(c, el) { const aid = el.dataset.area; c.H.suggestScenes(aid); c.save(`${c.data.areaName(aid)} has five scenes`); },
   'scenes-notnow'(c, el) { try { localStorage.setItem(HIDE_KEY, JSON.stringify([...notNow(), el.dataset.area])); } catch (_) { /* shows again next time */ } c.render(); },
   // ---- the sheet
-  'scene-star'(c, el, r) { const t = 'p:' + r.id; const f = c.S.config.favorites; const i = f.indexOf(t); if (i >= 0) f.splice(i, 1); else f.push(t); c.save(i >= 0 ? 'Taken off Home' : 'Starred on Home'); },
-  'lutron-star'(c, el, r) { const t = 's:' + r.id.slice(7); const f = c.S.config.favorites; const i = f.indexOf(t); if (i >= 0) f.splice(i, 1); else f.push(t); c.save(i >= 0 ? 'Taken off Home' : 'Starred on Home'); },
+  // the pin in the sheet's head: the scene's chip on Home, or not
+  'scene-pin'(c, el, r) { c.H.togglePin('p:' + r.id); c.save('', { quiet: true }); },
+  'lutron-pin'(c, el, r) { c.H.togglePin('s:' + r.id.slice(7)); c.save('', { quiet: true }); },
   'scene-name'(c, el, r) { const p = cur(c, r); if (p) c.openPicker('name', c2 => nameSheet(c2, { over: 'Scene', title: 'Name', value: c2.H.sceneShortName(p), act: 'scene-name-set', max: 40 })); },
   'scene-name-set'(c, el, r, value) { const p = cur(c, r); if (!p) return; c.EDIT.renameScene(p, value); c.saveSoon(); },
   'scene-room'(c, el, r) {

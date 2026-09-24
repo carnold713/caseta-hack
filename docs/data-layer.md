@@ -9,7 +9,7 @@ be tested without a browser.
 | File | Global | What it owns |
 |---|---|---|
 | `caseta-data.js` | `CasetaData` | The state (`S`), the socket and what each message does to the state, `api()` and the command gate, `hold()` (a light a finger just set beats the bridge's echoes for a moment), save and undo, the connection's quiet window, and every question asked of the inventory: devices, rooms, targets, remotes, `describe()` |
-| `home.js` | `CasetaHome` | Light roles, the five suggested scenes and their levels, which scene a room is showing, a room's scenes in order, what is lit, the starred row, the one-time seeding of the app's rooms |
+| `home.js` | `CasetaHome` | Light roles, the five suggested scenes and their levels, which scene a room is showing, a room's scenes in order, what is lit, what is pinned to Home and in what order, the one-time seeding of the app's rooms |
 | `daylight.js` | `CasetaDaylight` | Follow the day: the curve, who follows it, the words for what a lamp is doing, and the names of whites |
 | `edit.js` | `CasetaEdit` | Changing the home: making, renaming, deleting rooms and moving things between them (and asking the bridges to follow); making and editing scenes; a light's kind and role; hiding and removing a device; what the Add a device card offers (a heard device's name, the rooms, which of the Lutron bridge's areas a room maps to) and filing a new device into the room it was put in |
 | `remotes.js` | `CasetaRemotes` | Picos: which key is which on each model, learning a remote's numbering from its presses, what a press does and how that is said, the ready-made ways a press can go, night versions, walks through scenes, Leaving, the usual layout, the step editor's fields |

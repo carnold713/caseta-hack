@@ -110,6 +110,13 @@ test("a light's kind sets its role, and picking it again clears both", () => {
   assert.equal(e.setKind('2', 'not-a-kind'), null);
 });
 
+test('a deleted room takes its pin on Home with it', () => {
+  const { d, e } = setup({}, { favorites: ['a:a1', 'd:1', 'a:a2'] });
+  d.S.config.settings.rooms = [{ id: 'a1', name: 'Living room', device_ids: [] }, { id: 'a2', name: 'Kitchen', device_ids: [] }];
+  e.deleteRoom('a1');
+  assert.deepEqual(d.S.config.favorites, ['d:1', 'a:a2']);
+});
+
 test('hiding, and forgetting a removed device everywhere it was named', () => {
   const { d, e } = setup({}, {
     bindings: [{ device_id: 'p1', button: 1, actions: [{ type: 'level', target: ['d:1', 'd:5'], level: 'on' }] }, { device_id: 'p1', button: 2, actions: [{ type: 'level', target: 'd:1', level: 'off' }] }],

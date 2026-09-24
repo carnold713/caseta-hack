@@ -38,7 +38,8 @@ function timerFor(c, id) {
   return null;
 }
 
-// A device tile: 168 wide in Home's strip, 180 in a room's grid (the width comes from the strip or grid it is in).
+// A device tile: 180 in a room's grid or Home's Pinned grid (the width comes from the grid it is in), 168 in a sideways
+// strip.
 export function tile(c, d) {
   const { icon, esc } = c;
   const id = d.device_id;
@@ -80,7 +81,7 @@ function sceneDots(levels) {
   while (cols.length && cols.length < 3) cols.push(cols[cols.length - 1]);
   return cols.length ? `<span class="chip-dots">${cols.map(h => `<i style="background:${h}"></i>`).join('')}</span>` : '';
 }
-// A scene chip: a starred scene on Home. Lutron's own scenes run the same way and carry no colours of their own.
+// A scene chip: a pinned scene on Home. Lutron's own scenes run the same way and carry no colours of their own.
 export function sceneChip(c, t, name, levels) {
   return `<button class="chip scene" data-act="scene" data-t="${c.esc(t)}">${sceneDots(levels)}${c.esc(name)}</button>`;
 }
@@ -103,6 +104,29 @@ export function roomPicture(c, aid, name, where) {
   const src = c.H.roomPhotoURL(aid);
   if (src) return `<img class="room-photo" src="${c.esc(src)}" alt="" decoding="async">`;
   return roomScene(c, aid, where === 'home' ? 'thumb' : 'page');
+}
+
+// ---------- pinned to Home ----------
+// The pin on a light's page and a room's page: the header circle beside the ⋯. Its glyph is filled while the thing is
+// pinned and an outline while it is not, and it says which in words for a screen reader (aria-pressed). A tap pins or
+// unpins at once (app.js, the shared 'pin'); the pin itself is the answer, so nothing else says so.
+export function pinButton(c, key, name) {
+  const on = c.H.isPinned(key);
+  return `<button class="hdr-btn a2 pin ${on ? 'pinned' : ''}" data-act="pin" data-key="${c.esc(key)}" aria-pressed="${on}" aria-label="${on ? `${c.esc(name)} is pinned to Home` : `Pin ${c.esc(name)} to Home`}">${c.icon('pin', 24, 1.7)}</button>`;
+}
+
+// A pinned room on Home: a card the size of a tile, in the same grid. Its picture (the photograph, or the drawing of
+// the room with its own lamps lit as they are), its name and how much is on, and a power circle that switches the
+// room on or off (rooms.js roomPower, the Rooms card's own). A tap on the card opens the room.
+export function pinRoomCard(c, a) {
+  const { esc, icon, H, data } = c;
+  const lit = H.roomLights(a.id).some(d => (data.level(d.device_id) || 0) > 0);
+  const photo = !!H.roomPhotoURL(a.id);
+  const canToggle = data.controllable().some(d => data.devArea(d) === a.id && d.domain !== 'cover');
+  return `<div class="pin-room ${photo ? 'photo' : 'scene'} ${lit ? 'lit' : ''}" data-go="room/${esc(a.id)}" role="link" aria-label="${esc(a.name)}" data-xf>
+    ${roomPicture(c, a.id, a.name, 'home')}
+    ${canToggle ? `<button class="pwr" data-act="room-toggle" data-id="${esc(a.id)}" aria-label="${lit ? 'Turn off' : 'Turn on'} ${esc(a.name)}">${icon('power', 22, 2)}</button>` : ''}
+    <span class="nm">${esc(a.name)}</span><span class="vl">${esc(roomStatus(c, a.id))}</span></div>`;
 }
 
 // The offline card, after ten quiet seconds. v7: the card says which link is out in one calm sentence (conn.js, 18 · Offline, calmly).

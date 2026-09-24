@@ -50,7 +50,10 @@ export const PATHS = {
   lamp:    '<path d="M8.5 3.5h7l3 7.5h-13z"/><path d="M12 11v7.5M8 20.5h8"/>',
   arrow:   '<path d="M5 12h14M13 18l6-6-6-6"/>',
   wifiOff: '<path d="M2.5 9a14 14 0 0 1 5-3.2M11 5.1a14 14 0 0 1 10.5 3.9M5.8 12.6a9 9 0 0 1 3.6-2.1M14.8 10.8a9 9 0 0 1 3.4 1.8M9 16.1a4.4 4.4 0 0 1 6 0"/><circle cx="12" cy="19.3" r=".6"/><path d="M3.5 3.5l17 17"/>',
-  camera:  '<path d="M4 8.5a2 2 0 0 1 2-2h1.8L9.5 4h5l1.7 2.5H18a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>'
+  camera:  '<path d="M4 8.5a2 2 0 0 1 2-2h1.8L9.5 4h5l1.7 2.5H18a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>',
+  // drawn here on the same grid and stroke, for pinning to Home: a push pin, its cap, body and point. The body has a
+  // class of its own so something pinned can fill it (screens.css, .pinned)
+  pin:     '<path class="pin-body" d="M9.5 3.5l-.4 5.2-2.6 4.8h11l-2.6-4.8-.4-5.2z"/><path d="M8 3.5h8M12 13.5v7"/>'
 };
 
 export const NAMES = Object.keys(PATHS);

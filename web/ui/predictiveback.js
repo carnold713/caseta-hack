@@ -458,17 +458,24 @@ register({
 // ---------- a room reached from its card ----------
 // Leaving it for Rooms closes it back into its card (M10). Behind it Rooms waits as that close starts from: scrolled
 // where it was, the card not there (it is the page in the finger), the cards above it up 16, those below down 64
-// and "Rooms" up 12, as the file draws it. The close then brings the list back from there, nearest first.
+// and "Rooms" up 12, as the file draws it. The close then brings the list back from there, nearest first. A room
+// opened from its card pinned on Home closes back into that card, with Home waiting as it was.
 const ROOMS = { up: -16, down: 64, head: -12 };
 register({
   name: 'room',
   claims(info) {
     const o = opening.openedFrom('room');
-    return !!(o && info.page === `room/${o.aid}` && info.prev && info.prev.page === 'rooms/null');
+    return !!(o && info.page === `room/${o.aid}` && info.prev && info.prev.page === o.from);
   },
   scroll: () => { const o = opening.openedFrom('room'); return o ? o.y : 0; },
   dress(copy) {
     const o = opening.openedFrom('room'); if (!o) return;
+    // a room opened from its card pinned on Home: Home waits with everything in its place and the card not there
+    if (o.from === 'home/null') {
+      const n = copy.querySelector(`.pin-grid .pin-room[data-go="${CSS.escape(o.to)}"]`);
+      if (n) n.style.visibility = 'hidden';
+      return;
+    }
     const list = copy.querySelector('.rooms-list');
     const card = list && [...list.children].find(k => k.dataset.go === `room/${o.aid}`);
     if (!card) return;
@@ -479,14 +486,14 @@ register({
     const head = copy.querySelector('.rooms-head');
     if (head) for (const n of head.children) n.style.transform = `translateY(${ROOMS.head}px)`;
   },
-  hand(pose) { pose.list = { ...ROOMS }; },
+  hand(pose) { const o = opening.openedFrom('room'); if (o && o.from === 'rooms/null') pose.list = { ...ROOMS }; },
 });
 
 // ---------- a light reached from its tile, a remote from its card ----------
 // Leaving it for the page it opened from closes it back into its tile or card (M11 and M14, lightopen.js and
 // remoteopen.js). Behind it that page waits as the close starts from: scrolled where it was, everything in its place
 // and the tile or card not there (it is the page in the finger). The close starts from the shrunk page.
-for (const [name, sel] of [['light', '.room-grid > .tile'], ['remote', '.rgrid > .rcard']]) {
+for (const [name, sel] of [['light', ':is(.room-grid, .pin-grid > .pin-item) > .tile'], ['remote', '.rgrid > .rcard']]) {
   register({
     name,
     claims(info) {

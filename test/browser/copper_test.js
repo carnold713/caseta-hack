@@ -3,8 +3,8 @@
 // outer edge): 03 Room 12733:20, 04 Light 12731:22, 05 Colour 12732:48591, 05b White 12732:49220, 06b Sleep timer
 // 12733:49235, 13 Rooms 12744:38, 17 Fan 12744:111211.
 //
-// Runs after nanoleaf_test so the Office has a colour lamp. It stars a light, saves a look and moves levels, and
-// puts the stars and the scenes back on the way out.
+// Runs after nanoleaf_test so the Office has a colour lamp. It pins a light, saves a look and moves levels, and
+// puts the pins and the scenes back on the way out.
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -26,7 +26,7 @@ const ROOM = [
 ];
 const LIGHT = [
   ['hero art', '.hero-art', 116, 46, 180, 180],
-  ['star', '.hdr .a2', 272, 52, 56, 56],
+  ['pin', '.hdr .a2', 272, 52, 56, 56],
   ['room line', '.where', null, 240, null, 17],
   ['name', '.t-hero', null, 260, null, 48],
   ['on / off', '.onoff', 20, 326, 372, 72],
@@ -171,12 +171,12 @@ const FAN = [
   await go('light/5');
   check('a dimmer has no White or Colour', !(await page.$('.looks')));
   check('and its pills close up under the switch', await C(() => Math.round(document.querySelector('.feats').getBoundingClientRect().top)) === 414);
-  const starred0 = await C(() => window.__copper.S.config.favorites.includes('d:5'));
+  const pinned0 = await C(() => window.__copper.S.config.favorites.includes('d:5'));
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
-  await page.click('[data-act="star"]'); await wait(1200);
-  check('star saves', await C(w => window.__copper.S.config.favorites.includes('d:5') !== w, starred0));
-  check('and shows no toast, no Undo (the star itself is the answer)', !(await C(() => document.querySelector('#toast-root').textContent)), await C(() => document.querySelector('#toast-root').textContent));
-  if (starred0) { await page.click('[data-act="star"]'); await wait(1200); }
+  await page.click('[data-act="pin"]'); await wait(1200);
+  check('the pin saves', await C(w => window.__copper.S.config.favorites.includes('d:5') !== w, pinned0));
+  check('and shows no toast, no Undo (the pin itself is the answer)', !(await C(() => document.querySelector('#toast-root').textContent)), await C(() => document.querySelector('#toast-root').textContent));
+  if (pinned0) { await page.click('[data-act="pin"]'); await wait(1200); }
   const svg = await page.locator('.dial > svg').boundingBox();
   const s = svg.width / 340; const pt = p => { const a = Math.PI * (1 - p / 100); return [svg.x + (170 + 150 * Math.cos(a)) * s, svg.y + (170 - 150 * Math.sin(a)) * s]; };
   // the knob is the grip (a finger anywhere else on the arc only moves it sideways, so a scroll stays a scroll)
@@ -199,9 +199,9 @@ const FAN = [
   await page.click('[data-act="back"]'); await wait(800);
   check('back returns to the light', /#light\/5$/.test(page.url()), page.url());
 
-  // ---- Home: the starred strip, a tile's power circle
+  // ---- Home: the Pinned grid, a tile's power circle
   await go('home');
-  check('starred strip shows the starred light', !!(await page.$('.tile-strip[data-keep="starred"] .tile[data-go="light/5"]')));
+  check('the Pinned grid shows the pinned light', !!(await page.$('.pin-grid .tile[data-go="light/5"]')));
   const was = await lv('5');
   await page.click('.tile[data-go="light/5"] .pwr'); await wait(1400);
   check('the power circle toggles in place', /#home$/.test(page.url()) && ((await lv('5')) > 0) !== (was > 0), [page.url(), await lv('5')]);

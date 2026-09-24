@@ -140,7 +140,36 @@ test('a device the bridges stopped reporting leaves its room, but not while the 
   assert.deepEqual(d.S.config.settings.rooms[0].device_ids, ['1', 'gone2']);
 });
 
-test('what is lit, the house level, and the starred row in room order', () => {
+test('pinned to Home: lights and rooms in the order pinned, scenes and what is gone left out of the grid', () => {
+  const { d, h } = setup({}, {}, { favorites: ['d:5', 'p:x', 'a:a1', 's:9', 'd:gone', 'd:4', 'a:nowhere'] });
+  assert.deepEqual(h.pinned().map(p => [p.key, p.kind]), [['d:5', 'light'], ['a:a1', 'room'], ['d:4', 'light']], 'a fan pins as a light does');
+  assert.equal(h.isPinned('a:a1'), true);
+  assert.equal(h.isPinned('a:a2'), false);
+  // a hidden light drops out of the grid; its key stays, so showing it again brings its pin back
+  d.S.config.settings.hidden_devices = ['5'];
+  assert.deepEqual(h.pinned().map(p => p.key), ['a:a1', 'd:4']);
+  d.S.config.settings.hidden_devices = [];
+  // pinning adds to the end, pinning again takes it off
+  assert.equal(h.togglePin('a:a2'), true);
+  assert.deepEqual(h.pinned().map(p => p.key), ['d:5', 'a:a1', 'd:4', 'a:a2']);
+  assert.equal(h.togglePin('d:5'), false);
+  assert.deepEqual(h.pinned().map(p => p.key), ['a:a1', 'd:4', 'a:a2']);
+  assert.equal(h.unpin('d:4'), true);
+  assert.equal(h.unpin('d:4'), false);
+});
+
+test('reordering the pins keeps the scenes and the keys not drawn where they were', () => {
+  const { d, h } = setup({}, {}, { favorites: ['d:5', 'p:x', 'a:a1', 'd:gone', 'd:1', 's:9'] });
+  h.setPinOrder(['d:1', 'd:5', 'a:a1']);
+  assert.deepEqual(d.S.config.favorites, ['d:1', 'p:x', 'd:5', 'd:gone', 'a:a1', 's:9']);
+  assert.deepEqual(h.pinned().map(p => p.key), ['d:1', 'd:5', 'a:a1']);
+  // an order that leaves one out, or names one that is not pinned, still keeps every pin exactly once
+  h.setPinOrder(['a:a1', 'd:nope']);
+  assert.deepEqual(h.pinned().map(p => p.key), ['a:a1', 'd:1', 'd:5']);
+  assert.equal(d.S.config.favorites.length, 6);
+});
+
+test('what is lit, the house level, and the pinned row in room order', () => {
   const { h } = setup({}, { 1: { level: 80 }, 2: { level: 40 }, 5: { level: 0 }, hue_l1: { level: 30 } }, { favorites: ['d:5', 'd:2', 'd:hue_l1', 'a:a1'] });
   assert.deepEqual(h.litLights().map(x => x.device_id).sort(), ['1', '2', 'hue_l1']);
   assert.equal(h.houseLevel(), 50);

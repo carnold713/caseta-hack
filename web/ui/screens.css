@@ -67,6 +67,79 @@
 .room-card .room-art { position: absolute; inset: auto; right: 12px; top: 10px; width: 72px; height: 72px; opacity: .22; object-fit: contain; }
 .room-card .room-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
+/* ---- Home's Pinned section (pins.js) ------------------------------------------------------------ */
+/* The heading, with Edit (Done) at its right: the overline where a section's overline sits, the link's touch area
+   taller than its line without moving it. */
+.pin-sec { display: flex; align-items: center; justify-content: space-between; margin: 18px var(--gutter) 10px; height: 14px; }
+.pin-sec .t-over { line-height: 14px; }
+.pin-sec .link { height: 40px; margin: -13px -8px -13px 0; padding: 0 8px; }
+/* The grid is the room page's two columns; each item holds a tile or a room card and, in edit mode, its x. */
+.pin-grid .pin-item { position: relative; min-width: 0; }
+.pin-grid .pin-item > .tile, .pin-grid .pin-item > .pin-room { width: 100%; }
+/* A pinned room: 150 tall like a tile, its picture filling it, a shade under its words, its power circle where a
+   tile's is. Its name is one line and ends in an ellipsis. */
+.pin-room {
+  position: relative; display: block; height: 150px; overflow: hidden; cursor: pointer;
+  border-radius: var(--r-card); color: #fff; text-align: left;
+  background: #1D1A18; box-shadow: inset 0 0 0 1px var(--line);
+  transition: transform var(--tap) var(--spring-quick);
+}
+.pin-room:active { transform: scale(.96); }
+.pin-room .room-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pin-room .room-scene { z-index: 0; }
+/* (over the whole card, so a room opening from it carries the same shade over its window: roomopen.js) */
+.pin-room::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 9, 8, 0) 41%, rgba(10, 9, 8, .72) 100%);
+}
+.pin-room .nm { position: absolute; left: 16px; right: 16px; bottom: 36px; z-index: 1; font-size: 16px; font-weight: 500; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-room .vl { position: absolute; left: 16px; right: 16px; top: 116px; z-index: 1; font-size: 14px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-room.lit .vl { color: var(--text-1); }
+/* its power circle: an unlit tile's grey while the room is off (with an edge, so it reads over a dark picture), white
+   with a copper glyph and a copper glow while it is lit, as a lit tile's is */
+.pin-room .pwr {
+  position: absolute; left: 16px; top: 16px; z-index: 1;
+  width: 44px; height: 44px; border-radius: 22px; border: 0; padding: 0; display: grid; place-items: center;
+  background: rgba(43, 43, 43, .86); color: var(--icon-2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease), box-shadow var(--standard) var(--ease), transform var(--tap) var(--spring-quick);
+}
+.pin-room.lit .pwr { background: #fff; color: var(--copper-lo); box-shadow: 0 0 16px rgba(217, 138, 78, .45); }
+.pin-room .pwr:active { transform: scale(.96); }
+
+/* Edit mode: what is in an item no longer takes a tap (nothing switches or opens), each item has its x, and a finger
+   held on one picks it up. */
+.pin-grid.editing .pin-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: grab; }
+.pin-grid.editing .pin-item > :not(.pin-x) { pointer-events: none; }
+.pin-x {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  width: 32px; height: 32px; border-radius: 16px; border: 0; padding: 0; display: grid; place-items: center;
+  background: rgba(18, 18, 18, .78); color: var(--text-1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+/* the x's come in once, as Edit is tapped, not again with every redraw while editing */
+.pin-x.in { animation: pin-x-in var(--standard) var(--ease) both; }
+.pin-x::before { content: ''; position: absolute; inset: -6px; }   /* a 44 touch area around the 32 circle */
+/* the drawing, a fan's dots and a shade's bar sit where the x goes, and step back while it is there */
+.pin-grid.editing .tile :is(.art, .speed, .shade-bar) { opacity: 0; transition: opacity var(--standard) var(--ease); }
+@keyframes pin-x-in { from { opacity: 0; scale: .6; } }
+/* An item held: it lifts a little over the others with a shadow under it and follows the finger; the others make room
+   on the standard curve; let go, it settles into its place on the same curve. */
+.pin-grid.dragging .pin-item { transition: translate var(--standard) var(--ease); }
+.pin-grid .pin-item.lifted { z-index: 5; scale: 1.04; transition: scale var(--standard) var(--ease); cursor: grabbing; }
+.pin-grid .pin-item.lifted > :first-child { box-shadow: 0 18px 40px rgba(0, 0, 0, .55), inset 0 0 0 1px var(--line); }
+.pin-grid .pin-item.lifted > .tile.on:first-child { box-shadow: 0 18px 40px rgba(0, 0, 0, .55), inset 0 0 0 1px var(--tile-on-line); }
+.pin-grid .pin-item.dropping { z-index: 5; transition: translate var(--standard) var(--ease), scale var(--standard) var(--ease); }
+
+/* With nothing pinned: one calm card that says how. */
+.pin-hint {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  margin: 0 var(--gutter); padding: 16px 18px 16px 16px; border-radius: var(--r-group);
+  background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line);
+}
+.pin-hint .ic-c { flex: none; width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--surface-2); color: var(--icon-2); }
+.pin-hint-t { min-width: 0; }
+.pin-hint .t-row { margin: 0; }
+.pin-hint .t-cap { margin: 3px 0 0; }
+
 /* ---- page chrome for pushed pages ------------------------------------------------------------ */
 
 .hdr .a1, .hdr .a2, .hdr .back { top: 52px; }
@@ -137,6 +210,10 @@
    ellipsis */
 .room-title h1.fit1 { font-size: 32px; position: relative; top: 2px; }
 .room-title h1.fit2 { font-size: 28px; position: relative; top: 4px; }
+/* The pin beside the ⋯ is a second circle on the right: a long name, which shrinks less as the header collapses
+   (header.css), is cut shorter where it rests so that at no step of the way does it reach the pin. */
+.room-title h1.fit1 { max-width: calc(100% - 150px); }
+.room-title h1.fit2 { max-width: calc(100% - 168px); }
 .room-title .count { position: absolute; right: 22px; top: 43px; font-size: 14px; line-height: 17px; color: var(--text-2); }
 
 .room-photo-card {
@@ -212,7 +289,11 @@
 .dev .hero-art { position: absolute; left: calc(50% - 90px); top: 46px; width: 180px; height: 180px; opacity: .2; transition: opacity var(--dimmer) var(--ease-both); }
 .dev.on .hero-art { opacity: 1; }
 .dev .hdr { position: absolute; inset: 0 0 auto 0; }
-.hdr-btn.starred { color: var(--copper-hi); }
+/* The pin (a light's page, a room's page, a scene's sheet): an outline while the thing is not on Home, filled in white
+   while it is. Not copper: copper is light that is on. */
+.pin .ic .pin-body { fill: transparent; transition: fill var(--standard) var(--ease); }
+.pin.pinned { color: var(--text-1); }
+.pin[aria-pressed="true"] .ic .pin-body, .pin.pinned .ic .pin-body { fill: currentColor; }
 .dev .where { position: absolute; left: 0; right: 0; top: 240px; text-align: center; font-size: 14px; line-height: 17px; color: var(--text-2); }
 .dev .t-hero { position: absolute; left: var(--gutter); right: var(--gutter); top: 260px; margin: 0; line-height: 48px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dev .t-hero.fit1 { font-size: 36px; }
@@ -606,7 +687,7 @@
 .scene-tile.current { background: linear-gradient(180deg, #E6A06A 0%, #D98A4E 100%); }
 .scene-tile .glow { position: absolute; left: 80px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 226, 194, .35) 0%, rgba(255, 226, 194, 0.345) 6.2%, rgba(255, 226, 194, 0.331) 12.5%, rgba(255, 226, 194, 0.309) 18.8%, rgba(255, 226, 194, 0.280) 25%, rgba(255, 226, 194, 0.246) 31.2%, rgba(255, 226, 194, 0.209) 37.5%, rgba(255, 226, 194, 0.170) 43.8%, rgba(255, 226, 194, 0.133) 50%, rgba(255, 226, 194, 0.098) 56.2%, rgba(255, 226, 194, 0.068) 62.5%, rgba(255, 226, 194, 0.043) 68.8%, rgba(255, 226, 194, 0.024) 75%, rgba(255, 226, 194, 0.011) 81.2%, rgba(255, 226, 194, 0.004) 87.5%, rgba(255, 226, 194, 0.001) 93.8%, transparent 100%); }
 .scene-tile .sdots { position: absolute; left: 16px; top: 18px; }
-.scene-tile .st { position: absolute; left: 144px; top: 16px; color: var(--copper); }
+.scene-tile .st { position: absolute; left: 144px; top: 16px; color: var(--text-2); }
 .scene-tile.current .st { color: #fff; }
 .scene-tile .nm { position: absolute; left: 16px; top: 64px; right: 16px; font-size: 20px; font-weight: 500; line-height: 26px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scene-tile .vl { position: absolute; left: 16px; top: 92px; right: 12px; font-size: 14px; line-height: 20px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

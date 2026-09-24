@@ -149,11 +149,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('and the slider sets it in the scene', Number(typeof (await P()).levels['5'] === 'object' ? (await P()).levels['5'].level : (await P()).levels['5']) === 25, (await P()).levels['5']);
   await page.click('.sl-row[data-id="5"] .sl-x'); await wait(900);
   check('the x takes a light out', !('5' in (await P()).levels));
-  await page.click('[data-act="scene-star"]'); await wait(900);
-  check('the star puts it on Home', (await cfg()).favorites.includes('p:' + pid));
+  await page.click('[data-act="scene-pin"]'); await wait(900);
+  check('the pin puts it on Home', (await cfg()).favorites.includes('p:' + pid));
   await page.click('.sheet-close'); await wait(700);
   check('closing goes back to the list', /#scenes$/.test(page.url()), page.url());
-  check('a starred scene is a tile', !!(await page.$(`.scene-tile[data-id="${pid}"]`)));
+  check('a pinned scene is a tile', !!(await page.$(`.scene-tile[data-id="${pid}"]`)));
   await C(() => { const c = window.__copper; document.querySelector('#toast-root').innerHTML = ''; window.__sent = []; if (!c.__run0) { c.__run0 = c.run; c.run = a => { window.__sent.push(a); return c.__run0(a); }; } });
   await page.click(`.scene-tile[data-id="${pid}"]`); await wait(1400);
   // running a scene is shown by its lights: no toast and no Put back (2ca8d0a)

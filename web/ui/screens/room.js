@@ -5,7 +5,7 @@
 // across the page at the wave token (60 ms per 100 px). Each tile, and the photograph's light, crossfades when the
 // ring reaches it or when its light's state arrives, whichever is later, so a slow bridge shows as a tile catching up
 // and never as a lie. The count and the badge settle last, and the toast offers Put back.
-import { tile, roomPicture } from '/ui/screens/parts.js';
+import { tile, roomPicture, pinButton } from '/ui/screens/parts.js';
 import { roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
 import { sceneSheet, actions as sceneActions, LIST_ACTS } from '/ui/screens/scenes.js';
@@ -150,6 +150,7 @@ export function view(c, r) {
   return `<div class="room">
     <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
+      ${pinButton(c, `a:${aid}`, a.name)}
       <button class="hdr-btn a1" data-go="room/${esc(aid)}/setup" aria-label="Room setup">${icon('dots', 22, 2.4)}</button>
     </header>
     <div class="room-title bar-pin">

@@ -526,6 +526,14 @@ const SHARED = {
     assume([id], on ? 0 : onLevel(id, `d:${id}`)); soon();
     run({ type: 'level', target: `d:${id}`, level: on ? 'off' : 'on' });
   },
+  // the pin on a light's or a room's page (and a scene's sheet): pinned to Home or not, saved to the hub at once so
+  // it is the same on every phone. The pin filling in is the answer; nothing else says so.
+  pin(c, el) {
+    const key = el.dataset.key; if (!key) return;
+    H.togglePin(key);
+    render();
+    save('', { quiet: true });
+  },
   // a scene chip: Lutron scenes and the app's own run the same way
   scene(c, el) {
     const t = el.dataset.t;

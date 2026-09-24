@@ -221,6 +221,56 @@ export function windowGeo({ box, k }, Hr, r0, r1) {
   };
 }
 
+// ---------- Home's Pinned grid ----------
+// A room opens from its pinned card on Home, and a light from its pinned tile, as they do from Rooms and from a room
+// (roomopen.js, lightopen.js). Around the thing tapped, what steps aside is the rest of Home that is on screen: the
+// parts of its header (with `head`), the house's own light, each section, and the other pinned items.
+export function homeParts(root, el, head = true) {
+  const home = root.querySelector('.home'); if (!home) return [];
+  const item = el && el.closest('.pin-item');
+  const on = n => { const b = n.getBoundingClientRect(); return b.bottom > 0 && b.top < innerHeight && b.width > 0; };
+  const out = [];
+  for (const n of home.children) {
+    if (n.matches('.home-head')) { if (head) out.push(...n.children); continue; }
+    if (n.matches('.pin-grid')) { out.push(...[...n.children].filter(k => k !== item)); continue; }
+    out.push(n);
+  }
+  return out.filter(on);
+}
+// A picture's own coordinates on screen: where its drawing's (or photograph's) origin is and how many screen px one of
+// its units is, so the same point of the room can be found on two pictures of it drawn at different sizes (a pinned
+// room's card and the room page's photograph card). An illustration says so itself (its SVG's screen matrix); a
+// photograph covering its box is worked out from its own size, which `nat` gives when it has not loaded yet.
+export function pictureFrame(box, nat) {
+  const svg = box.querySelector('.rs-svg');
+  if (svg && svg.getScreenCTM) { const m = svg.getScreenCTM(); if (m) return { a: m.a, x: m.e, y: m.f }; }
+  const img = box.querySelector('img.room-photo');
+  if (!img) return null;
+  const r = img.getBoundingClientRect();
+  const nw = img.naturalWidth || (nat && nat.w), nh = img.naturalHeight || (nat && nat.h);
+  if (!nw || !nh) return null;
+  const a = Math.max(r.width / nw, r.height / nh);
+  return { a, x: r.left + (r.width - nw * a) / 2, y: r.top + (r.height - nh * a) / 2, nat: { w: nw, h: nh } };
+}
+// The window for a picture that shows the room at another scale than the page does (a pinned room's card): the page's
+// photograph card scaled and moved so its picture lies exactly on the card's, and clipped to the card's box. The same
+// fields as windowGeo's, for the same callers; `iY` is the inset under the card, where its shade sits.
+export function pictureGeo({ box, k, pic }, Hr, hp, r0, r1) {
+  const W = Hr.width, H = Hr.height;
+  const s = pic.a / hp.a;
+  const C = centre(Hr);
+  const dx = pic.x - C.x + s * (C.x - hp.x), dy = pic.y - C.y + s * (C.y - hp.y);
+  // a point on screen, as the card was, in the photograph card's own coordinates
+  const loc = (x, y) => ({ x: (x - pic.x) / s + hp.x - Hr.left, y: (y - pic.y) / s + hp.y - Hr.top });
+  const tl = loc(box.left, box.top), br = loc(box.right, box.bottom);
+  const ins = [tl.y, W - br.x, H - br.y, tl.x];
+  return {
+    k: s, W, H, iX: ins[3], iY: ins[2], cardW: br.x - tl.x, cardH: br.y - tl.y, loc,
+    shut: { transform: `translate(${px(dx)}, ${px(dy)}) scale(${s})`, clipPath: `inset(${ins.map(px).join(' ')} round ${px(r0 * k / s)})` },
+    open: { transform: 'translate(0px, 0px) scale(1)', clipPath: `inset(0px 0px 0px 0px round ${px(r1)})` },
+  };
+}
+
 // ---------- the words ----------
 // The place a part flies to, as it rests on its page: its words' box (Dt) and its own box (Db).
 // The destination's flight: from the part's box to where it rests, matched on width and centre to centre. Its origin

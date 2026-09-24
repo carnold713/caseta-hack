@@ -364,13 +364,13 @@
   width: 40px; height: 40px; border-radius: 20px; border: 0;
   display: grid; place-items: center; background: var(--surface-2); color: var(--icon-1);
 }
-/* a second round button in the head, left of the close circle (a scene's star) */
+/* a second round button in the head, left of the close circle (a scene's pin) */
 .sheet-head .head-btn {
   position: absolute; top: 16px; right: calc(var(--gutter) + 52px);
   width: 40px; height: 40px; border-radius: 20px; border: 0;
   display: grid; place-items: center; background: var(--surface-2); color: var(--icon-1);
 }
-.sheet-head .head-btn[aria-pressed='true'] { color: var(--copper); }
+.sheet-head .head-btn[aria-pressed='true'] { color: var(--text-1); }
 .sheet-head h2 { padding-right: 56px; }
 .sheet-head:has(.head-btn) h2 { padding-right: 108px; }
 .sheet-head h2 { margin: 0; }

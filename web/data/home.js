@@ -61,12 +61,57 @@
     function houseLevel() { const ls = litLights(); return ls.length ? meanLevel(ls.map(d => d.device_id)) : 0; }
     // Is a sleep timer running over this light?
     function timerOn(id) { return Object.entries(S.timers || {}).some(([t, v]) => v && v.ends_at && D.targetDevices(tsplit(t)).includes(id)); }
-    // The starred lights, in room order then by name: the row under the house card on Home. A home with nothing
-    // starred has no row at all.
+    // The pinned lights, in room order then by name: the classic app's row of lamps (web/js/light.js). Copper Night's
+    // Home draws pinned() instead, in the order things were pinned.
     function rowLights() {
       const order = new Map(D.areas().map((a, i) => [a.id, i])); const f = S.config.favorites;
       return D.controllable().filter(d => (d.domain === 'light' || d.domain === 'switch') && f.includes('d:' + d.device_id))
         .sort((a, b) => ((order.get(D.devArea(a)) ?? 999) - (order.get(D.devArea(b)) ?? 999)) || a.name.localeCompare(b.name));
+    }
+
+    // ---------- pinned to Home ----------
+    // What is pinned lives in config.favorites, which the hub keeps, so a pin follows the home to every phone. The
+    // keys are the ones stars always used, so a home's old stars are its pins: d:<device> for a light (or a fan or a
+    // shade), a:<room> for a room, p:<scene> and s:<Lutron scene> for scenes.
+    const favs = () => (S.config && S.config.favorites) || [];
+    const isPinned = key => favs().includes(key);
+    // Pin or unpin; returns whether it is pinned now. A new pin goes to the end, so Home shows things in the order
+    // they were pinned.
+    function togglePin(key) {
+      const f = S.config.favorites || (S.config.favorites = []);
+      const i = f.indexOf(key);
+      if (i >= 0) f.splice(i, 1); else f.push(key);
+      return i < 0;
+    }
+    function unpin(key) { if (!S.config.favorites) return false; const n = S.config.favorites.length; S.config.favorites = S.config.favorites.filter(k => k !== key); return S.config.favorites.length !== n; }
+    // Home's Pinned grid: every pinned light and room that is still in the home, in the order pinned. A light that has
+    // been removed or hidden, or a room that has been deleted, is simply not drawn (removing either also takes its key
+    // out, edit.js).
+    function pinned() {
+      const rooms = new Map(D.areas().map(a => [a.id, a]));
+      const out = [];
+      for (const key of favs()) {
+        if (key.startsWith('d:')) {
+          const id = key.slice(2);
+          const d = D.controllable().find(x => x.device_id === id);
+          if (d) out.push({ key, kind: 'light', d });
+        } else if (key.startsWith('a:')) {
+          const a = rooms.get(key.slice(2));
+          if (a) out.push({ key, kind: 'room', a });
+        }
+      }
+      return out;
+    }
+    // The grid's new order, as it was dragged: those keys take the places the grid's keys held in favorites, in
+    // this order. Scenes and keys that are not drawn keep their places.
+    function setPinOrder(keys) {
+      const f = favs();
+      const shown = new Set(pinned().map(p => p.key));
+      const next = keys.filter(k => shown.has(k));
+      for (const k of shown) if (!next.includes(k)) next.push(k);
+      let i = 0;
+      S.config.favorites = f.map(k => (shown.has(k) ? next[i++] : k));
+      return S.config.favorites;
     }
 
     // ---------- scenes ----------
@@ -315,6 +360,7 @@
       moodById,
       lightKind, lightRole, kindLabel,
       roomLights, roomDimmers, meanLevel, roomMean, litLights, houseLevel, timerOn, rowLights,
+      isPinned, togglePin, unpin, pinned, setPinOrder,
       shortenSuggestedFades, moodLevels, levelsMatch, roomScenes, roomHasScenes, roomSuggested, roomHasSuggested,
       sceneMatch, noteSceneRun, suggestedMatch, sceneShortName, presetMax, suggestScenes, keepMoodScene, sceneEntryNow, saveRoomLook,
       fileable, roomById, bridgeTag, ensureRooms, pruneRooms,

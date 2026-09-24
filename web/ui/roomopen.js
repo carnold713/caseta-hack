@@ -21,7 +21,7 @@
 // BACK is the same run the other way, faster (0.45 s on (0.4, 0, 0.2, 1)), with the room's content gone first. A room
 // let go by Android's back swipe (M13) closes from the shrunk pose the finger left (opening.js starts its ghost there).
 import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, CROSS, last, shown, textBox, px, opacityOf, part, copyText, copyButton, topLayer, el, windowGeo, pair, stepAside, parts as barParts, scrim } from '/ui/flight.js';
+import { OPEN, CLOSE, CROSS, last, shown, textBox, px, opacityOf, part, copyText, copyButton, topLayer, el, windowGeo, pair, stepAside, parts as barParts, scrim, aside, homeParts, pictureFrame, pictureGeo } from '/ui/flight.js';
 
 const FACE = 300;       // the card's face fades over the first (open) or last (back) 0.3 s
 const RADIUS = 28;      // the card's corners, which the window keeps
@@ -40,8 +40,10 @@ function readCard(card) {
     return { el: g, x: r.left, y: r.top, transform: cs.transform, opacity: cs.opacity };
   });
   const veil = q('.rm-veil'), warm = q('.rm-warm');
+  // a room pinned on Home: a smaller card that shows the whole room, so its picture is matched point for point
+  const home = card.classList.contains('pin-room');
   return {
-    card, box, k,
+    card, box, k, home, pic: home ? pictureFrame(card) : null,
     bg: photo ? null : getComputedStyle(card).backgroundImage,
     shade: photo ? getComputedStyle(card, '::after').backgroundImage : null,
     nm: part(q('.nm'), k), vl: part(q('.vl'), k), pwr: part(q('.pwr'), k), pill: part(q('.add-photo'), k),
@@ -72,8 +74,19 @@ function spill(O, after) {
 }
 
 // The window's geometry: the photograph card moved and scaled so its middle sits on the card, and clipped to the
-// card's box.
-const geometry = (O, Hr) => windowGeo(O, Hr, RADIUS / O.k, RADIUS);
+// card's box. From a pinned card on Home, which shows the whole room smaller, the photograph card is scaled down
+// until its picture lies on the card's, the same point of the room on the same point of the screen.
+function geometry(O, Hr, hero, hp0 = null) {
+  const hp = O.pic && (hp0 || pictureFrame(hero, O.pic.nat));
+  if (O.home && hp) return pictureGeo(O, Hr, hp, RADIUS, RADIUS);
+  return windowGeo(O, Hr, RADIUS / O.k, RADIUS);
+}
+// What steps aside around the card, and the header that lifts away: Rooms' list and its "Rooms", or the rest of Home.
+function around2(root, card, O) {
+  if (card.classList.contains('pin-room')) return { steps: aside(homeParts(root, card, false), O.box), head: root.querySelector('.home > .home-head') };
+  const list = root.querySelector('.rooms-list');
+  return { steps: list ? around(list, card) : [], head: root.querySelector('.rooms-head') };
+}
 
 // The card's face over the window. Each part is [element, keyframe when shut, keyframe when open]; the caller
 // plays them one way or the other. Only the shade is locked to an edge (the bottom, where the name was); the veil
@@ -140,9 +153,9 @@ function around(list, card) {
 
 // ---------- the kind, for opening.js ----------
 export const name = 'room';
-// Only a card on Rooms opens this way.
-export const source = e => e.matches('.room-big[data-go]');
-export const opens = ({ from, r, to }) => from === 'rooms/null' && r.name === 'room' && !r.sub && to === `room/${r.id}`;
+// A card on Rooms opens this way, and a room's card in Home's Pinned grid.
+export const source = e => e.matches('.room-big[data-go], .pin-grid .pin-room[data-go]');
+export const opens = ({ from, r, to }) => (from === 'rooms/null' || from === 'home/null') && r.name === 'room' && !r.sub && to === `room/${r.id}`;
 export const minShown = 0.25;
 export const read = readCard;
 // The room page, read before it is taken off screen, so its photograph closes from where it is.
@@ -150,11 +163,11 @@ export function readClose(screen) {
   const hero = screen.querySelector('.room-photo-card'), h1 = screen.querySelector('.room-title h1');
   if (!hero || !h1 || shown(hero) <= 0) return null;
   const art = hero.querySelector('.room-art');
-  return { hero, h1, Hr: hero.getBoundingClientRect(), Ht: textBox(h1), Hb: h1.getBoundingClientRect(), artR: art && art.getBoundingClientRect() };
+  return { hero, h1, Hr: hero.getBoundingClientRect(), Ht: textBox(h1), Hb: h1.getBoundingClientRect(), artR: art && art.getBoundingClientRect(), hp: pictureFrame(hero) };
 }
-// The card on Rooms that the room closes into.
+// The card on Rooms (or pinned on Home) that the room closes into.
 export function find(screen, entry) {
-  const card = screen.querySelector(`.room-big[data-go="${CSS.escape(entry.to)}"]`);
+  const card = screen.querySelector(`${entry.from === 'home/null' ? '.pin-grid .pin-room' : '.room-big'}[data-go="${CSS.escape(entry.to)}"]`);
   return card && card.querySelector('.nm') ? card : null;
 }
 
@@ -165,14 +178,12 @@ export function open({ O, ghost }, screen, F) {
   // read everything first
   const Hr = hero.getBoundingClientRect(), Hb = h1.getBoundingClientRect(), Ht = textBox(h1);
   const artR = (hero.querySelector('.room-art') || { getBoundingClientRect: () => null }).getBoundingClientRect();
-  const G = geometry(O, Hr);
+  const G = geometry(O, Hr, hero);
   const q = s => screen.querySelector(s);
   const onScreen = e => { const b = e.getBoundingClientRect(); return b.top < innerHeight && b.left < innerWidth && b.bottom > 0; };
   const chips = [...screen.querySelectorAll('.room-chips > *')].filter(onScreen);
   const tiles = [...screen.querySelectorAll('.room-grid > .tile, .room-empty')].filter(onScreen);
-  const list = ghost.querySelector('.rooms-list');
-  const steps = list ? around(list, O.card) : [];
-  const head = ghost.querySelector('.rooms-head');
+  const { steps, head } = around2(ghost, O.card, O);
   const play = (node, kf, o) => F.extra(node, kf, { fill: 'backwards', ...o });
   const top = topLayer(screen, 'm10-top');
   F.undo(() => top.remove());
@@ -215,6 +226,7 @@ export function open({ O, ghost }, screen, F) {
   const rise = (n, delay, dur = T.enter, dy = 12) => play(n, [{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: 'translateY(0px)' }], { duration: dur, easing: T.ease, delay });
   play(q('.room > .hdr .back'), [{ opacity: 0, transform: 'translateX(-12px)' }, { opacity: 1, transform: 'translateX(0px)' }], { duration: T.standard, easing: T.ease, delay: 200 });
   play(q('.room > .hdr .a1'), [{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay: 120 });
+  play(q('.room > .hdr .a2'), [{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay: 160 });
   play(hero.querySelector('.badge'), [{ opacity: 0, transform: 'scale(0.8)' }, { opacity: 1, transform: 'scale(1)' }], { duration: T.standard, easing: T.ease, delay: 350 });
   play(hero.querySelector('.add-photo'), [{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay: 350 });
   rise(hero.querySelector('.room-onoff'), 400);
@@ -237,12 +249,10 @@ export function open({ O, ghost }, screen, F) {
 
 // ---------- back ----------
 export function close(p, screen, F, { ghost: g, O, el: card }) {
-  const { hero, h1, Hr, Ht, Hb, artR } = p;
-  const G = geometry(O, Hr);
+  const { hero, h1, Hr, Ht, Hb, artR, hp } = p;
+  const G = geometry(O, Hr, hero, hp);
   const room = g.querySelector('.room');
-  const list = card.parentElement;
-  const steps = list ? around(list, card) : [];
-  const head = screen.querySelector('.rooms-head');
+  const { steps, head } = around2(screen, card, O);
   const top = topLayer(g, 'm10-top');
   F.undo(() => top.remove());
 

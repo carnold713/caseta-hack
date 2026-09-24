@@ -30,7 +30,7 @@ const ORDER = [
   'health_test', 'huearea_test', 'err_test', 'remove_test', 'rooms_test', 'reconnect_test', 'sheetscroll_test', 'nav_test',
   'v7_home_test', 'v7_night_test', 'v7_log_test', 'v7_setup_test', 'toastoff_test', 'roomopen_test', 'predictiveback_test', 'chipopen_test', 'lightopen_test', 'remoteopen_test', 'layout_scenes_test',
   'layout_rooms_test',
-  'header_test',
+  'header_test', 'pins_test',
 ];
 
 const only = process.argv.slice(2).filter(a => !a.startsWith('-'));
