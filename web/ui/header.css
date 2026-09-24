@@ -15,8 +15,8 @@
 
    Two shapes, as the file draws them:
      no back button (Home, Rooms, Remotes, Routines, Settings): the title at x 20 shrinks to 0.6 about its left
-       edge, rising to centre on y 72; the circles go from 56 to 44 about their outer edge, centred on y 72, so
-       the bar reads from 44 to 100 under the status bar.
+       edge (a long home name, set smaller, to 24 all the same), rising to centre on y 72; the circles go from 56
+       to 44 about their outer edge, centred on y 72, so the bar reads from 44 to 100 under the status bar.
      a back button (a room, a remote, a routine, All scenes, Activity, Add a device, Press timing): the circles do
        the same, and the title, which rests under them at y 128, takes two steps so it never crosses the back
        button: over the first half it slides right to x 76 (the back circle's edge and 12) shrinking to 0.72 and
@@ -52,9 +52,13 @@
 .bar .bar-t {
   transform-origin: 0 50%;
   translate: 0 calc(var(--bar-dy, -8px) * var(--hdr-p, 0));
-  scale: calc(1 - .4 * var(--hdr-p, 0));
+  scale: calc(1 - (1 - var(--bar-s, .6)) * var(--hdr-p, 0));
 }
 .home-head { --bar-dy: -38px; }
+/* A long home name is set a size or two down where it rests (screens.css: fit1 32, fit2 28). In the bar it still
+   reads 24, as 40 at 0.6 does: it shrinks less, on the same line, so it rises to the same centre. */
+.home-head h1.bar-t.fit1 { --bar-s: .75; }
+.home-head h1.bar-t.fit2 { --bar-s: .8571; }
 /* Remotes' title is a block with its words 58 down, so it shrinks about where its words start */
 .bar .top-h1.bar-t { transform-origin: var(--gutter) 80px; }
 /* Home's greeting over the title scrolls away with the page and is gone by 40 px */

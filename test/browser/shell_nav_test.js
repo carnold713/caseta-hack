@@ -129,6 +129,8 @@ async function through(page, what, act, { settle = 700 } = {}) {
       c.S.config.schedules = (c.S.config.schedules || []).filter(x => !String(x.id).startsWith('zz'));
       ['Porch, path and garden lights for the long winter evenings w', 'Kitchen'].forEach((n, i) => { const sc = c.RT.newRoutine(); sc.id = `zz${i}`; sc.name = n; });
       await c.save('', { quiet: true });
+      // on a rig no earlier test has greeted, the first-time greeting is already up over Home
+      if (document.querySelector('#sheet-root[data-key="greet"]')) c.closeSheet();
     });
     return { ctx, page };
   };
@@ -254,6 +256,91 @@ async function through(page, what, act, { settle = 700 } = {}) {
     await wait(1200);
     await is('a tab tapped in the middle of a push lands whole', '#rooms', 1);
     check('with nothing left half faded', JSON.stringify(await settled()) === JSON.stringify({ ghosts: 0, scrims: 0, op: '1' }), await settled());
+
+    // a deletion takes its page with it: a light removed from its About sheet, a room deleted from its setup, a scene
+    // deleted from its editor. Each leaves the way Back would, and no step of what is gone is left under it: Back from
+    // there is one step, and Home is the only place Back leaves from. Removing a light here is only the app's half of
+    // it (the bridge's half is stubbed), so the pretend house keeps every light for the tests after this one.
+    // the app opened on `hash`, with the home as it was, a spare room and a spare scene in it, and the stub in place
+    const load = async (hash, key) => { await page.goto(`${ROOT}?night=0&open=${key}#${hash}`); await page.waitForFunction(() => window.__copper && window.__copper.S.ready); await wait(900); };
+    const fresh = async (hash, key) => {
+      await load('home', `${key}a`);
+      await page.evaluate(p => {
+        const c = window.__copper;
+        c.S.config = JSON.parse(p);
+        const s = c.S.config.settings; s.greeted = true;
+        s.rooms = (s.rooms || []).filter(r => !String(r.id).startsWith('zz'));
+        s.rooms.push({ id: 'zzroom', name: 'Spare room', device_ids: [], bridge_area: null, hue_room: null });
+        c.S.config.presets = (c.S.config.presets || []).filter(x => !String(x.id).startsWith('zz'));
+        c.S.config.presets.push({ id: 'zzscene', name: 'Spare scene', levels: {}, fade: null });
+        return c.save('', { quiet: true });
+      }, prev);
+      await wait(400);
+      await load(hash, key);
+      await page.evaluate(() => { const c = window.__copper; c.EDIT.removeDevice = async id => { c.EDIT.forgetDevice(id); delete c.S.inv.devices[id]; return { stillListed: true }; }; });
+    };
+    const push = async h => { await page.evaluate(h => { location.hash = h; }, h); await wait(800); };
+    await fresh('home', 'del1');
+    const lamp = await page.evaluate(() => { const c = window.__copper; const d = c.data.controllable().find(x => x.domain === 'light' && c.EDIT.canRemove(x.device_id) && c.data.devArea(x)); return d && { id: d.device_id, room: c.data.devArea(d) }; });
+    check('there is a light in a room to remove', !!lamp, lamp);
+    const remove = async () => { await tap(`.hdr-btn[data-go="light/${lamp.id}/about"]`); await tap('#sheet-root [data-act="about-remove"]'); await tap('#sheet-root [data-act="about-remove-go"]'); await wait(400); };
+    const bottom = async what => {
+      await page.evaluate(() => window.__caseta.back.commit()); await wait(900);
+      await is(`${what}: Back is Home`, '#home', 0, { sheet: false });
+      check(`${what}: and from Home, Back has nowhere to go but out`, !(await page.evaluate(() => window.__caseta.back.can())));
+    };
+
+    await tab('rooms'); await push(`room/${lamp.room}`); await push(`light/${lamp.id}`);
+    await remove();
+    await is('a light removed from its About sheet leaves for its room', `#room/${lamp.room}`, 2, { sheet: false });
+    await page.evaluate(() => window.__caseta.back.commit()); await wait(900);
+    await is('and Back from its room is Rooms', '#rooms', 1);
+    await bottom('a light removed from its room');
+
+    await fresh('home', 'del2');
+    await push(`light/${lamp.id}`);
+    await remove();
+    await is('a light opened from Home and removed leaves for Home', '#home', 0, { sheet: false });
+    check('and from Home, Back has nowhere to go but out', !(await page.evaluate(() => window.__caseta.back.can())));
+
+    await fresh(`light/${lamp.id}`, 'del3');
+    await is('the app opened on a light has it at the bottom', `#light/${lamp.id}`, 0);
+    await remove();
+    await is('removed, its room takes its place at the bottom', `#room/${lamp.room}`, 0, { sheet: false });
+    await bottom('a light the app opened on');
+
+    await fresh('home', 'del4');
+    await tab('rooms'); await push('room/zzroom');
+    await tap('.hdr-btn[data-go="room/zzroom/setup"]'); await is('a room\'s setup is a sheet a step above it', '#room/zzroom/setup', 3, { sheet: true });
+    await tap('#sheet-root [data-act="setup-delete"]'); await tap('#sheet-root [data-act="setup-delete-go"]'); await wait(600);
+    await is('a room deleted from its setup leaves for Rooms, one step above Home', '#rooms', 1, { sheet: false, tab: 'rooms' });
+    await bottom('a deleted room');
+
+    await fresh('room/zzroom/setup', 'del5');
+    await tap('#sheet-root [data-act="setup-delete"]'); await tap('#sheet-root [data-act="setup-delete-go"]'); await wait(600);
+    await is('a room deleted from its setup, the app opened on it, is Rooms at the bottom', '#rooms', 0, { sheet: false, tab: 'rooms' });
+    await bottom('a room deleted where the app opened');
+
+    await fresh('home', 'del6');
+    await push('scenes/zzscene');
+    await is('a scene opened by its address is a step above Home', '#scenes/zzscene', 1, { sheet: true });
+    await tap('#sheet-root [data-act="scene-delete"]'); await tap('#sheet-root [data-act="scene-delete-go"]'); await wait(600);
+    await is('deleted, All scenes takes its place at the same step', '#scenes', 1, { sheet: false });
+    await bottom('a scene deleted where it was opened by its address');
+
+    await fresh('scenes/zzscene', 'del7');
+    await tap('#sheet-root [data-act="scene-delete"]'); await tap('#sheet-root [data-act="scene-delete-go"]'); await wait(600);
+    await is('a scene deleted where the app opened on it is All scenes at the bottom', '#scenes', 0, { sheet: false });
+    await bottom('a scene deleted where the app opened');
+
+    await fresh('home', 'del8');
+    await push('scenes'); await push('scenes/zzscene');
+    await is('a scene opened from All scenes is a sheet a step above it', '#scenes/zzscene', 2, { sheet: true });
+    await tap('#sheet-root [data-act="scene-delete"]'); await tap('#sheet-root [data-act="scene-delete-go"]'); await wait(600);
+    await is('deleted, it steps back to All scenes', '#scenes', 1, { sheet: false });
+    await bottom('a scene deleted from All scenes');
+    check('and the deletions were real', await page.evaluate(() => { const c = window.__copper; return !c.data.presets().some(p => p.id === 'zzscene'); }));
+
     await page.evaluate(async p => { const c = window.__copper; c.S.config = JSON.parse(p); await c.save('', { quiet: true }); }, prev);
     await ctx.close();
   }

@@ -249,11 +249,14 @@ function replacePage(hash) {
 }
 // The thing a page shows is gone (a routine deleted from its own sheet): close the sheet and leave the page the way
 // Back would, rather than writing the list over the sheet's entry and leaving the page and its sheet under it.
+// Opened by its address with its sheet a step above it, the page that is gone is the bottom entry: the step goes down
+// to it and `fallback` takes its place there (as a tab does), so no step of the gone page is left under it.
 function leavePage(fallback) {
   const steps = (history.state && history.state.sheet ? 1 : 0) + 1;
   closeSheet(); ctx.ui.picker = null;
   if (place() >= steps) { stepHistory(-steps); return; }
-  history.replaceState(history.state, '', '#' + fallback); render();
+  if (place() > 0) { pendingTab = fallback; stepHistory(-place()); return; }
+  history.replaceState({ ...history.state, sheet: false }, '', '#' + fallback); render();
 }
 
 // ---------- what every screen is handed ----------

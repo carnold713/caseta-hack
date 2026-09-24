@@ -113,6 +113,10 @@ export function view(c) {
   const lit = H.litLights();
   const lv = H.houseLevel();
   const name = (S.config.settings.home_name || 'Home');
+  // A long name steps down a size, then another, before it has to end in an ellipsis, as a room's title does: beside
+  // the clock on a 360 screen the line holds about eleven letters at 40, fourteen at 32 and sixteen at 28 (more on a
+  // wider screen, whose line runs further), where at 40 alone a longer name was cut to its first nine.
+  const fit = name.length > 14 ? 'fit2' : name.length > 11 ? 'fit1' : '';
   // connected: nothing. The first ten seconds of a drop: a grey breathing dot after the greeting. After that: a red
   // dot and "Offline · showing last known state" in its place, and a card that says what to do.
   const greet = st === 'off'
@@ -130,7 +134,7 @@ export function view(c) {
     ${empty ? '' : houseLight(c, rooms.filter(a => H.roomLights(a.id).length))}
     <header class="home-head bar">
       <button class="greet ${st === 'off' ? 'off' : ''}" data-act="conn-open" aria-label="Connection" data-xf="standard">${greet}</button>
-      <h1 class="t-h1 bar-t">${esc(name)}</h1>
+      <h1 class="t-h1 bar-t ${fit}">${esc(name)}</h1>
       <button class="hdr-btn a1" data-go="activity" aria-label="Recent activity">${icon('clock', 20, 1.7)}</button>
     </header>
     ${st === 'off' ? offlineCard(c) : ''}

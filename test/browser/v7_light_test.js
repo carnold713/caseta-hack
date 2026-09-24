@@ -70,6 +70,20 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('3: a floor pool 120 + 180 x level wide, and a filament lighting the bulb', Math.abs(pool0.pw - (120 + 180 * lv0 / 100)) <= 1 && pool0.fil > 0.3, pool0);
   check('3: a colour change crossfades the glow (it carries data-xf), it never slides', g0 && g0.xf, g0);
   await page.screenshot({ path: 'v7-light-on.png' });
+  // the dial's "Brightness" a gap (tokens.css) over its number, where the file puts it, on the owner's 412 and a small
+  // Android's 360 alike, lit here and off below: the two used to touch, the label's line on the number's
+  const dialGap = async () => {
+    const at = [];
+    for (const [w, h] of [[412, 915], [360, 780]]) {
+      await page.setViewportSize({ width: w, height: h }); await wait(300);
+      at.push(await C(() => { const d = document.querySelector('#screen .dial'), b = d.getBoundingClientRect(), l = d.querySelector('.lbl').getBoundingClientRect(), n = d.querySelector('.num').getBoundingClientRect(); return { w: innerWidth, lbl: l.top - b.top, gap: n.top - l.bottom, token: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) }; }));
+    }
+    await page.setViewportSize({ width: 412, height: 915 }); await wait(300);
+    return at;
+  };
+  const gapOk = at => at.length === 2 && at.every(g => g.lbl === 78 && g.token > 0 && Math.abs(g.gap - g.token) < 0.5);
+  const gapOn = await dialGap();
+  check('3: lit, "Brightness" sits a gap over the number, at 412 and 360', gapOk(gapOn), gapOn);
 
   // the knob takes the finger; under it the light is locked to it (no transition), and it bottoms out at 1%
   const kn = await C(() => { const g = document.querySelector('.dial .kgrab').getBoundingClientRect(); return [g.left + g.width / 2, g.top + g.height / 2]; });
@@ -114,6 +128,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('3: off draws no light (the glow is off, the filament dark)', off.glowOff && off.fil === 0, off);
   check('3: the dial stays, greyed, at the level On will bring back', off.at === off.want && /58, 54, 51/.test(off.stroke) && /158, 158, 158/.test(off.num), off);
   await page.screenshot({ path: 'v7-light-off.png' });
+  const gapOff = await dialGap();
+  check('3: off, the same gap', gapOk(gapOff), gapOff);
   await page.click('[data-act="dev-on"]'); await wait(1400);
   await C(([id, v]) => window.__copper.run({ type: 'level', target: `d:${id}`, level: v }), [dim, lv0]); await wait(900);
 

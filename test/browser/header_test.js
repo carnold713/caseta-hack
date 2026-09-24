@@ -27,7 +27,7 @@ function measure() {
   const count = scr.querySelector('.room-title .count');
   return {
     y: window.scrollY, p: Number(document.getElementById('app').style.getPropertyValue('--hdr-p') || 0),
-    bar: r(bar), t: r(t), words, tw: t && t.offsetWidth, th: t && t.offsetHeight, tsw: t && t.scrollWidth, tcw: t && t.clientWidth,
+    bar: r(bar), t: r(t), words, tw: t && t.offsetWidth, th: t && t.offsetHeight, tsw: t && t.scrollWidth, tcw: t && t.clientWidth, tfs: t && parseFloat(getComputedStyle(t).fontSize),
     back: btn('.back'), a1: btn('.a1'), a2: btn('.a2'),
     scrim: cs && { o: Number(cs.opacity), h: parseFloat(cs.height), w: parseFloat(cs.width), mask: cs.maskImage || cs.webkitMaskImage, blur: cs.backdropFilter || cs.webkitBackdropFilter, bg: cs.backgroundColor },
     count: count && { ...r(count), o: Number(getComputedStyle(count).opacity) },
@@ -185,11 +185,43 @@ async function scrollTo(page, y) {
       // (a title that is its own row is padded 20 all round but the bottom: its words are 42 down its box, at its scale)
       const words = m.words.l;
       check(`${hash} at ${y}: collapsed as far as it scrolls (p ${p.toFixed(2)})`, near(m.p, p, 0.002) && near(m.scrim.o, p, 0.002), { p: m.p, o: m.scrim.o });
-      if (p === 1) check(`${hash} at 64: the title's words start at ${back ? 76 : 20}, centred on y 72, at 0.6`, near(words, back ? 76 : 20, 1) && near(m.t.h / m.th, 0.6, 0.005) && near(back ? m.t.t + 42 * (m.t.h / m.th) : m.t.cy, 72, 1), { words, s: m.t.h / m.th, top: m.t.t });
+      // (a long home name is set smaller where it rests and shrinks less, to read 24 like the rest)
+      const s1 = hash === 'home' ? 24 / m.tfs : 0.6;
+      if (p === 1) check(`${hash} at 64: the title's words start at ${back ? 76 : 20}, centred on y 72, at ${s1.toFixed(3)}`, near(words, back ? 76 : 20, 1) && near(m.t.h / m.th, s1, 0.005) && near(back ? m.t.t + 42 * (m.t.h / m.th) : m.t.cy, 72, 1), { words, s: m.t.h / m.th, top: m.t.t });
       check(`${hash}: no sideways scroll`, m.hscroll <= 0, m.hscroll);
       if (m0.maxY >= 400) { await scrollTo(page, 400); await shot(`${hash.replace('/', '-')}-400`); }
       await scrollTo(page, 0);
     }
+
+    // ---- Home with a long name: a size or two down where it rests, and in the bar like any title ----
+    // Beside the clock its line runs up to the circle and 24 short of it. A name that fits at a smaller size is set
+    // at it instead of being cut, and at every step of the collapse it stays on its one line, clear of the circle.
+    const homeWas = await C(() => window.__copper.S.config.settings.home_name);
+    for (const [nm, fit, px] of [['Home', '', 40], ['The Arnolds', '', 40], ['Lakeside Cabin', 'fit1', 32], ['The Arnold House', 'fit2', 28], ['The Arnold-Whitfield Family Lake House o', 'fit2', 28]]) {
+      await C(n => { const c = window.__copper; c.S.config.settings.home_name = n; c.render(); }, nm);
+      await go('home'); await scrollTo(page, 0);
+      const h0 = await M();
+      const cls = await C(() => document.querySelector('#screen .home-head h1').className);
+      check(`home "${nm}": set at ${px}`, near(h0.tfs, px, 0.01) && cls.includes(fit || 't-h1') && (!!fit || !/fit/.test(cls)), { px: h0.tfs, cls });
+      if (nm.length > 30) check(`home "${nm}": cut where its line meets 24 short of the clock`, near(h0.tcw, W - 40 - 80, 1) && h0.tsw > h0.tcw, { width: h0.tcw, want: W - 120 });
+      if (nm.length <= 16) check(`home "${nm}": whole, not cut`, h0.tsw <= h0.tcw, { sw: h0.tsw, cw: h0.tcw });
+      const y = Math.min(64, h0.maxY);
+      let clear = true, same = true;
+      for (const at of [0, 8, 16, 24, 32, 40, 48, 56, 64].filter(v => v <= y)) {
+        await scrollTo(page, at);
+        const m = await M();
+        // (the words as far as they show: a cut line's own words run on under its ellipsis)
+        if (Math.min(m.words.r, m.t.r) > m.a1.l - 8) clear = false;
+        if (m.th !== h0.th || m.tsw !== h0.tsw || m.tcw !== h0.tcw) same = false;
+      }
+      check(`home "${nm}": clear of the clock at every step of the collapse`, clear);
+      check(`home "${nm}": its line never rewraps or cuts differently as it collapses`, same);
+      const hb = await M();
+      if (y === 64) check(`home "${nm}" at 64: reads 24 px, centred on y 72, its words from 20`, near(hb.t.h / hb.th * hb.tfs, 24, 0.3) && near(hb.t.cy, 72, 1) && near(hb.words.l, 20, 1), { px: hb.t.h / hb.th * hb.tfs, cy: hb.t.cy, l: hb.words.l });
+      if (nm.length > 30) await shot('home-long-64');
+      await scrollTo(page, 0);
+    }
+    await C(n => { const c = window.__copper; c.S.config.settings.home_name = n; c.render(); }, homeWas);
 
     // ---- Rooms put back where it was scrolled has its header collapsed from its first frame ----
     await go('rooms');

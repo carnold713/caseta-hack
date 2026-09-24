@@ -96,12 +96,15 @@ export const actions = {
   async 'about-remove-go'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;
     const prev = JSON.stringify(c.S.config);
+    const aid = c.data.devArea(d);
     el.disabled = true; el.textContent = 'Removing';
     try {
       const { stillListed } = await c.EDIT.removeDevice(r.id);
       c.closePicker(); c.closeSheet();
       await c.save('', { quiet: true });
-      c.go('home');
+      // its page is gone: back to the page it was opened from (its room, or Home), or its room in its place when the
+      // app opened on it
+      c.leave(aid ? `room/${aid}` : 'rooms');
       c.toast(`${d.name} removed from your home`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); c.EDIT.unhideDevice(r.id); await c.save('Put back'); } });
       // an older connector does not say whether the bridge let go of it: hide it if it comes back
       if (!stillListed) setTimeout(() => { if (c.data.dev(r.id)) { c.EDIT.hideDevice(r.id); c.save('', { quiet: true }); } }, 4000);

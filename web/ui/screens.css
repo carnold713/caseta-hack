@@ -22,7 +22,12 @@
 .home-head .greet { position: absolute; left: var(--gutter); top: 66px; margin: 0; font-size: 14px; line-height: 17px; color: var(--text-2); display: flex; align-items: center; }
 .home-head .greet.off { color: var(--text-1); }
 .home-head .greet.off .conn-dot { margin: 0 8px 0 0; }
-.home-head h1 { position: absolute; left: var(--gutter); top: 88px; margin: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The name's line runs up to the clock circle and 24 short of it (240 at 360, 270 at 390, 292 at 412): its top rows
+   are the circle's bottom ones. A long name steps down a size or two (home.js) before it has to end in an ellipsis,
+   centred on the same line, so in the bar it lands where any title does (header.css). */
+.home-head h1 { position: absolute; left: var(--gutter); top: 88px; margin: 0; max-width: calc(100% - 2 * var(--gutter) - 80px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-head h1.fit1 { font-size: 32px; }
+.home-head h1.fit2 { font-size: 28px; }
 
 .offline-card {
   margin: 0 var(--gutter) 16px; padding: 18px 20px; border-radius: var(--r-card);
@@ -359,7 +364,8 @@
 .dial .trk, .dial .fil { fill: none; stroke-width: 40; stroke-linecap: round; }
 .dial .kn { fill: #fff; stroke: var(--bg); stroke-width: 4; }
 .dial .lbl { position: absolute; left: 0; right: 0; top: 78px; text-align: center; font-size: 14px; line-height: 17px; color: var(--text-2); pointer-events: none; }
-.dial .num { position: absolute; left: 0; right: 0; top: 96px; display: flex; justify-content: center; align-items: flex-start; pointer-events: none; }
+/* the number a gap under its label (the label where the file puts it, 78; the two used to touch, 95 on 96) */
+.dial .num { position: absolute; left: 0; right: 0; top: calc(95px + var(--gap)); display: flex; justify-content: center; align-items: flex-start; pointer-events: none; }
 .dial .num b { font-weight: 300; font-size: 88px; line-height: 88px; letter-spacing: -.03em; }
 .dial .num span { font-weight: 300; font-size: 36px; line-height: 42px; color: var(--text-2); margin-top: 12px; margin-left: 1px; }
 .dial .nudge {

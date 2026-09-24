@@ -454,9 +454,10 @@ export const actions = {
     const p = c.EDIT.deleteScene(r.id); if (!p) return;
     c.closePicker(); c.closeSheet();
     await c.save('', { quiet: true });
-    // opened over a room (room.js), it steps back to the room; opened from All scenes, it is the list again
-    if (r.parent && history.state && history.state.sheet) history.back();
-    else { history.replaceState(r.parent ? history.state : null, '', '#' + (r.parent || 'scenes')); c.render(); }
+    // opened over a room (room.js) or All scenes, it steps back to what it was opened over; opened by its address,
+    // that page takes its place, at the same step of the history
+    if (history.state && history.state.sheet && history.state.n > 0) c.back();
+    else { history.replaceState({ ...history.state, n: (history.state && history.state.n) || 0, sheet: false }, '', '#' + (r.parent || 'scenes')); c.render(); }
     c.toast(`${c.H.sceneShortName(p)} deleted`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };
