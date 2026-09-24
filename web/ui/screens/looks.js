@@ -191,8 +191,48 @@ const pickName = hex => { const f = LAMP_COLOURS.find(([, x]) => sameHex(x, hex)
 function bead(n, x, sel) {
   return `<button class="sw ${sel ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="--b:${x}" aria-label="${n}"></button>`;
 }
+// The wheel's picture. The stylesheet draws it as a conic gradient (screens.css .wheel .disc), and a conic gradient
+// has a join where it meets itself, at three o'clock: a phone's GPU can draw that join as a hairline running from the
+// middle out to the right edge. So the same picture is drawn once, pixel by pixel, into an image with no join at all
+// (the same eight hue stops mixed as CSS mixes them, the same white from the middle), and the disc wears that as soon
+// as it exists; until then, or with no canvas, the gradient stands in.
+const HUE_STOPS = [5, 45, 90, 135, 180, 225, 270, 315, 365].map((h, i) => [i * 45, hslRgb(h, 1, 0.55)]);
+const WHITE = [[0, 1], [6.2, 0.987], [12.5, 0.947], [18.8, 0.884], [25, 0.801], [31.2, 0.703], [37.5, 0.596], [43.8, 0.486], [50, 0.379], [56.2, 0.28], [62.5, 0.193], [68.8, 0.122], [75, 0.068], [81.2, 0.031], [87.5, 0.01], [93.8, 0.001], [100, 0]];
+function hslRgb(h, s, l) {
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  return [0, 8, 4].map(n => 255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+}
+const along = (stops, x) => { for (let i = 1; i < stops.length; i++) if (x <= stops[i][0]) { const [a, va] = stops[i - 1], [b, vb] = stops[i]; return [va, vb, (x - a) / (b - a)]; } const l = stops[stops.length - 1]; return [l[1], l[1], 0]; };
+let wheelURL = null, wheelDrawing = false;
+function drawWheel() {
+  if (wheelURL || wheelDrawing || typeof document === 'undefined') return;
+  wheelDrawing = true;
+  try {
+    const N = Math.round(WHEEL * Math.min(3, Math.max(1, window.devicePixelRatio || 1))), R = N / 2;
+    const cv = document.createElement('canvas'); cv.width = cv.height = N;
+    const g = cv.getContext('2d'); const img = g.createImageData(N, N); const px = img.data;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const dx = x + 0.5 - R, dy = y + 0.5 - R, dist = Math.hypot(dx, dy);
+      const cover = Math.max(0, Math.min(1, R - dist + 0.5)); if (!cover) continue;
+      const [c0, c1, t] = along(HUE_STOPS, (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360);
+      const [w0, w1, u] = along(WHITE, Math.min(100, dist / R * 100)), w = w0 + (w1 - w0) * u;
+      const o = (y * N + x) * 4;
+      for (let k = 0; k < 3; k++) px[o + k] = Math.round((c0[k] + (c1[k] - c0[k]) * t) * (1 - w) + 255 * w);
+      px[o + 3] = Math.round(cover * 255);
+    }
+    g.putImageData(img, 0, 0);
+    cv.toBlob(blob => {
+      wheelDrawing = false; if (!blob) return;
+      wheelURL = URL.createObjectURL(blob);
+      document.querySelectorAll('.wheel .disc').forEach(el => { el.style.background = discBg(); });
+    }, 'image/png');
+  } catch (_) { wheelDrawing = false; }
+}
+const discBg = () => `url(${wheelURL}) center / 100% 100% no-repeat`;
+
 function colour(c, r) {
   const d = c.data.dev(r.id); if (!d || !d.color) return null;
+  drawWheel();
   const id = d.device_id;
   const col = colOf(c, id);
   const hex = (col.mode === 'xy' && col.hex ? col.hex : '#4C8DFF').toUpperCase();
@@ -208,7 +248,7 @@ function colour(c, r) {
       ${washHTML(rgba(hex, showing ? 0.2 : 0.06))}
       ${segmented(c, d, 'colour')}
       <div class="wheel" data-drag="wheel" role="slider" aria-label="Colour">
-        <span class="disc"></span>
+        <span class="disc"${wheelURL ? ` style="background:${discBg()}"` : ''}></span>
         <span class="handle" data-xf="standard" style="left:${hx.toFixed(1)}px;top:${hy.toFixed(1)}px;background:${hex}"></span>
       </div>
       <div class="cs-val" data-cval>
