@@ -248,7 +248,7 @@ export const actions = {
   ...pinActions,
   // The house on, held: every light when something is already on; from dark, what was on before (the connector
   // remembers) or every light, as Settings says.
-  'house-on'(c) { c.ui.houseHint = 0; c.run(c.H.houseOnAction()); },
+  'house-on'(c) { c.ui.houseHint = 0; c.turn(c.H.houseOnAction()); },
   // a tap on the held button: nothing turns on, the line under the bar says to hold it
   'house-on-hint'(c) { c.ui.houseHint = Date.now(); c.render(); setTimeout(() => c.render(), 2600); },
   // The house off. If an automation is holding some of what is on, ask first rather than fight it every time.
@@ -256,9 +256,7 @@ export const actions = {
   // light the app last heard as off may be on), and it no longer stops to ask about lights a routine turned on: the
   // owner's rule is that off really means off. The connector makes sure of it (engine.py, "off means off").
   'house-off'(c) {
-    const lit = c.H.litLights().map(d => d.device_id);
-    c.assume(lit, 0); c.soon();
-    c.run({ type: 'level', target: 'h:all', level: 'off' });
+    c.turn({ type: 'level', target: 'h:all', level: 'off' });
   },
   // Goodnight house, held for a second: every light off, the shades closed, the fans stopped. Then the page goes to
   // sleep with the house (goodnightDark). Offline, nothing went dark, so nothing on the page does either.
@@ -266,17 +264,17 @@ export const actions = {
     if (c.conn() === 'off') { c.toast("The house didn't hear that. Your remotes still work.", { err: true }); return; }
     const acts = c.H.goodnightActions();
     const rooms = c.data.areas().map(a => ({ aid: a.id, L: roomLight(c, a.id) })).filter(r => r.L);
-    c.assume(c.H.litLights().map(d => d.device_id), 0);
+    // every light is shown off at once (turn), then the page goes dark over it
+    const off = c.turn(acts[0]);
     goodnightDark(c, rooms, acts);
     c.soon();
-    await c.run(acts[0]);
+    await off;
     for (const a of acts.slice(1)) c.run(a);
   },
   // A light that stayed on through Goodnight: a tap turns it off.
   'gn-off'(c, el) {
     const ids = (el.dataset.ids || '').split(',').filter(Boolean); if (!ids.length) return;
-    c.assume(ids, 0); c.soon();
-    c.run({ type: 'level', target: ids.map(id => `d:${id}`), level: 'off' });
+    c.turn({ type: 'level', target: ids.map(id => `d:${id}`), level: 'off' });
     el.closest('.gn-stay')?.remove();
   },
   'what-now'(c) { connActions['conn-open'](c); },

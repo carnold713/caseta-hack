@@ -346,7 +346,7 @@ async function runWave(c, el, r, p) {
   if (c.H.sceneMatch(aid) === p.id && !fading(wave, p.id)) {
     wave = { kind: 'same', id: p.id, aid, t0, x, y };
     c.render();
-    c.run({ type: 'preset', preset_id: p.id });
+    c.turn({ type: 'preset', preset_id: p.id });
     return;
   }
   const lights = c.H.roomLights(aid);
@@ -355,9 +355,11 @@ async function runWave(c, el, r, p) {
   const fade = p.fade == null ? 1 : Number(p.fade) || 0;
   const me = wave = { kind: 'run', id: p.id, aid, t0, x, y, fade, tone: sceneTone(c, p), countWas: countText(ds.length, onN), litWas: lights.filter(d => (c.data.level(d.device_id) || 0) > 0).length };
   const before = snapshot(c, p);
+  // the house is asked now, and each tile is shown where the scene puts it from the tap, crossfading over the scene's
+  // 1.0 s rather than stepping through every level the bridge reports on the way (app.js turn)
+  const going = c.turn({ type: 'preset', preset_id: p.id });
   c.render();
-  // the house is asked now; each tile changes when its light says it has
-  const ok = await c.run({ type: 'preset', preset_id: p.id });
+  const ok = await going;
   if (!ok) { if (wave === me) { wave = null; c.render(); } return; }
   // the toast comes in as the count settles; at night it stays longer, so Put back is easy to reach
   const settle = reduced() ? 0 : Math.max(0, (me.tSet || 1300) - since(me));

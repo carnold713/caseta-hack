@@ -5,7 +5,7 @@
 // It is served at /ui/ beside the old app until cutover (docs/design-spec-v6.md, the handoff's phase 5).
 import '/js/kinds.js';
 import '/js/cities.js';
-import { create, CasetaHome, CasetaDaylight, CasetaEdit, CasetaRemotes, CasetaRoutines, RECONNECT_GRACE, esc } from '/data/index.js';
+import { create, CasetaHome, CasetaDaylight, CasetaEdit, CasetaRemotes, CasetaRoutines, RECONNECT_GRACE, esc, levelOf } from '/data/index.js';
 import { icon } from '/ui/icons.js';
 import { deviceArt, roomArt, artSrc, kindArt } from '/ui/art.js';
 import { lampTint } from '/ui/tint.js';
@@ -91,6 +91,50 @@ function onLevel(id, target) {
 }
 // A slider held by a finger also holds that level against the bridge's echoes of the values it passed through.
 function assume(ids, level, { held = false } = {}) { if (data.connState() === 'off') return; for (const id of ids) S.states[id] = { ...(S.states[id] || {}), level }; if (held) data.hold(ids); }
+
+// ---------- switching lights ----------
+// Every place a light is switched goes through turn(): a tile's power circle, a room's (on Rooms, pinned on Home, the
+// room page's On and Off), a light's page, All off and All on, Goodnight, a scene chip. It shows each light at once
+// where the connector is about to put it, holds it there while the bridge reports its way there (the data layer's
+// expect), and lets the bridge have the last word once the fade is over. One place, so no screen can show a light
+// on, then off, then on again while the bridge catches up, and a room or the house lands all at once rather than a
+// light at a time.
+//
+// Where each light lands, decided the way the connector decides it (engine.py run_one): "on" is each light's own on
+// level for this target, "toggle" is off when anything in it is on, a scene is its own levels. A restore or a Lutron
+// scene lands where only the connector knows, so those are not shown ahead: their lights change as the bridge says.
+// Fans and shades are left to the bridge too. Null when nothing can be said ahead of the bridge.
+function landFor(action) {
+  const s = S.config.settings || {};
+  const lamp = id => { const d = data.dev(id); return !!d && (d.domain === 'light' || d.domain === 'switch'); };
+  const levels = {};
+  if (action.type === 'level' || (action.type === 'color' && action.level != null)) {
+    const ids = data.targetDevices(action.target).filter(lamp);
+    const anyOn = ids.some(data.isOn);
+    for (const id of ids) {
+      const l = action.level;
+      const v = l === 'on' ? onLevel(id, action.target) : l === 'off' ? 0 : l === 'toggle' ? (anyOn ? 0 : onLevel(id, action.target)) : Number(l);
+      if (Number.isFinite(v)) levels[id] = data.landing(id, v);
+    }
+  } else if (action.type === 'preset') {
+    const p = data.presets().find(x => x.id === action.preset_id); if (!p) return null;
+    for (const [id, v] of Object.entries(p.levels || {})) if (lamp(id)) levels[id] = data.landing(id, levelOf(v));
+    return { levels, fade: p.fade != null ? p.fade : s.default_fade };
+  } else return null;
+  return { levels, fade: action.fade != null ? action.fade : s.default_fade };
+}
+async function turn(action) {
+  const land = data.connState() === 'off' ? null : landFor(action);
+  const n = land && Object.keys(land.levels).length ? data.expect(land.levels, land.fade) : null;
+  if (n) soon();
+  // through the context's run, the one every screen sends with, so anything that watches what is sent sees this too
+  const ok = await ctx.run(action);
+  // not sent: the lights are shown as the bridge has them again, at once
+  if (n && data.sent(n, ok)) soon();
+  return ok;
+}
+// a hold the data layer lets go of by itself (the fade is over) shows what the bridge said meanwhile
+data.hooks.changed = () => soon();
 
 // ---------- the toast ----------
 // The owner turned toasts off for now because they got in the way; set this back to true to bring every one back.
@@ -263,7 +307,7 @@ function leavePage(fallback) {
 const ctx = {
   data, H, DAY, EDIT, REM, RT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
   openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
-  run, gate, save, saveSoon, assume, onLevel, toast, go, openSheet, closeSheet, render: () => render(),
+  run, turn, gate, save, saveSoon, assume, onLevel, toast, go, openSheet, closeSheet, render: () => render(),
   // the history's own steps, for a page that finishes something: dismiss closes a sheet as its X does (a step back
   // when it was opened as one), back is the back circle, goTab is a tab's button, replace and leave are above,
   dismiss: () => dismissSheet(), back: () => stepBack(), goTab: t => goTab(t), replace: h => replacePage(h), leave: f => leavePage(f),
@@ -296,6 +340,9 @@ function render() {
   if (ctx.ui.dragging) { pending = true; return; }
   if (stepping && performance.now() - stepping < 600) { skipped = true; return; }
   stepping = 0;
+  // drawn now, a redraw already booked for the next frame would draw the same again (a tap that switches lights books
+  // one and its screen draws at once too); a second draw restarts whatever the first one started
+  if (frame) { (frameLater ? clearTimeout : cancelAnimationFrame)(frame); frame = 0; }
   pending = false;
   const app = $('#app'), scr = $('#screen'), tabs = $('#tabs');
   native.credentials(S.token);
@@ -406,11 +453,12 @@ function routedSheet(screen, r) {
 // Open a picker inside the current sheet. `spec(ctx, r)` draws it; its taps are the screen's actions as usual.
 function openPicker(name, spec) { ctx.ui.picker = { key: location.hash.replace(/^#/, ''), name, spec }; render(); }
 function closePicker() { ctx.ui.picker = null; render(); }
-let frame = 0;
+let frame = 0, frameLater = false;
 // A redraw asked for by the socket waits while a page is still arriving; a tap redraws at once.
 function soon() {
   if (frame) return;
   const wait = motion.busyFor();
+  frameLater = !!wait;
   frame = wait ? setTimeout(() => { frame = 0; render(); }, wait) : requestAnimationFrame(() => { frame = 0; render(); });
 }
 ctx.soon = soon;
@@ -596,9 +644,7 @@ const SHARED = {
   toggle(c, el) {
     const id = el.dataset.id; const d = data.dev(id); if (!d) return;
     if (d.domain === 'fan') { const on = data.isOn(id); run({ type: 'fan', target: `d:${id}`, speed: on ? 'Off' : 'Medium' }); return; }
-    const on = data.isOn(id);
-    assume([id], on ? 0 : onLevel(id, `d:${id}`)); soon();
-    run({ type: 'level', target: `d:${id}`, level: on ? 'off' : 'on' });
+    turn({ type: 'level', target: `d:${id}`, level: data.isOn(id) ? 'off' : 'on' });
   },
   // the pin on a light's or a room's page (and a scene's sheet): pinned to Home or not, saved to the hub at once so
   // it is the same on every phone. The pin filling in is the answer; nothing else says so.
@@ -614,9 +660,7 @@ const SHARED = {
     if (data.connState() === 'off') { toast(OFFLINE_TAP, { icon: 'wifi' }); return; }
     if (t.startsWith('p:')) {
       const p = data.presets().find(x => x.id === t.slice(2)); if (!p) return;
-      for (const [id, v] of Object.entries(p.levels || {})) if (data.dev(id)) S.states[id] = { ...(S.states[id] || {}), level: typeof v === 'object' ? Number(v.level) || 0 : typeof v === 'number' ? v : 0 };
-      soon();
-      run({ type: 'preset', preset_id: p.id });
+      turn({ type: 'preset', preset_id: p.id });
     } else if (t.startsWith('s:')) run({ type: 'scene', scene_id: t.slice(2) });
   },
 };

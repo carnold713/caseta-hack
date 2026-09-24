@@ -51,6 +51,12 @@ own WebSocket, plus fake Hue and Nanoleaf bridges over real HTTP. It holds its i
 wiping the hub's data directory is not a reset of the fixture: `rooms_test` restarts it for that reason,
 killing only the one on its own port by reading `/proc/<pid>/environ`.
 
+By default the fake answers a light command with every light's final state in one message, at once. A real home
+does not: a Lutron dimmer reports the level it was at, then the levels it fades through; a Hue lamp is reported again
+by its event stream, sometimes at its old brightness first; a room arrives a light at a time. `{"echo": "bridge"}`
+in `fake-do.json` (or `FAKE_ECHO=bridge`) puts the fake on that pace, and `{"stuck": [ids]}` makes lights ignore
+what they are asked. `toggle_smooth_test` uses both, and puts the fake back on `plain` when it is done.
+
 A test that leaves state behind is a test the next run starts inside. Reset what you set up, at the top
 of the test, rather than assuming a clean rig.
 
