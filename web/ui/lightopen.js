@@ -25,7 +25,7 @@
 // shrinks into the tile and its face comes back only in the last 0.2 s, the halo is drawn back into the tile's glow,
 // the words fly back and cross in the last 0.15 s, and the room returns around it, nearest first.
 import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, last, textBox, centre, px, opacityOf, part, words, chars, span, copyText, copyButton, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going } from '/ui/flight.js';
+import { OPEN, CLOSE, last, textBox, centre, px, opacityOf, part, words, chars, span, copyText, copyButton, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim } from '/ui/flight.js';
 
 const FACE_GO = 80;     // the face starts giving way this far into the open (a third of the surface's growth)
 // and gives way quickly at first, so that by the time the surface is most of the screen little copper is left on it
@@ -143,10 +143,11 @@ function glowFlight(sf, D) {
   const s = Math.min(5, Math.max(1, D.haloR.width / (sf.glow.w || 1)));
   return `translate(${px(hc.x - sf.glow.c.x)}, ${px(hc.y - sf.glow.c.y)}) scale(${s})`;
 }
-// The room around the tile: what steps aside for it (only what is on screen).
+// The room around the tile: what steps aside for it (only what is on screen). Its header's circles step aside one by
+// one and its scrim fades where it is (flight.js, scrim): the header row itself is never faded.
 function roomParts(root, tile, head) {
   const on = n => { const b = n.getBoundingClientRect(); return b.bottom > 0 && b.top < innerHeight && b.width > 0; };
-  return [...root.querySelectorAll(`${head ? '.room > .hdr, ' : ''}.room-title, .room-photo-card, .room-sec, .room-chips, .room-grid > .tile, .room-empty`)]
+  return [...root.querySelectorAll(`${head ? '.room > .hdr > *, ' : ''}.room-title, .room-photo-card, .room-sec, .room-chips, .room-grid > .tile, .room-empty`)]
     .filter(n => n !== tile && on(n));
 }
 // The room's header and the page's sit in the same place, back button over back button, unless the room was scrolled.
@@ -249,6 +250,7 @@ export function open({ O, ghost }, screen, F) {
 
   // the room steps aside around the tile; its tab bar and the fade over it go down with it
   stepAside(F, 'open', steps);
+  if (!shared) scrim(F, ghost.querySelector('.room > .hdr'), 1, 0, { duration: 250, easing: T.easeIn, fill: 'forwards' });
   for (const c of O.chrome) {
     const n = c.el.cloneNode(true);
     n.removeAttribute('id'); n.hidden = false; n.setAttribute('aria-hidden', 'true'); n.inert = true;
@@ -361,6 +363,7 @@ export function close(p, screen, F, { ghost, O, el: tile }) {
   // already there, under the page, and comes up with it)
   if (p.pose) return true;
   stepAside(F, 'close', steps, { at: 70, back: 400, backFade: 300 });
+  if (!shared) scrim(F, screen.querySelector('.room > .hdr'), 0, 1, { duration: 300, delay: 70, easing: T.ease, fill: 'backwards' }, 'extra');
   if (showTabs) F.extra(tabs, [{ opacity: 0, translate: '0px 120px', scale: '0.96' }, { opacity: 1, translate: '0px 0px', scale: '1' }], { duration: 400, delay: 70, easing: T.ease, fill: 'backwards' });
   if (showTabs && fade) F.extra(fade, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 70, easing: T.ease, fill: 'backwards' });
   return true;

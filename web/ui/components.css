@@ -20,7 +20,9 @@
   margin: 0 auto;
   /* the tab bar floats 40 above the bottom and is 72 tall: the page ends 24 above its top edge */
   padding: 0 0 calc(136px + env(safe-area-inset-bottom));
-  overflow-x: hidden;
+  /* clip, not hidden: nothing wider than the screen shows, and the page is still no scroller of its own, so a header
+     stuck to the top (header.css) sticks to the window's scroll */
+  overflow-x: clip;
 }
 
 /* Header: a 56 circle at x 20, actions ending at x 336, each further one 64 to the left. */

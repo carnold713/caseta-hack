@@ -128,9 +128,9 @@ export function view(c) {
 
   return `<div class="home">
     ${empty ? '' : houseLight(c, rooms.filter(a => H.roomLights(a.id).length))}
-    <header class="home-head">
+    <header class="home-head bar">
       <button class="greet ${st === 'off' ? 'off' : ''}" data-act="conn-open" aria-label="Connection" data-xf="standard">${greet}</button>
-      <h1 class="t-h1">${esc(name)}</h1>
+      <h1 class="t-h1 bar-t">${esc(name)}</h1>
       <button class="hdr-btn a1" data-go="activity" aria-label="Recent activity">${icon('clock', 20, 1.7)}</button>
     </header>
     ${st === 'off' ? offlineCard(c) : ''}

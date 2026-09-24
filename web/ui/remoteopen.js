@@ -19,7 +19,7 @@
 // BACK runs it the other way in 0.45 s on (0.4, 0, 0.2, 1): the page's content goes first (0.15 s EASE_IN), the stage
 // closes into the card with its spotlight coming back, the remote and the name fly back, and the cards return.
 import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, last, textBox, px, opacityOf, part, words, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going } from '/ui/flight.js';
+import { OPEN, CLOSE, last, textBox, px, opacityOf, part, words, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim } from '/ui/flight.js';
 
 const SPOT = 250;       // the card's spotlight fades over the first 0.25 s (and comes back over the close's last 0.3 s)
 const KEY = 40;         // the keys arrive this far apart, top first
@@ -137,6 +137,8 @@ export function open({ O, ghost }, screen, F) {
   // the other cards step aside, and "Remotes" lifts away
   stepAside(F, 'open', steps);
   if (head) F.core(head, [{ opacity: 1, transform: 'translateY(0px)' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: 200, easing: T.easeIn, fill: 'forwards' });
+  // the scrim behind it, when Remotes was scrolled, goes with it
+  if (head) scrim(F, head.closest('.bar'), 1, 0, { duration: 200, easing: T.easeIn, fill: 'forwards' });
 
   // the page arrives in reading order
   rise(F, q('.hdr .a1'), 120, { dy: 0, dur: 220 });
@@ -212,5 +214,6 @@ export function close(p, screen, F, { ghost, O, el: card }) {
   if (p.pose) return true;
   stepAside(F, 'close', steps, { back: 400, backFade: 300 });
   F.extra(head, [{ opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: 280, delay: 120, easing: T.ease, fill: 'backwards' });
+  if (head) scrim(F, head.closest('.bar'), 0, 1, { duration: 280, delay: 120, easing: T.ease, fill: 'backwards' }, 'extra');
   return true;
 }

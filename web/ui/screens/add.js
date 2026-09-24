@@ -76,8 +76,8 @@ export function view(c) {
       <button class="next-btn" data-act="ad-create" ${room && !a.busy ? '' : 'disabled'}>${a.busy ? 'Adding…' : room ? 'Add to my home' : 'Pick a room'}</button></div>`;
   }
   return `<div class="add-page ${card ? 'has-card' : ''}">
-    <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
-    <h1 class="t-h1 page-h1">Add a device</h1>
+    <header class="hdr bar"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
+    <h1 class="t-h1 page-h1 bar-t bar-pin">Add a device</h1>
     <p class="t-cap muted ad-sub">Caséta · experimental</p>
     <div class="ad-steps">${steps}</div>
     <div class="radar ${active(c) && !pick ? 'on' : ''} ${a.created ? 'landed' : ''}"><i class="g"></i><i class="r1"></i><i class="r2"></i><i class="p p1"></i><i class="p p2"></i><i class="p p3"></i><i class="r3"></i>${pick && !a.created ? '<i class="ping" data-enter="ping"></i>' : ''}${a.created ? `<span class="ad-check" data-enter data-enter-at="0">${icon('check', 40, 2.4)}</span>` : `<img data-xf="standard" src="${c.artSrc(pick ? art(pick.device_type) : 'lutron-wireless')}" alt=""${a.flying ? ' style="opacity:0"' : ''}>`}</div>

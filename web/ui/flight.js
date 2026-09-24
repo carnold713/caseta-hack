@@ -218,6 +218,29 @@ export function destFlip(dest, Dt, Db, p) {
   dest.style.transformOrigin = `${px(tc.x - Db.left)} ${px(tc.y - Db.top)}`;
   return `translate(${px(lc.x - tc.x)}, ${px(lc.y - tc.y)}) scale(${p.r.width / (Dt.width || 1)})`;
 }
+// A title in a header that has collapsed as its page scrolled (header.js) is drawn moved and shrunk by its own
+// translate and scale. Its flight starts from exactly there: those are set aside for the run and the whole of it,
+// collapse and flight, is one transform from the corner of its box. Null for a title drawn where it rests.
+function collapsed(dest) {
+  const now = dest.getBoundingClientRect();
+  const keep = [dest.style.translate, dest.style.scale];
+  dest.style.translate = 'none'; dest.style.scale = 'none';
+  const b0 = dest.getBoundingClientRect();
+  if (Math.abs(now.left - b0.left) < 0.01 && Math.abs(now.top - b0.top) < 0.01 && Math.abs(now.width - b0.width) < 0.01) {
+    [dest.style.translate, dest.style.scale] = keep;
+    return null;
+  }
+  return { now, b0, s: now.width / (b0.width || 1) };
+}
+// Where it is drawn now (rest) and on the part (small): the words' centre on the part's, matched on width, as destFlip.
+function heldFlip(dest, { now, b0, s }, Dt, p) {
+  const lc = centre(p.r), tc = centre(Dt), m = p.r.width / (Dt.width || 1);
+  dest.style.transformOrigin = '0px 0px';
+  return {
+    rest: `translate(${px(now.left - b0.left)}, ${px(now.top - b0.top)}) scale(${s})`,
+    small: `translate(${px(lc.x + m * (now.left - tc.x) - b0.left)}, ${px(lc.y + m * (now.top - tc.y) - b0.top)}) scale(${m * s})`,
+  };
+}
 // The copy's flight to the destination's words (its origin is its own centre).
 export function copyFlight(copy, p, Dt) {
   const tc = centre(Dt);
@@ -230,11 +253,15 @@ export function copyFlight(copy, p, Dt) {
 export function pair(F, dir, { dest, Dt, Db, p, k = 1, top, copy = null, cross = CROSS, crossEase = 'linear', to = 1, from = 1, raise = true }) {
   const R = dir === 'open' ? OPEN : CLOSE;
   const node = copy || copyText(p, k); top.appendChild(node);
-  const was = { position: dest.style.position, zIndex: dest.style.zIndex, origin: dest.style.transformOrigin };
-  if (raise) { if (getComputedStyle(dest).position === 'static') dest.style.position = 'relative'; dest.style.zIndex = '1'; }
-  const small = destFlip(dest, Dt, Db, p), rest = 'translate(0px, 0px) scale(1)';
+  const was = { position: dest.style.position, zIndex: dest.style.zIndex, origin: dest.style.transformOrigin, translate: dest.style.translate, scale: dest.style.scale };
+  // (a title stuck in its page's header keeps its own place in the stacking, over the header's scrim)
+  if (raise) { const cs = getComputedStyle(dest); if (cs.position === 'static') dest.style.position = 'relative'; if (cs.zIndex === 'auto') dest.style.zIndex = '1'; }
+  const held = collapsed(dest);
+  let small = null, rest = 'translate(0px, 0px) scale(1)';
+  if (held) ({ small, rest } = heldFlip(dest, held, Dt, p));
+  else small = destFlip(dest, Dt, Db, p);
   const fly = copyFlight(node, p, Dt), home = `translate(0px, 0px) scale(${k})`;
-  F.undo(() => { dest.style.position = was.position; dest.style.zIndex = was.zIndex; dest.style.transformOrigin = was.origin; });
+  F.undo(() => { Object.assign(dest.style, { position: was.position, zIndex: was.zIndex, transformOrigin: was.origin, translate: was.translate, scale: was.scale }); });
   if (dir === 'open') {
     F.core(dest, [{ transform: small }, { transform: rest }], { duration: R.dur, easing: R.ease });
     F.core(dest, [{ opacity: 0 }, { opacity: to }], { duration: cross, easing: crossEase });
@@ -247,6 +274,21 @@ export function pair(F, dir, { dest, Dt, Db, p, k = 1, top, copy = null, cross =
     F.core(node, [{ opacity: 0 }, { opacity: from }], last(cross, { easing: crossEase }));
   }
   return node;
+}
+
+// ---------- a header that stays ----------
+// A page's header row stays at the top as the page scrolls (header.css, .bar) and carries a blurred scrim. A blur shows
+// what is under it only as far as the nearest element being faded, so fading the header row itself would cut the blur
+// off for as long as that plays: what the scrim covers would show through it sharp, and blur again as it lands. So a
+// header row is moved and faded by its parts, each thing in it (parts), and its scrim is faded on its own (scrim).
+export const parts = n => (n && n.matches && n.matches('.bar') ? [...n.children] : [n]);
+// The scrim from `a` to `b` of what it shows now (as far as the page is scrolled), on the timing given; nothing when
+// the page is at the top and it shows nothing. `how` is the run's 'core' or 'extra'.
+export function scrim(F, bar, a, b, o, how = 'core') {
+  if (!bar || !bar.matches || !bar.matches('.bar')) return null;
+  const at = Number(getComputedStyle(bar, '::before').opacity) || 0;
+  if (!at) return null;
+  try { return F[how](bar, [{ opacity: a * at }, { opacity: b * at }], { ...o, pseudoElement: '::before' }); } catch (_) { return null; }
 }
 
 // ---------- aside ----------

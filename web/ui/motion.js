@@ -16,6 +16,8 @@
 //
 // "User actions land now. Things the app decides happen slowly. Nothing ever slides colour." Nothing here runs when
 // the phone asks for reduced motion.
+import { freeze } from '/ui/header.js';
+
 export const T = {
   tap: 120, standard: 240, enter: 320, exit: 200, stagger: 40, sheetIn: 420, sheetOut: 280, push: 300, dimmer: 400,
   scene: 1000, breathe: 1600,
@@ -281,6 +283,8 @@ export function capture(screen, { live = false } = {}) {
   const box = screen.getBoundingClientRect();
   const g = document.createElement('div');
   g.className = 'page-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
+  // its header stays where the page's was stuck, as collapsed as it was (header.js)
+  freeze(g);
   Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, pointerEvents: 'none', zIndex: '1' });
   for (const k of [...screen.children]) g.appendChild(live ? k : k.cloneNode(true));
   g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));

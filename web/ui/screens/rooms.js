@@ -52,8 +52,8 @@ export function view(c) {
     </div>`;
   };
   return `<div class="rooms">
-    <header class="rooms-head">
-      <h1 class="t-h1">Rooms</h1>
+    <header class="rooms-head bar">
+      <h1 class="t-h1 bar-t">Rooms</h1>
       <button class="hdr-btn a1" data-act="room-new" aria-label="Add a room">${icon('plus', 22, 1.7)}</button>
     </header>
     <div class="rooms-list">

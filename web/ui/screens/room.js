@@ -132,12 +132,12 @@ export function view(c, r) {
   const layer = w ? waveLayer(w) : '';
 
   return `<div class="room">
-    <header class="hdr">
+    <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       <button class="hdr-btn a1" data-go="room/${esc(aid)}/setup" aria-label="Room setup">${icon('dots', 22, 2.4)}</button>
     </header>
-    <div class="room-title">
-      <h1 class="t-h1">${esc(a.name)}</h1>
+    <div class="room-title bar-pin">
+      <h1 class="t-h1 bar-t">${esc(a.name)}</h1>
       ${countHTML}
     </div>
     <div class="room-photo-card ${photo ? '' : roomTone(aid)}">
