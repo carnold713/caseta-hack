@@ -15,7 +15,7 @@
 //               crossfade only in the first 0.15 s, where the change of weight cannot be seen.
 //   the list    the other cards step aside (up 40 above, down 120 below) and fade, 0.25 s EASE_IN, nearest first
 //               0.03 s apart, and "Rooms" lifts away; the card's status and power fade in 0.12 s.
-//   the room    fills in in reading order: the header, the count badge, All on and All off, the count, the scenes,
+//   the room    fills in in reading order: the header, the count badge, the room's On and Off, the count, the scenes,
 //               the tiles (each lit one blooming with its own light as it lands), and a spill of the card's light
 //               over the page as it opens.
 // BACK is the same run the other way, faster (0.45 s on (0.4, 0, 0.2, 1)), with the room's content gone first. A room
@@ -217,7 +217,7 @@ export function open({ O, ghost }, screen, F) {
   play(q('.room > .hdr .a1'), [{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay: 120 });
   play(hero.querySelector('.badge'), [{ opacity: 0, transform: 'scale(0.8)' }, { opacity: 1, transform: 'scale(1)' }], { duration: T.standard, easing: T.ease, delay: 350 });
   play(hero.querySelector('.add-photo'), [{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay: 350 });
-  rise(hero.querySelector('.room-acts'), 400);
+  rise(hero.querySelector('.room-onoff'), 400);
   rise(q('.room-title .count'), 500);
   rise(q('.room-sec'), 400);
   chips.forEach((c, i) => rise(c, 400 + i * T.stagger));
@@ -251,7 +251,7 @@ export function close(p, screen, F, { ghost: g, O, el: card }) {
   const going = [
     ...(room ? [...room.children].filter(n => n !== hero && !n.classList.contains('room-title')) : []).flatMap(barParts),
     ...[...h1.parentElement.children].filter(n => n !== h1),
-    ...hero.querySelectorAll('.badge, .room-acts, .add-photo'),
+    ...hero.querySelectorAll('.badge, .room-onoff, .add-photo'),
   ];
   if (room) for (const n of room.children) scrim(F, n, 1, 0, fade);
   // each from where it is: the count beside the title has already faded if the room was scrolled (header.css)

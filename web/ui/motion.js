@@ -119,11 +119,18 @@ export function snap(root) {
       for (const p in t) v[p] = cs.getPropertyValue(p);
       (rec.v || (rec.v = {}))[ps] = v; any = true;
     }
-    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; any = true; }
+    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; rec.size = sizeOf(el); any = true; }
     if (el.hasAttribute('data-enter')) { rec.enter = el.getAttribute('data-enter') || 'rise'; rec.node = el; rec.rect = el.getBoundingClientRect(); any = true; }
     if (any) s.set(path, rec);
   });
   return s;
+}
+// An element's own laid out size (not as a press or a flight has it scaled) and where its edges were on screen, so a
+// copy of it can keep its words laid out exactly as they were.
+function sizeOf(el) {
+  const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+  const w = parseFloat(cs.width), h = parseFloat(cs.height);
+  return { w: Number.isFinite(w) ? w : r.width, h: Number.isFinite(h) ? h : r.height, left: r.left, right: r.right };
 }
 // the parts of an element that make it look different: its classes, inline style and words
 // (a copy still fading inside it is not part of its look)
@@ -173,7 +180,7 @@ export function carry(s, root) {
     }
     if (rec.copy && rec.look !== look(el)) fades.push([rec, el]);
   });
-  for (const [rec, el] of fades) crossfade(rec.copy, el, rec.xf);
+  for (const [rec, el] of fades) crossfade(rec.copy, el, rec.xf, rec.size);
   // what came in with data-enter and is gone now leaves the way it came
   for (const [path, rec] of s) if (rec.enter && !seen.has(path)) gone(rec, path, made);
 }
@@ -244,7 +251,7 @@ export function settle(root) {
 
 // The old element laid over the new one and faded out: an old tile dissolving into the new, the way the file's
 // "after" tiles fade in over the "before" ones. It sits inside the new element, so it scrolls and clips with it.
-function crossfade(old, el, kind) {
+function crossfade(old, el, kind, was) {
   if (!canAnimate(el)) return;
   const dur = kind === 'standard' ? T.standard : document.body.classList.contains('scene-arriving') ? T.scene : T.dimmer;
   const ease = kind === 'standard' ? T.ease : T.easeBoth;
@@ -259,10 +266,16 @@ function crossfade(old, el, kind) {
   // an image holds nothing inside it: its old self goes beside it, placed by the same rules
   if (/^(IMG|INPUT|SVG)$/i.test(el.tagName)) { copy.style.pointerEvents = 'none'; el.after(copy); fade(); return; }
   const box = el.getBoundingClientRect(), cs = getComputedStyle(el);
-  // the copy keeps its own look but sits exactly on the new element's box
+  const now = sizeOf(el);
+  was = was || now;
+  // The copy keeps its own look and its own size, so its words stay on the lines they were on: a longer status laid
+  // into the new, shorter one's box would wrap onto a second line as it faded. It sits on the new element's box,
+  // from the left, or from the right for words set against the right (a count that changes length there).
+  let left = -parseFloat(cs.borderLeftWidth) || 0;
+  if (Math.abs(was.right - box.right) < 1 && Math.abs(was.left - box.left) >= 1) left += now.w - was.w;
   Object.assign(copy.style, {
-    position: 'absolute', left: `${-parseFloat(cs.borderLeftWidth) || 0}px`, top: `${-parseFloat(cs.borderTopWidth) || 0}px`,
-    width: `${box.width}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '3',
+    position: 'absolute', left: `${left}px`, top: `${-parseFloat(cs.borderTopWidth) || 0}px`,
+    width: `${was.w}px`, height: `${was.h}px`, margin: '0', pointerEvents: 'none', zIndex: '3',
     transform: 'none', animation: 'none',
   });
   if (cs.position === 'static') el.style.position = 'relative';

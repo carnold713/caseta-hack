@@ -103,6 +103,10 @@ function dialHTML(c, lv, tone, label) {
   </div>`;
 }
 
+// A long name steps down a size, then another, before it has to end in an ellipsis: at 44 the line holds about
+// twelve letters on a small phone, so "Pendant over the kitchen island" said only "Pendant ove...".
+const heroFit = name => (name.length > 22 ? 'fit2' : name.length > 14 ? 'fit1' : '');
+
 function header(c, d) {
   const { icon, esc } = c;
   const starred = (c.S.config.favorites || []).includes(`d:${d.device_id}`);
@@ -182,7 +186,7 @@ function lightView(c, d) {
     ${filamentHTML(shown, tone)}
     ${header(c, d)}
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
-    <h1 class="t-hero">${esc(d.name)}</h1>
+    <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>
     <div class="onoff">
       <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}<span>${on && dim ? `On · <span data-lv>${lv}</span>%` : 'On'}</span></button>
       <button data-act="dev-off" aria-pressed="${!on}">${icon('power', 22, 2)}Off</button>
@@ -208,7 +212,7 @@ function fanView(c, d) {
     <img class="hero-art" src="${c.artSrc('light-ceiling-fan')}" alt="">
     ${header(c, d)}
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
-    <h1 class="t-hero">${esc(d.name)}</h1>
+    <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>
     <div class="onoff blue">
       <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}${on ? `On · ${FAN_WORD[sp]}` : 'On'}</button>
       <button data-act="dev-off" aria-pressed="${!on}">${icon('power', 22, 2)}Off</button>
@@ -239,7 +243,7 @@ function shadeView(c, d) {
     <img class="hero-art" src="${c.artSrc('lutron-rollershades')}" alt="">
     ${header(c, d)}
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
-    <h1 class="t-hero">${esc(d.name)}</h1>
+    <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>
     <div class="window" data-drag="shade" role="slider" aria-label="How far open" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${open}">
       <span class="sun"></span><span class="sill"></span>
       <span class="fabric"><span class="hem"></span></span><span class="roller"></span>

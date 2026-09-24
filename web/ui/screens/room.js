@@ -1,4 +1,4 @@
-// 03 · A room. Its photograph with All on and All off laid on it, its scenes, and every device in it as a tile.
+// 03 · A room. Its photograph with the room's On and Off laid on it, its scenes, and every device in it as a tile.
 // Read from the Figma frame (12733:20).
 //
 // v7 · 6, a scene arriving (12814:48798): a tapped chip lights first, then a ring of light leaves it and walks out
@@ -84,6 +84,22 @@ function roomLight(c, aid, lights) {
   return `<span class="rp-light" data-xf style="--rl:${mean}" aria-hidden="true">${glowHTML({ level: mean, kelvin: k || 2700, ctx: 'card', x: '70%', y: '34%' })}</span>`;
 }
 
+// The room's On and Off: the light page's switch, so the room's state is plain at a glance. The copper pill sits under
+// On while anything in the room is on and under Off once it is all off, and slides on the standard curve when that
+// changes. On says how much is on in the count line's own numbers ("8 devices · 3 on" is "On · 3 of 8"). It comes
+// before the badge and the photo pill on the card, which come and go, so a redraw pairs it with itself and the pill
+// slides rather than jumps (motion.js pairs elements by their place).
+function powerHTML(c, aid, n, onN) {
+  const { icon, esc } = c;
+  const on = onN > 0;
+  const word = on ? `On · ${onN} of ${n}` : 'On';
+  return `<div class="onoff room-onoff ${word.length > 11 ? 'long' : ''}">
+        <button data-act="room-on" data-id="${esc(aid)}" aria-pressed="${on}">${icon('power', 22, 2)}<span>${esc(word)}</span></button>
+        <button data-act="room-off" data-id="${esc(aid)}" aria-pressed="${!on}">${icon('power', 22, 2)}<span>Off</span></button>
+        <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>
+      </div>`;
+}
+
 export function view(c, r) {
   const { data, H, esc, icon } = c;
   const aid = r.id;
@@ -137,18 +153,15 @@ export function view(c, r) {
       <button class="hdr-btn a1" data-go="room/${esc(aid)}/setup" aria-label="Room setup">${icon('dots', 22, 2.4)}</button>
     </header>
     <div class="room-title bar-pin">
-      <h1 class="t-h1 bar-t">${esc(a.name)}</h1>
+      <h1 class="t-h1 bar-t ${a.name.length > 24 ? 'fit2' : a.name.length > 14 ? 'fit1' : ''}">${esc(a.name)}</h1>
       ${countHTML}
     </div>
     <div class="room-photo-card ${photo ? '' : 'scene'}">
       ${roomPicture(c, aid, a.name, 'page')}
       ${photo ? roomLight(c, aid, lights) : ''}
+      ${canToggle ? powerHTML(c, aid, ds.length, onN) : ''}
       ${badgeHTML}
       ${photo ? '' : `<button class="add-photo" data-go="room/${esc(aid)}/setup">${icon('camera', 16, 1.8)}Add a photo</button>`}
-      ${canToggle ? `<div class="room-acts">
-        <button class="glass" data-act="room-on" data-id="${esc(aid)}">${icon('sun', 22, 2)}All on</button>
-        <button class="glass" data-act="room-off" data-id="${esc(aid)}">${icon('power', 22, 2)}All off</button>
-      </div>` : ''}
     </div>
     ${scenesHead}
     ${scenes.length || saveLook || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${saveLook}${suggest}${newScene}</div>` : ''}

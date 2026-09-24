@@ -223,13 +223,21 @@
 /* Device art is the file's own SVG (web/ui/art), white line on a 64 grid, shown at 48. At 20% on an
    off tile, full on a lit one. */
 .tile .art { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; opacity: .2; display: block; }
-.tile .nm { position: absolute; left: 16px; top: 94px; width: calc(var(--tile-w, 168px) - 32px); font-size: 16px; font-weight: 500; }
+/* The name ends where a one line name ends (at 114) and a longer one grows upward into a second line, never down onto
+   the value line under it; past two lines it ends in an ellipsis. With a timer chip in the space above, it keeps to
+   one line. */
+.tile .nm {
+  position: absolute; left: 16px; bottom: 36px; width: calc(var(--tile-w, 168px) - 32px);
+  font-size: 16px; font-weight: 500; line-height: 20px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+}
+.tile-timer ~ .nm { -webkit-line-clamp: 1; }
 .tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); padding: 0 var(--gutter); }
 .tile-grid .tile { width: auto; }
 .tile-grid .tile .nm { width: auto; right: 16px; }
 /* hand placed in the file, not a rule of the width: 104, -7 on the room grid's 180 tile */
 .tile-grid .tile .glow { right: -10px; top: -7px; }
-.tile .vl { position: absolute; left: 16px; top: 116px; font-size: 14px; color: var(--text-2); }
+.tile .vl { position: absolute; left: 16px; right: 16px; top: 116px; font-size: 14px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The glow is a soft disc bleeding off the top right corner, not a box shadow. 89,-9 from the tile's
    outer edge: the export says 88,-10, which is the border trap again. */
 .tile .glow {
@@ -280,8 +288,9 @@
   content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 72px;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .6) 100%);
 }
-.room-card .nm { position: absolute; left: 16px; top: 84px; font-size: 16px; font-weight: 500; z-index: 1; }
-.room-card .vl { position: absolute; left: 16px; top: 106px; font-size: 13px; z-index: 1; }
+/* one line each: a long name ends in an ellipsis rather than wrapping onto the line under it */
+.room-card .nm { position: absolute; left: 16px; right: 16px; top: 84px; font-size: 16px; font-weight: 500; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-card .vl { position: absolute; left: 16px; right: 16px; top: 106px; font-size: 13px; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* A card holding one row's worth: the "Coming up" card on Home. 68 tall, radius 20 rather than the
    28 of a full card, a 40 circle 14 in, title and caption at 66, a trailing action. */

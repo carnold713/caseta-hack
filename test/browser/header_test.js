@@ -162,6 +162,9 @@ async function scrollTo(page, y) {
     const lb = await M();
     await shot('room-long-64');
     check('in the bar it ends before the circle on the right', lb.t.r <= lb.a1.l - 8, { title: lb.t.r, circle: lb.a1.l });
+    // set a size down where it rests (a long name), it still reads 24 in the bar, centred on y 72
+    const px24 = await C(() => { const h = document.querySelector('#screen .room-title h1'); return parseFloat(getComputedStyle(h).fontSize) * h.getBoundingClientRect().height / h.offsetHeight; });
+    check('and reads 24 px there, centred on y 72, like any title in the bar', near(px24, 24, 0.3) && near(lb.t.cy, 72, 1), { px: px24, cy: lb.t.cy });
     await clear('the long name');
     await C(a => { const c = window.__copper; c.EDIT.renameRoom(a, 'Study'); c.render(); }, aid);
     await scrollTo(page, 0);

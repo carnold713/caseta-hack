@@ -67,17 +67,22 @@
   --bar-a: calc(min(var(--hdr-p, 0), .5) * 2);
   --bar-b: calc(max(var(--hdr-p, 0) - .5, 0) * 2);
   transform-origin: 0 50%;
-  translate: calc(56px * var(--bar-a)) calc(-44px * var(--bar-a) - 34px * var(--bar-b));
-  scale: calc(1 - .28 * var(--bar-a) - .12 * var(--bar-b));
+  translate: calc(56px * var(--bar-a)) calc(-44px * var(--bar-a) - 34px * var(--bar-b) - var(--bar-lift, 0px) * (var(--bar-a) + var(--bar-b)) / 2);
+  scale: calc(1 - (1 - var(--bar-s1, .72)) * var(--bar-a) - (var(--bar-s1, .72) - var(--bar-s2, .6)) * var(--bar-b));
 }
+/* A long room name is set a size or two down where it rests (screens.css: fit1 32 and 2 lower, fit2 28 and 4 lower). In
+   the bar it still reads 24, as 40 at 0.6 does: it shrinks less on each step (to 28.8 at most by the middle, as 40
+   does) and rises the few px more its lower line needs. */
+.room-title h1.bar-t.fit1 { --bar-s1: .9; --bar-s2: .75; --bar-lift: 2px; }
+.room-title h1.bar-t.fit2 { --bar-s1: 1; --bar-s2: .8571; --bar-lift: 4px; }
 /* a title that is its own row (.page-h1, padded 20 all round but the bottom) shrinks about where its words start */
 .bar-t.bar-pin { transform-origin: var(--gutter) 42px; }
 /* One line, cut with an ellipsis where it rests, so the words never change while the title moves. Beside a circle on
    the right it is also no wider than keeps it clear of that circle at every step of the way (the tightest is a third
-   of the way in, where it has risen level with the circle but not yet shrunk: 268 on a 360 screen, 332 on 412). */
+   of the way in, where it has risen level with the circle but not yet shrunk: 268 on a 360 screen, 332 on 412). A
+   room's title is narrower than that already, to stay clear of its count (screens.css). */
 .bar-t.page-h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hdr.bar:has(.a1) ~ .bar-t.page-h1 { max-width: calc(min(123vw - 176px, 100vw) + 2 * var(--gutter)); }
-.room-title.bar-pin h1 { max-width: min(250px, 123vw - 176px); }
 /* the line beside or under the title scrolls with the page and is gone by 40 px */
 .room-title.bar-pin .count { translate: 0 calc(-64px * var(--hdr-p, 0)); opacity: calc(1 - 1.6 * var(--hdr-p, 0)); }
 .bar ~ .fd-sub, .bar ~ .rm-sub { opacity: calc(1 - 1.6 * var(--hdr-p, 0)); }
