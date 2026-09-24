@@ -433,6 +433,9 @@ function hueCommand(m) {
 let nanoleaf = { devices: [], count: 0, live: false };
 let nlSerial = 1;
 const NL_FOUND = { '192.168.1.44': 'Living room panels', '192.168.1.45': 'Bedroom panels' };
+// which panels each controller runs, as the real one reports it: the living room's are Light Panels (the Aurora's
+// triangles), the bedroom's Canvas squares
+const NL_MODEL = { '192.168.1.44': 'NL22', '192.168.1.45': 'NL29' };
 function nanoleafCommand(m) {
   const a = m.action;
   if (a.type === 'nanoleaf_discover') {
@@ -445,8 +448,9 @@ function nanoleafCommand(m) {
       const serial = 'NL-' + (nlSerial++);
       const name = NL_FOUND[a.host] || 'Nanoleaf';
       const did = 'nanoleaf_' + serial;
-      nanoleaf = { devices: [...nanoleaf.devices, { serial, name, model: 'NL29', host: a.host, error: null }], count: nanoleaf.devices.length + 1, live: true };
-      inventory.devices[did] = { device_id: did, name, type: 'NanoleafLight', domain: 'light', area: null, zone: serial, color: true, ct: true, ct_range: [1200, 6500] };
+      const model = NL_MODEL[a.host] || 'NL29';
+      nanoleaf = { devices: [...nanoleaf.devices, { serial, name, model, host: a.host, error: null }], count: nanoleaf.devices.length + 1, live: true };
+      inventory.devices[did] = { device_id: did, name, type: 'NanoleafLight', model, domain: 'light', area: null, zone: serial, color: true, ct: true, ct_range: [1200, 6500] };
       states[did] = { level: 0, color: { mode: 'ct', kelvin: 4000, xy: null, hex: kelvinHex(4000) } };
       inventory.nanoleaf = nanoleaf;
       send({ type: 'result', id: m.id, ok: true, detail: nanoleaf });
