@@ -281,6 +281,11 @@ async function through(page, what, act, { settle = 700 } = {}) {
     await through(page, `${W}: and on`, () => document.querySelector('[data-act="wd-toggle"]').click(), { settle: 900 });
     await go('nightstand');
     await through(page, `${W}: the Nightstand's words crossfading while pressed`, () => { const a = document.querySelector('.ns-area[data-act]'); a.style.transform = 'scale(.96)'; a.click(); });
+    // with its lamp on, the line under the title is set smaller through the area's own class, which the fading copy
+    // must keep once it sits in the unlit area
+    await page.evaluate(() => { const c = window.__copper; const d = c.data.controllable().find(x => x.domain === 'light'); c.S.config.settings.night_light = d.device_id; c.S.states[d.device_id] = { ...(c.S.states[d.device_id] || {}), level: 100 }; c.render(); });
+    await wait(700);
+    await through(page, `${W}: the Nightstand's lit words crossfading as it goes off`, () => { const c = window.__copper; const d = c.data.dev(c.S.config.settings.night_light); c.S.states[d.device_id] = { ...(c.S.states[d.device_id] || {}), level: 0 }; c.render(); }, { settle: 900 });
     // the shared crossfade, on Home's headline: "All off" and "1 on" are not the same length
     await go('home');
     await page.evaluate(() => { const c = window.__copper; for (const d of c.data.controllable()) c.S.states[d.device_id] = { ...(c.S.states[d.device_id] || {}), level: 0 }; c.render(); });

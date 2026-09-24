@@ -117,7 +117,7 @@ export function snap(root) {
       for (const p in t) v[p] = cs.getPropertyValue(p);
       (rec.v || (rec.v = {}))[ps] = v; any = true;
     }
-    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; rec.size = sizeOf(el); any = true; }
+    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = frozen(el); rec.size = sizeOf(el); any = true; }
     if (el.hasAttribute('data-enter')) { rec.enter = el.getAttribute('data-enter') || 'rise'; rec.node = el; rec.rect = el.getBoundingClientRect(); any = true; }
     if (any) s.set(path, rec);
   });
@@ -131,6 +131,21 @@ function sizeOf(el) {
   const w = parseFloat(cs.width), h = parseFloat(cs.height);
   const inline = cs.display === 'inline';
   return { w: Number.isFinite(w) && !inline ? w : r.width, h: Number.isFinite(h) && !inline ? h : r.height, left: r.left, right: r.right, oneLine: inline && el.getClientRects().length === 1 };
+}
+// A copy of an element to fade out, taken while it is still on the page, with the type and ink of every part of it
+// written onto the copy. The copy fades inside the new element, where a rule that set its words through an ancestor
+// no longer reaches it: the Nightstand's line under its title is 14 while the lamp is on (.ns-area.on), and laid in
+// the new, unlit area at 16 it went to two lines as it faded.
+const FROZEN = ['font-size', 'font-weight', 'font-family', 'line-height', 'letter-spacing', 'color', 'white-space', 'text-align', 'text-transform'];
+function frozen(el) {
+  const c = el.cloneNode(true);
+  const from = [el, ...el.querySelectorAll('*')], to = [c, ...c.querySelectorAll('*')];
+  from.forEach((f, i) => {
+    if (f.classList.contains('xf-old') || f.closest('.xf-old') || !to[i] || !to[i].style) return;
+    const cs = getComputedStyle(f);
+    for (const p of FROZEN) to[i].style.setProperty(p, cs.getPropertyValue(p));
+  });
+  return c;
 }
 // the parts of an element that make it look different: its classes, inline style and words
 // (a copy still fading inside it is not part of its look)
