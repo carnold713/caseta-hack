@@ -168,7 +168,8 @@
 /* Scenes, with Edit on the right, over the chips once a room has any; the chips then sit 10 under it */
 .room-sec { display: flex; align-items: center; justify-content: space-between; margin: 20px var(--gutter) 0; min-height: 24px; }
 .room-sec .t-over { line-height: 14px; }
-.room-sec .link { min-height: 32px; padding: 0 2px; }
+/* Edit is a word, but the finger gets 40 round it; the margins keep the row as it was */
+.room-sec .link { min-height: 40px; margin: -8px -6px -8px 0; padding: 0 8px; }
 .room-chips.headed { margin-top: 10px; }
 .chip.editing .ic { color: var(--copper); }
 .room-grid { margin-top: 16px; padding-bottom: 8px; }
@@ -575,6 +576,9 @@
 .sdots.s16 i { width: 16px; height: 16px; margin-right: -4px; }
 .sdots.s14 i { width: 14px; height: 14px; margin-right: -4px; }
 .scene-row { cursor: pointer; user-select: none; -webkit-user-select: none; }
+/* A row whose words run to a third line (a long scene or light name, a long setting) keeps them clear of the rows
+   above and below it; a row of one or two lines is as tall as it was. */
+.scenes-page .row, .scene-sheet .row, .remote-page .row, .press .row, .ways .row, .rmore .row, .row[data-act="cycle-room"] { padding-top: 10px; padding-bottom: 10px; }
 .scene-row .sdots { width: 44px; flex: none; }
 .scene-row .row-txt { padding-left: 4px; }
 .scene-row + .scene-row::before { left: 76px; }
@@ -589,6 +593,11 @@
 
 .scene-sheet { padding: 0 0 8px; }
 .scene-sheet .row { min-height: 56px; }
+/* A value that can be long (a scene's name, what a press controls, a remote's room) takes what it needs up to 60% of
+   the row and then ends in an ellipsis on one line; the row's own label has the rest, wrapping if it must, so a
+   short value is never cut for a long label nor a label squeezed out by a long value. */
+.scene-sheet .row > .row-val, .press .row > .row-val, .rmore .row > .row-val { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-sheet .row > .row-txt, .press .row > .row-txt, .rmore .row > .row-txt { flex: 1 1 0; }
 .scene-sheet .t-over.sec { margin-top: 4px; }
 .sl-row { min-height: 64px !important; cursor: pointer; padding-left: 14px; gap: 14px; }
 .sl-row + .sl-row::before, .sl-edit + .sl-row::before, .sl-row + .add-row::before, .sl-edit + .add-row::before { left: 64px; }
@@ -632,13 +641,13 @@
 .pico-photo .pico-svg { position: absolute; inset: 0; margin: auto; }
 .pico-photo .pico-svg > g:first-of-type, .pico-photo .pico-svg > rect, .pico-photo .pk-shape, .pico-photo .pk > path, .pico-photo .pk > line, .pico-photo .pk > text { opacity: 0; }
 
-/* The listening banner: a blue dot breathing in its halo. 48 tall on Remotes, 36 and pinned on a remote's page. */
-.listen { display: flex; align-items: center; gap: 10px; margin: 26px var(--gutter) 0; height: 48px; padding: 0 14px; border-radius: 24px; background: var(--surface-1); font-size: 14px; line-height: 20px; white-space: nowrap; }
-.listen > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+/* The listening banner: a blue dot breathing in its halo. 48 tall on Remotes, 36 and pinned on a remote's page. It
+   says all of what it says: on a narrow phone it takes a second line rather than losing its end to an ellipsis. */
+.listen { display: flex; align-items: center; gap: 10px; margin: 26px var(--gutter) 0; min-height: 48px; padding: 6px 14px; border-radius: 24px; background: var(--surface-1); font-size: 14px; line-height: 18px; }
 .listen .breath { position: relative; width: 20px; height: 20px; flex: none; }
 .listen .breath::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: rgba(0, 109, 204, .3); animation: breathe var(--breathe) var(--ease-both) infinite; }
 .listen .breath i { position: absolute; left: 5px; top: 5px; width: 10px; height: 10px; border-radius: 5px; background: var(--blue-hi); }
-.listen.pin { width: 327px; max-width: calc(100% - 40px); height: 36px; margin-top: 15px; padding: 0 13px; gap: 10px; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; }
+.listen.pin { width: 327px; max-width: calc(100% - 40px); min-height: 36px; margin-top: 15px; padding: 4px 13px; gap: 10px; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; line-height: 14px; }
 .listen.pin .breath { width: 16px; height: 16px; }
 .listen.pin .breath i { left: 4px; top: 4px; width: 8px; height: 8px; }
 
@@ -653,8 +662,15 @@
 .rc-stage { position: absolute; left: 8px; right: 8px; top: 8px; height: 136px; border-radius: 20px; overflow: hidden; display: grid; place-items: center; background: radial-gradient(closest-side, #3C3C3C, #262626); }
 .rc-cap { position: absolute; left: 18px; top: 104px; width: 128px; height: 24px; border-radius: 12px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 500; line-height: 24px; text-align: center; }
 .rc-nm { position: absolute; left: 16px; right: 8px; top: 150px; font-size: 20px; font-weight: 500; line-height: 24px; }
-.rc-st { position: absolute; left: 16px; top: 178px; right: 12px; font-size: 14px; line-height: 18px; color: var(--text-2); }
-.rc-usual { position: absolute; left: 16px; top: 198px; border: 0; padding: 0; background: none; color: var(--text-1); font: inherit; font-size: 14px; font-weight: 500; line-height: 18px; }
+/* The card is one height, so its lines are one line each: a status too long for a narrow card ends in an ellipsis
+   rather than pushing its last word under the link below it. */
+.rc-st { position: absolute; left: 16px; top: 178px; right: 12px; font-size: 14px; line-height: 18px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-usual { position: absolute; left: 16px; top: 198px; max-width: calc(100% - 28px); border: 0; padding: 0; background: none; color: var(--text-1); font: inherit; font-size: 14px; font-weight: 500; line-height: 18px; text-align: left; }
+.rc-usual > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* its words are one small line; the finger gets 40 high round them */
+.rc-usual::after { content: ''; position: absolute; left: -8px; right: -8px; top: -11px; bottom: -11px; }
+/* two across on a small phone leaves a card 150 wide: its two small lines step down to 13 so they still say it all */
+@media (max-width: 380px) { .rc-st, .rc-usual, .rc-err { font-size: 13px; } }
 .rc-err { position: absolute; left: 16px; top: 177px; right: 12px; display: flex; gap: 6px; font-size: 14px; line-height: 18px; color: var(--err); }
 .rc-err i { width: 16px; height: 16px; border-radius: 8px; flex: none; margin-top: 1px; background: var(--err); color: var(--bg); font-style: normal; font-size: 11px; font-weight: 700; line-height: 16px; text-align: center; }
 .rempty { padding: 0 var(--gutter); margin-top: 20px; }
@@ -746,7 +762,7 @@
 .ck-head { display: flex; justify-content: space-between; align-items: baseline; margin: 22px var(--gutter) 8px; }
 .ck-head .t-over { line-height: 14px; }
 .ck-n { font-size: 12px; font-weight: 500; line-height: 14px; color: var(--text-4); }
-.row.ck { min-height: 52px; padding-left: 12px; }
+.row.ck { min-height: 52px; padding-top: 8px; padding-bottom: 8px; padding-left: 12px; }
 .row.ck + .row::before { left: 56px; }
 .row.ck .row-txt .t.off { color: #F5F4F2; }
 .lampc { width: 32px; height: 32px; border-radius: 16px; display: grid; place-items: center; flex: none; background: #333; color: var(--text-3); }
@@ -766,7 +782,7 @@
 .ctl-sum .t-cap { font-size: 13px; line-height: 15px; margin-top: 3px; }
 .order { width: 22px; height: 22px; border-radius: 11px; flex: none; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px var(--text-4); font-size: 12px; font-weight: 500; }
 .order.on { background: var(--blue); box-shadow: none; }
-.look-row { min-height: 72px; }
+.look-row { min-height: 72px; padding-top: 10px; padding-bottom: 10px; }
 .look-th { width: 36px; display: grid; place-items: center; flex: none; }
 
 /* the step editor */

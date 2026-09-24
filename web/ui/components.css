@@ -343,6 +343,9 @@
 /* Overline at 28, title at 48, close circle at 28: the grabber takes the first 12. */
 .sheet-head { position: relative; padding: 16px var(--gutter) 0; }
 .sheet-head .t-over { margin: 0 0 6px; line-height: 14px; }
+/* a long overline (a remote's own name) wraps short of the round buttons, as the title does */
+.sheet-head .t-over { padding-right: 56px; }
+.sheet-head:has(.head-btn) .t-over { padding-right: 108px; }
 /* A picker inside a sheet carries a back arrow before its overline. */
 .sheet-head.has-back { padding-left: 64px; }
 .sheet-back {
