@@ -313,6 +313,15 @@ function gone(c) {
     <h1 class="t-h1 page-h1">That room is gone</h1><p class="t-body muted soon">It is no longer in your home.</p></div>`;
 }
 
+// Edit stays on while the room's scenes are changed over it (their editors are the room's own addresses) and is off
+// again once the room is left, so a chip tapped on a later visit runs its scene rather than opening it.
+let editUi = null;
+addEventListener('hashchange', () => {
+  const aid = editUi && editUi.roomScenesEdit; if (!aid) return;
+  let h = location.hash.replace(/^#/, ''); try { h = decodeURIComponent(h); } catch (_) { /* as it is */ }
+  if (h !== `room/${aid}` && !h.startsWith(`room/${aid}/`)) editUi.roomScenesEdit = null;
+});
+
 export const actions = {
   ...setupActions,
   ...sheetActs,
@@ -327,7 +336,7 @@ export const actions = {
   },
   // a scene's editor opens over the room, and closing it is the room again
   'scene-edit'(c, el, r) { if (el.dataset.id) c.go(`room/${r.id}/scene/${el.dataset.id}`); },
-  'room-scenes-edit'(c, el) { const aid = el.dataset.id; c.ui.roomScenesEdit = c.ui.roomScenesEdit === aid ? null : aid; c.render(); },
+  'room-scenes-edit'(c, el) { const aid = el.dataset.id; c.ui.roomScenesEdit = c.ui.roomScenesEdit === aid ? null : aid; editUi = c.ui; c.render(); },
   // a new scene is the room as it is now (every light in it, so the ones that are off stay off), opened to change
   'room-scene-new'(c, el) {
     const aid = el.dataset.id;

@@ -9,7 +9,9 @@
 //   the remote   the drawing on the card is the big remote on the page: it grows and moves into place on the same
 //                curve, never drawn twice.
 //   the name     the card's name flies to the page's title, matched on width, crossing only in the first 0.15 s; it
-//                may pass behind the growing remote. The card's second line fades in 0.12 s EASE_IN.
+//                may pass behind the growing remote. The card's second line fades in 0.12 s EASE_IN. A name cut short
+//                by its ellipsis on the card or on the page does not fly (the two would read differently): it fades
+//                where it is, and the title comes in with the model line.
 //   the list     the other cards step aside, nearest first 0.03 s apart: beside sideways 60, below down 120, fading
 //                (0.25 s EASE_IN) and settling to 0.96; "Remotes" lifts away and its banner goes up.
 //   the page     arrives in reading order on (0.2, 0.8, 0.2, 1): the header's "more" (0.12 s) and its back button,
@@ -48,7 +50,7 @@ export function read(card) {
     radius: parseFloat(getComputedStyle(card).borderTopLeftRadius) || 28,
     stage: stage && { r: stage.getBoundingClientRect(), bg: scs.backgroundImage, radius: parseFloat(scs.borderTopLeftRadius) || 20 },
     art: part(art, k),
-    nm: words(q('.rc-nm'), k),
+    nm: words(q('.rc-nm'), k), nmPart: part(q('.rc-nm'), k), nmCut: cutShort(q('.rc-nm')),
     lines: [...card.querySelectorAll('.rc-st, .rc-err, .rc-usual, .rc-cap')].map(n => part(n, k)),
   };
 }
@@ -65,10 +67,14 @@ function readPage(page) {
   return {
     page, stage, h1, rart,
     Hr: stage.getBoundingClientRect(), radius: parseFloat(getComputedStyle(stage).borderTopLeftRadius) || 28,
-    Ht: textBox(h1), Hb: h1.getBoundingClientRect(),
+    Ht: textBox(h1), Hb: h1.getBoundingClientRect(), h1Cut: cutShort(h1),
     artR: rart && rart.getBoundingClientRect(),
   };
 }
+
+// A line of words cut short by its ellipsis. The card and the title cut a long name at different places, and the two
+// crossing would change the words mid flight; a name cut short on either does not fly (see open and close).
+const cutShort = n => !!n && n.scrollWidth > n.clientWidth + 1;
 
 // ---------- building ----------
 // The card's spotlight, laid in the stage where it was on the card.
@@ -130,8 +136,11 @@ export function open({ O, ghost }, screen, F) {
   // the remote grows and moves into place
   const flip = remoteFlip(O, D, G);
   if (flip) { F.core(D.rart, flip, { duration: OPEN.dur, easing: OPEN.ease }); F.undo(() => { D.rart.style.transformOrigin = ''; }); }
-  // the name flies to the title; the rest of the card goes where it is
-  pair(F, 'open', { dest: D.h1, Dt: D.Ht, Db: D.Hb, p: O.nm, k: O.k, top, crossEase: 'ease-in-out' });
+  // the name flies to the title; the rest of the card goes where it is. A name cut short on the card or on the page
+  // goes where it is too, and the title comes in with the model line under it, each as it rests.
+  const flies = !O.nmCut && !D.h1Cut;
+  if (flies) pair(F, 'open', { dest: D.h1, Dt: D.Ht, Db: D.Hb, p: O.nm, k: O.k, top, crossEase: 'ease-in-out' });
+  else if (O.nmPart) { const c = copyNode(O.nmPart, O.k); top.appendChild(c); F.core(c, [{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: T.easeIn, fill: 'forwards' }); }
   for (const l of O.lines) { const c = copyNode(l, O.k); top.appendChild(c); F.core(c, [{ opacity: opacityOf(l.el) }, { opacity: 0 }], { duration: 120, easing: T.easeIn, fill: 'forwards' }); }
 
   // the other cards step aside, and "Remotes" lifts away
@@ -141,6 +150,7 @@ export function open({ O, ghost }, screen, F) {
   // the page arrives in reading order
   rise(F, q('.hdr .a1'), 120, { dy: 0, dur: 220 });
   rise(F, q('.hdr .back'), 200, { dx: -12, dy: 0, dur: T.standard });
+  if (!flies) rise(F, D.h1, 300, { dx: 8, dy: 0, dur: T.standard });
   rise(F, q('.rm-sub'), 350, { dx: 8, dy: 0, dur: T.standard });
   rise(F, page.querySelector(':scope > .listen'), 400, { dy: 12, dur: 320 });
   before.forEach((n, i) => rise(F, n, 450 + i * 50, { dy: 12, dur: 320 }));
@@ -203,8 +213,13 @@ export function close(p, screen, F, { ghost, O, el: card }) {
   if (spot) F.core(spot, [{ opacity: 0 }, { opacity: 1 }], last(300, { easing: 'ease-in-out' }));
   const flip = remoteFlip(O, D, G);
   if (flip) F.core(D.rart, [flip[1], flip[0]], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
-  // the title flies back into the name, crossing in the last 0.15 s; the card's second line comes back in the last 0.2 s
-  pair(F, 'close', { dest: D.h1, Dt: D.Ht, Db: D.Hb, p: O.nm, k: 1, top, crossEase: 'ease-in-out' });
+  // the title flies back into the name, crossing in the last 0.15 s; the card's second line comes back in the last 0.2 s.
+  // A name cut short on either goes with the page and comes back on the card with its second line.
+  if (!O.nmCut && !D.h1Cut) pair(F, 'close', { dest: D.h1, Dt: D.Ht, Db: D.Hb, p: O.nm, k: 1, top, crossEase: 'ease-in-out' });
+  else {
+    going(F, D.h1, { dur: 150 });
+    if (O.nmPart) { const c = copyNode(O.nmPart, 1); top.appendChild(c); F.core(c, [{ opacity: 0 }, { opacity: 1 }], last(200, { easing: T.ease })); }
+  }
   for (const l of O.lines) { const c = copyNode(l, 1); top.appendChild(c); F.core(c, [{ opacity: 0 }, { opacity: opacityOf(l.el) }], last(200, { easing: T.ease })); }
 
   // the cards return, nearest first, and "Remotes" comes down into place (after a back swipe they are already there,
