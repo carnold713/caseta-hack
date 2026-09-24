@@ -74,7 +74,9 @@ function white(c, r) {
   const id = d.device_id;
   const [kmin, kmax] = lampRange(d);
   const col = colOf(c, id);
-  const k = Math.round(col.mode === 'ct' && col.kelvin ? col.kelvin : 2700);
+  // to the nearest 50K, as a pick is made: a Hue bridge answers in mireds, so a lamp set to 6500K reports 6494K a
+  // moment later, and the sun and its readout must not shift when it does
+  const k = Math.round((col.mode === 'ct' && col.kelvin ? col.kelvin : 2700) / 50) * 50;
   const lim = kmax < K_MAX ? posOfKelvin(kmax) : null;
   const low = kmin > K_MIN ? posOfKelvin(kmin) : null;
   const lit = isOn(c, id);

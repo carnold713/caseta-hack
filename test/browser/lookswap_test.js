@@ -40,6 +40,26 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const col = () => C(id => { const s = window.__copper.S.states[id] || {}; const k = s.color || {}; return { level: s.level || 0, mode: k.mode, kelvin: k.kelvin, hex: String(k.hex || '').toUpperCase() }; }, lamp);
   const left = () => C(() => ({ dot: document.querySelectorAll('.m16-dot').length, copies: document.querySelectorAll('.m16-copy').length }));
   const tab = to => page.click(`#sheet-root .seg2 [data-act="look-swap"][data-to$="/${to}"]`);
+  // every frame from the tap: where the travelling dot is and where the sheet's own dot is, once it shows (the sun is
+  // drawn 28 across with its 2 px ring outside it, 32 as seen, as the dot lands)
+  const sample = () => C(() => {
+    window.__hand = []; const t0 = performance.now();
+    const tick = () => {
+      const f = document.querySelector('.m16-dot .m16-disc');
+      const own = document.querySelector('#sheet-root .sheet-body .ws-thumb .disc') || document.querySelector('#sheet-root .sheet-body .wheel .handle');
+      let o = 1; for (let e = own; e && e !== document.body; e = e.parentElement) o *= Number(getComputedStyle(e).opacity);
+      const R = (el, pad) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, r.width + pad]; };
+      window.__hand.push({ fly: f && Number(getComputedStyle(document.querySelector('.m16-dot')).opacity) > 0 ? R(f, 0) : null, own: own && o > 0.99 ? R(own, own.classList.contains('disc') ? 4 : 0) : null });
+      if (performance.now() - t0 < 1800) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  const handover = () => C(() => {
+    const h = window.__hand; const i = h.findIndex((x, j) => j && h[j - 1].fly && !x.fly);
+    if (i < 1) return { ok: false, why: 'no handover' };
+    const a = h[i - 1].fly, b = h[i].own, gaps = h.slice(i).filter(x => !x.own && !x.fly).length;
+    return { ok: !!b && Math.hypot(a[0] - b[0], a[1] - b[1]) < 1 && Math.abs(a[2] - b[2]) < 1 && !gaps, last: a, first: b, gaps };
+  });
 
   // on, in blue, on the Colour sheet
   await goto(`light/${lamp}/colour`, 1200);
@@ -50,6 +70,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // ---- Colour to White
   // where the handle is in the sheet (the sheet's top edge may slide to the new sheet's height, carrying the dot)
   const handle = await C(() => { const r = document.querySelector('.wheel .handle').getBoundingClientRect(), s = document.querySelector('#sheet-root .sheet').getBoundingClientRect(); return { x: r.left + r.width / 2 - s.left, y: r.top + r.height / 2 - s.top }; });
+  await sample();
   await tab('white');
   await wait(60);
   const early = await C(() => {
@@ -79,10 +100,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await wait(700);
   const done = await C(() => ({ chips: [...document.querySelectorAll('#sheet-root .ws-chips .chip:not(.out)')].map(c => Number(getComputedStyle(c).opacity)), follow: document.querySelector('#sheet-root .ws-follow') ? Number(getComputedStyle(document.querySelector('#sheet-root .ws-follow')).opacity) : 1 }));
   check('White: by 1.5 s everything has arrived', done.chips.every(o => o === 1) && done.follow === 1, done);
+  const hw = await handover();
+  check('White: the dot hands over to the sun where it landed, same place and size, no frame without one (no jump)', hw.ok, hw);
   check('White: nothing of the swap is left behind', JSON.stringify(await left()) === '{"dot":0,"copies":0}', await left());
   await page.screenshot({ path: 'm16-white.png' });
 
   // ---- White to Colour: the colour White took comes back
+  await sample();
   await tab('colour');
   await wait(60);
   const back = await C(() => {
@@ -95,6 +119,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await wait(1400);
   const home = await C(() => ({ hd: Number(getComputedStyle(document.querySelector('#sheet-root .wheel .handle')).opacity), wheel: Number(getComputedStyle(document.querySelector('#sheet-root .wheel')).opacity), val: Number(getComputedStyle(document.querySelector('#sheet-root .cs-val')).opacity) }));
   check('Colour: the wheel has opened out of the handle and the rest has risen in', home.hd === 1 && home.wheel === 1 && home.val === 1, home);
+  const hc = await handover();
+  check('Colour: the dot hands over to the handle once the wheel is whole, same place and size (no jump)', hc.ok, hc);
   check('Colour: nothing of the swap is left behind', JSON.stringify(await left()) === '{"dot":0,"copies":0}', await left());
 
   // ---- a tab never makes up a colour: from a white the lamp was given, Colour leaves it white

@@ -70,7 +70,7 @@ export function play(cap, root) {
   if (kindOf(lk) !== cap.to) return;               // the redraw has not happened (a finger was down): no animation
   const sheet = lk.closest('.sheet'), dot = dotIn(lk, cap.to);
   if (!sheet || !dot) return;
-  holdFor(LENGTH + 50);
+  holdFor(LENGTH + 250);
   const L = local(sheet);
   const made = [];
   const layer = (el, r) => {
@@ -106,39 +106,56 @@ export function play(cap, root) {
     if (was && was !== now) b.animate([{ color: was }, { color: now }], { duration: T.standard, easing: STD });
   });
 
-  // the sheet's top edge moves to the new sheet's height with the pill, rather than jumping
+  // ---- the lamp's colour, travelling
+  // It flies from 0.28 s (0.26 s going back) for 0.55 s. Going to White the sun is its own again the moment the dot
+  // lands; going to Colour the handle sits inside the wheel, which is still opening out (scaling) round it then, so the
+  // dot holds its place until the wheel is whole and hands over after. The handover is on the animations' own clock
+  // (the dot hides and the sheet's own dot shows on the same frame), never a timer, which on a busy phone would run
+  // ahead of animations that started a frame or two late.
+  const start = cap.to === 'white' ? 280 : 260, FLIGHT = 550;
+  const handover = cap.to === 'white' ? start + FLIGHT : 560 + 550;
+  const r0 = seen(cap.dot.rect, cap.from), r1 = seen(L(dot.getBoundingClientRect()), cap.to);
+  const ring = k => (k === 'colour' ? 3 : 2);
+  const fly = document.createElement('span');
+  fly.className = 'm16-dot';
+  fly.innerHTML = `<i class="m16-y"><span class="m16-disc"><b class="m16-was"></b><b class="m16-now"></b><i class="m16-ring"></i></span></i>`;
+  // the dot is drawn about its middle: the flier is a point there, carried along (x) and up or down (y) apart, so the
+  // two eases make the arc; its disc grows or shrinks in true size, ring and all, so it lands exactly as the one it
+  // becomes looks (the handle's 36 with its ring inside, the sun's 28 with its ring outside, 32 across)
+  layer(fly, { left: r0.left + r0.width / 2, top: r0.top + r0.height / 2, width: 0 }); fly.style.height = '0'; fly.style.zIndex = '5';
+  const disc = fly.querySelector('.m16-disc');
+  disc.style.width = disc.style.height = `${r0.width}px`;
+  fly.querySelector('.m16-was').style.background = cap.dot.bg;
+  fly.querySelector('.m16-now').style.background = getComputedStyle(dot).backgroundColor;
+  fly.querySelector('.m16-ring').style.boxShadow = `inset 0 0 0 ${ring(cap.from)}px #fff`;
+  const dx = (r1.left + r1.width / 2) - (r0.left + r0.width / 2), dy = (r1.top + r1.height / 2) - (r0.top + r0.height / 2);
+  const flight = { duration: FLIGHT, delay: start, fill: 'both' };
+  fly.animate([{ transform: 'none' }, { transform: `translateX(${dx}px)` }], { ...flight, easing: EMPH });
+  fly.querySelector('.m16-y').animate([{ transform: 'none' }, { transform: `translateY(${dy}px)` }], { ...flight, easing: T.easeBoth });
+  disc.animate([{ width: `${r0.width}px`, height: `${r0.height}px` }, { width: `${r1.width}px`, height: `${r1.height}px` }], { ...flight, easing: EMPH });
+  fly.querySelector('.m16-ring').animate([{ boxShadow: `inset 0 0 0 ${ring(cap.from)}px #fff` }, { boxShadow: `inset 0 0 0 ${ring(cap.to)}px #fff` }], { ...flight, easing: EMPH });
+  fade(fly.querySelector('.m16-now'), 0, 1, { duration: T.dimmer, delay: start, easing: T.easeBoth, fill: 'both' });
+  // the handover: one frame, the same clock
+  const at = handover, eps = 1 / at;
+  fly.animate([{ opacity: 1 }, { opacity: 1, offset: 1 - eps }, { opacity: 0 }], { duration: at, fill: 'forwards' });
+  const own = cap.to === 'white' ? lk.querySelector('.ws-thumb') : dot;
+  if (own) own.animate([{ opacity: 0 }, { opacity: 0, offset: 1 - eps }, { opacity: 1 }], { duration: at, fill: 'backwards' });
+
+  // the sheet's top edge moves to the new sheet's height with the pill, rather than jumping. Last, after
+  // everything above is measured: a place read off the sheet while it is sliding would be off by the slide
   const lift = cap.top - sheet.getBoundingClientRect().top;
   if (Math.abs(lift) > 1) sheet.animate([{ transform: `translateY(${lift}px)` }, { transform: 'none' }], { duration: T.dimmer, easing: STD });
 
-  // ---- the lamp's colour, travelling
-  const lands = cap.to === 'white' ? 830 : 810;
-  const r0 = seen(cap.dot.rect, cap.from), r1 = seen(L(dot.getBoundingClientRect()), cap.to);
-  const fly = document.createElement('span');
-  fly.className = 'm16-dot';
-  fly.style.setProperty('--m16-ring', cap.from === 'colour' ? '3px' : '2px');
-  fly.innerHTML = `<i class="m16-y"><b class="m16-was"></b><b class="m16-now"></b></i>`;
-  layer(fly, r0); fly.style.height = `${r0.height}px`; fly.style.zIndex = '5';
-  fly.querySelector('.m16-was').style.background = cap.dot.bg;
-  fly.querySelector('.m16-now').style.background = getComputedStyle(dot).backgroundColor;
-  const dx = (r1.left + r1.width / 2) - (r0.left + r0.width / 2), dy = (r1.top + r1.height / 2) - (r0.top + r0.height / 2);
-  const s = r1.width / r0.width, start = lands - 550;
-  // along the sheet fast and settling (EMPH), up and down eased both ways: together an arc, as the file draws it
-  fly.animate([{ transform: 'none' }, { transform: `translateX(${dx}px)` }], { duration: 550, delay: start, easing: EMPH, fill: 'both' });
-  fly.querySelector('.m16-y').animate([{ transform: 'none' }, { transform: `translateY(${dy}px) scale(${s})` }], { duration: 550, delay: start, easing: T.easeBoth, fill: 'both' });
-  fade(fly.querySelector('.m16-now'), 0, 1, { duration: T.dimmer, delay: start, easing: T.easeBoth, fill: 'both' });
-  // the new sheet's own dot takes over the moment the travelling one lands
-  const own = cap.to === 'white' ? lk.querySelector('.ws-thumb') : dot;
-  if (own) own.animate([{ opacity: 0 }, { opacity: 0 }], { duration: lands, fill: 'none' });
-
   if (cap.to === 'white') arriveWhite(lk); else arriveColour(lk, dot);
 
-  // ---- tidy: every copy goes when it is done, or at once if the sheet closes first
+  // ---- tidy: every copy goes once its animations have finished (on their clock, not a timer), or at once if the
+  // sheet closes first; a long stop in case something never finishes
   let done = false;
-  const tidy = () => { if (done) return; done = true; obs.disconnect(); made.forEach(el => el.remove()); };
+  const tidy = () => { if (done) return; done = true; obs.disconnect(); clearTimeout(late); made.forEach(el => el.remove()); };
   const obs = new MutationObserver(() => { if (root.hidden || !root.contains(sheet)) tidy(); });
   obs.observe(root, { childList: true, attributes: true, attributeFilter: ['hidden'] });
-  setTimeout(() => { fly.remove(); }, lands + 20);
-  setTimeout(tidy, LENGTH + 50);
+  const late = setTimeout(tidy, LENGTH * 3);
+  Promise.all(made.flatMap(el => el.getAnimations({ subtree: true })).map(a => a.finished)).then(tidy, tidy);
 }
 
 // ---------- the parts ----------
