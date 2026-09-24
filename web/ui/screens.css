@@ -499,7 +499,7 @@
 .chip.sm::after, .pill.sm::after, .dd::after { content: ''; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }
 .pill.sm::after, .dd::after { top: -2px; bottom: -2px; }
 :is(.timer-row, .where-line, .pt-row, .ad-links, .st-card, .conn, .sheet-body .row) .link { position: relative; }
-:is(.timer-row, .where-line, .pt-row, .ad-links, .st-card, .conn, .sheet-body .row) .link::after { content: ''; position: absolute; left: -4px; right: -4px; top: -12px; bottom: -12px; }
+:is(.timer-row, .where-line, .pt-row, .ad-links, .st-card, .conn, .sheet-body .row) .link::after { content: ''; position: absolute; left: 0; right: 0; top: -12px; bottom: -12px; }
 .chip.tag { display: inline-flex; height: 22px; border-radius: 11px; padding: 0 8px; font-size: 11px; margin-left: 8px; vertical-align: 2px; color: var(--text-2); }
 .chip-wrap { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 var(--gutter); }
 .cdot { width: 12px; height: 12px; border-radius: 6px; display: inline-block; flex: none; }

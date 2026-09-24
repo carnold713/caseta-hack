@@ -116,8 +116,8 @@
 }
 .toggle[aria-checked='true'] { background: var(--blue); }
 .toggle[aria-checked='true']::after { transform: translateX(20px); background: #fff; }
-/* The switch is drawn 32 tall; a finger gets 40 of it, and a little either side, without it looking any bigger */
-.toggle::before { content: ''; position: absolute; inset: -4px; }
+/* The switch is drawn 32 tall; a finger gets 40 of it without it looking any bigger */
+.toggle::before { content: ''; position: absolute; inset: -4px 0; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 8px;
@@ -373,8 +373,6 @@
 .sheet-head h2 { padding-right: 56px; }
 .sheet-head:has(.head-btn) h2 { padding-right: 108px; }
 .sheet-head h2 { margin: 0; }
-/* A title that is a name someone typed stops at three lines rather than filling the sheet */
-.sheet-head h2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 .sheet-close {
   position: absolute; top: 16px; right: var(--gutter);
   width: 40px; height: 40px; border-radius: 20px; border: 0;
