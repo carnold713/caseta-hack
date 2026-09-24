@@ -50,7 +50,7 @@ function card(c, d) {
   const pressed = pressedKey(c, d.device_id);
   const line = st.error
     ? `<span class="rc-err"><i>!</i>${esc(st.text)}</span>`
-    : `<span class="rc-st">${esc(st.text)}</span>${st.none && REM.usualLayoutTargets(d) ? `<button class="rc-usual" data-act="usual" data-id="${esc(d.device_id)}">Set up the usual way</button>` : ''}`;
+    : `<span class="rc-st">${esc(st.text)}</span>${st.none && REM.usualLayoutTargets(d) ? `<button class="rc-usual" data-act="usual" data-id="${esc(d.device_id)}"><span>Set up the usual way</span></button>` : ''}`;
   return `<div class="rcard ${pressed != null ? 'pressed' : ''}" data-go="remote/${esc(d.device_id)}" role="link" aria-label="${esc(d.name)}">
     <span class="rc-stage">${remoteArt(c, d, { height: 124, pressed })}${pressed != null ? `<span class="rc-cap">${esc(REM.buttonName(d.device_id, pressed))} pressed</span>` : ''}</span>
     <span class="rc-nm nm-cut">${esc(d.name)}</span>${line}</div>`;

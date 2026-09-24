@@ -85,7 +85,10 @@
 .sc-wash { position: absolute; left: 50%; top: 120px; width: 520px; height: 300px; margin: -150px 0 0 -260px; border-radius: 50%;
   background: radial-gradient(closest-side, rgba(217, 138, 78, .22) 0%, rgba(217, 138, 78, 0.217) 6.2%, rgba(217, 138, 78, 0.208) 12.5%, rgba(217, 138, 78, 0.194) 18.8%, rgba(217, 138, 78, 0.176) 25%, rgba(217, 138, 78, 0.155) 31.2%, rgba(217, 138, 78, 0.131) 37.5%, rgba(217, 138, 78, 0.107) 43.8%, rgba(217, 138, 78, 0.083) 50%, rgba(217, 138, 78, 0.062) 56.2%, rgba(217, 138, 78, 0.042) 62.5%, rgba(217, 138, 78, 0.027) 68.8%, rgba(217, 138, 78, 0.015) 75%, rgba(217, 138, 78, 0.007) 81.2%, rgba(217, 138, 78, 0.002) 87.5%, rgba(217, 138, 78, 0.000) 93.8%, transparent 100%); opacity: var(--wash, .4);
   transition: opacity var(--dimmer) var(--ease-both); pointer-events: none; }
-.sc-lanes { position: absolute; inset: 0 12px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(56px, 1fr);
+/* Each light has a lane of its own, never narrower than 64: wide enough for its orb and its number over it with room
+   either side, so two lights' numbers can never meet. More lights than fit and the stage scrolls sideways, the last
+   lane showing cut at the edge to say so. */
+.sc-lanes { position: absolute; inset: 0 12px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr);
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none; z-index: 2; touch-action: pan-x pan-y; }
 .sc-lanes::-webkit-scrollbar { display: none; }
 .sc-lane { position: relative; height: 356px; }
@@ -102,12 +105,16 @@
 .sc-ball { position: absolute; inset: 0; border-radius: 50%; background: var(--ball); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
   display: grid; place-items: center; color: rgba(60, 40, 20, .75); transition: opacity var(--dimmer) var(--ease-both); }
 .sc-orb:focus-visible .sc-ball { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 0 0 2px var(--copper-hi); }
-/* Off in this scene: under the floor line, a hollow ring and no light at all. */
-.sc-orb.off .sc-ball { background: none; box-shadow: inset 0 0 0 1px #6E6E6E; }
-.sc-lv { position: absolute; left: calc(50% + 30px); top: calc(var(--y) - 9px); font-size: 14px; font-weight: 500; line-height: 18px; color: var(--text-1);
-  white-space: nowrap; pointer-events: none; transition: top var(--standard) var(--ease); }
-.sc-orb.off + .sc-lv { color: var(--text-3); }
-.sc-lane:last-child:not(:first-child) .sc-lv { left: auto; right: calc(50% + 30px); }
+/* Off in this scene: under the floor line, a hollow ring and no light at all, drawn smaller than the orb (whose 44
+   still takes the finger) so it sits between the floor line and the light's name without touching either. */
+.sc-orb.off .sc-ball { inset: 6px; background: none; box-shadow: inset 0 0 0 1px #6E6E6E; }
+/* The light's number sits over its orb, centred in its own lane and never wider than it, so it cannot run into a
+   neighbour's however many lights there are, and a finger on the orb never covers it. It hangs from its bottom
+   edge, so a word that takes two lines in a narrow lane ("Medium high", "Leave out") grows upward, away from the
+   orb. Placed by its bottom rather than a transform, which M12's arrival animates. */
+.sc-lv { position: absolute; left: 2px; right: 2px; bottom: calc(356px - var(--y) + var(--lo, 28px)); font-size: 14px; font-weight: 500; line-height: 16px; color: var(--text-1);
+  text-align: center; pointer-events: none; transition: bottom var(--standard) var(--ease); }
+.sc-orb.off + .sc-lv { color: var(--text-3); --lo: 22px; }
 .sc-nm { position: absolute; left: 2px; right: 2px; top: 326px; font-size: 13px; line-height: 16px; color: var(--text-2); text-align: center;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .sc-lane.leaving .sc-orb { opacity: .45; }
@@ -124,15 +131,18 @@
 .sc-shelf { display: flex; align-items: center; gap: 16px; margin: 14px 0 0; padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; }
 .sc-shelf::-webkit-scrollbar { display: none; }
 .sc-shelf-t { flex: none; font-size: 14px; color: var(--text-3); }
-.sc-ring { flex: none; display: inline-flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; color: var(--text-1); font-size: 14px; }
+.sc-ring { flex: none; display: inline-flex; align-items: center; gap: 10px; min-height: 44px; border: 0; background: none; padding: 0; color: var(--text-1); font: inherit; font-size: 14px; }
 .sc-ring i { width: 36px; height: 36px; border-radius: 50%; box-shadow: inset 0 0 0 1px #6E6E6E; }
 /* The light last tapped on the stage: its choices, as the list's rows have them. */
 .sc-edit { margin: 14px var(--gutter) 0; padding: 14px 0 0 16px; border-radius: var(--r-group); background: var(--surface-2); }
 .sc-edit-h { display: flex; justify-content: space-between; align-items: center; padding-right: 16px; margin-bottom: 10px; font-size: 16px; font-weight: 500; }
+/* Done is a word, but the finger gets 40 round it; the margins keep the header as it was */
+.sc-edit-h .link { min-height: 40px; margin: -11px -8px; padding: 0 8px; }
 .sc-edit .sl-edit { padding-left: 0; }
 .sc-play { display: flex; align-items: center; gap: 14px; margin: 16px var(--gutter) 20px; }
 .sc-play .t { flex: 1 1 auto; font-size: 16px; font-weight: 500; }
-.sc-play .sc-try { flex: none; width: 120px; height: 48px; }
+/* Try it as wide as its words and a pill's ends, leaving "Show it on the room" as much of the row as it can have */
+.sc-play .sc-try { flex: none; width: auto; min-width: 96px; height: 48px; padding: 0 24px; }
 /* The hold on a scene chip (0.5 s to change it) fills it with copper from the left, LINEAR, as the house shows a
    hold (M12); let go early and it empties in 0.2 s EASE_IN. Held to the end, the copper is where the scene's editor
    grows from (chipopen.js). */

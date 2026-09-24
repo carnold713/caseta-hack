@@ -11,7 +11,10 @@
 //                The chip's copper covers the surface at first and dissolves into it well inside the first 0.18 s,
 //                so no big copper panel ever shows; the chip's outline and glyph go in 0.08 s.
 //   the word     the sheet's title flies out of the chip's word, width matched, on the surface's curve; the two
-//                crossfade only in the first 0.15 s, where they are the chip's size.
+//                crossfade only in the first 0.15 s, where they are the chip's size. Only when the two read alike,
+//                whole and on one line each: a word that would change its lines or its ellipsis on the way (a long
+//                name whose title takes two lines, a tile's name cut short) goes with the chip's face instead, and
+//                the title comes in with the header.
 //   the content  the header bits fade and rise 12 at 0.3 s (the "N lights · Room" line at 0.34 s), the stage at
 //                0.3 s; then the orbs rise from where the chip was, left to right 0.05 s apart from 0.4 s, each
 //                scaling 0.4 to 1 and fading in over 0.45 s on the opening curve, its glow blooming as it lands (a
@@ -138,7 +141,7 @@ function measure({ el, word }) {
     fill: copper ? { color: copper } : paint(el),
     edge: bw ? { w: bw, color: cs.borderTopColor } : null,
     // its look, copied now: a computed style is live, and the chip is about to be drawn again
-    word: words(word), wordCss: word && look(getComputedStyle(word)),
+    word: words(word), wordCss: word && look(getComputedStyle(word)), wordLay: word && lay(word),
     face: faceCopy(el),
   };
 }
@@ -221,19 +224,27 @@ function open(root, sheet, h2, O) {
   }
 
   // the word: the title flies out of it, and the two cross only while they are the chip's size
+  const rise = (n, delay, dur = T.enter, dy = 12) => play(n, [{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: 'translateY(0px)' }], { duration: dur, easing: T.ease, delay });
   if (head) { head.style.zIndex = '2'; f.undo.push(() => { head.style.zIndex = ''; }); }
-  const tc = centre(Ht.r), wc = centre(W.r);
-  h2.style.transformOrigin = `${px(tc.x - Hb.left)} ${px(tc.y - Hb.top)}`;
-  f.undo.push(() => { h2.style.transformOrigin = ''; });
-  core(h2, [{ transform: `translate(${px(wc.x - tc.x)}, ${px(wc.y - tc.y)}) scale(${W.r.width / Ht.r.width})` }, { transform: 'translate(0px, 0px) scale(1)' }], { duration: OPEN.dur, easing: OPEN.ease });
-  core(h2, [{ opacity: 0 }, { opacity: 1 }], { duration: CROSS - CROSS_IN, delay: CROSS_IN, easing: 'linear', fill: 'backwards' });
-  const word = wordCopy(W, O, S);
-  sheet.appendChild(word); f.undo.push(() => word.remove());
-  core(word, [{ transform: `scale(${O.k})` }, { transform: `translate(${px(tc.x - wc.x)}, ${px(tc.y - wc.y)}) scale(${Ht.r.width / (W.r.width / O.k)})` }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
-  core(word, [{ opacity: 1 }, { opacity: 0 }], { duration: CROSS_OUT, easing: 'linear', fill: 'forwards' });
+  if (flies(O.wordLay, lay(h2))) {
+    if (face) bare(face);
+    const tc = centre(Ht.r), wc = centre(W.r);
+    h2.style.transformOrigin = `${px(tc.x - Hb.left)} ${px(tc.y - Hb.top)}`;
+    f.undo.push(() => { h2.style.transformOrigin = ''; });
+    core(h2, [{ transform: `translate(${px(wc.x - tc.x)}, ${px(wc.y - tc.y)}) scale(${W.r.width / Ht.r.width})` }, { transform: 'translate(0px, 0px) scale(1)' }], { duration: OPEN.dur, easing: OPEN.ease });
+    core(h2, [{ opacity: 0 }, { opacity: 1 }], { duration: CROSS - CROSS_IN, delay: CROSS_IN, easing: 'linear', fill: 'backwards' });
+    const word = wordCopy(W, O, S);
+    sheet.appendChild(word); f.undo.push(() => word.remove());
+    core(word, [{ transform: `scale(${O.k})` }, { transform: `translate(${px(tc.x - wc.x)}, ${px(tc.y - wc.y)}) scale(${Ht.r.width / (W.r.width / O.k)})` }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
+    core(word, [{ opacity: 1 }, { opacity: 0 }], { duration: CROSS_OUT, easing: 'linear', fill: 'forwards' });
+  } else {
+    // a word that would change on the way (a one line chip into a title of two, a name cut short by its ellipsis,
+    // a row's name on three lines) does not fly: it goes where it is with the chip's face, and the title comes in
+    // with the header, each looking as it does at rest
+    rise(h2, HEAD, T.enter);
+  }
 
   // then the content, in the order it reads
-  const rise = (n, delay, dur = T.enter, dy = 12) => play(n, [{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: 'translateY(0px)' }], { duration: dur, easing: T.ease, delay });
   for (const b of bits) rise(b, HEAD, T.enter);
   rise(cap, CAP);
   rise(stage, STAGE);
@@ -246,7 +257,7 @@ function open(root, sheet, h2, O) {
     if (glow) play(glow, [{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 500, easing: 'ease-out', delay: d + 250 });
     for (const [s, lag, dur] of [['.sc-stem', 300, 300], ['.sc-pool', 300, 400]]) { const n = l.querySelector(s); if (n) play(n, [{ opacity: 0 }, { opacity: lvl(n) }], { duration: dur, easing: 'ease-out', delay: d + lag }); }
     const nm = l.querySelector('.sc-nm'); if (nm) rise(nm, d + 350);
-    const lv = l.querySelector('.sc-lv'); if (lv) play(lv, [{ opacity: 0, transform: 'translateX(-8px)' }, { opacity: 1, transform: 'translateX(0px)' }], { duration: T.standard, easing: T.ease, delay: d + 450 });
+    const lv = l.querySelector('.sc-lv'); if (lv) play(lv, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: T.standard, easing: T.ease, delay: d + 450 });
     // the light blooms as the orb lands
     if (blooms[i]) {
       const b = document.createElement('span');
@@ -301,13 +312,28 @@ function wordCopy(W, O, S) {
   });
   return s;
 }
-// The chip's glyph (a tile's dots and star, a row's dots and count) without its word or colour, made while the chip
-// is still on the page (the redraw that follows replaces it), to be laid where it was.
+// How a piece of words lies at rest: how many lines it takes, and whether an ellipsis has cut it short.
+function lay(el) {
+  const rg = document.createRange(); rg.selectNodeContents(el);
+  const rows = [];
+  for (const r of rg.getClientRects()) { if (r.width < 1 || r.height < 1) continue; const m = r.top + r.height / 2; if (!rows.some(y => Math.abs(y - m) < r.height / 2)) rows.push(m); }
+  return { lines: rows.length, cut: getComputedStyle(el).textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1 };
+}
+// A word flies into the title only when the two read alike at both ends: whole, and on one line each. Anything
+// else would change its lines or its ellipsis on the way, which reads as the words jumping.
+const flies = (w, t) => !!(w && t && w.lines === 1 && !w.cut && t.lines === 1 && !t.cut);
+// The chip's face without its words, for when its word flies on its own.
+function bare(c) {
+  for (const n of [...c.childNodes]) if (n.nodeType === 3) n.remove();
+  c.querySelectorAll('.nm, .row-txt').forEach(n => { n.style.visibility = 'hidden'; });
+}
+// The chip's glyph (a tile's dots and star, a row's dots and count) and its words, without its colour, made while the
+// chip is still on the page (the redraw that follows replaces it), to be laid where it was. Its words go when the
+// word flies on its own (bare); otherwise they stay and go with it, laid out exactly as they were.
 function faceCopy(el) {
   const c = el.cloneNode(true);
   c._w = el.offsetWidth; c._h = el.offsetHeight;
-  for (const n of [...c.childNodes]) if (n.nodeType === 3) n.remove();
-  c.querySelectorAll('.nm, .row-txt, .ch-sub, .wv-prog, .row-chev').forEach(n => { n.style.visibility = 'hidden'; });
+  c.querySelectorAll('.ch-sub, .wv-prog, .row-chev').forEach(n => { n.style.visibility = 'hidden'; });
   for (const a of [...c.attributes]) if (a.name !== 'class') c.removeAttribute(a.name);
   c.classList.add('xf-old', 'm12-face');
   c.setAttribute('aria-hidden', 'true');
@@ -410,7 +436,9 @@ export function closer(root, { dy = 0 } = {}) {
   // goes first and the surface after it, so the two words are never both plainly there
   run(sheet, [{ opacity: 1 }, { opacity: 0 }], { duration: CROSS - CROSS_IN, delay: total - CROSS + CROSS_IN, easing: T.easeIn });
   if (scrim) run(scrim, [{ opacity: scrimO }, { opacity: 0 }], { duration: SCRIM_OUT, delay: at, easing: T.easeIn });
-  if (h2 && Ht && W) {
+  if (h2 && Ht && W && !flies(s.word && lay(s.word), lay(h2))) {
+    run(h2, [{ opacity: 1 }, { opacity: 0 }], { duration: fade, easing: T.easeIn });
+  } else if (h2 && Ht && W) {
     const tc = centre(Ht.r), wc = centre(W.r);
     const tcy = tc.y - dy;
     h2.style.transformOrigin = `${px(tc.x - Hb.left)} ${px(tcy - (Hb.top - dy))}`;
