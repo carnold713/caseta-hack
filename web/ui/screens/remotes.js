@@ -63,7 +63,7 @@ export function view(c) {
     ? `<div class="rgrid">${list.map(d => card(c, d)).join('')}</div>`
     : `<div class="rempty"><p class="t-body muted">No remotes yet. Pair a Pico in the Lutron app, or add one from Settings, and it shows up here.</p><button class="pill ghost" data-act="refresh">Look again</button></div>`;
   return `<div class="remotes-page">
-    <h1 class="t-h1 top-h1">Remotes</h1>
+    <header class="bar"><h1 class="t-h1 top-h1 bar-t">Remotes</h1></header>
     ${listenLine(c, false)}
     ${body}
     <div class="info-row"><span class="ic-c">${icon('remote', 20, 1.4)}</span><p>Remotes keep working even when this phone is offline.</p></div>

@@ -52,6 +52,7 @@ import * as opening from '/ui/opening.js';
 import * as chipOpen from '/ui/chipopen.js';
 import { icon } from '/ui/icons.js';
 import * as native from '/ui/native.js';
+import { freeze } from '/ui/header.js';
 
 const SHRINK = 0.1;      // the page goes down to 0.9
 const FULL = 0.3;        // reached at 30% of the gesture
@@ -220,6 +221,8 @@ function behind(g) {
     let y = 0;
     try { y = (g.kind && g.kind.scroll && g.kind.scroll(info)) || (app.scrollOf ? app.scrollOf(info.prev) : 0) || 0; } catch (_) { y = 0; }
     if (y) sc.style.transform = `translateY(${px(-y)})`;
+    // its header where that page will have it: stuck at the top, collapsed for that scroll (header.js)
+    freeze(sc, y);
     if (g.kind && g.kind.dress) { try { g.kind.dress(sc, info); } catch (_) { /* drawn plain */ } }
     pg.appendChild(sc);
     // a page with the tab bar behind one without it (a light over its room) shows the bar it will come back to
@@ -365,6 +368,7 @@ export function prepare(screen, pose) {
     transformOrigin: pose.origin, transform: pose.transform, clipPath: pose.clip, backgroundColor: pose.bg,
   });
   gh.inert = true;
+  freeze(gh);
   for (const k of [...screen.children]) gh.appendChild(k);
   gh.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
   gh.querySelectorAll('[data-go], [data-act]').forEach(n => { n.removeAttribute('data-go'); n.removeAttribute('data-act'); });
@@ -471,8 +475,9 @@ register({
     card.style.visibility = 'hidden';
     const kids = [...list.children], at = kids.indexOf(card);
     kids.forEach((k, i) => { if (i !== at) k.style.transform = `translateY(${i < at ? ROOMS.up : ROOMS.down}px)`; });
+    // what is in the header moves, and not the header with its scrim, as the close then moves it (flight.js, parts)
     const head = copy.querySelector('.rooms-head');
-    if (head) head.style.transform = `translateY(${ROOMS.head}px)`;
+    if (head) for (const n of head.children) n.style.transform = `translateY(${ROOMS.head}px)`;
   },
   hand(pose) { pose.list = { ...ROOMS }; },
 });

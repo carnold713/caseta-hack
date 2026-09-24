@@ -445,8 +445,8 @@ export function view(c) {
   }
   if (cur) html += '</div>';
   return `<div class="activity-page">
-    <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
-    <h1 class="t-h1 page-h1">Activity</h1>
+    <header class="hdr bar"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
+    <h1 class="t-h1 page-h1 bar-t bar-pin">Activity</h1>
     <div class="chip-wrap act-f">${FILTERS.map(([k, l]) => `<button class="chip" aria-pressed="${f === k}" data-act="filter" data-f="${k}">${l}</button>`).join('')}</div>
     ${lightLog(c)}
     ${html || `<p class="t-body muted soon">${f === 'all' ? 'Nothing yet. Press a remote button and it shows up here.' : 'Nothing of that kind yet.'}</p>`}

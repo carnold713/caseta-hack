@@ -13,6 +13,7 @@ import * as motion from '/ui/motion.js';
 import * as opening from '/ui/opening.js';
 import * as swipeBack from '/ui/predictiveback.js';
 import * as chipOpen from '/ui/chipopen.js';
+import * as header from '/ui/header.js';
 import { wireSheetDrag } from '/ui/sheetdrag.js';
 import * as homeScreen from '/ui/screens/home.js';
 import * as roomsScreen from '/ui/screens/rooms.js';
@@ -330,6 +331,9 @@ function render() {
   if (y != null) window.scrollTo(0, y);
   else if (restoreY != null) window.scrollTo(0, restoreY);
   restoreY = null;
+  // the header follows the scroll the page now has, before anything measures it or moves (header.js): a redraw
+  // mid-scroll keeps it where it was, and a page put back where it was scrolled has it collapsed from the start
+  header.sync();
   if (opening.plays(how)) opening.arrive(how, scr);
   else if (how === 'swipe-back') swipeBack.arrive(scr);
   else if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
@@ -679,6 +683,8 @@ if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 if (!history.state || typeof history.state.n !== 'number') stamp({ n: 0 });
 try { sessionStorage.setItem('navN', String(place())); } catch (_) { /* fine */ }
 render();
+// the header that stays at the top as a page scrolls (M15)
+header.wire();
 // Android's back swipe, followed by the page (M13): what it needs of the app
 swipeBack.wire({
   ctx, route, parseRoute, pageOf, depthOf, place, stepBack,

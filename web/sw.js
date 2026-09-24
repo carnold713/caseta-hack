@@ -8,7 +8,7 @@
    It also keeps the lock screen's one notification per running sleep timer (20 · Beyond the app, web/ui/beyond.js):
    the app hands it the timers and its sign-in; "Off now" and "Add 15 min" act through the API with that sign-in, and
    nothing here ever turns a light on. */
-const VERSION = 'v45';
+const VERSION = 'v46';
 const APP = [
   '/', '/index.html', '/ui/', '/ui/index.html', '/ui/app.js', '/ui/art.js', '/ui/art/light-arc-lamp.svg',
   '/ui/art/light-bedside-lamp.svg', '/ui/art/light-ceiling-fan.svg', '/ui/art/light-chandelier.svg',
@@ -21,7 +21,7 @@ const APP = [
   '/ui/art/lutron-sunrise.svg', '/ui/art/lutron-wireless.svg', '/ui/art/room-bathroom.svg',
   '/ui/art/room-bedroom.svg', '/ui/art/room-dining-room.svg', '/ui/art/room-entry.svg', '/ui/art/room-garage.svg',
   '/ui/art/room-garden.svg', '/ui/art/room-kitchen.svg', '/ui/art/room-living-room.svg', '/ui/art/room-office.svg',
-  '/ui/art/room-porch.svg', '/ui/colour.js', '/ui/components.css', '/ui/gesture.js', '/ui/icons.js', '/ui/motion.js', '/ui/predictiveback.js', '/ui/opening.js', '/ui/flight.js', '/ui/roomopen.js', '/ui/lightopen.js', '/ui/remoteopen.js', '/ui/chipopen.js', '/ui/sheetdrag.js', '/ui/photo.js', '/ui/pico.js',
+  '/ui/art/room-porch.svg', '/ui/colour.js', '/ui/components.css', '/ui/gesture.js', '/ui/icons.js', '/ui/motion.js', '/ui/predictiveback.js', '/ui/opening.js', '/ui/flight.js', '/ui/roomopen.js', '/ui/lightopen.js', '/ui/remoteopen.js', '/ui/chipopen.js', '/ui/header.js', '/ui/header.css', '/ui/sheetdrag.js', '/ui/photo.js', '/ui/pico.js',
   '/ui/screens.css', '/ui/screens/about.js', '/ui/screens/activity.js', '/ui/screens/add.js', '/ui/screens/conn.js',
   '/ui/screens/device.js', '/ui/screens/follow.js', '/ui/screens/guided.js', '/ui/screens/home.js',
   '/ui/screens/looks.js', '/ui/screens/next.js', '/ui/screens/parts.js', '/ui/screens/pickers.js',

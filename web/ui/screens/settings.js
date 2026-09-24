@@ -36,8 +36,8 @@ export function view(c, r) {
   const conn = c.conn();
   const zone = RT.zoneName(s.timezone) || 'Not set';
   return `<div class="settings-page">
-    <header class="tab-head">
-      <h1 class="t-h1">Settings</h1>
+    <header class="tab-head bar">
+      <h1 class="t-h1 bar-t">Settings</h1>
       <button class="hdr-btn a1" data-go="settings/connection" aria-label="Connection"><span class="conn-state ${conn}"></span>${icon('wifi', 22, 1.6)}</button>
     </header>
 

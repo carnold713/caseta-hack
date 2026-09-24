@@ -1,0 +1,98 @@
+/* The header that stays (M15 12933:2853, M15b 12934:54024, its states 12935:2963). A page's title and its header
+   circles never scroll away: as the page scrolls, the header shrinks a little and stays stuck to the top, and a
+   blurred scrim fades in behind it, so the page's name and its controls can always be read and reached.
+
+   Everything follows one number, --hdr-p on #app: the page's scroll over its first 64 px, 0 at rest and 1 from
+   64 on (header.js writes it on each frame the page scrolls, and after every redraw). Nothing here eases or
+   transitions: the header is locked to the finger. It moves by the `translate` and `scale` properties alone, never
+   by `transform`, so it composes with every transition that flies or fades these elements by their transform (the
+   openings in flight.js, a press) instead of fighting them.
+
+   What stays put is position: sticky, which the compositor keeps in place during a fling with no script at all: the
+   header row (.bar) at the top, and on a page with a back button the title row under it (.bar-pin), stuck from
+   scroll 0 where it rests. A copy of a page that no longer scrolls (the page a transition is flying away, the page
+   waiting under a back swipe) is frozen by header.js at the scroll it had (.hdr-frozen, below).
+
+   Two shapes, as the file draws them:
+     no back button (Home, Rooms, Remotes, Routines, Settings): the title at x 20 shrinks to 0.6 about its left
+       edge, rising to centre on y 72; the circles go from 56 to 44 about their outer edge, centred on y 72, so
+       the bar reads from 44 to 100 under the status bar.
+     a back button (a room, a remote, a routine, All scenes, Activity, Add a device, Press timing): the circles do
+       the same, and the title, which rests under them at y 128, takes two steps so it never crosses the back
+       button: over the first half it slides right to x 76 (the back circle's edge and 12) shrinking to 0.72 and
+       rising to centre on y 106; over the second it rises to centre on y 72 at 0.6. Its one line is cut to fit
+       the bar where it rests, so nothing in it rewraps or cuts differently while it moves. */
+
+/* ---- the bar and its scrim ---- */
+.bar, .hdr.bar, .home > .bar { position: sticky; top: 0; z-index: 3; pointer-events: none; }
+.bar > * { pointer-events: auto; }
+/* The scrim: the status bar, the bar and a soft 24 px below it, #121212 at 72% over a 20 px blur, fading in with the
+   scroll. It hangs off the header row, which stays at the top, so it is fixed to the screen as the page moves and
+   sits with the header in the page's own stacking (over the page's content, under its title and circles, and
+   under the tab bar and any sheet). A blur shows what is under it only as far as the nearest element being faded, so
+   the transitions never fade a header row whole: they move and fade what is in it, and fade the scrim on its own
+   (flight.js, parts and scrim). */
+.bar::before {
+  content: ''; position: absolute; left: 50%; top: 0; width: 100vw; height: 124px; margin-left: -50vw; z-index: -1;
+  pointer-events: none;
+  background: rgba(18, 18, 18, .72);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  -webkit-mask-image: linear-gradient(#000 100px, transparent 124px); mask-image: linear-gradient(#000 100px, transparent 124px);
+  opacity: var(--hdr-p, 0);
+}
+
+/* ---- the circles: 56 at y 52 to 44 at y 50, their outer edge 20 from the screen's ---- */
+/* scaled about their own middle (a press still shrinks them there), and moved so the outer edge stays put */
+.bar .hdr-btn { translate: 0 calc(-8px * var(--hdr-p, 0)); scale: calc(1 - .2142857 * var(--hdr-p, 0)); }
+.bar .hdr-btn.a1 { translate: calc(6px * var(--hdr-p, 0)) calc(-8px * var(--hdr-p, 0)); }
+.bar .hdr-btn.a2 { translate: calc(18px * var(--hdr-p, 0)) calc(-8px * var(--hdr-p, 0)); }
+.bar .hdr-btn.back { translate: calc(-6px * var(--hdr-p, 0)) calc(-8px * var(--hdr-p, 0)); }
+
+/* ---- no back button: the title at x 20, from centre y 80 (Home: 110) to 72 at 0.6 ---- */
+.bar .bar-t {
+  transform-origin: 0 50%;
+  translate: 0 calc(var(--bar-dy, -8px) * var(--hdr-p, 0));
+  scale: calc(1 - .4 * var(--hdr-p, 0));
+}
+.home-head { --bar-dy: -38px; }
+/* Remotes' title is a block with its words 58 down, so it shrinks about where its words start */
+.bar .top-h1.bar-t { transform-origin: var(--gutter) 80px; }
+/* Home's greeting over the title scrolls away with the page and is gone by 40 px */
+.home-head .greet { translate: 0 calc(-64px * var(--hdr-p, 0)); opacity: calc(1 - 1.6 * var(--hdr-p, 0)); }
+
+/* ---- a back button: the title row, stuck where it rests (its box at 108, the words at 128) ---- */
+.bar-pin { position: sticky; top: 108px; z-index: 3; pointer-events: none; }
+.bar-pin .bar-t, .bar-t.bar-pin {
+  /* the two steps: a runs 0 to 1 over the first half of the scroll, b over the second */
+  --bar-a: calc(min(var(--hdr-p, 0), .5) * 2);
+  --bar-b: calc(max(var(--hdr-p, 0) - .5, 0) * 2);
+  transform-origin: 0 50%;
+  translate: calc(56px * var(--bar-a)) calc(-44px * var(--bar-a) - 34px * var(--bar-b) - var(--bar-lift, 0px) * (var(--bar-a) + var(--bar-b)) / 2);
+  scale: calc(1 - (1 - var(--bar-s1, .72)) * var(--bar-a) - (var(--bar-s1, .72) - var(--bar-s2, .6)) * var(--bar-b));
+}
+/* A long room name is set a size or two down where it rests (screens.css: fit1 32 and 2 lower, fit2 28 and 4 lower). In
+   the bar it still reads 24, as 40 at 0.6 does: it shrinks less on each step (to 28.8 at most by the middle, as 40
+   does) and rises the few px more its lower line needs. */
+.room-title h1.bar-t.fit1 { --bar-s1: .9; --bar-s2: .75; --bar-lift: 2px; }
+.room-title h1.bar-t.fit2 { --bar-s1: 1; --bar-s2: .8571; --bar-lift: 4px; }
+/* a title that is its own row (.page-h1, padded 20 all round but the bottom) shrinks about where its words start */
+.bar-t.bar-pin { transform-origin: var(--gutter) 42px; }
+/* One line, cut with an ellipsis where it rests, so the words never change while the title moves. Beside a circle on
+   the right it is also no wider than keeps it clear of that circle at every step of the way (the tightest is a third
+   of the way in, where it has risen level with the circle but not yet shrunk: 268 on a 360 screen, 332 on 412). A
+   room's title is narrower than that already, to stay clear of its count (screens.css). */
+.bar-t.page-h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hdr.bar:has(.a1) ~ .bar-t.page-h1 { max-width: calc(min(123vw - 176px, 100vw) + 2 * var(--gutter)); }
+/* the line beside or under the title scrolls with the page and is gone by 40 px */
+.room-title.bar-pin .count { translate: 0 calc(-64px * var(--hdr-p, 0)); opacity: calc(1 - 1.6 * var(--hdr-p, 0)); }
+.bar ~ .fd-sub, .bar ~ .rm-sub { opacity: calc(1 - 1.6 * var(--hdr-p, 0)); }
+
+/* ---- a page that no longer scrolls ---- */
+/* A copy of a page moved off #screen (a transition's ghost, the page under a back swipe) is placed as the page was
+   scrolled, and sticky means nothing there: its header rows are held where they were stuck instead, as far down
+   the copy as the page had scrolled (--hdr-y), with the header as collapsed as it was (--hdr-p). */
+.hdr-frozen :is(.bar, .hdr.bar, .home > .bar, .bar-pin) { position: relative; top: var(--hdr-y, 0px); }
+
+/* The copies a transition flies (flight.js's layer over the page) stay over a page's header, as they did before it
+   stayed at the top; the tab bar and its fade are still over them. */
+.op-top { z-index: 3; }

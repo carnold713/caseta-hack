@@ -51,11 +51,11 @@ export function view(c, r) {
   const warn = nl && typeof nl === 'object' ? nl.text : '';
   const sun = sc.at && sc.at.type !== 'time';
   return `<div class="routine-page">
-    <header class="hdr">
+    <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       <button class="hdr-btn a1" data-go="${base}/more" aria-label="More">${icon('dots', 22, 1.7)}</button>
     </header>
-    <h1 class="t-h1 page-h1 nm-cut">${esc(fresh ? 'New routine' : sc.name || 'Routine')}</h1>
+    <h1 class="t-h1 page-h1 nm-cut bar-t bar-pin">${esc(fresh ? 'New routine' : sc.name || 'Routine')}</h1>
     ${fresh ? '' : `<p class="t-cap muted rm-sub">${esc(typeof nl === 'string' ? nl : '')}</p>`}
     ${wakeOf(c, sc) ? sunriseHTML(c, wakeOf(c, sc), `r:${sc.id}`) : ''}
     ${sentence}

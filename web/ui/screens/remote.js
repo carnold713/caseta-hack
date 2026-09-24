@@ -216,11 +216,11 @@ export function view(c, r) {
   const twice = REM.gestureActions(pid, sel, 'double').length
     ? `<div class="note">${icon('info', 20, 1.4)}<p>This button has a double press now, so its single press waits a moment to tell them apart.</p></div>` : '';
   return `<div class="remote-page">
-    <header class="hdr">
+    <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       <button class="hdr-btn a1" data-go="remote/${esc(pid)}/more" aria-label="More">${icon('dots', 22, 1.7)}</button>
     </header>
-    <h1 class="t-h1 page-h1 nm-cut">${esc(d.name)}</h1>
+    <h1 class="t-h1 page-h1 nm-cut bar-t bar-pin">${esc(d.name)}</h1>
     <p class="t-cap muted rm-sub">${esc(REM.modelLine(d))}</p>
     ${listenLine(c, true)}
     ${waiting}${offer}

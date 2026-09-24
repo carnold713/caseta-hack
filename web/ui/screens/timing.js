@@ -34,8 +34,8 @@ export function view(c) {
     chart = `<p class="tm-held">Held for ${secs(h.held)}. A hold starts after ${secs(hold)}.</p>`;
   }
   return `<div class="timing-page">
-    <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
-    <h1 class="t-h1 page-h1">Press timing</h1>
+    <header class="hdr bar"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
+    <h1 class="t-h1 page-h1 bar-t bar-pin">Press timing</h1>
     <p class="t-cap muted tm-sub">How the app tells a press, a double press and a hold apart</p>
     <div class="tm-card ${h && Date.now() - h.at < 1600 ? 'live' : ''}">
       <p class="tm-prompt">${h ? esc(h.who) : 'Press your remote now…'}</p>

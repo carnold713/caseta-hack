@@ -21,7 +21,7 @@
 // BACK is the same run the other way, faster (0.45 s on (0.4, 0, 0.2, 1)), with the room's content gone first. A room
 // let go by Android's back swipe (M13) closes from the shrunk pose the finger left (opening.js starts its ghost there).
 import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, CROSS, last, shown, textBox, px, opacityOf, part, copyText, copyButton, topLayer, el, windowGeo, pair, stepAside } from '/ui/flight.js';
+import { OPEN, CLOSE, CROSS, last, shown, textBox, px, opacityOf, part, copyText, copyButton, topLayer, el, windowGeo, pair, stepAside, parts as barParts, scrim } from '/ui/flight.js';
 
 const FACE = 300;       // the card's face fades over the first (open) or last (back) 0.3 s
 const RADIUS = 28;      // the card's corners, which the window keeps
@@ -202,7 +202,9 @@ export function open({ O, ghost }, screen, F) {
 
   // the list steps aside, and "Rooms" lifts away
   stepAside(F, 'open', steps, { fade: 250, move: 250, moveEase: T.easeIn });
-  if (head) F.core(head, [{ opacity: 1, transform: 'translateY(0px)' }, { opacity: 0, transform: 'translateY(-16px)' }], { duration: 200, easing: T.easeIn, fill: 'forwards' });
+  // ("Rooms" goes by its parts, and its scrim fades on its own, so the scrim keeps its blur while it goes: flight.js)
+  const lift = { duration: 200, easing: T.easeIn, fill: 'forwards' };
+  if (head) { for (const n of barParts(head)) F.core(n, [{ opacity: 1, transform: 'translateY(0px)' }, { opacity: 0, transform: 'translateY(-16px)' }], lift); scrim(F, head, 1, 0, lift); }
 
   // the light spills over the page as the room opens
   const sp = spill(O, top);
@@ -247,11 +249,14 @@ export function close(p, screen, F, { ghost: g, O, el: card }) {
   // the room's content goes first, together
   const fade = { duration: 150, easing: T.easeIn, fill: 'forwards' };
   const going = [
-    ...(room ? [...room.children].filter(n => n !== hero && !n.classList.contains('room-title')) : []),
+    ...(room ? [...room.children].filter(n => n !== hero && !n.classList.contains('room-title')) : []).flatMap(barParts),
     ...[...h1.parentElement.children].filter(n => n !== h1),
     ...hero.querySelectorAll('.badge, .room-onoff, .add-photo'),
   ];
-  for (const n of going) F.core(n, [{ opacity: 1 }, { opacity: 0 }], fade);
+  if (room) for (const n of room.children) scrim(F, n, 1, 0, fade);
+  // each from where it is: the count beside the title has already faded if the room was scrolled (header.css)
+  const was = going.map(opacityOf);
+  going.forEach((n, i) => F.core(n, [{ opacity: was[i] }, { opacity: 0 }], fade));
 
   // the window closes into the card, and the card's face comes back over it
   F.core(hero, [G.open, G.shut], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
@@ -275,7 +280,9 @@ export function close(p, screen, F, { ghost: g, O, el: card }) {
   const L = p.pose && p.pose.list;
   if (L) for (const s of steps) F.extra(s.el, [{ opacity: 1, transform: `translateY(${s.dy < 0 ? L.up : L.down}px) scale(1)` }, { opacity: 1, transform: 'translateY(0px) scale(1)' }], { duration: 400, easing: T.ease, delay: s.delay, fill: 'backwards' });
   else stepAside(F, 'close', steps, { back: 400, backFade: 400 });
-  F.extra(head, [L ? { opacity: 1, transform: `translateY(${L.head}px)` } : { opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: 400, easing: T.ease, fill: 'backwards' });
+  const down = { duration: 400, easing: T.ease, fill: 'backwards' };
+  for (const n of barParts(head)) F.extra(n, [L ? { opacity: 1, transform: `translateY(${L.head}px)` } : { opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], down);
+  if (!L) scrim(F, head, 0, 1, down, 'extra');
 
   // a softer spill of light is drawn back into the card
   const sp = spill(O, top);

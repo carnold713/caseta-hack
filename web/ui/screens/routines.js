@@ -73,7 +73,7 @@ export function view(c, r) {
       <button class="row has-ic" data-act="follow" ${lamps.length ? '' : 'disabled'}><span class="row-ic">${icon('sunrise', 20, 1.4)}</span><span class="row-txt"><span class="t">Follow the day</span><span class="d">${esc(followSub)}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>`;
   return `<div class="routines-page">
-    <div class="rt-head"><h1 class="t-h1">Routines</h1><button class="hdr-btn a1" data-act="new" aria-label="New routine">${icon('plus', 22, 1.7)}</button></div>
+    <div class="rt-head bar"><h1 class="t-h1 bar-t">Routines</h1><button class="hdr-btn a1" data-act="new" aria-label="New routine">${icon('plus', 22, 1.7)}</button></div>
     ${tz}
     ${needLoc ? `<div class="loc-card">${whereBlock(c)}</div>` : ''}
     ${upCard}${timers}

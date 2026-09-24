@@ -16,6 +16,8 @@
 //
 // "User actions land now. Things the app decides happen slowly. Nothing ever slides colour." Nothing here runs when
 // the phone asks for reduced motion.
+import { freeze } from '/ui/header.js';
+
 export const T = {
   tap: 120, standard: 240, enter: 320, exit: 200, stagger: 40, sheetIn: 420, sheetOut: 280, push: 300, dimmer: 400,
   scene: 1000, breathe: 1600,
@@ -312,6 +314,8 @@ export function capture(screen, { live = false } = {}) {
   const box = screen.getBoundingClientRect();
   const g = document.createElement('div');
   g.className = 'page-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
+  // its header stays where the page's was stuck, as collapsed as it was (header.js)
+  freeze(g);
   // the page's own layout width, not its box on screen: a page caught mid-slide or mid-press measures the same, and
   // its words wrap in the copy exactly as they did on the page
   const w = parseFloat(getComputedStyle(screen).width) || box.width;

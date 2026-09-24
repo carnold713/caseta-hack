@@ -67,11 +67,11 @@ export function view(c, r) {
   const lutron = theirs.map(sc => `<div class="row scene-row" data-act="scene-run-lutron" data-hold="scene-lutron" data-ms="500" data-sid="${esc(sc.scene_id)}" role="button" tabindex="0">
       ${lutronDots(14)}<span class="row-txt"><span class="t">${esc(sc.name)}<span class="chip tag">Lutron</span></span></span><span class="row-val">Run</span></div>`).join('');
   return `<div class="scenes-page">
-    <header class="hdr">
+    <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       <button class="hdr-btn a1" data-act="scene-new" aria-label="New scene">${icon('plus', 22, 1.7)}</button>
     </header>
-    <h1 class="t-h1 page-h1">Scenes</h1>
+    <h1 class="t-h1 page-h1 bar-t bar-pin">Scenes</h1>
     <p class="t-cap muted fd-sub">Tap to run · press and hold to edit</p>
     ${starred.length ? `<div class="t-over sec first">Starred</div><div class="tile-grid scene-grid">${starred.map(tile).join('')}</div>` : ''}
     ${groups}
