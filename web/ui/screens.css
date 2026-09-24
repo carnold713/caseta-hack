@@ -97,7 +97,7 @@
   background: #1D1A18; box-shadow: inset 0 0 0 1px var(--line);
   transition: transform var(--tap) var(--spring-quick);
 }
-.pin-room:active { transform: scale(.96); }
+.pin-room:active:not(:has(.pwr:active)) { transform: scale(.96); }
 .pin-room .room-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .pin-room .room-scene { z-index: 0; }
 /* (over the whole card, so a room opening from it carries the same shade over its window: roomopen.js) */
@@ -188,7 +188,8 @@
   transition: transform var(--tap) var(--spring-quick);
 }
 /* The press is the file's 0.97 (M10), held while the finger is down. */
-.room-big:active { transform: scale(.97); }
+/* the card presses when it is the card that is pressed: a finger on its power button presses the button alone */
+.room-big:active:not(:has(.pwr:active)) { transform: scale(.97); }
 /* A card shows the middle 180 of its room page's 300 tall photograph, at the page's scale, so opening the room
    (roomopen.js) only uncovers more of the same picture and never rescales it. */
 .room-big .room-photo { position: absolute; left: 0; top: calc(50% - 150px); width: 100%; height: 300px; object-fit: cover; }

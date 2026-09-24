@@ -140,7 +140,8 @@ const FAN = [
     check('dragging the bar to 4000K sets it', k >= 3900 && k <= 4100, k);
     await page.click('.ws-chips .chip:nth-child(2)'); await wait(1400);
     check('Warm sets 2700K and turns copper', (await C(id => (window.__copper.S.states[id].color || {}).kelvin, lamp)) === 2700 && (await page.textContent('.ws-chips .chip.current')) === 'Warm');
-    await page.click('.seg2 button:nth-of-type(2)'); await wait(900);
+    // the swap plays M16 (the wheel opens out of its handle, the rows rise in), about 1.3 s: measure once it has landed
+    await page.click('.seg2 button:nth-of-type(2)'); await wait(1500);
     check('the segmented control swaps to Colour in place', /\/colour$/.test(page.url()) && !!(await page.$('#sheet-root .wheel')), page.url());
     await sheetAt('05 Colour', [['wheel', '.wheel', 76, 164, 260, 260], ['value row', '.cs-val', 20, 448, 372, 28], ['first swatch', '.cs-sw .sw:first-child', 24, 506, 32, 32]]);
     await page.click('.cs-sw .sw[data-hex="#4C8DFF"]'); await wait(1400);

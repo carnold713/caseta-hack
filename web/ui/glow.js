@@ -52,9 +52,11 @@ export function colourStops(h) {
 // ---------- the light's own numbers ----------
 // Its colour: a colour lamp's is its colour, a white lamp's is its kelvin's body tone on the ramp.
 export const lightColour = ({ kelvin, hex: h } = {}) => (h ? String(h) : whiteStops(kelvin).body);
-// Its strength at a level (0 to 100, or 0 to 1): the house's curve, capped to 0.7 at night; 0 when off.
+// Its strength at a level, 0 to 100: the house's curve, capped to 0.7 at night; 0 when off. A level is always a
+// percentage: guessing that anything up to 1 was a fraction drew a lamp at 1% as if it were at full.
+const frac = level => Math.max(0, Math.min(100, +level || 0)) / 100;
 export function lightStrength(level, night = false) {
-  let L = +level || 0; if (L > 1) L /= 100;
+  const L = frac(level);
   if (L <= 0) return 0;
   return (0.35 + 0.65 * Math.min(1, L)) * (night ? 0.7 : 1);
 }
@@ -100,7 +102,7 @@ const rgba = (h, a) => { const [r, g, b] = rgb(h); return `rgba(${r},${g},${b},$
 // little wider and softer, so it holds the light the three layers held between them.
 // `peak` sets its strength at full in place of the house's usual one (a scene's orb keeps its glow at about 0.25).
 export function glowSpec({ level, kelvin, hex: h, ctx = 'card', night = false, gain = 1, peak = null } = {}) {
-  let L = +level || 0; if (L > 1) L /= 100;
+  const L = frac(level);
   if (L <= 0) return null;
   const [dmin, dmax] = SIZES[ctx] || SIZES.card;
   const D = (dmin + (dmax - dmin) * Math.sqrt(L)) * (night ? 0.9 : 1);

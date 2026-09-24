@@ -147,6 +147,10 @@ function frozen(el) {
   const from = [el, ...el.querySelectorAll('*')], to = [c, ...c.querySelectorAll('*')];
   from.forEach((f, i) => {
     if (f.classList.contains('xf-old') || f.closest('.xf-old') || !to[i] || !to[i].style) return;
+    // Inside a drawing there are no words to keep on their lines, and writing a style onto its parts changes them: a
+    // room illustration's gradient stops take `currentColor` once they carry a style attribute (roomscene.css), so a
+    // frozen card painted its whole room in the card's white for as long as the copy took to fade.
+    if (f.closest('svg')) return;
     const cs = getComputedStyle(f);
     for (const p of FROZEN) to[i].style.setProperty(p, cs.getPropertyValue(p));
   });
@@ -192,7 +196,10 @@ export function carry(s, root) {
           if (!(p in was) || moving.has(ps + p)) continue;
           const now = cs.getPropertyValue(p);
           if (now === was[p] || !was[p]) continue;
-          const opts = { duration: t[p].d, easing: t[p].e, delay: t[p].delay };
+          // a transition with a delay holds where it was until it starts, as CSS's own does: without `backwards` the
+          // element showed its new value through the delay and then jumped back to the old one to begin (a photo
+          // room's card lit up, went grey again and only then faded up)
+          const opts = { duration: t[p].d, easing: t[p].e, delay: t[p].delay, fill: t[p].delay > 0 ? 'backwards' : 'auto' };
           if (ps) opts.pseudoElement = ps;
           try { el.animate([{ [camel(p)]: was[p] }, { [camel(p)]: now }], opts); } catch (_) { /* a browser without pseudo-element animation */ }
         }

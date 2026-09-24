@@ -50,6 +50,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const level = id => C(x => window.__copper.data.level(x) || 0, id);
   // the light's strength at a level: the house's curve (glow.js), by day
   const strength = lv => (lv > 0 ? 0.35 + 0.65 * lv / 100 : 0);
+  // a level is a percentage: a lamp at 1% draws the faintest light, never a full one (1 once read as a fraction)
+  const low = await C(async () => { const m = await import('/ui/glow.js'); return [m.lightStrength(1), m.lightStrength(2), m.lightStrength(100), m.glowSpec({ level: 1, kelvin: 2700, ctx: 'card' }).D, m.glowSpec({ level: 100, kelvin: 2700, ctx: 'card' }).D]; });
+  check('3: at 1% the light is at its faintest (0.36), just under 2%, never the full strength of 100%', Math.abs(low[0] - 0.3565) < 0.001 && low[0] < low[1] && low[2] === 1 && low[3] < low[4] / 2, low);
   const lightOp = () => C(() => { const g = document.querySelector('.dev [data-light="lamp"]'); return g ? Number(getComputedStyle(g).opacity) : null; });
   // a finger on an element: down, through each step (page coordinates), then up; `hold` ms before lifting
   const finger = (steps, { hold = 0 } = {}) => C(async ([st, h]) => {
