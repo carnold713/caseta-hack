@@ -255,17 +255,17 @@ function open(root, sheet, h2, O) {
     play(orb, [{ opacity: 0, transform: `translate(${px(centre(B).x - oc.x)}, ${px(centre(B).y - oc.y)}) scale(0.4)` }, { opacity: 1, transform: 'translate(0px, 0px) scale(1)' }], { duration: ORB_DUR, easing: OPEN.ease, delay: d });
     const glow = orb.querySelector('.glow');
     if (glow) play(glow, [{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 500, easing: 'ease-out', delay: d + 250 });
-    for (const [s, lag, dur] of [['.sc-stem', 300, 300], ['.sc-pool', 300, 400]]) { const n = l.querySelector(s); if (n) play(n, [{ opacity: 0 }, { opacity: lvl(n) }], { duration: dur, easing: 'ease-out', delay: d + lag }); }
+    const stem = l.querySelector('.sc-stem'); if (stem) play(stem, [{ opacity: 0 }, { opacity: lvl(stem) }], { duration: 300, easing: 'ease-out', delay: d + 300 });
     const nm = l.querySelector('.sc-nm'); if (nm) rise(nm, d + 350);
     const lv = l.querySelector('.sc-lv'); if (lv) play(lv, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: T.standard, easing: T.ease, delay: d + 450 });
-    // the light blooms as the orb lands
+    // the light blooms as the orb lands, as soft as the orb's own glow
     if (blooms[i]) {
       const b = document.createElement('span');
       b.className = 'm12-bloom'; b.setAttribute('aria-hidden', 'true');
       const c = blooms[i];
       Object.assign(b.style, {
         position: 'absolute', left: '50%', top: 'var(--y)', width: '160px', height: '160px', margin: '-80px 0 0 -80px', borderRadius: '50%', pointerEvents: 'none',
-        mixBlendMode: 'screen', opacity: '0', background: `radial-gradient(closest-side, rgba(${c}, .5) 0%, rgba(${c}, .3) 35%, rgba(${c}, .1) 70%, rgba(${c}, 0) 100%)`,
+        mixBlendMode: 'screen', opacity: '0', background: `radial-gradient(closest-side, rgba(${c}, .25) 0%, rgba(${c}, .2) 20%, rgba(${c}, .12) 40%, rgba(${c}, .05) 62%, rgba(${c}, .01) 84%, rgba(${c}, 0) 100%)`,
       });
       orb.before(b);
       play(b, [{ opacity: 0, transform: 'scale(0.5)' }, { opacity: 1, offset: 0.33 }, { opacity: 0, transform: 'scale(1.2)' }], { duration: BLOOM, easing: 'ease-out', delay: d + 250, fill: 'both' })
@@ -290,10 +290,10 @@ function finishOpen() {
   land(f);
 }
 
-// The colour of an orb's light, as "r, g, b", from its glow's core; none for a fan or a light off in the scene.
+// The colour of an orb's light, as "r, g, b", from its glow; none for a fan or a light off in the scene.
 function bloomColour(orb) {
   const g = orb.querySelector('.glow:not(.off)'); if (!g) return null;
-  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(g.style.getPropertyValue('--g-core') || g.style.getPropertyValue('--g-body') || '');
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(g.style.getPropertyValue('--g-c') || '');
   return m ? `${m[1]}, ${m[2]}, ${m[3]}` : null;
 }
 const look = cs => Object.fromEntries(['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'color'].map(p => [p, cs[p]]));
@@ -426,7 +426,7 @@ export function closer(root, { dy = 0 } = {}) {
   lanes.slice().reverse().forEach(({ l, orb, r }, j) => {
     const oc = centre(r);
     run(orb, [{ opacity: 1, transform: 'translate(0px, 0px) scale(1)' }, { opacity: 0, transform: `translate(${px(bc.x - oc.x)}, ${px(bc.y - dy - oc.y)}) scale(0.4)` }], { duration: GATHER, delay: j * GATHER_STEP, easing: T.easeIn });
-    for (const q of ['.sc-stem', '.sc-pool', '.sc-lv', '.sc-nm']) { const n = l.querySelector(q); if (n) run(n, [{ opacity: Number(getComputedStyle(n).opacity) }, { opacity: 0 }], { duration: fade, easing: T.easeIn }); }
+    for (const q of ['.sc-stem', '.sc-lv', '.sc-nm']) { const n = l.querySelector(q); if (n) run(n, [{ opacity: Number(getComputedStyle(n).opacity) }, { opacity: 0 }], { duration: fade, easing: T.easeIn }); }
   });
   // the surface goes back into the chip, from wherever it is (a finger may have pulled it down)
   const shut = `inset(${px(B.top - S.top)} ${px(S.right - B.right)} ${px(S.bottom - B.bottom)} ${px(B.left - S.left)} round ${px(radius)})`;

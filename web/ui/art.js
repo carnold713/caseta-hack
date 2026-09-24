@@ -55,3 +55,22 @@ export function roomArt(name) {
   return null;
 }
 export const artSrc = name => `/ui/art/${name}.svg`;
+
+// A drawing's own markup, for the one place a drawing is shown larger than its grid: the top of a device's page. There
+// it keeps the house's line weight (2.75, the icon set's own stroke) at whatever size it is drawn, as the Figma file's
+// hero icons do, rather than thickening as an image scaled up would. Fetched once per drawing; until it has arrived
+// (or if it cannot be), `artInline` is null and the page shows the plain image.
+const MARKUP = new Map();
+export function artInline(name, w, h) {
+  const m = MARKUP.get(name);
+  if (typeof m !== 'string') return null;
+  return m.replace(/<svg\b([^>]*)>/, (_, a) => `<svg${a.replace(/\s(width|height|class)="[^"]*"/g, '')} class="hero-art" width="${w}" height="${h}" aria-hidden="true">`)
+    .replace(/stroke-width="[^"]*"/g, 'stroke-width="2.75" vector-effect="non-scaling-stroke"');
+}
+export function loadArt(name) {
+  if (MARKUP.has(name)) return;
+  MARKUP.set(name, null);
+  fetch(artSrc(name)).then(r => (r.ok ? r.text() : Promise.reject(new Error(r.status))))
+    .then(t => { if (/^\s*<svg\b/.test(t)) MARKUP.set(name, t); })
+    .catch(() => {});
+}

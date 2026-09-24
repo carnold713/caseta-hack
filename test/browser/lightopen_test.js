@@ -33,7 +33,8 @@ function instrument() {
     const t = M.now();
     const S = document.querySelector('.m11-surface'), face = document.querySelector('.m11-face');
     const q = s => document.querySelector(`.page-ghost ${s}`) || document.querySelector(`#screen ${s}`);
-    const h1 = q('.dev .t-hero'), num = q('.dev .dial .num b'), halo = q('.dev .halo');
+    const h1 = q('.dev .t-hero'), num = q('.dev .dial .num b'), halo = q('.dev > .onelight');
+    const li = halo && halo.querySelector('i'), lr = li && li.getBoundingClientRect();
     const top = document.querySelector('.m11-top');
     const copies = top ? [...top.children].filter(n => !n.matches('.tabbar, .scroll-fade')) : [];
     const name = h1 ? h1.textContent : '';
@@ -48,7 +49,8 @@ function instrument() {
     return {
       t: Math.round(t), at: sa && sa.playState !== 'finished' && sa.currentTime != null ? Math.round(sa.currentTime) : null,
       win: w, faceo: fo, facebg: face ? getComputedStyle(face).backgroundImage + ' ' + getComputedStyle(face).backgroundColor : null, copper: w && fo != null ? +(fo * (w.w * w.h) / (innerWidth * innerHeight)).toFixed(3) : 0, cover: w ? +((w.w * w.h) / (innerWidth * innerHeight)).toFixed(3) : 0,
-      h1: h1 ? words(h1) : null, h1o: op(h1), num: num ? words(num) : null, numo: op(num), haloo: op(halo),
+      h1: h1 ? words(h1) : null, h1o: op(h1), num: num ? words(num) : null, numo: op(num), haloo: op(halo), halot: halo ? Number(halo.style.opacity) : null,
+      lc: lr ? { x: Math.round(lr.left + lr.width / 2), y: Math.round(lr.top + lr.height / 2), s: +(lr.width / (halo.offsetWidth * 1.2 || 1)).toFixed(3) } : null,
       copyo: op(copy), pwro: op(pwr), others: others.map(n => [n.tagName, n.textContent.slice(0, 12), +op(n).toFixed(2)]),
       ghost: !!document.querySelector('.page-ghost'),
       list: list.map(k => Number(getComputedStyle(k).opacity)).filter(o => o > 0 && o < 1).length,
@@ -132,7 +134,7 @@ function instrument() {
   await wait(400);
   const y0 = await C(() => window.scrollY);
   const n0 = await C(() => history.state && history.state.n);
-  const before = { tile: await box(tile), name: await wordsOf(`${tile} .nm`) };
+  const before = { tile: await box(tile), name: await wordsOf(`${tile} .nm`), art: await box(`${tile} .art`) };
   const vl = await C(s => { const e = document.querySelector(`${s} .vl`); const g = document.createRange(); g.setStart(e.firstChild, 0); g.setEnd(e.firstChild, 2); const b = g.getBoundingClientRect(); return { text: e.textContent, l: Math.round(b.left), t: Math.round(b.top), r: Math.round(b.right), b: Math.round(b.bottom) }; }, tile);
   check('the tile is lit at 75% and the room is scrolled', /^75%/.test(vl.text) && y0 > 40 && (await C(s => document.querySelector(s).matches('.on'), tile)), { vl: vl.text, y0 });
   // wait for the room to be still (the level just set is still being echoed back), so a redraw cannot take the tile
@@ -174,11 +176,17 @@ function instrument() {
   check('the copper never covers the screen: at most a third of it at any moment', most < 0.34 && !bigCopper.length, { most, big: bigCopper.slice(0, 3).map(f => [f.at, f.cover, f.faceo]) });
   check('and is gone by the time the surface lands', fEnd && fEnd.faceo < 0.03, fEnd && fEnd.faceo);
   const early = flightF.filter(f => f.at < 70);
-  check('while at the tile\'s size it is the tile\'s own copper', early.length && early.every(f => f.faceo > 0.97 && /gradient/.test(f.facebg)), early.map(f => [f.at, f.faceo, f.facebg]));
-  // the page's own glow is what stays warm, arriving over the second half
+  check('while at the tile\'s size it is the tile\'s own flat copper', early.length && early.every(f => f.faceo > 0.97 && /217, 138, 78/.test(f.facebg) && !/gradient/.test(f.facebg)), early.map(f => [f.at, f.faceo, f.facebg]));
+  // the page's one light is what stays warm, arriving over the second half at its own strength
   const haloMid = flightF.filter(f => f.at > 100 && f.at < 200).map(f => f.haloo);
   const rest = frames.filter(f => f.at == null && f.t > (fEnd ? fEnd.t : 0));
-  check('the page\'s halo arrives over the second half', haloMid.every(o => o < 0.2) && rest.length && rest[rest.length - 1].haloo > 0.95, { mid: haloMid, end: rest.length && rest[rest.length - 1].haloo });
+  const lastF = rest.length && rest[rest.length - 1];
+  check('the page\'s light arrives over the second half, at its own strength', haloMid.every(o => o < 0.2) && lastF && lastF.halot > 0.3 && Math.abs(lastF.haloo - lastF.halot) < 0.02, { mid: haloMid, end: lastF && [lastF.haloo, lastF.halot] });
+  // and it rides with the lamp's drawing: from the tile's drawing, small, to the lamp
+  const artC = { x: (before.art.l + before.art.r) / 2, y: (before.art.t + before.art.b) / 2 };
+  const heroC = await C(() => { const r = document.querySelector('#screen .dev .hero-art').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  const lf0 = flightF.find(f => f.lc && f.at <= 40), lfEnd = lastF && lastF.lc;
+  check('the light leaves from the tile\'s drawing, small, and lands on the lamp', lf0 && Math.hypot(lf0.lc.x - artC.x, lf0.lc.y - artC.y) <= 16 && lf0.lc.s < 0.8 && lfEnd && Math.hypot(lfEnd.x - heroC.x, lfEnd.y - heroC.y) <= 2 && Math.abs(lfEnd.s - 1) < 0.02, { start: lf0 && lf0.lc, art: artC, end: lfEnd, hero: heroC });
   const titleRest = await wordsOf('#screen .dev .t-hero');
   check('the title starts at the tile\'s name, width matched', f0 && f0.h1 && dist(f0.h1, before.name) <= 6 && Math.abs(f0.h1.w - (before.name.r - before.name.l)) <= 8, { h1: f0 && f0.h1, name: before.name });
   check('and ends where it rests', fEnd && near(fEnd.h1, titleRest, 4), { end: fEnd && fEnd.h1, rest: titleRest });

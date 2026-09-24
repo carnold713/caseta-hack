@@ -3,9 +3,10 @@
 // the greeting, and the offline card, open the connection sheet (conn.js).
 //
 // v7 (design-v7-ui.md 1 and 10, frames 12814:126, 12817:96, 12817:49280): behind the header lies the house's own
-// light, one pool per lit room, and holding Goodnight puts the page to sleep room by room with the house.
+// light, one soft light from the top of the screen in the colour of what is on, and holding Goodnight puts the page
+// to sleep room by room with the house.
 import { track } from '/ui/gesture.js';
-import { glowHTML } from '/ui/glow.js';
+import { glowHTML, lightHTML, blendLight, whiteStops } from '/ui/glow.js';
 import { reduced } from '/ui/motion.js';
 import { sceneChip, roomStatus, roomPicture, offlineCard } from '/ui/screens/parts.js';
 import { pinnedHTML, wirePins, pinActions, pinsLeave } from '/ui/pins.js';
@@ -18,8 +19,7 @@ import { connActions } from '/ui/screens/conn.js';
 const COPPER_K = 2200;
 const kelvinOf = (d, col) => (col && col.mode === 'ct' && col.kelvin ? col.kelvin : d.ct || d.color ? 2700 : COPPER_K);
 // What a room's lights add up to: its mean level over what is lit, its whites mixed in mireds (weighted by level, the
-// way two lamps on one wall mix), and its brightest colour lamp, which the lighting system draws as its own smaller
-// pool beside the white one. Null when nothing in it is on.
+// way two lamps on one wall mix), and its brightest colour lamp. Null when nothing in it is on.
 export function roomLight(c, aid) {
   const lit = c.H.roomLights(aid).filter(d => (c.data.level(d.device_id) || 0) > 0);
   if (!lit.length) return null;
@@ -32,7 +32,7 @@ export function roomLight(c, aid) {
   }
   return { level: Math.round(sum / lit.length), kelvin: w ? Math.round(1e6 / (mired / w)) : null, colour };
 }
-// Night hours, the same test the app's night look uses: the field caps itself so the phone is never the brightest
+// Night hours, the same test the app's night look uses: the light caps itself so the phone is never the brightest
 // thing in a dark room.
 export function nightNow(c) {
   const s = c.S.config.settings || {};
@@ -41,52 +41,37 @@ export function nightNow(c) {
   return ns < ne ? hm >= ns && hm < ne : hm >= ns || hm < ne;
 }
 
-// ---------- the field ----------
-// The constellation: where each room's pool sits, in the 412 frame, by its place in the Rooms tab, so a person
-// learns "the left glow is the kitchen" without being told. A seventh room reuses the slots at 0.8 of the size.
-const SLOTS = [[104, 64], [330, 40], [230, 180], [40, 220], [380, 240], [150, 300]];
-// Each pool wanders its own few pixels on the ambient 8 s (the file's 6,-4 · -5,3 · 4,-3), half of them a half
-// beat behind, so the field drifts rather than pulsing together. It never breathes: breathing means waiting.
-const DRIFT = [[6, -4], [-5, 3], [4, -3], [-4, -3], [5, 4], [-6, 2]];
-// The last light each room gave off, so a room going out fades and shrinks from what it was, not from nothing.
-const lastLight = new Map();
-
-function pool(c, key, i, L, { accent = false, night = false } = {}) {
-  const [sx, sy] = SLOTS[i % 6], [dx, dy] = DRIFT[i % 6];
-  const k = (i >= 6 ? 0.8 : 1) * (accent ? 0.6 : 1);
-  // a colour lamp's pool sits below and to the right of its room's white one (the file's accent at 176, 140)
-  const x = `calc(${(sx / 412 * 100).toFixed(2)}% + ${accent ? 72 : 0}px)`, y = sy + (accent ? 76 : 0);
-  const on = !!L;
-  const was = lastLight.get(key);
-  if (on) lastLight.set(key, L);
-  const spec = L || was || { level: 1, kelvin: COPPER_K };
-  // the night look caps the field at half: glowSpec's night is 0.7 already, the gain takes it the rest of the way
-  const g = glowHTML({ level: spec.level, kelvin: spec.kelvin, hex: spec.hex, ctx: 'pool', x: 0, y: 0, night, gain: night ? 0.72 : 1, cls: on ? '' : 'off' });
-  return `<span class="hl-pool${accent ? ' acc' : ''}" style="left:${x};top:${y}px;--k:${k};--dx:${dx}px;--dy:${dy}px;--ph:${i % 2 ? -4 : 0}s">${g}</span>`;
+// ---------- the light at the top of the screen ----------
+// The owner's rule: one light source, subtle. A page with a lit header (Home, Rooms, a room, Settings) has one light
+// from just above the top centre of the screen, in the warm white of what is on (or the lit lamps' colours, blended)
+// and as strong as the house (or the room) is bright. With nothing on it is out: the darkness is the information.
+// It replaces the constellation of one pool per room, which read as too much.
+const lampOf = (c, d) => {
+  const col = (c.S.states[d.device_id] || {}).color, lv = c.data.level(d.device_id) || 0;
+  return d.color && col && col.mode === 'xy' && col.hex ? { level: lv, hex: col.hex } : { level: lv, kelvin: kelvinOf(d, col) };
+};
+// The colour each page's light last had, so a light going out fades from what it was rather than from nothing. The
+// element is drawn even while nothing is on (at no strength), so the first light on fades in on the dimmer too.
+const lastTop = new Map();
+export function topLight(c, key, lamps, level = null, cls = '') {
+  const mixed = blendLight(lamps);
+  if (mixed) lastTop.set(key, mixed);
+  const tone = mixed || lastTop.get(key) || { hex: whiteStops(COPPER_K).body };
+  return lightHTML({ kind: 'top', level: mixed ? (level ?? mixed.level) : 0, hex: tone.hex, night: nightNow(c), name: key, cls });
 }
-// One pool per room in the Rooms tab's order, lit or not, so a pool keeps its place from one redraw to the next and
-// what changes is only its light (0.85 to 1 and 0 to 1 on the dimmer, as every light does). Above five lit rooms
-// the five brightest keep their pools and the rest fold into a faint copper haze: the header never turns into a
-// rainbow. With nothing on, nothing is drawn at all: the darkness is the information.
-function houseLight(c, rooms) {
-  const night = nightNow(c);
+// The whole house's: every light that is on, at the house's level.
+export const houseTop = (c, cls = 'house-light') => topLight(c, 'house', c.H.litLights().map(d => lampOf(c, d)), c.H.houseLevel(), cls);
+// One room's: its lights that are on, at their mean.
+export const roomTop = (c, aid) => topLight(c, `room:${aid}`, c.H.roomLights(aid).filter(d => (c.data.level(d.device_id) || 0) > 0).map(d => lampOf(c, d)), null, 'room-light');
+// Home's: the house's, except while Goodnight is putting the page to sleep, when a room keeps the light it had until
+// its turn to go out, so the page goes dark room by room with the house.
+function houseLight(c) {
   const gn = c.ui.gn && c.ui.gn.active ? c.ui.gn : null;
-  const lights = rooms.map(a => {
-    // While Goodnight is putting the page to sleep, a room keeps the light it had until its turn to go out.
-    if (gn) { const g = gn.rooms.find(r => r.aid === a.id); if (g && performance.now() < gn.t0 + g.at) return g.L; }
-    return roomLight(c, a.id);
-  });
-  const ranked = lights.map((L, i) => [L ? L.level : -1, i]).filter(x => x[0] >= 0).sort((a, b) => b[0] - a[0]);
-  const shown = new Set(ranked.slice(0, 5).map(x => x[1]));
-  const haze = ranked.length > 5;
-  if (!ranked.length && !rooms.some(a => lastLight.has(a.id))) return '';
-  const out = rooms.map((a, i) => {
-    const L = shown.has(i) ? lights[i] : null;
-    const white = L && L.kelvin ? { level: L.level, kelvin: L.kelvin } : null;
-    const col = L && L.colour ? { level: L.colour.level, hex: L.colour.hex } : null;
-    return pool(c, a.id, i, white, { night }) + pool(c, a.id + '#c', i, col, { accent: true, night });
-  }).join('');
-  return `<div class="house-light" aria-hidden="true">${out}<span class="hl-haze${haze ? ' on' : ''}"></span></div>`;
+  if (!gn) return houseTop(c);
+  const left = gn.rooms.filter(r => performance.now() < gn.t0 + r.at);
+  const lamps = left.flatMap(r => [r.L.kelvin ? { level: r.L.level, kelvin: r.L.kelvin } : null, r.L.colour].filter(Boolean));
+  const level = left.reduce((a, r) => a + r.L.level, 0) / Math.max(1, gn.rooms.length);
+  return topLight(c, 'house', lamps, level, 'house-light');
 }
 
 // Where the lights that are on are: "Office", "Office and Kitchen", "3 rooms".
@@ -132,7 +117,7 @@ export function view(c) {
   const rooms = data.areas().filter(a => H.roomLights(a.id).length || data.controllable().some(d => data.devArea(d) === a.id));
 
   return `<div class="home">
-    ${empty ? '' : houseLight(c, rooms.filter(a => H.roomLights(a.id).length))}
+    ${empty ? '' : houseLight(c)}
     <header class="home-head bar">
       <button class="greet ${st === 'off' ? 'off' : ''}" data-act="conn-open" aria-label="Connection" data-xf="standard">${greet}</button>
       <h1 class="t-h1 bar-t ${fit}">${esc(name)}</h1>
@@ -299,7 +284,7 @@ export const actions = {
 
 // ---------- Goodnight: the page goes to sleep with the house ----------
 // The file's timeline (12817:49280), from the moment the hold completes:
-//   each lit room's pool goes out on the dimmer, in the Rooms tab's order, 0.24 s apart, the first 0.1 s in
+//   each lit room's light goes out of the page's on the dimmer, in the Rooms tab's order, 0.24 s apart, the first 0.1 s in
 //   0.22 s after the last is out, the night veil closes over everything on the night fade (1.6 s) to 0.97
 //   a light kept on for the way to bed glows alone on it, its two minutes counting round a thin ring
 //   then a faint moon on the night fade; "Sleep well" rises 12 over 0.32 s standard 0.4 s into it, what the fans
@@ -341,7 +326,7 @@ function goodnightDark(c, rooms, acts) {
   gn = { el, c, timers: [], ended: false, toasted: false };
   // a tap during it only skips to the end; a button inside it (Turn off) is its own
   el.addEventListener('click', e => { if (!e.target.closest('[data-act]')) gnSkip(); });
-  // each room's turn: the Home view draws its pool from the light it had until then, and redraws as each goes out
+  // each room's turn: the Home view draws its light from what it had until then, and redraws as each goes out
   rooms.forEach(r => later(() => c.render(), r.at + 10));
   const out = rooms.length ? FIRST + (rooms.length - 1) * GAP + DIMMER : 0;
   const veilAt = out + (rooms.length ? 220 : 0);

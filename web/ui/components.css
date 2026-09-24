@@ -245,30 +245,23 @@
 .tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); padding: 0 var(--gutter); }
 .tile-grid .tile { width: auto; }
 .tile-grid .tile .nm { width: auto; right: 16px; }
-/* hand placed in the file, not a rule of the width: 104, -7 on the room grid's 180 tile */
-.tile-grid .tile .glow { right: -10px; top: -7px; }
 .tile .vl { position: absolute; left: 16px; right: 16px; top: 116px; font-size: 14px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The glow is a soft disc bleeding off the top right corner, not a box shadow. 89,-9 from the tile's
-   outer edge: the export says 88,-10, which is the border trap again. */
-.tile .glow {
-  position: absolute; top: -9px; right: -7px; width: 86px; height: 86px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 241, 220, .55) 0%, rgba(255, 241, 220, 0.543) 6.2%, rgba(255, 241, 220, 0.521) 12.5%, rgba(255, 241, 220, 0.486) 18.8%, rgba(255, 241, 220, 0.441) 25%, rgba(255, 241, 220, 0.387) 31.2%, rgba(255, 241, 220, 0.328) 37.5%, rgba(255, 241, 220, 0.267) 43.8%, rgba(255, 241, 220, 0.208) 50%, rgba(255, 241, 220, 0.154) 56.2%, rgba(255, 241, 220, 0.106) 62.5%, rgba(255, 241, 220, 0.067) 68.8%, rgba(255, 241, 220, 0.037) 75%, rgba(255, 241, 220, 0.017) 81.2%, rgba(255, 241, 220, 0.006) 87.5%, rgba(255, 241, 220, 0.001) 93.8%, transparent 100%);
-  pointer-events: none;
-}
+/* A lit tile is a flat fill of its light: copper for a white light, the lamp's colour for a colour lamp, blue for a
+   fan that is running. No diagonal gradient, no glow in its corner, no coloured shadow. */
 .tile.on {
   background: var(--tile-on);
-  box-shadow: var(--tile-on-shadow), inset 0 0 0 1px var(--tile-on-line);
+  box-shadow: inset 0 0 0 1px var(--tile-on-line);
 }
 .tile.on .pwr { background: #fff; color: var(--copper-lo); }
 .tile.tinted .pwr { color: var(--lamp-ink, var(--lamp-lo)); }
 .tile.on .art { opacity: 1; }
 .tile.on .vl { color: var(--text-1); }
-/* A colour lamp keeps the shape and takes its own hue. The three values are set per lamp. */
+/* A colour lamp keeps the shape and takes its own hue (tint.js sets it per lamp). */
 .tile.tinted {
-  background: linear-gradient(180deg, var(--lamp-hi) 0%, var(--lamp) 55%, var(--lamp-lo) 100%);
-  box-shadow: 0 10px 28px var(--lamp-shadow, rgba(0, 0, 0, .35)),
-              inset 0 0 0 1px var(--lamp-line, rgba(255, 255, 255, .3));
+  background: var(--lamp);
+  box-shadow: inset 0 0 0 1px var(--lamp-line, rgba(255, 255, 255, .3));
 }
+.tile.fan.running { background: var(--blue); box-shadow: none; }
 .tile.gone { opacity: .45; }
 /* A fan or a shade: the power circle becomes an icon circle with a white glyph. */
 .tile .pwr.ic-circle { color: var(--icon-1); }
@@ -488,17 +481,34 @@
 .sheet { animation-name: sheetrise; }
 @keyframes sheetrise { from { transform: translateY(100%); } }
 
-/* A glow (web/ui/glow.js): three radial layers sharing a centre, blended screen so lights add. Sized and coloured by
-   custom properties, so a new level or colour on a live element fades on the dimmer instead of jumping. Off is no
-   light at all. Put it inside the thing it lights, which clips it (overflow: hidden) unless it is meant to bleed.
-   The layers' margin is pinned because the guided setup's `.g-body` (a page body, screens.css) shares a name.
-   Every layer falls off on the same eased curve, full at the centre and reaching nothing with no slope, drawn as
-   sixteen stops, and so does every other glow in the app (scripts/soften-glows.py writes them): a straight fade,
-   or one with a knee in it, shows a ring where it starts or stops, and light has no edge. */
+/* One light (web/ui/glow.js, lightHTML): the owner's single source, never stacked layers. 'top' is a page's lit
+   header, a wide soft radial from just above the top centre of the screen (radius 70% of its width, 0.14 at its
+   strongest); 'lamp' is a light's page, centred on the lamp (radius 60%, 0.22). The element's opacity is the light's
+   strength, so a level changing fades on the dimmer; its colour sits on its own layer, which crossfades (data-xf). The
+   falloff is the soften-glows curve, full at the centre and reaching nothing with no slope, in twenty-four stops so
+   a light this large never bands on the dark. */
+.onelight { position: absolute; left: 0; right: 0; top: 0; overflow: hidden; pointer-events: none; z-index: 0;
+  transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both); }
+.onelight .ol-c { position: absolute; inset: 0; }
+.onelight i { position: absolute; left: 50%; border-radius: 50%; mix-blend-mode: screen; aspect-ratio: 1; transform: translate(-50%, -50%); }
+.onelight.off { transform: scale(.85); }
+.onelight-top { height: 0; padding-bottom: 76%; transform-origin: 50% 0; }
+.onelight-top i { top: -12px; width: 140%; background: radial-gradient(closest-side, rgba(var(--l-c), 0.1400) 0%, rgba(var(--l-c), 0.1392) 4.2%, rgba(var(--l-c), 0.1367) 8.3%, rgba(var(--l-c), 0.1326) 12.5%, rgba(var(--l-c), 0.1270) 16.7%, rgba(var(--l-c), 0.1202) 20.8%, rgba(var(--l-c), 0.1122) 25%, rgba(var(--l-c), 0.1032) 29.2%, rgba(var(--l-c), 0.0936) 33.3%, rgba(var(--l-c), 0.0835) 37.5%, rgba(var(--l-c), 0.0732) 41.7%, rgba(var(--l-c), 0.0630) 45.8%, rgba(var(--l-c), 0.0531) 50%, rgba(var(--l-c), 0.0436) 54.2%, rgba(var(--l-c), 0.0349) 58.3%, rgba(var(--l-c), 0.0270) 62.5%, rgba(var(--l-c), 0.0201) 66.7%, rgba(var(--l-c), 0.0143) 70.8%, rgba(var(--l-c), 0.0095) 75%, rgba(var(--l-c), 0.0058) 79.2%, rgba(var(--l-c), 0.0032) 83.3%, rgba(var(--l-c), 0.0014) 87.5%, rgba(var(--l-c), 0.0005) 91.7%, rgba(var(--l-c), 0.0001) 95.8%, rgba(var(--l-c), 0) 100%);
+  animation: light-drift var(--ambient) var(--ease-both) infinite; }
+/* the header's light drifts its few pixels on the ambient 8 s, as the house's pools did: a living house moves slower
+   than attention, and it never breathes (breathing means waiting) */
+@keyframes light-drift { 0%, 100% { translate: 0 0; } 50% { translate: 6px -4px; } }
+/* A page lit from the top sits the light behind everything it draws (its sticky header's scrim included). */
+:is(.rooms, .room, .settings-page) { position: relative; isolation: isolate; }
+:is(.rooms, .room, .settings-page) > .onelight { z-index: -1; }
+.onelight-lamp { bottom: 0; transform-origin: 50% var(--lamp-y, 112px); }
+.onelight-lamp i { top: var(--lamp-y, 112px); width: 120%; background: radial-gradient(closest-side, rgba(var(--l-c), 0.2200) 0%, rgba(var(--l-c), 0.2187) 4.2%, rgba(var(--l-c), 0.2148) 8.3%, rgba(var(--l-c), 0.2084) 12.5%, rgba(var(--l-c), 0.1996) 16.7%, rgba(var(--l-c), 0.1888) 20.8%, rgba(var(--l-c), 0.1763) 25%, rgba(var(--l-c), 0.1622) 29.2%, rgba(var(--l-c), 0.1471) 33.3%, rgba(var(--l-c), 0.1312) 37.5%, rgba(var(--l-c), 0.1151) 41.7%, rgba(var(--l-c), 0.0990) 45.8%, rgba(var(--l-c), 0.0834) 50%, rgba(var(--l-c), 0.0685) 54.2%, rgba(var(--l-c), 0.0548) 58.3%, rgba(var(--l-c), 0.0424) 62.5%, rgba(var(--l-c), 0.0316) 66.7%, rgba(var(--l-c), 0.0224) 70.8%, rgba(var(--l-c), 0.0149) 75%, rgba(var(--l-c), 0.0092) 79.2%, rgba(var(--l-c), 0.0050) 83.3%, rgba(var(--l-c), 0.0023) 87.5%, rgba(var(--l-c), 0.0007) 91.7%, rgba(var(--l-c), 0.0001) 95.8%, rgba(var(--l-c), 0) 100%); }
+
+/* A small glow (glowHTML): one soft disc of a light's colour round something lit (an orb, a lamp in a strip), blended
+   screen so lights add. Sized and coloured by custom properties, so a new level or colour on a live element fades
+   on the dimmer instead of jumping. Off is no light at all. */
 .glow { position: absolute; left: var(--g-x, 50%); top: var(--g-y, 50%); width: 0; height: 0; pointer-events: none; z-index: 0; }
 .glow > i { position: absolute; left: 0; top: 0; margin: 0; border-radius: 50%; mix-blend-mode: screen; transform: translate(-50%, -50%) scale(1);
-  transition: width var(--dimmer) var(--ease-both), height var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both), background var(--dimmer) var(--ease-both); }
-.glow .g-wash { width: calc(var(--g-d) * 1.6); height: calc(var(--g-d) * 1.6); background: radial-gradient(closest-side, var(--g-wash) 0%, color-mix(in srgb, var(--g-wash) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--g-wash) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--g-wash) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--g-wash) 80.1%, transparent) 25%, color-mix(in srgb, var(--g-wash) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--g-wash) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--g-wash) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--g-wash) 37.9%, transparent) 50%, color-mix(in srgb, var(--g-wash) 28%, transparent) 56.2%, color-mix(in srgb, var(--g-wash) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--g-wash) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--g-wash) 6.8%, transparent) 75%, color-mix(in srgb, var(--g-wash) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--g-wash) 1%, transparent) 87.5%, color-mix(in srgb, var(--g-wash) 0.1%, transparent) 93.8%, transparent 100%); filter: blur(var(--g-blur, 32px)); }
-.glow .g-body { width: var(--g-d); height: var(--g-d); background: radial-gradient(closest-side, var(--g-body) 0%, color-mix(in srgb, var(--g-body) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--g-body) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--g-body) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--g-body) 80.1%, transparent) 25%, color-mix(in srgb, var(--g-body) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--g-body) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--g-body) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--g-body) 37.9%, transparent) 50%, color-mix(in srgb, var(--g-body) 28%, transparent) 56.2%, color-mix(in srgb, var(--g-body) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--g-body) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--g-body) 6.8%, transparent) 75%, color-mix(in srgb, var(--g-body) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--g-body) 1%, transparent) 87.5%, color-mix(in srgb, var(--g-body) 0.1%, transparent) 93.8%, transparent 100%); }
-.glow .g-core { width: calc(var(--g-d) * .32); height: calc(var(--g-d) * .32); background: radial-gradient(closest-side, var(--g-core) 0%, color-mix(in srgb, var(--g-core) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--g-core) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--g-core) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--g-core) 80.1%, transparent) 25%, color-mix(in srgb, var(--g-core) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--g-core) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--g-core) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--g-core) 37.9%, transparent) 50%, color-mix(in srgb, var(--g-core) 28%, transparent) 56.2%, color-mix(in srgb, var(--g-core) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--g-core) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--g-core) 6.8%, transparent) 75%, color-mix(in srgb, var(--g-core) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--g-core) 1%, transparent) 87.5%, color-mix(in srgb, var(--g-core) 0.1%, transparent) 93.8%, transparent 100%); opacity: var(--g-core-on, 1); }
+  width: calc(var(--g-d) * 1.25); height: calc(var(--g-d) * 1.25); background: radial-gradient(closest-side, var(--g-c) 0%, color-mix(in srgb, var(--g-c) 99.4%, transparent) 4.2%, color-mix(in srgb, var(--g-c) 97.6%, transparent) 8.3%, color-mix(in srgb, var(--g-c) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--g-c) 90.7%, transparent) 16.7%, color-mix(in srgb, var(--g-c) 85.8%, transparent) 20.8%, color-mix(in srgb, var(--g-c) 80.1%, transparent) 25%, color-mix(in srgb, var(--g-c) 73.7%, transparent) 29.2%, color-mix(in srgb, var(--g-c) 66.8%, transparent) 33.3%, color-mix(in srgb, var(--g-c) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--g-c) 52.3%, transparent) 41.7%, color-mix(in srgb, var(--g-c) 45.0%, transparent) 45.8%, color-mix(in srgb, var(--g-c) 37.9%, transparent) 50%, color-mix(in srgb, var(--g-c) 31.2%, transparent) 54.2%, color-mix(in srgb, var(--g-c) 24.9%, transparent) 58.3%, color-mix(in srgb, var(--g-c) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--g-c) 14.4%, transparent) 66.7%, color-mix(in srgb, var(--g-c) 10.2%, transparent) 70.8%, color-mix(in srgb, var(--g-c) 6.8%, transparent) 75%, color-mix(in srgb, var(--g-c) 4.2%, transparent) 79.2%, color-mix(in srgb, var(--g-c) 2.3%, transparent) 83.3%, color-mix(in srgb, var(--g-c) 1.0%, transparent) 87.5%, color-mix(in srgb, var(--g-c) 0.3%, transparent) 91.7%, color-mix(in srgb, var(--g-c) 0.0%, transparent) 95.8%, transparent 100%);
+  transition: width var(--dimmer) var(--ease-both), height var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both); }
 .glow.off > i { opacity: 0; transform: translate(-50%, -50%) scale(.85); }

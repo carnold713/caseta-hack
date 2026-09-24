@@ -109,14 +109,14 @@
 .pin-room .vl { position: absolute; left: 16px; right: 16px; top: 116px; z-index: 1; font-size: 14px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pin-room.lit .vl { color: var(--text-1); }
 /* its power circle: an unlit tile's grey while the room is off (with an edge, so it reads over a dark picture), white
-   with a copper glyph and a copper glow while it is lit, as a lit tile's is */
+   with a copper glyph while it is lit, as a lit tile's is (flat: no glow round it) */
 .pin-room .pwr {
   position: absolute; left: 16px; top: 16px; z-index: 1;
   width: 44px; height: 44px; border-radius: 22px; border: 0; padding: 0; display: grid; place-items: center;
   background: rgba(43, 43, 43, .86); color: var(--icon-2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
   transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease), box-shadow var(--standard) var(--ease), transform var(--tap) var(--spring-quick);
 }
-.pin-room.lit .pwr { background: #fff; color: var(--copper-lo); box-shadow: 0 0 16px rgba(217, 138, 78, .45); }
+.pin-room.lit .pwr { background: #fff; color: var(--copper-lo); box-shadow: none; }
 .pin-room .pwr:active { transform: scale(.96); }
 
 /* Edit mode: what is in an item no longer takes a tap (nothing switches or opens), each item has its x, and a finger
@@ -197,10 +197,6 @@
   background: linear-gradient(180deg, rgba(0, 0, 0, 0) 25%, rgba(0, 0, 0, .78) 100%);
 }
 .room-big .room-art { position: absolute; right: 26px; top: 16px; width: 124px; height: 124px; opacity: .22; }
-.room-big .glow {
-  position: absolute; right: -40px; top: -50px; width: 240px; height: 240px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(255, 184, 112, .22) 0%, rgba(255, 184, 112, 0.217) 6.2%, rgba(255, 184, 112, 0.208) 12.5%, rgba(255, 184, 112, 0.194) 18.8%, rgba(255, 184, 112, 0.176) 25%, rgba(255, 184, 112, 0.155) 31.2%, rgba(255, 184, 112, 0.131) 37.5%, rgba(255, 184, 112, 0.107) 43.8%, rgba(255, 184, 112, 0.083) 50%, rgba(255, 184, 112, 0.062) 56.2%, rgba(255, 184, 112, 0.042) 62.5%, rgba(255, 184, 112, 0.027) 68.8%, rgba(255, 184, 112, 0.015) 75%, rgba(255, 184, 112, 0.007) 81.2%, rgba(255, 184, 112, 0.002) 87.5%, rgba(255, 184, 112, 0.000) 93.8%, transparent 100%);
-}
 .room-big .add-photo {
   position: absolute; left: 16px; top: 16px; height: 32px; padding: 0 16px 0 12px; border-radius: 16px;
   display: inline-flex; align-items: center; gap: 8px; z-index: 1;
@@ -248,7 +244,7 @@
 .room-photo-card .add-photo .ic { color: var(--text-3); }
 /* The room's On and Off: the light page's switch (components.css .onoff) in the old pair of buttons' place and glass,
    so it reads over any picture: a 64 tall track 12 in from the photograph's edges at 224, 6 of padding, and two 52
-   tall halves. The pill is the light page's copper. */
+   tall halves. The pill is the light page's flat copper. */
 .room-photo-card .room-onoff {
   position: absolute; left: 12px; right: 12px; top: 224px; margin: 0;
   height: 64px; border-radius: 32px; padding: 6px; gap: 6px;
@@ -261,10 +257,7 @@
    and the words would end in an ellipsis before they ever left the half */
 .room-onoff button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 400px) { .room-onoff.long button:first-child { gap: 6px; } }
-.room-onoff .onoff-pill {
-  height: 52px; border-radius: 26px;
-  background: linear-gradient(180deg, #D98A4E 0%, #C77A40 100%); box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
-}
+.room-onoff .onoff-pill { height: 52px; border-radius: 26px; background: var(--copper); }
 
 /* The room's scenes at 504: 16 under the photograph; the grid at 560, 16 under the chips. */
 .room-chips { margin-top: 16px; }
@@ -276,14 +269,6 @@
 .room-chips.headed { margin-top: 10px; }
 .chip.editing .ic { color: var(--copper); }
 .room-grid { margin-top: 16px; padding-bottom: 8px; }
-/* M10: a lit tile blooms with its own light as the room fills in (roomopen.js plays it; at rest it is not there).
-   Centred on the tile's glow in its top right corner, in the lamp's colour for a colour lamp. */
-.room-grid .tile.on::before {
-  content: ''; position: absolute; right: -67px; top: -64px; width: 200px; height: 200px; border-radius: 50%;
-  --bloom: var(--lamp-glow, rgba(255, 214, 168, .55));
-  background: radial-gradient(closest-side, var(--bloom) 0%, color-mix(in srgb, var(--bloom) 80%, transparent) 25%, color-mix(in srgb, var(--bloom) 45%, transparent) 50%, color-mix(in srgb, var(--bloom) 15%, transparent) 75%, transparent 100%);
-  mix-blend-mode: screen; opacity: 0; pointer-events: none;
-}
 /* M11: a tile on a room presses to the file's 0.97, held while the finger is down, and opens from there (lightopen.js). */
 .room-grid .tile:active { transform: scale(.97); }
 .room-empty { margin-top: 16px; }
@@ -291,15 +276,13 @@
 
 /* ---- 04 Light -------------------------------------------------------------------------------- */
 
-.dev { position: relative; min-height: 890px; overflow: hidden; }
-.dev .halo {
-  position: absolute; left: calc(50% - 280px); top: -260px; width: 560px; height: 560px; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(255, 184, 112, .10) 0%, rgba(255, 184, 112, 0.099) 6.2%, rgba(255, 184, 112, 0.095) 12.5%, rgba(255, 184, 112, 0.088) 18.8%, rgba(255, 184, 112, 0.080) 25%, rgba(255, 184, 112, 0.070) 31.2%, rgba(255, 184, 112, 0.060) 37.5%, rgba(255, 184, 112, 0.049) 43.8%, rgba(255, 184, 112, 0.038) 50%, rgba(255, 184, 112, 0.028) 56.2%, rgba(255, 184, 112, 0.019) 62.5%, rgba(255, 184, 112, 0.012) 68.8%, rgba(255, 184, 112, 0.007) 75%, rgba(255, 184, 112, 0.003) 81.2%, rgba(255, 184, 112, 0.001) 87.5%, rgba(255, 184, 112, 0.000) 93.8%, transparent 100%);
-  opacity: 0; transform: scale(.85);
-  transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both);
-}
-.dev.on .halo { opacity: 1; transform: none; }
-.dev .hero-art { position: absolute; left: calc(50% - 90px); top: 46px; width: 180px; height: 180px; opacity: .2; transition: opacity var(--dimmer) var(--ease-both); }
+.dev { position: relative; min-height: calc(890px - var(--lift, 0px)); overflow: hidden; }
+/* The drawing at the top, sized to the kind of light (device.js, heroGeo sets --art-w, --art-h and --art-top): dim
+   while the light is off, whole while it is on. The room's name and the title sit under it, moved up by what the
+   smaller drawing gave back (--lift), and so does everything under them. */
+/* and everything under the title moves up with it, by the same amount, so the page keeps its rhythm with no gap */
+.dev > :is(.onoff, .looks, .feats, .dial, .speeds, .window, .readout, .shade-btns, .shade-gn) { translate: 0 calc(-1 * var(--lift, 0px)); }
+.dev .hero-art { position: absolute; left: calc(50% - var(--art-w, 72px) / 2); top: var(--art-top, 98px); width: var(--art-w, 72px); height: var(--art-h, 72px); opacity: .2; transition: opacity var(--dimmer) var(--ease-both); }
 .dev.on .hero-art { opacity: 1; }
 .dev .hdr { position: absolute; inset: 0 0 auto 0; }
 /* The pin (a light's page, a room's page, a scene's sheet): an outline while the thing is not on Home, filled in white
@@ -307,15 +290,15 @@
 .pin .ic .pin-body { fill: transparent; transition: fill var(--standard) var(--ease); }
 .pin.pinned { color: var(--text-1); }
 .pin[aria-pressed="true"] .ic .pin-body, .pin.pinned .ic .pin-body { fill: currentColor; }
-.dev .where { position: absolute; left: 0; right: 0; top: 240px; text-align: center; font-size: 14px; line-height: 17px; color: var(--text-2); }
-.dev .t-hero { position: absolute; left: var(--gutter); right: var(--gutter); top: 260px; margin: 0; line-height: 48px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev .where { position: absolute; left: 0; right: 0; top: calc(240px - var(--lift, 0px)); text-align: center; font-size: 14px; line-height: 17px; color: var(--text-2); }
+.dev .t-hero { position: absolute; left: var(--gutter); right: var(--gutter); top: calc(260px - var(--lift, 0px)); margin: 0; line-height: 48px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dev .t-hero.fit1 { font-size: 36px; }
 .dev .t-hero.fit2 { font-size: 30px; }
 .dev .onoff { position: absolute; left: 0; right: 0; top: 326px; }
 .onoff button .ic { flex: none; }
-.onoff button[aria-pressed='true'] { background: linear-gradient(180deg, #D98A4E 0%, #C77A40 100%); box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }
+.onoff button[aria-pressed='true'] { background: var(--copper); }
 .dev .onoff:has(.onoff-pill) button[aria-pressed='true'] { background: none; box-shadow: none; }
-.dev .onoff-pill { background: linear-gradient(180deg, #D98A4E 0%, #C77A40 100%); box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }
+.dev .onoff-pill { background: var(--copper); }
 .dev .onoff.blue .onoff-pill { background: var(--blue); }
 
 /* White and Colour, 180 x 132 at 414; the two feature pills, 180 x 64 at 558. */
@@ -388,7 +371,6 @@
 
 /* ---- 17 Fan ---------------------------------------------------------------------------------- */
 
-.dev.is-fan .halo { background: radial-gradient(closest-side, rgba(207, 224, 242, .12) 0%, rgba(207, 224, 242, 0.118) 6.2%, rgba(207, 224, 242, 0.114) 12.5%, rgba(207, 224, 242, 0.106) 18.8%, rgba(207, 224, 242, 0.096) 25%, rgba(207, 224, 242, 0.084) 31.2%, rgba(207, 224, 242, 0.072) 37.5%, rgba(207, 224, 242, 0.058) 43.8%, rgba(207, 224, 242, 0.045) 50%, rgba(207, 224, 242, 0.034) 56.2%, rgba(207, 224, 242, 0.023) 62.5%, rgba(207, 224, 242, 0.015) 68.8%, rgba(207, 224, 242, 0.008) 75%, rgba(207, 224, 242, 0.004) 81.2%, rgba(207, 224, 242, 0.001) 87.5%, rgba(207, 224, 242, 0.000) 93.8%, transparent 100%); }
 .dev.is-fan .feats { top: 414px; }
 .dev.is-fan .feat { background: var(--surface-2); }
 .dev.is-fan .feat .c { background: var(--surface-2); color: var(--icon-1); }
@@ -397,9 +379,9 @@
 .speeds { position: absolute; left: 0; right: 0; top: 490px; height: 400px; }
 .speeds .lbl { position: absolute; left: 0; right: 0; top: 12px; text-align: center; font-size: 14px; line-height: 17px; color: var(--text-2); }
 .speeds .big { position: absolute; left: 0; right: 0; top: 32px; text-align: center; font-size: 56px; font-weight: 300; line-height: 64px; letter-spacing: -.02em; }
-.speeds .step { position: absolute; width: 44px; border: 0; padding: 0; border-radius: 14px; background: #2A2A2A; transition: background var(--standard) var(--ease); }
-.speeds .step.fill { background: linear-gradient(180deg, #3C9BEA 0%, var(--blue) 100%); }
-.speeds .step.sel { box-shadow: 0 6px 20px rgba(0, 110, 204, .45); }
+/* Flat bars: the chosen speed and those under it filled blue, the rest the surface grey; no gradient, no glow. */
+.speeds .step { position: absolute; width: 44px; border: 0; padding: 0; border-radius: 14px; background: var(--surface-2); transition: background var(--standard) var(--ease); }
+.speeds .step.fill { background: var(--blue); }
 .speeds .steplbl { position: absolute; top: 302px; transform: translateX(-50%); font-size: 12px; line-height: 14px; color: var(--text-2); white-space: nowrap; }
 .speeds .steplbl.sel { color: var(--text-1); font-weight: 500; }
 .speeds .nudge { position: absolute; top: 336px; width: 56px; height: 56px; border-radius: 28px; border: 0; display: grid; place-items: center; background: var(--surface-2); color: var(--icon-1); }
@@ -412,7 +394,6 @@
 
 /* ---- 18 Shade -------------------------------------------------------------------------------- */
 
-.dev.is-shade .halo { background: radial-gradient(closest-side, rgba(230, 225, 216, .09) 0%, rgba(230, 225, 216, 0.089) 6.2%, rgba(230, 225, 216, 0.085) 12.5%, rgba(230, 225, 216, 0.080) 18.8%, rgba(230, 225, 216, 0.072) 25%, rgba(230, 225, 216, 0.063) 31.2%, rgba(230, 225, 216, 0.054) 37.5%, rgba(230, 225, 216, 0.044) 43.8%, rgba(230, 225, 216, 0.034) 50%, rgba(230, 225, 216, 0.025) 56.2%, rgba(230, 225, 216, 0.017) 62.5%, rgba(230, 225, 216, 0.011) 68.8%, rgba(230, 225, 216, 0.006) 75%, rgba(230, 225, 216, 0.003) 81.2%, rgba(230, 225, 216, 0.001) 87.5%, rgba(230, 225, 216, 0.000) 93.8%, transparent 100%); }
 /* The window: dusk behind it, the fabric hanging from the roller to how far down it is, a white handle on the
    hem. 200 x 300 at 72, 336; the readout rides beside the handle. */
 .window {
@@ -516,7 +497,7 @@
   background: radial-gradient(closest-side, #fff 0%, rgba(255, 255, 255, 0.987) 6.2%, rgba(255, 255, 255, 0.947) 12.5%, rgba(255, 255, 255, 0.884) 18.8%, rgba(255, 255, 255, 0.801) 25%, rgba(255, 255, 255, 0.703) 31.2%, rgba(255, 255, 255, 0.596) 37.5%, rgba(255, 255, 255, 0.486) 43.8%, rgba(255, 255, 255, 0.379) 50%, rgba(255, 255, 255, 0.280) 56.2%, rgba(255, 255, 255, 0.193) 62.5%, rgba(255, 255, 255, 0.122) 68.8%, rgba(255, 255, 255, 0.068) 75%, rgba(255, 255, 255, 0.031) 81.2%, rgba(255, 255, 255, 0.010) 87.5%, rgba(255, 255, 255, 0.001) 93.8%, transparent 100%),
               conic-gradient(from 90deg, hsl(5 100% 55%), hsl(45 100% 55%), hsl(90 100% 55%), hsl(135 100% 55%), hsl(180 100% 55%), hsl(225 100% 55%), hsl(270 100% 55%), hsl(315 100% 55%), hsl(365 100% 55%));
 }
-.wheel .handle { position: absolute; width: 36px; height: 36px; border-radius: 18px; pointer-events: none; box-shadow: inset 0 0 0 3px #fff, 0 4px 12px rgba(0, 0, 0, .45); }
+.wheel .handle { position: absolute; width: 36px; height: 36px; border-radius: 18px; pointer-events: none; box-shadow: inset 0 0 0 3px #fff, 0 0 0 1px rgba(0, 0, 0, .2); }
 .cs-val { position: absolute; left: var(--gutter); right: var(--gutter); top: 348px; height: 28px; display: flex; align-items: center; }
 .cs-val .dot { width: 14px; height: 14px; border-radius: 7px; margin-right: 10px; flex: none; }
 .cs-val b { font-size: 20px; font-weight: 500; line-height: 24px; }
@@ -528,9 +509,9 @@
 .cs-sw { position: absolute; left: 0; right: 0; top: 400px; height: 44px; display: flex; gap: 10px; padding: 0 24px; overflow-x: auto; scrollbar-width: none; align-items: center; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 60px), transparent); }
 .cs-sw::-webkit-scrollbar { display: none; }
 .cs-sw .sw { flex: none; width: 32px; height: 32px; border-radius: 16px; border: 0; padding: 0; }
-.cs-sw .sw.sel { box-shadow: 0 0 0 3px var(--surface-1), 0 0 0 5px #fff; }
+.cs-sw .sw.sel { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 4px #fff; }
 .cs-sw:has(.sw-ring) .sw.sel { box-shadow: none; }
-.cs-sw .sw-ring { position: absolute; left: 24px; top: 6px; width: 32px; height: 32px; border-radius: 16px; pointer-events: none; box-shadow: 0 0 0 3px var(--surface-1), 0 0 0 5px #fff; transition: transform var(--standard) var(--ease); }
+.cs-sw .sw-ring { position: absolute; left: 24px; top: 6px; width: 32px; height: 32px; border-radius: 16px; pointer-events: none; box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 4px #fff; transition: transform var(--standard) var(--ease); }
 .cs-sw .sw-ring[hidden] { display: none; }
 .wheel:not(.held) .handle { transition: left var(--standard) var(--ease), top var(--standard) var(--ease), background-color var(--standard) var(--ease); }
 .cs-val .dot { transition: background-color var(--standard) var(--ease); }
@@ -648,7 +629,6 @@
 /* ---- 06 Follow the day ------------------------------------------------------------------------- */
 
 .follow-page { min-height: 0; padding-bottom: 32px; }
-.follow-page .halo { opacity: 1; }
 .follow-page .hdr { position: relative; }
 .fd-sub { margin: 6px var(--gutter) 0; line-height: 17px; }
 .dc-card { position: relative; margin: 17px var(--gutter) 0; height: 304px; border-radius: var(--r-card); background: var(--surface-1); }
@@ -708,8 +688,7 @@
   transition: transform var(--tap) var(--spring-quick);
 }
 .scene-tile:active { transform: scale(.97); }
-.scene-tile.current { background: linear-gradient(180deg, #E6A06A 0%, #D98A4E 100%); }
-.scene-tile .glow { position: absolute; left: 80px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 226, 194, .35) 0%, rgba(255, 226, 194, 0.345) 6.2%, rgba(255, 226, 194, 0.331) 12.5%, rgba(255, 226, 194, 0.309) 18.8%, rgba(255, 226, 194, 0.280) 25%, rgba(255, 226, 194, 0.246) 31.2%, rgba(255, 226, 194, 0.209) 37.5%, rgba(255, 226, 194, 0.170) 43.8%, rgba(255, 226, 194, 0.133) 50%, rgba(255, 226, 194, 0.098) 56.2%, rgba(255, 226, 194, 0.068) 62.5%, rgba(255, 226, 194, 0.043) 68.8%, rgba(255, 226, 194, 0.024) 75%, rgba(255, 226, 194, 0.011) 81.2%, rgba(255, 226, 194, 0.004) 87.5%, rgba(255, 226, 194, 0.001) 93.8%, transparent 100%); }
+.scene-tile.current { background: var(--copper); }
 .scene-tile .sdots { position: absolute; left: 16px; top: 18px; }
 .scene-tile .st { position: absolute; left: 144px; top: 16px; color: var(--text-2); }
 .scene-tile.current .st { color: #fff; }

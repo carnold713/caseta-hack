@@ -24,24 +24,28 @@ const ROOM = [
   ['second tile', '.room-grid .tile:nth-child(2)', 212, 560, 180, 150],
   ['header dots', '.hdr .a1', 336, 52, 56, 56],
 ];
+// The light page as the calm-and-flat pass left it: the drawing at the top sized to the kind of light (a bulb, a lamp
+// nobody has given a kind, is 72, where the file had 180), resting 14 over the room's name, and the name, the title
+// and everything under them 56 higher than the file's 04 Light, the room the smaller drawing gave back.
+const LIFT = 56;
 const LIGHT = [
-  ['hero art', '.hero-art', 116, 46, 180, 180],
+  ['hero art', '.hero-art', 170, 226 - LIFT - 72, 72, 72],
   ['pin', '.hdr .a2', 272, 52, 56, 56],
-  ['room line', '.where', null, 240, null, 17],
-  ['name', '.t-hero', null, 260, null, 48],
-  ['on / off', '.onoff', 20, 326, 372, 72],
-  ['on segment', '.onoff button:first-child', 26, 332, 177, 60],
-  ['White', '.looks .look:nth-child(1)', 20, 414, 180, 132],
-  ['Colour', '.looks .look:nth-child(2)', 212, 414, 180, 132],
-  ['White circle', '.looks .look:nth-child(1) .c', 34, 428, 44, 44],
-  ['first pill', '.feats .feat:nth-child(1)', 20, 558, 180, 64],
-  ['pill circle', '.feats .feat:nth-child(1) .c', 28, 566, 48, 48],
-  ['arc', '.dial > svg', 36, 640, 340, 190],
-  ['minus', '.dial .minus', 32, 836, 48, 48],
-  ['plus', '.dial .plus', 332, 836, 48, 48],
-  ['moon', '.dial .lo', 102, 849, 22, 22],
-  ['sun', '.dial .hi', 288, 849, 22, 22],
-  ['Brightness', '.dial .lbl', null, 718, null, 17],
+  ['room line', '.where', null, 240 - LIFT, null, 17],
+  ['name', '.t-hero', null, 260 - LIFT, null, 48],
+  ['on / off', '.onoff', 20, 326 - LIFT, 372, 72],
+  ['on segment', '.onoff button:first-child', 26, 332 - LIFT, 177, 60],
+  ['White', '.looks .look:nth-child(1)', 20, 414 - LIFT, 180, 132],
+  ['Colour', '.looks .look:nth-child(2)', 212, 414 - LIFT, 180, 132],
+  ['White circle', '.looks .look:nth-child(1) .c', 34, 428 - LIFT, 44, 44],
+  ['first pill', '.feats .feat:nth-child(1)', 20, 558 - LIFT, 180, 64],
+  ['pill circle', '.feats .feat:nth-child(1) .c', 28, 566 - LIFT, 48, 48],
+  ['arc', '.dial > svg', 36, 640 - LIFT, 340, 190],
+  ['minus', '.dial .minus', 32, 836 - LIFT, 48, 48],
+  ['plus', '.dial .plus', 332, 836 - LIFT, 48, 48],
+  ['moon', '.dial .lo', 102, 849 - LIFT, 22, 22],
+  ['sun', '.dial .hi', 288, 849 - LIFT, 22, 22],
+  ['Brightness', '.dial .lbl', null, 718 - LIFT, null, 17],
 ];
 const ROOMS = [
   ['Rooms H1', '.rooms-head h1', 20, 58, null, 44],
@@ -53,13 +57,15 @@ const ROOMS = [
   ['room power', '.room-big:nth-of-type(1) .pwr', 332, 352, 44, 44],
   ['room name', '.room-big:nth-of-type(1) .nm', 40, 340, null, 30],
 ];
+// a fan's page moves up the same 56 under its 80 tall drawing
 const FAN = [
-  ['on / off', '.onoff', 20, 326, 372, 72],
-  ['first pill', '.feats .feat:nth-child(1)', 20, 414, 180, 64],
-  ['Off step', '.speeds .step:nth-of-type(1)', 60, 740, 44, 40],
-  ['High step', '.speeds .step:nth-of-type(5)', 308, 612, 44, 168],
-  ['minus', '.speeds .minus', 20, 826, 56, 56],
-  ['plus', '.speeds .plus', 336, 826, 56, 56],
+  ['hero art', '.hero-art', 166, 226 - LIFT - 40, 80, 80],
+  ['on / off', '.onoff', 20, 326 - LIFT, 372, 72],
+  ['first pill', '.feats .feat:nth-child(1)', 20, 414 - LIFT, 180, 64],
+  ['Off step', '.speeds .step:nth-of-type(1)', 60, 740 - LIFT, 44, 40],
+  ['High step', '.speeds .step:nth-of-type(5)', 308, 612 - LIFT, 44, 168],
+  ['minus', '.speeds .minus', 20, 826 - LIFT, 56, 56],
+  ['plus', '.speeds .plus', 336, 826 - LIFT, 56, 56],
 ];
 
 (async () => {
@@ -170,7 +176,7 @@ const FAN = [
   // ---- behaviour on a Caseta dimmer (5, Kitchen Cans)
   await go('light/5');
   check('a dimmer has no White or Colour', !(await page.$('.looks')));
-  check('and its pills close up under the switch', await C(() => Math.round(document.querySelector('.feats').getBoundingClientRect().top)) === 414);
+  check('and its pills close up under the switch', await C(() => Math.round(document.querySelector('.feats').getBoundingClientRect().top)) === 414 - LIFT);
   const pinned0 = await C(() => window.__copper.S.config.favorites.includes('d:5'));
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await page.click('[data-act="pin"]'); await wait(1200);
@@ -217,6 +223,9 @@ const FAN = [
   const cm = /^(\d+) devices? · (\d+) on$/.exec(lit.count);
   check('the pill sits under On, which says how much is on in the count line\'s numbers', lit.on === 'true' && !lit.off && !!cm && lit.word === `On · ${cm[2]} of ${cm[1]}`, lit);
   await measure('03 Room', ROOM);
+  // a lit tile is a flat fill of its light, with no glow in its corner and no coloured shadow
+  const tiles = await C(() => [...document.querySelectorAll('.room-grid .tile.on')].map(t => { const cs = getComputedStyle(t); return { img: cs.backgroundImage, col: cs.backgroundColor, tinted: t.classList.contains('tinted'), glow: !!t.querySelector('.glow'), sh: cs.boxShadow }; }));
+  check('lit tiles are flat fills (copper for a white light), no corner glow, no coloured shadow', tiles.length && tiles.every(t => t.img === 'none' && !t.glow && !/217, 138, 78|0px 10px/.test(t.sh) && (t.tinted || t.col === 'rgb(217, 138, 78)')), tiles);
   const n0 = await C(() => window.__copper.data.presets().length);
   await page.click('[data-act="save-look"]'); await wait(1400);
   check('Save this look makes a scene', (await C(() => window.__copper.data.presets().length)) === n0 + 1);
@@ -234,6 +243,9 @@ const FAN = [
   await measure('17 Fan', FAN);
   await page.click('[data-speed="High"]'); await wait(800);
   check('a speed bar sets the fan', (await page.textContent('.speeds .big')) === 'High', await page.textContent('.speeds .big'));
+  // flat bars: the chosen speed and those under it a flat blue, the rest the surface grey, no gradient and no glow
+  const bars = await C(() => [...document.querySelectorAll('.speeds .step')].map(b => { const cs = getComputedStyle(b); return [cs.backgroundImage, cs.backgroundColor, cs.boxShadow]; }));
+  check('the speed bars are flat: blue up to the speed, grey past it, no gradient, no glow', bars.length === 5 && bars.every(([img, , sh]) => img === 'none' && sh === 'none') && bars.every(([, col]) => col === 'rgb(0, 109, 204)'), bars);
   await page.click('.speeds .minus'); await wait(800);
   check('minus steps down', (await page.textContent('.speeds .big')) === 'Medium high', await page.textContent('.speeds .big'));
 

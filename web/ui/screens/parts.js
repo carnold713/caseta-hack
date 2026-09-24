@@ -48,7 +48,7 @@ export function tile(c, d) {
   const gone = d.domain === 'light' && lv == null;
   const hex = on ? lampHex(c, d) : null;
   const lit = on && d.domain !== 'fan' && d.domain !== 'cover';
-  const cls = ['tile', lit ? 'on' : '', hex ? 'tinted' : '', gone ? 'gone' : '', d.domain].filter(Boolean).join(' ');
+  const cls = ['tile', lit ? 'on' : '', hex ? 'tinted' : '', gone ? 'gone' : '', d.domain, on && d.domain === 'fan' ? 'running' : ''].filter(Boolean).join(' ');
   const style = hex ? ` style="${c.lampTint(hex)}"` : '';
   const art = `<img class="art" src="${c.artSrc(c.deviceArt(c, d))}" alt="">`;
   let lead, extra = '';
@@ -67,7 +67,7 @@ export function tile(c, d) {
   const t = lit ? timerFor(c, id) : null;
   const timer = t ? `<span class="tile-timer">${icon('timer', 14, 1.8)}${minutesLeft(t.ends_at)} min</span>` : '';
   return `<div class="${cls}"${style} data-go="light/${esc(id)}" role="link" aria-label="${esc(d.name)}" data-xf>
-    ${lit ? '<span class="glow"></span>' : ''}${lead}${d.domain === 'fan' || d.domain === 'cover' ? '' : art}${extra}${timer}
+    ${lead}${d.domain === 'fan' || d.domain === 'cover' ? '' : art}${extra}${timer}
     <span class="nm">${esc(d.name)}</span><span class="vl">${esc(valueLine(c, d))}</span></div>`;
 }
 

@@ -1,11 +1,13 @@
 // Copper Night v7 · light: screens 3, 4, 5 and 15 (design-v7-ux.md, design-v7-ui.md; Figma 12815:49080, 12815:50658,
 // 12816:94, 12817:49023 and 12818:257).
 //
-//   3   the lamp's own glow: a three-layer hero halo, a floor pool and a filament drawn from the light's real level
-//       and colour, locked to the finger on the dial (no easing under it); the dial bottoms out at 1%, never 0; off
-//       greys the dial at the level On brings back; holding minus dims steadily and stops at 1%.
+//   3   the lamp's own light: one soft light centred on the lamp (calm and flat: no halo rings, no floor pool, no
+//       filament), in its colour and as strong as its level, locked to the finger on the dial (no easing under it);
+//       the icon sized to the kind of light; the dial says just "Brightness" and its arc is one flat stroke; the dial
+//       bottoms out at 1%, never 0; off draws no light and greys the dial at the level On brings back; holding minus
+//       dims steadily and stops at 1%.
 //   4   Colour: the sheet is washed by the lamp's colour and crossfades to a new one (never slides); the swatches are
-//       lit glass beads; a pick on a lamp that is off brings it on at the level On gives, not 100%; a pick shows no
+//       flat discs with a plain white ring on the chosen one; a pick on a lamp that is off brings it on at the level On gives, not 100%; a pick shows no
 //       toast and no Undo (2ca8d0a: the lamp changing is the answer).
 //   5   White: the bar is a sky, the lamp's white a sun on a path in mireds; dragging the sun moves the white live.
 //   15  the sleep timer's candle: its height is the time left over the time set (the hub records the minutes, so a
@@ -35,8 +37,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 });
   await wait(900);
   await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
-  // the sizes and strengths below are the day's: at night (from 10 pm, by the home's clock) every glow is capped, so a
-  // run in the evening read a 450 glow as 405. The day look is pinned for this test and put back after it.
+  // the strengths below are the day's: at night (from 10 pm, by the home's clock) every light is capped at 0.7, so a
+  // run in the evening would read a lower one. The day look is pinned for this test and put back after it.
   const look0 = await C(async () => { const s = window.__copper.S.config.settings; const was = s.night_look ?? null; s.night_look = 'never'; await window.__copper.save('', { quiet: true }); return was; });
   // every level and colour this phone sends
   await C(() => {
@@ -46,8 +48,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     c.gate.sendColor = (...a) => { window.__col.push(a); return k(...a); };
   });
   const level = id => C(x => window.__copper.data.level(x) || 0, id);
-  const glowD = () => C(() => { const g = document.querySelector('.dev [data-glow="lamp"]'); return g ? parseFloat(g.style.getPropertyValue('--g-d')) : null; });
-  const heroD = lv => Math.round(260 + 300 * Math.sqrt(lv / 100));
+  // the light's strength at a level: the house's curve (glow.js), by day
+  const strength = lv => (lv > 0 ? 0.35 + 0.65 * lv / 100 : 0);
+  const lightOp = () => C(() => { const g = document.querySelector('.dev [data-light="lamp"]'); return g ? Number(getComputedStyle(g).opacity) : null; });
   // a finger on an element: down, through each step (page coordinates), then up; `hold` ms before lifting
   const finger = (steps, { hold = 0 } = {}) => C(async ([st, h]) => {
     const target = document.elementFromPoint(st[0][0], st[0][1]);
@@ -58,17 +61,34 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     fire('pointerup', st[st.length - 1]);
   }, [steps, hold]);
 
-  // ================= 3 · the lamp's own glow, on the Kitchen Cans dimmer =================
+  // ================= 3 · the lamp's own light, on the Kitchen Cans dimmer =================
   const dim = '5';
   await goto(`light/${dim}`);
   if (!(await level(dim))) { await page.click('[data-act="dev-on"]'); await wait(1400); }
   const lv0 = await level(dim);
-  const g0 = await C(() => { const g = document.querySelector('.dev [data-glow="lamp"]'); return g && { off: g.classList.contains('off'), layers: g.querySelectorAll('i').length, blend: getComputedStyle(g.querySelector('.g-body')).mixBlendMode, xf: g.hasAttribute('data-xf') }; });
-  check('3: the hero lamp casts a three-layer glow, blended screen', g0 && !g0.off && g0.layers === 3 && g0.blend === 'screen', g0);
-  check(`3: its size is the hero row of the size table at ${lv0}% (D ${heroD(lv0)})`, Math.abs((await glowD()) - heroD(lv0)) <= 1, await glowD());
-  const pool0 = await C(() => { const p = document.querySelector('.lamp-pool'), f = document.querySelector('.lamp-filament'); return { pw: parseFloat(p.style.getPropertyValue('--pool-w')), fil: Number(getComputedStyle(f).opacity) }; });
-  check('3: a floor pool 120 + 180 x level wide, and a filament lighting the bulb', Math.abs(pool0.pw - (120 + 180 * lv0 / 100)) <= 1 && pool0.fil > 0.3, pool0);
-  check('3: a colour change crossfades the glow (it carries data-xf), it never slides', g0 && g0.xf, g0);
+  const g0 = await C(() => {
+    const page = document.querySelector('.dev'), g = page.querySelector('[data-light="lamp"]');
+    if (!g) return null;
+    const i = g.querySelector('i'), ir = i.getBoundingClientRect(), ar = page.querySelector('.hero-art').getBoundingClientRect(), pr = page.getBoundingClientRect();
+    return {
+      off: g.classList.contains('off'), lights: page.querySelectorAll('.onelight').length, others: page.querySelectorAll('.glow, .halo, .lamp-pool, .lamp-filament, .kglow').length,
+      layers: g.querySelectorAll('i').length, blend: getComputedStyle(i).mixBlendMode, xf: g.querySelector('.ol-c').hasAttribute('data-xf'), colour: g.querySelector('.ol-c').style.getPropertyValue('--l-c'),
+      dx: Math.round((ir.left + ir.width / 2) - (ar.left + ar.width / 2)), dy: Math.round((ir.top + ir.height / 2) - (ar.top + ar.height / 2)), r: ir.width / 2 / pr.width,
+      fade: getComputedStyle(g).transitionDuration, ease: getComputedStyle(g).transitionTimingFunction,
+    };
+  });
+  check('3: the lamp casts one light and nothing else: no halo, no floor pool, no filament, no knob glow', g0 && !g0.off && g0.lights === 1 && g0.layers === 1 && g0.others === 0 && g0.blend === 'screen', g0);
+  check('3: the light is centred on the lamp, its radius 60% of the screen\'s width', g0 && Math.abs(g0.dx) <= 1 && Math.abs(g0.dy) <= 1 && Math.abs(g0.r - 0.6) < 0.01, g0);
+  check('3: a Caseta dimmer\'s light is the warm incandescent white of the ramp (2700K)', g0 && g0.colour.replace(/\s/g, '') === '255,199,138', g0 && g0.colour);
+  check(`3: its strength is the house's curve at ${lv0}% (${strength(lv0).toFixed(3)})`, Math.abs((await lightOp()) - strength(lv0)) < 0.01, await lightOp());
+  check('3: it fades on the dimmer, 0.4 s EASE_IN_AND_OUT, and a colour change crossfades (data-xf), never slides', g0 && /^0\.4s/.test(g0.fade) && /ease-in-out/.test(g0.ease) && g0.xf, g0);
+  // the icon is sized to the kind of light: 72 for a lamp, a sconce or a bulb, 88 for a floor lamp, 80 for a pendant
+  const icon = await C(id => { const c = window.__copper, art = c.deviceArt(c, c.data.dev(id)), r = document.querySelector('.dev .hero-art').getBoundingClientRect(); return { art, w: r.width, h: r.height, stroke: [...document.querySelectorAll('.dev .hero-art [stroke-width]')].map(n => n.getAttribute('stroke-width') + '/' + n.getAttribute('vector-effect')) }; }, dim);
+  const SIZE = { 'light-floor-lamp': 88, 'light-pendant': 80, 'light-chandelier': 80, 'light-ceiling-fan': 80, 'lutron-rollershades': 88 };
+  check('3: the icon is sized to the kind of light (72 for a lamp or a bulb)', Math.abs(icon.h - (SIZE[icon.art] || 72)) < 1, icon);
+  check('3: and drawn in the house\'s line weight at that size (2.75, not scaled)', icon.stroke.every(x => x === '2.75/non-scaling-stroke'), icon);
+  const dialLook = await C(() => { const d = document.querySelector('.dial'); return { lbl: d.querySelector('.lbl').textContent, stroke: d.querySelector('.fil').getAttribute('stroke'), grads: d.querySelectorAll('linearGradient, radialGradient').length, kglow: !!d.querySelector('.kglow'), numGlow: getComputedStyle(d.querySelector('.num b')).textShadow }; });
+  check('3: the dial says just "Brightness", its arc one flat copper stroke, no light round the knob or the number', dialLook.lbl === 'Brightness' && /^#D98A4E$/i.test(dialLook.stroke) && !dialLook.grads && !dialLook.kglow && dialLook.numGlow === 'none', dialLook);
   await page.screenshot({ path: 'v7-light-on.png' });
   // the dial's "Brightness" a gap (tokens.css) over its number, where the file puts it, on the owner's 412 and a small
   // Android's 360 alike, lit here and off below: the two used to touch, the label's line on the number's
@@ -95,13 +115,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const fire = (type, [x, y]) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, button: 0 }));
     fire('pointerdown', k); fire('pointermove', p);
     await new Promise(r => setTimeout(r, 200));
-    const g = document.querySelector('.dev [data-glow="lamp"]');
-    const out = { held: !!document.querySelector('.dev.held'), dur: getComputedStyle(g.querySelector('.g-body')).transitionDuration, d: parseFloat(g.style.getPropertyValue('--g-d')), n: document.querySelector('.dial .num b').textContent, touch: Number(getComputedStyle(document.querySelector('.dial .ktouch')).opacity) };
+    const g = document.querySelector('.dev [data-light="lamp"]');
+    const out = { held: !!document.querySelector('.dev.held'), dur: getComputedStyle(g).transitionDuration, op: Number(g.style.opacity), n: document.querySelector('.dial .num b').textContent, touch: Number(getComputedStyle(document.querySelector('.dial .ktouch')).opacity) };
     fire('pointerup', p);
     return out;
   }, [kn, pt(30)]);
-  check('3: under a finger the glow follows it with no easing (transition 0s, M6)', mid.held && /^0s/.test(mid.dur), mid);
-  check('3: the halo is the finger\'s level while it is still down', Math.abs(mid.d - heroD(Number(mid.n))) <= 1, mid);
+  check('3: under a finger the light follows it with no easing (transition 0s, M6)', mid.held && /^0s/.test(mid.dur), mid);
+  check('3: the light is the finger\'s level while it is still down', Math.abs(mid.op - strength(Number(mid.n))) < 0.01, mid);
   check('3: the finger shows as a 44 disc of white 22% on the knob', Math.abs(mid.touch - 0.22) < 0.03, mid.touch);
   await wait(900);
   // a slip right off the low end of the arc dims to 1%, never off
@@ -124,10 +144,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('3: holding minus dims steadily and stops at 1%, never off', (await level(dim)) === 1, await level(dim));
   // off: no light at all, and the dial greyed where On will bring it back
   await page.click('[data-act="dev-off"]'); await wait(1400);
-  const off = await C(id => { const c = window.__copper; const g = document.querySelector('.dev [data-glow="lamp"]'); const d = document.querySelector('.dial'); return { glowOff: g.classList.contains('off'), at: Number(d.getAttribute('aria-valuenow')), want: Math.round(c.onLevel(id, `d:${id}`)), stroke: getComputedStyle(d.querySelector('.fil')).stroke, num: getComputedStyle(d.querySelector('.num b')).color, fil: Number(getComputedStyle(document.querySelector('.lamp-filament')).opacity) }; }, dim);
-  check('3: off draws no light (the glow is off, the filament dark)', off.glowOff && off.fil === 0, off);
+  const off = await C(id => { const c = window.__copper; const g = document.querySelector('.dev [data-light="lamp"]'); const d = document.querySelector('.dial'); return { lightOff: g.classList.contains('off'), op: Number(getComputedStyle(g).opacity), at: Number(d.getAttribute('aria-valuenow')), want: Math.round(c.onLevel(id, `d:${id}`)), stroke: getComputedStyle(d.querySelector('.fil')).stroke, num: getComputedStyle(d.querySelector('.num b')).color, lbl: d.querySelector('.lbl').textContent }; }, dim);
+  check('3: off draws no light at all', off.lightOff && off.op === 0, off);
+  check('3: off, the dial still says just "Brightness"', off.lbl === 'Brightness', off.lbl);
   check('3: the dial stays, greyed, at the level On will bring back', off.at === off.want && /58, 54, 51/.test(off.stroke) && /158, 158, 158/.test(off.num), off);
-  // the number's glow is light too: off, it has none even at a level of 50 or more (where a lit dial's number glows)
+  // the number casts no light, lit or off, at any level
   const offGlow = await C(() => { const d = document.querySelector('.dial'); const was = d.classList.contains('bright'); d.classList.add('bright'); const sh = getComputedStyle(d.querySelector('.num b')).textShadow; d.classList.toggle('bright', was); return sh; });
   check('3: off, the number does not glow at any level', offGlow === 'none', offGlow);
   await page.screenshot({ path: 'v7-light-off.png' });
@@ -148,14 +169,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await page.click('.cs-sw .sw[data-hex="#4C8DFF"]'); await wait(1400);
     const head = await C(() => ({ over: document.querySelector('.sheet-head .t-over').textContent, title: document.querySelector('.sheet-head h2').textContent }));
     check('4: the sheet says "Colour", under "{light} · {colour}"', head.title === 'Colour' && head.over === `${name} · Blue`, head);
-    const bead = await C(() => { const b = document.querySelector('.cs-sw .sw[data-hex="#FFC24A"]'); const cs = getComputedStyle(b), sp = getComputedStyle(b, '::after'); return { bg: cs.backgroundImage, spec: sp.backgroundColor, sh: cs.boxShadow }; });
-    check('4: the colours are beads of lit glass (radial light, a specular spot, a coloured shadow)', /radial-gradient/.test(bead.bg) && /255, 255, 255, 0\.55/.test(bead.spec) && /255, 194, 74/.test(bead.sh), bead);
+    const bead = await C(() => { const b = document.querySelector('.cs-sw .sw[data-hex="#FFC24A"]'); const cs = getComputedStyle(b), sp = getComputedStyle(b, '::after'); const ring = getComputedStyle(document.querySelector('.cs-sw .sw-ring')); return { bg: cs.backgroundImage, col: cs.backgroundColor, spec: sp.content, sh: cs.boxShadow, ring: ring.boxShadow, ringGlow: !!document.querySelector('.cs-sw .sw-ring .glow') }; });
+    check('4: the colours are flat swatches (no light, no specular spot, no shadow)', bead.bg === 'none' && /255, 194, 74/.test(bead.col) && (bead.spec === 'none' || bead.spec === 'normal') && bead.sh === 'none', bead);
+    check('4: the chosen one wears a plain 2 px white ring with a small gap, and casts no light', /rgb\(255, 255, 255\) 0px 0px 0px 4px/.test(bead.ring) && /0px 0px 0px 2px/.test(bead.ring) && !bead.ringGlow, bead);
     const wash0 = await C(() => getComputedStyle(document.querySelector('.lk-wash')).getPropertyValue('--wash'));
     check('4: the sheet is washed with the lamp\'s colour', /76, ?141, ?255/.test(wash0), wash0);
     const hand = await C(() => getComputedStyle(document.querySelector('.wheel .handle')).boxShadow);
-    check('4: the wheel\'s handle glows with the colour under it', /76, 141, 255, 0\.35/.test(hand), hand);
+    check('4: the wheel\'s handle is flat: a white ring, no glow of its colour, no drop shadow', !/76, 141, 255/.test(hand) && /255, 255, 255\) 0px 0px 0px 3px inset/.test(hand) && hand.split(/,(?![^(]*\))/).every(x => /\) 0px 0px 0px /.test(x.trim())), hand);
     await page.screenshot({ path: 'v7-colour-blue.png' });
-    // Amber: the wash crossfades (an old copy fading over the new), the ring and its light slide; no toast
+    // Amber: the wash crossfades (an old copy fading over the new), the ring slides; no toast
     await C(() => { window.__col = []; document.querySelector('#toast-root').innerHTML = ''; });
     await page.click('.cs-sw .sw[data-hex="#FFC24A"]');
     await wait(150);
@@ -190,6 +212,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const wh = await C(() => ({ over: document.querySelector('.sheet-head .t-over').textContent, title: document.querySelector('.sheet-head h2').textContent, ends: document.querySelector('.ws-ends').innerText }));
     check('5: "White", under "{light} · 2700K · Warm", from candle at dusk to daylight at noon', wh.title === 'White' && wh.over === `${name} · 2700K · Warm` && /CANDLE · DUSK/.test(wh.ends) && /DAYLIGHT · NOON/.test(wh.ends), wh);
     await page.screenshot({ path: 'v7-white-2700.png' });
+    const sunLook = await C(() => { const t = document.querySelector('.ws-thumb'); return { glow: t.querySelectorAll('.glow').length, sh: getComputedStyle(t.querySelector('.disc')).boxShadow, bg: getComputedStyle(t.querySelector('.disc')).backgroundImage }; });
+    check('5: the sun is flat: a disc of the white in a plain 2 px white ring, no light round it, no shadow', !sunLook.glow && sunLook.bg === 'none' && sunLook.sh === 'rgb(255, 255, 255) 0px 0px 0px 2px', sunLook);
     // drag the sun (a grip: it takes the finger at once) to 4000K; the readout steps, the sky's noon brightens
     const tr = await C(() => { const b = document.querySelector('.ws-track').getBoundingClientRect(); const t = document.querySelector('.ws-thumb').getBoundingClientRect(); return { x: b.left, w: b.width, sx: t.left, sy: t.top }; });
     const xAt = k => tr.x + tr.w * (1e6 / 1900 - 1e6 / k) / (1e6 / 1900 - 1e6 / 6500);

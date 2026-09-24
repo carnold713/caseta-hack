@@ -59,15 +59,14 @@ export function view(c) {
   } else {
     area = 'data-hold="ns-on" data-ms="250" data-act="ns-tap"'; title = 'Night light'; sub = hint ? 'Hold it' : 'Rest your thumb to turn on';
   }
-  // The glow is the lamp's real light: drawn at the night light's level and candle white while the lamp is on, and
-  // held at 0.85 and nothing while it is off, so on and off are the dimmer's scale and opacity pair.
+  // The one light on the page is the lamp's real light: drawn at the night light's level and candle white while the
+  // lamp is on, and held at 0.85 and nothing while it is off, so on and off are the dimmer's scale and opacity pair.
   const glow = d ? glowHTML({ level: LEVEL, kelvin: 1900, ctx: 'hero', gain: 0.75, cls: `ns-glow${on ? '' : ' off'}`, name: 'night-light' }) : '';
   return `<div class="ns-page${on ? ' on' : ''}">
     <header class="ns-top"><button class="ns-home" data-go="home">${icon('home', 24, 1.6)}<span>Home</span></button></header>
     <div class="ns-time" aria-label="The time">${esc(clock(c.RT.nowHm()))}</div>
     <div class="ns-area${on ? ' on' : ''}${off ? ' offline' : ''}" ${area} role="button" tabindex="0" aria-label="${esc(on ? `Turn ${d.name} off` : title)}">
-      <span class="ns-inner" aria-hidden="true"></span>
-      <span class="ns-ring" aria-hidden="true">${glow}<span class="ns-candle"></span>
+      <span class="ns-ring" aria-hidden="true">${glow}
         <svg width="112" height="112" viewBox="0 0 112 112"><circle class="ns-track" cx="56" cy="56" r="55.5"/><circle class="ns-fill" cx="56" cy="56" r="55.5" pathLength="1" transform="rotate(-90 56 56)"/></svg></span>
       ${MOON}
       <span class="ns-lbl" data-xf="standard"><span class="ns-title">${esc(title)}</span><span class="ns-sub">${esc(sub)}</span></span>

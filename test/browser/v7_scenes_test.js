@@ -119,6 +119,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const stage = await C(() => ({ orbs: document.querySelectorAll('#sheet-root .sc-orb').length, show: document.querySelector('[data-act="stage-show"]').getAttribute('aria-checked'), glows: document.querySelectorAll('#sheet-root .sc-orb .glow:not(.off)').length }));
   const inScene = await C(id => Object.keys(window.__copper.data.presets().find(p => p.id === id).levels).filter(x => window.__copper.data.dev(x)).length, sceneId);
   check('7: one orb per light in the scene, lit ones glowing', stage.orbs === inScene && stage.glows >= 1, { stage, inScene });
+  // calm and flat: each orb a flat disc of its light's colour, a lit one with one soft glow at about 0.25, no pools on
+  // the floor and no wash over the stage
+  const flat = await C(() => { const st = document.querySelector('#sheet-root .sc-stage'); return { balls: [...st.querySelectorAll('.sc-ball')].map(b => getComputedStyle(b).backgroundImage), pools: st.querySelectorAll('.sc-pool, .sc-wash').length, glows: [...st.querySelectorAll('.sc-orb')].map(o => o.querySelectorAll('.glow').length), peak: Math.max(...[...st.querySelectorAll('.sc-orb .glow:not(.off)')].map(g => Number((/,([\d.]+)\)$/.exec(g.style.getPropertyValue('--g-c')) || [0, 0])[1]))) }; });
+  check('7: the orbs are flat discs with at most one soft glow (about 0.25), no pools, no wash', flat.balls.every(b => b === 'none') && !flat.pools && flat.glows.every(n => n <= 1) && flat.peak > 0.05 && flat.peak <= 0.25 + 1e-6, flat);
   check('7: "Show it on the room" is off when the editor opens', stage.show === 'false', stage.show);
   const P = () => C(id => window.__copper.data.presets().find(p => p.id === id), sceneId);
   const orb = '#sheet-root .sc-lane:first-child .sc-orb';

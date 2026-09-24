@@ -8,6 +8,7 @@ import { connSheet, connActions } from '/ui/screens/conn.js';
 import { nameSheet, confirmSheet } from '/ui/screens/pickers.js';
 import { ideasSheet, installSheet, nextActions } from '/ui/screens/next.js';
 import { nightLamp } from '/ui/screens/nightstand.js';
+import { houseTop } from '/ui/screens/home.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const info = c => (c.S.agent && c.S.agent.info) || {};
@@ -36,6 +37,7 @@ export function view(c, r) {
   const conn = c.conn();
   const zone = RT.zoneName(s.timezone) || 'Not set';
   return `<div class="settings-page">
+    ${houseTop(c, 'settings-light')}
     <header class="tab-head bar">
       <h1 class="t-h1 bar-t">Settings</h1>
       <button class="hdr-btn a1" data-go="settings/connection" aria-label="Connection"><span class="conn-state ${conn}"></span>${icon('wifi', 22, 1.6)}</button>

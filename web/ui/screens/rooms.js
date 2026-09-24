@@ -1,35 +1,16 @@
 // 13 · Rooms. Every room as a 372 x 180 card, with All scenes above them. Read from the Figma frame (12744:38).
 //
-// v7 (design-v7-ui.md 2, frame 12814:49603): each card's glow is that room's real light, sized by its level and
-// coloured by its lamps, and a room turned on blooms from its power button outward. A room that is off is asleep:
-// grey under a veil, not merely unhighlighted.
+// v7 (design-v7-ui.md 2, frame 12814:49603): a room's card is lit by its own lights (its illustration's lamps, or the
+// warmth over its photograph), and a room that is off is asleep: grey under a veil, not merely unhighlighted. The
+// page has one light, the house's, from the top of the screen (home.js, houseTop); the cards draw no glows.
 import { roomStatus, roomPicture } from '/ui/screens/parts.js';
-import { glowHTML } from '/ui/glow.js';
-import { roomLight, nightNow } from '/ui/screens/home.js';
-
-// The last light each card showed, so a room going out draws back into its button from what it was.
-const lastLight = new Map();
-// The room's light on its card: a white pool where the file puts it (272, 44 on a 372 card, so 100 in from the
-// right), and a colour lamp's own pool at 0.6 of the size beside it (210, 60). Both are always drawn, lit or not, so
-// a redraw keeps the element and its light moves rather than appearing: on, it opens out from the power circle on
-// the dimmer (home.css); off, it draws back into it and goes out.
-function cardGlow(c, aid, night) {
-  const L = roomLight(c, aid);
-  const was = lastLight.get(aid) || { level: 30, kelvin: 2200, colour: null };
-  if (L) lastLight.set(aid, L);
-  const s = L || was;
-  const white = { level: s.level, kelvin: s.kelvin || 2200 };
-  const col = s.colour ? { level: s.colour.level, hex: s.colour.hex } : { level: s.level, kelvin: 2200 };
-  const g = (o, on, acc) => glowHTML({ ...o, ctx: 'card', night, x: acc ? 'calc(100% - 162px)' : 'calc(100% - 100px)', y: acc ? 60 : 44, cls: `${acc ? 'acc' : ''}${on ? '' : ' off'}`.trim() });
-  return g(white, !!(L && L.kelvin), false) + g(col, !!(L && L.colour), true);
-}
+import { roomLight, houseTop } from '/ui/screens/home.js';
 
 export function view(c) {
   const { data, H, S, esc, icon } = c;
   const scenes = data.presets().length + data.lutronScenes().length;
   const pinned = (S.config.favorites || []).filter(t => t.startsWith('p:') || t.startsWith('s:')).length;
   const rooms = data.areas();
-  const night = nightNow(c);
   const card = a => {
     const lit = H.roomLights(a.id).some(d => (data.level(d.device_id) || 0) > 0);
     const photo = !!H.roomPhotoURL(a.id);
@@ -38,16 +19,17 @@ export function view(c) {
     const lights = H.roomLights(a.id).length > 0;
     const L = lit ? roomLight(c, a.id) : null;
     // A room with no photograph shows its illustration, whose lamps are its lights: the illustration is the room's
-    // light there, so the veil, the warmth and the glow a photograph needs are left off.
+    // light there, so the veil and the warmth a photograph needs are left off.
     return `<div class="room-big ${photo ? 'photo' : 'scene'} ${lit ? 'lit' : ''}" data-go="room/${esc(a.id)}" role="link" aria-label="${esc(a.name)}">
       ${roomPicture(c, a.id, a.name, 'card')}
       ${photo ? `<span class="rm-veil" aria-hidden="true"></span>
-      ${lights ? `<span class="rm-warm" aria-hidden="true" style="--warm:${L ? (0.1 * L.level / 100).toFixed(3) : 0}"></span>${cardGlow(c, a.id, night)}` : ''}` : ''}
+      ${lights ? `<span class="rm-warm" aria-hidden="true" style="--warm:${L ? (0.1 * L.level / 100).toFixed(3) : 0}"></span>` : ''}` : ''}
       <span class="nm nm-cut">${esc(a.name)}</span><span class="vl" data-xf="standard">${esc(roomStatus(c, a.id))}</span>
       ${canToggle ? `<button class="pwr" data-act="room-toggle" data-id="${esc(a.id)}" aria-label="${lit ? 'Turn off' : 'Turn on'} ${esc(a.name)}">${icon('power', 20, 2)}</button>` : ''}
     </div>`;
   };
   return `<div class="rooms">
+    ${houseTop(c, 'rooms-light')}
     <header class="rooms-head bar">
       <h1 class="t-h1 bar-t">Rooms</h1>
       <button class="hdr-btn a1" data-act="room-new" aria-label="Add a room">${icon('plus', 22, 1.7)}</button>

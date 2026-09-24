@@ -3,7 +3,8 @@
 // pages hang off a light as #light/<id>/<page>.
 import { track } from '/ui/gesture.js';
 import { CasetaDaylight } from '/data/index.js';
-import { glowHTML, setGlow, whiteStops, colourStops } from '/ui/glow.js';
+import { lightHTML, setLight } from '/ui/glow.js';
+import { artInline, loadArt } from '/ui/art.js';
 import { endsMs, pinButton } from '/ui/screens/parts.js';
 import { sheets as lookSheets, actions as lookActions } from '/ui/screens/looks.js';
 import { about, actions as aboutActions } from '/ui/screens/about.js';
@@ -30,7 +31,6 @@ const TILE_SWATCHES = ['#FF5A4E', '#FFC24A', '#4FD39A', '#4C8DFF', '#A66BFF'];
 const CX = 170, CY = 170, R = 150;
 function arcPoint(p) { const a = Math.PI * (1 - p / 100); return [CX + R * Math.cos(a), CY - R * Math.sin(a)]; }
 function arcPath(p) { const [x, y] = arcPoint(p); return `M20 170 A150 150 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)}`; }
-const rgba = (h, a) => { const x = String(h).replace('#', ''); return `rgba(${[0, 2, 4].map(i => parseInt(x.slice(i, i + 2), 16)).join(',')},${a})`; };
 
 // ---------- the lamp's own light (v7 screen 3) ----------
 // What colour a lamp's light is: its white on the ramp, or its colour. A lamp that has never said (a Caseta dimmer)
@@ -48,54 +48,72 @@ export function nightNow(c) {
   const hm = c.RT.nowHm(), ns = s.night_start || '22:00', ne = s.night_end || '06:30';
   return ns < ne ? hm >= ns && hm < ne : hm >= ns || hm < ne;
 }
-// The strength of a light at level v, over its strength at 75%: the filament and the floor pool follow the halo's
-// own curve (A lighting system, 3), so at 20% everything is at the 0.57 the file's dial demo shows.
-const strength = v => Math.min(1, (0.35 + 0.65 * Math.max(0, v) / 100) / 0.84);
-// The halo (three layers, hero scale), the pool of light on the floor under the lamp, and the filament that lights
-// the bulb from inside. All three are drawn from the light's real level and colour; off draws none of them.
-function lampLight(c, id, lv, tone) {
-  const st = tone.hex ? colourStops(tone.hex) : whiteStops(tone.kelvin);
-  const glow = glowHTML({ level: lv, ...tone, ctx: 'hero', y: 112, name: 'lamp', night: nightNow(c) })
-    // a new colour crossfades, it never slides (motion.js carries data-xf over the dimmer)
-    .replace('<span class="glow', '<span data-xf="" class="glow');
-  return `<span class="halo lamp-halo" aria-hidden="true">${glow}<i class="lamp-pool" style="${poolStyle(lv, st)}"></i></span>`;
+// The lamp's own light: one soft light centred on the lamp, in its colour and as strong as its level (glow.js,
+// lightHTML), and nothing at all when it is off. No halo rings, no pool on the floor, no filament: the owner asked for
+// a single source that radiates out very subtly.
+function lampLight(c, lv, tone) {
+  return lightHTML({ kind: 'lamp', level: lv, ...tone, name: 'lamp', night: nightNow(c) });
 }
-function poolStyle(lv, st) { return `--pool-w:${Math.round(120 + 180 * lv / 100)}px;--pool-c:${rgba(st.body, (0.5 * strength(lv)).toFixed(3))}`; }
-function filamentHTML(lv, tone) {
-  const core = tone.hex ? colourStops(tone.hex).core : '#FFF1DC';
-  return `<i class="lamp-filament" aria-hidden="true" style="--fil-c:${rgba(core, 0.45)};--fil-o:${lv > 0 ? strength(lv).toFixed(3) : 0}"></i>`;
-}
-// Repaint the light for level v in place, so its layers ride their own transitions (and none at all under a finger,
-// where the light is locked to it: light.css).
+// Repaint the light for level v in place, so it rides its own transition (and none at all under a finger, where the
+// light is locked to it: light.css).
 function paintLight(page, v) {
   if (!page) return;
   const tone = page.dataset.hex ? { hex: page.dataset.hex } : { kelvin: Number(page.dataset.kelvin) || 2700 };
-  setGlow(page.querySelector('[data-glow="lamp"]'), { level: v, ...tone, ctx: 'hero', night: page.dataset.night === '1' });
-  const st = tone.hex ? colourStops(tone.hex) : whiteStops(tone.kelvin);
-  const pool = page.querySelector('.lamp-pool'); if (pool) pool.setAttribute('style', poolStyle(v, st));
-  const fil = page.querySelector('.lamp-filament'); if (fil) fil.style.setProperty('--fil-o', v > 0 ? strength(v).toFixed(3) : 0);
+  setLight(page.querySelector('[data-light="lamp"]'), { level: v, ...tone, night: page.dataset.night === '1' });
 }
-function dialHTML(c, lv, tone, label) {
+
+// The drawing at the top of a device's page, sized to what it is: a table lamp, a desk lamp, a sconce or a bulb 72
+// tall, a floor lamp 88, a pendant or a chandelier 80 hanging from the top of the screen, a strip a 120 x 16 bar, a
+// fan 80, a shade's window 88 (the owner found the old 180 far too big for most lights). [width, height, hangs, and
+// where the drawing ends, as a share of its height, when that is well short of its box: a ceiling fan's blades are in
+// its top half, so it rests on the name by its blades rather than by the empty half under them]
+const HERO = {
+  'light-floor-lamp': [88, 88], 'light-torchiere': [88, 88], 'light-arc-lamp': [88, 88], 'light-tree-lamp': [88, 88],
+  'light-pendant': [80, 80, true], 'light-chandelier': [80, 80, true],
+  'light-ceiling-fan': [80, 80, false, 0.5], 'lutron-rollershades': [88, 88], 'light-tape-light': [120, 16],
+};
+// Where it sits: resting on the room's name 14 above it, except a hanging one, which hangs between the header's
+// circles from just under the status bar. The name, the title and everything under them move up together by what the
+// drawing gave back, up to 56 (80 under a hanging one, which is out of their way), keeping the drawing clear of the
+// header's circles and leaving no gap in the page. --lamp-y is where the light is centred: the middle of the drawing,
+// or a hanging one's shade, low in it.
+const LIFT = 56, HANG_LIFT = 80, HANG_TOP = 16;
+function heroGeo(art) {
+  const [w, h, hangs, ends = 1] = HERO[art] || [72, 72];
+  const lift = hangs ? HANG_LIFT : Math.min(LIFT, 180 - h);
+  const top = hangs ? HANG_TOP : Math.round(226 - lift - h * ends);
+  const y = hangs ? top + h * 0.6 : top + h * ends / 2;
+  return { w, h, lift, top, y, style: `--art-w:${w}px;--art-h:${h}px;--art-top:${top}px;--lift:${lift}px;--lamp-y:${Math.round(y)}px` };
+}
+for (const n of [...Object.keys(HERO), 'light-table-lamp', 'light-desk-lamp', 'light-bedside-lamp', 'light-reading-lamp', 'light-wall-sconce',
+  'light-downlight', 'light-track-light', 'light-puck-lights', 'light-porch-lantern', 'lutron-lamps', 'lutron-dimmer']) loadArt(n);
+// A strip or a cove is a bar of light, drawn in the house's icon line: its body and the points of light along it.
+// Anything else is its own drawing, inline so its line keeps the house's weight at this size (art.js).
+function heroArt(c, art) {
+  if (art !== 'light-tape-light') {
+    const [w, h] = HERO[art] || [72, 72];
+    // (the drawings are fetched when this module loads; one not here yet is the plain image this once)
+    return artInline(art, w, h) || `<img class="hero-art" src="${c.artSrc(art)}" alt="">`;
+  }
+  const dots = [24, 42, 60, 78, 96].map(x => `<circle cx="${x}" cy="8" r="1.5" fill="white"/>`).join('');
+  return `<svg class="hero-art bar" viewBox="0 0 120 16" width="120" height="16" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="117" height="13" rx="6.5" stroke="white" stroke-width="2.75"/>${dots}</svg>`;
+}
+function dialHTML(c, lv, tone) {
   const { icon } = c;
   const [kx, ky] = arcPoint(lv);
-  // The arc is the lamp's own light: copper for a white, as built; a colour lamp's arc runs from its tint's glow
-  // through the colour to its deep stop, so the dial is lit by the lamp it sets.
-  const st = tone.hex ? colourStops(tone.hex) : null;
-  const stops = st ? [st.core, tone.hex, st.wash] : ['#F6E3CF', '#E8A774', '#D98A4E'];
-  const body = st ? tone.hex : whiteStops(tone.kelvin).body;
+  // The arc is a flat fill of the lamp's own light: copper for a white, a colour lamp's colour for a colour lamp.
+  const arc = tone.hex || '#D98A4E';
+  // The label is only ever "Brightness": the light's name is the page's title, and a long one under the dial was cut.
   return `<div class="dial shifted ${lv >= 50 ? 'bright' : ''}" data-drag="dial" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}"
-    style="--kx:${kx.toFixed(1)}px;--ky:${ky.toFixed(1)}px;--kglow:${rgba(body, 0.3)};--numglow:${rgba(body, 0.25)}">
-    <span class="kglow" aria-hidden="true"></span>
+    style="--kx:${kx.toFixed(1)}px;--ky:${ky.toFixed(1)}px">
     <svg viewBox="0 0 340 190" width="340" height="190" aria-hidden="true">
-      <defs><linearGradient id="dialgrad" x1="20" y1="170" x2="150.919" y2="-53.421" gradientUnits="userSpaceOnUse">
-        <stop stop-color="${stops[0]}"/><stop offset=".45" stop-color="${stops[1]}"/><stop offset="1" stop-color="${stops[2]}"/></linearGradient></defs>
       <path class="trk" d="M20 170 A150 150 0 0 1 320 170"/>
-      <path class="fil" d="${arcPath(lv)}" stroke="url(#dialgrad)" ${lv > 0 ? '' : 'visibility="hidden"'}/>
+      <path class="fil" d="${arcPath(lv)}" stroke="${c.esc(arc)}" ${lv > 0 ? '' : 'visibility="hidden"'}/>
       <circle class="kn" cx="${kx.toFixed(2)}" cy="${ky.toFixed(2)}" r="12"/>
     </svg>
     <span class="ktouch" aria-hidden="true"></span>
     <span class="kgrab" aria-hidden="true"></span>
-    <div class="lbl">${c.esc(label || 'Brightness')}</div>
+    <div class="lbl">Brightness</div>
     <div class="num"><b>${lv}</b><span>%</span></div>
     <button class="nudge minus" data-act="nudge" data-by="-5" aria-label="Dimmer">${icon('minus', 20, 1.7)}</button>
     <span class="lo">${icon('moon', 22, 1.7)}</span><span class="hi">${icon('sun', 22, 1.7)}</span>
@@ -160,8 +178,6 @@ function lightView(c, d) {
   const tone = toneOf(c, id);
   // Off, the dial still shows where the light will come back to, greyed (the level On gives it: the evening's, at night)
   const dialAt = on ? lv : Math.max(1, Math.min(100, Math.round(c.onLevel(id, `d:${id}`)) || 100));
-  // following the day, the halo is the curve's white right now, and the line under Brightness says which
-  const followLine = on && following && !c.DAY.followPaused(id) && col && col.mode === 'ct' && col.kelvin ? `Following the day · ${Math.round(col.kelvin / 100) * 100}K now` : '';
   const looks = [];
   if (d.ct) {
     const k = showingWhite ? Math.round(col.kelvin / 100) * 100 : null;
@@ -181,10 +197,10 @@ function lightView(c, d) {
   const shift = looks.length ? 0 : -144;
   // an on-or-off switch has no level: its light is either whole or none
   const shown = dim ? lv : on ? 100 : 0;
-  return `<div class="dev ${on ? 'on' : ''}" style="--shift:${shift}px" ${tone.hex ? `data-hex="${esc(tone.hex)}"` : `data-kelvin="${Math.round(tone.kelvin)}"`} data-night="${nightNow(c) ? 1 : 0}">
-    ${lampLight(c, id, shown, tone)}
-    <img class="hero-art" src="${c.artSrc(c.deviceArt(c, d))}" alt="">
-    ${filamentHTML(shown, tone)}
+  const art = c.deviceArt(c, d), geo = heroGeo(art);
+  return `<div class="dev ${on ? 'on' : ''}" style="--shift:${shift}px;${geo.style}" ${tone.hex ? `data-hex="${esc(tone.hex)}"` : `data-kelvin="${Math.round(tone.kelvin)}"`} data-night="${nightNow(c) ? 1 : 0}">
+    ${lampLight(c, shown, tone)}
+    ${heroArt(c, art)}
     ${header(c, d)}
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
     <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>
@@ -195,7 +211,7 @@ function lightView(c, d) {
     </div>
     ${looks.length ? `<div class="looks">${looks.join('')}</div>` : ''}
     <div class="feats shifted">${feats.join('')}</div>
-    ${dim ? dialHTML(c, dialAt, tone, followLine) : ''}
+    ${dim ? dialHTML(c, dialAt, tone) : ''}
   </div>`;
 }
 
@@ -208,9 +224,8 @@ function fanView(c, d) {
   const tl = on ? timerLine(c, id) : null;
   const bars = FAN.map(([k, label], i) => `<button class="step ${i <= idx ? 'fill' : ''} ${i === idx ? 'sel' : ''}" data-act="fan-speed" data-speed="${k}" style="left:calc(50% - 146px + ${i * 62}px);top:${250 - i * 32}px;height:${40 + i * 32}px" aria-label="${FAN_WORD[k]}" aria-pressed="${i === idx}"></button>
     <span class="steplbl ${i === idx ? 'sel' : ''}" style="left:calc(50% - 124px + ${i * 62}px)">${label}</span>`).join('');
-  return `<div class="dev is-fan ${on ? 'on' : ''}">
-    <span class="halo"></span>
-    <img class="hero-art" src="${c.artSrc('light-ceiling-fan')}" alt="">
+  return `<div class="dev is-fan ${on ? 'on' : ''}" style="${heroGeo('light-ceiling-fan').style}">
+    ${heroArt(c, 'light-ceiling-fan')}
     ${header(c, d)}
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
     <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>
@@ -239,9 +254,8 @@ function shadeView(c, d) {
   const id = d.device_id;
   const open = Math.max(0, Math.min(100, data.level(id) ?? 0));
   const moving = c.ui.moving && c.ui.moving[id] && Date.now() - c.ui.moving[id] < 30000;
-  return `<div class="dev is-shade ${open > 0 ? 'on' : ''}" style="--down:${100 - open}">
-    <span class="halo"></span>
-    <img class="hero-art" src="${c.artSrc('lutron-rollershades')}" alt="">
+  return `<div class="dev is-shade ${open > 0 ? 'on' : ''}" style="--down:${100 - open};${heroGeo('lutron-rollershades').style}">
+    ${heroArt(c, 'lutron-rollershades')}
     ${header(c, d)}
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
     <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>

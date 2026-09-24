@@ -1,6 +1,7 @@
-// v7 · home: the house, lit (1), rooms whose light pools (2), Goodnight putting the page to sleep (10) and the
-// welcome light's countdown ring (12). Read off the running app: which pools are drawn and how big, what each
-// animation's duration and curve is (document.getAnimations()), and what a person reads.
+// v7 · home: the house, lit (1: one soft light from the top of the screen, calm and flat), rooms lit by their own
+// lamps (2), Goodnight putting the page to sleep (10) and the welcome light's countdown ring (12). Read off the running
+// app: where the light is and how strong, what each animation's duration and curve is (document.getAnimations()), and
+// what a person reads.
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -38,50 +39,86 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // a clean start: every light off, the Kitchen (20) and the Hall (23) the two rooms this test lights
   await cmd({ type: 'level', target: 'h:all', level: 'off' }); await wait(1400);
 
-  // ---- 1 · all off: no field at all, "All off", no slider
+  // ---- 1 · all off: no light at all, "All off", no slider
   await go('home');
-  check('all off: no pool is lit', (await C(() => document.querySelectorAll('.house-light .glow:not(.off)').length)) === 0, await C(() => document.querySelectorAll('.house-light .glow:not(.off)').length));
+  // the page's one light (glow.js, lightHTML): lit or not, where it is, its colour and strength
+  const light = () => C(() => {
+    const home = document.querySelector('.home'), g = home.querySelector('.house-light');
+    if (!g) return null;
+    const i = g.querySelector('i'), ir = i.getBoundingClientRect(), hr = home.getBoundingClientRect();
+    return {
+      off: g.classList.contains('off'), op: Number(getComputedStyle(g).opacity), lights: home.querySelectorAll('.onelight').length,
+      pools: home.querySelectorAll('.hl-pool, .house-light .glow').length, cx: Math.round(ir.left + ir.width / 2 - hr.left - hr.width / 2),
+      cy: Math.round(ir.top + ir.height / 2 - hr.top), r: ir.width / 2 / hr.width, colour: g.querySelector('.ol-c').style.getPropertyValue('--l-c').replace(/\s/g, ''),
+      blend: getComputedStyle(i).mixBlendMode, level: window.__copper.H.houseLevel(),
+    };
+  });
+  // what the lit lamps add up to, by glow.js's own mixing, to hold the page's light to
+  const blend = () => C(async () => {
+    const c = window.__copper, m = await import('/ui/glow.js');
+    const lamps = c.H.litLights().map(d => { const col = (c.S.states[d.device_id] || {}).color, lv = c.data.level(d.device_id); return d.color && col && col.mode === 'xy' && col.hex ? { level: lv, hex: col.hex } : { level: lv, kelvin: col && col.mode === 'ct' && col.kelvin ? col.kelvin : d.ct || d.color ? 2700 : 2200 }; });
+    const b = m.blendLight(lamps); if (!b) return null;
+    const h = b.hex.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
+  });
+  const strength = lv => 0.35 + 0.65 * lv / 100;
+  const l0 = await light();
+  check('all off: the page\'s light is out (drawn, at no strength)', l0 && l0.off && l0.op === 0, l0);
   check('all off: the headline reads "All off"', (await page.textContent('.house-head')).trim() === 'All off', await page.textContent('.house-head'));
   check('all off: no slider, just the held "Lights back on" or "All on"', !(await page.$('.hbar')) && !!(await page.$('.house-pills.one [data-hold="house-on"]')));
   await page.screenshot({ path: 'v7-home-off.png' });
 
-  // ---- 1 · one room lit: one pool, in its fixed place, sized by its level, blended screen
-  await cmd({ type: 'level', target: 'a:20', level: 60 }); await wait(1400);
-  const pools = await C(() => [...document.querySelectorAll('.house-light .hl-pool')].map(p => ({ on: !!p.querySelector('.glow:not(.off)'), left: p.style.left, top: p.style.top, body: Math.round(p.querySelector('.g-body').getBoundingClientRect().width), blend: getComputedStyle(p.querySelector('.g-body')).mixBlendMode })));
-  const lit = pools.filter(p => p.on);
-  check('one room lit: exactly one pool is lit', lit.length === 1, pools);
-  // the Kitchen is the first lit room in the Rooms tab order, so it takes slot 1 (104, 64): the pool scale at 60%
-  // is 160 + 200 x sqrt(.6) = 315 (the body may be mid-swell, at most 3% over)
-  check('it sits in its slot and is sized by the level (pool D 315 at 60%)', lit[0] && /25\.24%/.test(lit[0].left) && lit[0].top === '64px' && lit[0].body >= 300 && lit[0].body <= 330, lit[0]);
-  check('its layers blend screen', lit[0] && lit[0].blend === 'screen', lit[0] && lit[0].blend);
+  // ---- 1 · one room lit: one light from the top centre of the screen, in the colour of what is on, as strong as the
+  // house is bright; it comes up on the dimmer (opacity, and 0.85 to 1)
+  await cmd({ type: 'level', target: 'a:20', level: 60 }); await wait(60);
+  const rise = (await anims('.house-light')).filter(a => a.css !== 'CSSAnimation');
+  check('the light comes up on the dimmer, 0.4 s EASE_IN_AND_OUT', rise.some(a => a.props.includes('opacity') && a.dur === 400 && a.ease === 'ease-in-out'), rise.map(a => [a.cls, a.props.join('+'), a.dur, a.ease]));
+  check('and grows from 0.85', rise.some(a => a.props.includes('transform') && /0\.85/.test(JSON.stringify(a.from))), rise.filter(a => a.props.includes('transform')).map(a => a.from));
+  await wait(1400);
+  const l1 = await light();
+  check('one room lit: one light on the page and nothing else (no pools)', l1 && !l1.off && l1.lights === 1 && l1.pools === 0 && l1.blend === 'screen', l1);
+  check('it is at the top centre, just above the top edge, its radius 70% of the screen\'s width', l1 && Math.abs(l1.cx) <= 1 && l1.cy === -12 && Math.abs(l1.r - 0.7) < 0.01, l1);
+  check(`its strength is the house's level on the house's curve (${l1 && l1.level}%)`, l1 && Math.abs(l1.op - strength(l1.level)) < 0.01, l1);
+  const want1 = await blend();
+  check('its colour is the warm white of what is on', l1 && want1 && l1.colour === want1, { got: l1 && l1.colour, want: want1 });
   const drift = (await anims('.house-light')).filter(a => a.css === 'CSSAnimation');
-  check('it drifts on the ambient 8 s, ease in and out, for as long as it is lit', drift.some(a => a.name === 'hl-drift' && a.dur === 8000 && a.iter === Infinity) && drift.some(a => a.name === 'hl-swell' && a.dur === 8000), drift.map(a => [a.name, a.dur, a.iter]));
-  const ease = await C(() => getComputedStyle(document.querySelector('.hl-pool')).animationTimingFunction);
+  check('it drifts on the ambient 8 s, ease in and out, for as long as it is lit', drift.some(a => a.name === 'light-drift' && a.dur === 8000 && a.iter === Infinity), drift.map(a => [a.name, a.dur, a.iter]));
+  const ease = await C(() => getComputedStyle(document.querySelector('.house-light i')).animationTimingFunction);
   check('the drift eases in and out each way', ease === 'ease-in-out', ease);
   // the frosted card: 88% with a background blur, and no glow of its own
   const card = await C(() => { const el = document.querySelector('.card.house'); const cs = getComputedStyle(el); return { bg: cs.backgroundColor, blur: cs.backdropFilter || cs.webkitBackdropFilter, before: getComputedStyle(el, '::before').content, lit: el.classList.contains('lit') }; });
   check('the house card is frosted glass: #262626 at 88%, blurred', card.bg === 'rgba(38, 38, 38, 0.88)' && /blur\(10px\)/.test(card.blur), card);
   check('and its old copper glow is gone', card.lit && (card.before === 'none' || card.before === 'normal'), card.before);
   check('the headline reads "1 on · N%" or "2 on · N%"', /^\d+ on · \d+%$/.test((await page.textContent('.house-head')).replace(/\s+/g, ' ').trim()), await page.textContent('.house-head'));
-  // the field never takes a touch
-  check('the field takes no touch', (await C(() => getComputedStyle(document.querySelector('.house-light')).pointerEvents)) === 'none');
+  // the house bar's fill is flat copper
+  const fill = await C(() => { const f = document.querySelector('.hbar .fill'); return f && { img: getComputedStyle(f).backgroundImage, col: getComputedStyle(f).backgroundColor }; });
+  check('the house bar\'s fill is a flat copper, no gradient', fill && fill.img === 'none' && fill.col === 'rgb(217, 138, 78)', fill);
+  // the light never takes a touch
+  check('the light takes no touch', (await C(() => getComputedStyle(document.querySelector('.house-light')).pointerEvents)) === 'none');
 
-  // ---- 1 · a second room arriving from elsewhere grows its pool on the dimmer: opacity and 0.85 to 1, 0.4 s
+  // ---- 1 · a second room arriving from elsewhere: still one light, whose strength moves to the house's level on the
+  // dimmer (0.4 s)
   await cmd({ type: 'level', target: 'a:23', level: 40 }); await wait(60);
   const grow = (await anims('.house-light')).filter(a => a.css !== 'CSSAnimation');
-  check('a room coming on: its pool fades in on the dimmer, 0.4 s EASE_IN_AND_OUT', grow.some(a => a.props.includes('opacity') && a.dur === 400 && a.ease === 'ease-in-out'), grow.map(a => [a.cls, a.props.join('+'), a.dur, a.ease]));
-  check('and scales from 0.85', grow.some(a => a.props.includes('transform') && /0\.85/.test(JSON.stringify(a.from))), grow.filter(a => a.props.includes('transform')).map(a => a.from));
+  check('a room coming on: the light moves to the house\'s new level on the dimmer, 0.4 s EASE_IN_AND_OUT', grow.some(a => a.props.includes('opacity') && a.dur === 400 && a.ease === 'ease-in-out'), grow.map(a => [a.cls, a.props.join('+'), a.dur, a.ease]));
   await wait(1200);
-  check('two rooms lit: two pools', (await C(() => document.querySelectorAll('.house-light .glow:not(.off)').length)) === 2);
+  const l2 = await light();
+  check('two rooms lit: still one light, at the house\'s level', l2 && l2.lights === 1 && !l2.off && Math.abs(l2.op - strength(l2.level)) < 0.01, l2);
   await page.screenshot({ path: 'v7-home-lit.png' });
-  // the header copy keeps its contrast: the greeting and the name stay on top of the field
+  // the header copy keeps its contrast: the greeting and the name stay on top of the light
   const z = await C(() => [getComputedStyle(document.querySelector('.home-head')).zIndex, getComputedStyle(document.querySelector('.house-light')).zIndex]);
   check('the words sit above the light', Number(z[0]) > Number(z[1]), z);
 
   // ---- 2 · Rooms: a room with no photograph shows its illustration, whose lamps are the room's lights
   // (roomscene.js): a lit room's lamps glow, a room that is off is asleep (dim, cool, no light drawn), and turning a
-  // room on lights its lamps on the dimmer. (A room with a photograph keeps the glow that blooms from its power
-  // button: roomopen_test and roomart_test hold photographed cards.)
+  // room on lights its lamps on the dimmer. The page's one light is the house's, at the top; a card draws no glow.
+  await go('rooms');
+  // the page's one light is the house's, from the top; the cards draw none of their own
+  const rl = await C(() => { const p = document.querySelector('.rooms'), g = p.querySelector(':scope > .rooms-light'); return { lights: p.querySelectorAll('.onelight').length, cardGlows: p.querySelectorAll('.room-big .glow').length, lit: g && !g.classList.contains('off'), op: g && Number(g.style.opacity), level: window.__copper.H.houseLevel() }; });
+  check('Rooms: one light from the top at the house\'s level, no glow on any card', rl.lights === 1 && !rl.cardGlows && rl.lit && Math.abs(rl.op - strength(rl.level)) < 0.01, rl);
+  // and a room's page has its own: its lights that are on, at their mean
+  await go('room/20');
+  const rp = await C(() => { const p = document.querySelector('.room'), g = p.querySelector(':scope > .room-light'); const c = window.__copper; const ls = c.H.roomLights('20').map(d => c.data.level(d.device_id) || 0).filter(v => v > 0); return { lights: p.querySelectorAll('.onelight').length, lit: g && !g.classList.contains('off'), op: g && Number(g.style.opacity), mean: ls.reduce((a, v) => a + v, 0) / ls.length }; });
+  check('a room: one light from the top at its lights\' mean', rp.lights === 1 && rp.lit && Math.abs(rp.op - strength(rp.mean)) < 0.01, rp);
   await go('rooms');
   // a card's lamps: the strongest glow drawn, and the veil a dark room sleeps under
   const cardLight = sel => C(s => { const el = document.querySelector(s); const rl = [...el.querySelectorAll('.rs-svg [data-l]')].filter(p => p.classList.contains('rl')); const veil = el.querySelector('.rs-svg .rs-veil'); return { scene: el.classList.contains('scene'), lit: el.classList.contains('lit'), glow: Math.max(0, ...rl.map(p => Number(p.style.opacity) || 0)), veil: veil ? Number(veil.style.opacity) : null }; }, sel);
@@ -162,15 +199,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await go('home');
   const litBefore = await C(() => window.__copper.H.litLights().map(d => [d.device_id, window.__copper.data.level(d.device_id)]));
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
-  const before = await C(() => document.querySelectorAll('.house-light .glow:not(.off)').length);
+  const before = await light();
   const gb = await page.locator('[data-hold="goodnight"]').boundingBox();
   await page.mouse.move(gb.x + 22, gb.y + 22); await page.mouse.down(); await wait(1150); await page.mouse.up();
   await wait(120);
-  const t1 = await C(() => ({ night: !!document.querySelector('.gn-night'), lit: document.querySelectorAll('.house-light .glow:not(.off)').length, houseLit: window.__copper.H.litLights().length }));
+  const t1 = await C(() => ({ night: !!document.querySelector('.gn-night'), op: Number(document.querySelector('.house-light').style.opacity), off: document.querySelector('.house-light').classList.contains('off'), houseLit: window.__copper.H.litLights().length }));
   check('held a second: everything goes off at once', t1.houseLit === 0, t1);
-  check('but the page goes dark room by room: one pool out, one still lit 0.12 s in', t1.night && before === 2 && t1.lit === 1, { before, ...t1 });
+  check('but the page goes dark room by room: 0.12 s in, the light is down to the room still lit', t1.night && before && !before.off && !t1.off && t1.op > 0 && t1.op < before.op, { before, ...t1 });
   await wait(400);
-  check('0.24 s later the next room is out too', (await C(() => document.querySelectorAll('.house-light .glow:not(.off)').length)) === 0);
+  check('0.24 s later the next room is out too, and the light with it', (await C(() => document.querySelector('.house-light').classList.contains('off'))));
   const veilA = await anims('.gn-night');
   check('then the night veil closes on the night fade, 1.6 s EASE_IN_AND_OUT, to 0.97', veilA.some(a => /gn-veil/.test(a.cls) && a.dur === 1600 && a.ease === 'ease-in-out' && Math.abs(Number(a.to.opacity) - 0.97) < 0.001), veilA.map(a => [a.cls, a.dur, a.to.opacity]));
   await wait(2300);
@@ -210,11 +247,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await C(() => { const c = window.__copper; c.conn = c.__conn; delete c.__conn; c.render(); });
   await cmd({ type: 'level', target: 'h:all', level: 'off' }); await wait(1000);
 
-  // ---- reduced motion: the field is still drawn and still shows its light; nothing drifts
+  // ---- reduced motion: the light is still drawn and still shows; nothing drifts
   const rm = await open({ reducedMotion: 'reduce' });
   await rm.page.goto(root + '#home'); await rm.page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 }); await wait(900);
   await rm.page.evaluate(() => window.__copper.run({ type: 'level', target: 'a:20', level: 60 })); await wait(1400);
-  const rmv = await rm.page.evaluate(() => ({ pools: document.querySelectorAll('.house-light .glow:not(.off)').length, long: document.getAnimations().filter(a => { const t = a.effect.getTiming(); return Number(t.duration) > 300 || t.iterations === Infinity && Number(t.duration) > 1; }).length }));
+  const rmv = await rm.page.evaluate(() => ({ pools: document.querySelectorAll('.house-light:not(.off)').length, long: document.getAnimations().filter(a => { const t = a.effect.getTiming(); return Number(t.duration) > 300 || t.iterations === Infinity && Number(t.duration) > 1; }).length }));
   check('reduced motion: the room\'s light is still drawn, and nothing drifts', rmv.pools === 1 && rmv.long === 0, rmv);
   await rm.page.evaluate(() => window.__copper.run({ type: 'level', target: 'h:all', level: 'off' })); await wait(800);
   await rm.ctx.close();
