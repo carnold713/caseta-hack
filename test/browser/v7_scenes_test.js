@@ -64,15 +64,20 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const countBefore = await C(() => document.querySelector('.room-title .count').textContent.trim());
   await clearCmds();
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
+  // the ring starts 0.12 s after the press, counted from the tap itself (room.js restates its delay at every redraw,
+  // so the delay on the element depends on when the last redraw ran; where it starts does not). Measured from before
+  // the test's tap, which the browser delivers a good 0.1 s later: never before the 0.12 s, and never much after.
+  await C(() => { window.__tapAt = performance.now(); });
   await page.tap(chip); await wait(60);
-  const early = await C(() => {
+  const early = await C(async () => {
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const ch = document.querySelector('.room-chips .chip[data-act="scene"]');
     const wave = document.querySelector('.wv-wave');
-    const wa = wave ? wave.getAnimations().map(a => ({ n: a.animationName, d: Math.round(a.effect.getTiming().duration), delay: Math.round(a.effect.getTiming().delay) })) : [];
+    const wa = wave ? wave.getAnimations().map(a => ({ n: a.animationName, d: Math.round(a.effect.getTiming().duration), delay: Math.round(a.effect.getTiming().delay), at: a.startTime == null ? null : Math.round(a.startTime + a.effect.getTiming().delay - window.__tapAt) })) : [];
     return { current: ch.classList.contains('current'), wave: !!wave, spark: !!document.querySelector('.wv-spark .glow'), wa, was: (document.querySelector('.count .wv-was') || {}).textContent };
   });
   check('6: the tapped chip is copper at once, before its lights answer', early.current, early);
-  check('6: a ring of light leaves the chip, 0.36 s at the wave token, after the press (0.12 s)', early.wave && early.spark && early.wa.some(a => a.n === 'wv-grow' && a.d === 360 && a.delay <= 120 && a.delay >= 40), early.wa);
+  check('6: a ring of light leaves the chip, 0.36 s at the wave token, after the press (0.12 s)', early.wave && early.spark && early.wa.some(a => a.n === 'wv-grow' && a.d === 360 && a.delay <= 120 && a.at != null && a.at >= 100 && a.at <= 350), early.wa);
   check('6: the count holds what it said', early.was === countBefore, early.was);
   check('6: the scene is run once, on the house', (await cmds()).filter(a => a.type === 'preset').length === 1, await cmds());
   await wait(260);
