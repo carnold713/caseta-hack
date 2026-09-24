@@ -26,7 +26,10 @@ export function about(c, r) {
       <button class="choice ${role === k ? 'sel' : ''}" data-act="about-role" data-role="${k}" aria-pressed="${role === k}">
         <span class="t">${t}</span><span class="d">${s}</span>${role === k ? `<span class="tick">${icon('check', 16, 2)}</span>` : ''}</button>`).join('')}</div>`;
     const kind = c.H.lightKind(id);
-    const place = (c.ui.aboutPlace && c.ui.aboutPlace[id]) || (kind ? K.KINDS[kind].place : null);
+    // a Nanoleaf with no kind opens on the wall's kinds, where its light panels are: the room's picture already
+    // draws it as panels, so this is where a person looks to confirm it
+    const nano = String(id).startsWith('nanoleaf_');
+    const place = (c.ui.aboutPlace && c.ui.aboutPlace[id]) || (kind ? K.KINDS[kind].place : nano ? 'wall' : null);
     body += `<div class="t-over sec-s what-is">What it is</div>
       <div class="chip-wrap">${K.PLACES.map(p => `<button class="chip sm" data-act="about-place" data-place="${p.id}" aria-pressed="${place === p.id}">${PLACE_WORD[p.id] || p.name}</button>`).join('')}</div>`;
     if (place) {

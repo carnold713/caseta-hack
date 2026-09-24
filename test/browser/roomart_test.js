@@ -1,5 +1,5 @@
 // A room's illustration (web/ui/roomscene.js): a room with no photograph shows a drawn room whose lamps are its own
-// lights. On its Rooms card and its page it draws one fixture per light (up to six) of the light's kind; each lamp's
+// lights. On its Rooms card and its page it draws one fixture per light (up to eight) of the light's kind; each lamp's
 // glow follows its light (off, on, level, colour) and fades on the dimmer rather than jumping; a fan turns while it
 // is on; a photograph still wins; and the room still opens from its card without its picture rescaling.
 // Needs a colour lamp: run it after hue_test, hue_color_test and nanoleaf_test (the suite's order does).
@@ -48,7 +48,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const withLights = rooms.filter(r => r.lights.length && !r.photo);
   check(withLights.length >= 2, 'rooms with lights and no photograph to draw', withLights.map(r => r.name));
 
-  // ---- Rooms: every card without a photograph is its illustration, one fixture per light (up to six)
+  // ---- Rooms: every card without a photograph is its illustration, one fixture per light (up to eight)
   await go('rooms');
   const cards = await C(() => [...document.querySelectorAll('#screen .room-big')].map(el => ({ id: el.dataset.go.slice(5), scene: el.classList.contains('scene'), svg: !!el.querySelector('.room-scene > svg.rs-svg'), veil: !!el.querySelector('.rm-veil, .glow, .room-art, .add-photo') })));
   const plain = cards.filter(k => !rooms.find(r => r.id === k.id).photo);
@@ -56,7 +56,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   for (const r of withLights) {
     const fx = await fixtures(`#screen .room-big[data-go="room/${r.id}"]`);
     const drawn = new Set(fx.flatMap(f => f.lamps));
-    check(fx.length === Math.min(r.lights.length, 6) && r.lights.every(id => drawn.has(id)), `${r.name}: one fixture per light, every light drawn`, { lights: r.lights, fx });
+    check(fx.length === Math.min(r.lights.length, 8) && r.lights.every(id => drawn.has(id)), `${r.name}: one fixture per light, every light drawn`, { lights: r.lights, fx });
   }
   // the card shows the middle 180 of the page's 300 tall picture, at the page's scale
   const band = await C(() => { const el = document.querySelector('#screen .room-big.scene'); const b = el.getBoundingClientRect(), s = el.querySelector('.room-scene').getBoundingClientRect(); return { top: Math.round(s.top - b.top), h: Math.round(s.height), w: Math.round(s.width), cw: Math.round(b.width) }; });
@@ -75,17 +75,17 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const kfx2 = await fixtures(`#screen .room-big[data-go="room/${big.id}"]`);
   const of2 = id => (kfx2.find(f => f.lamps.includes(id)) || {}).fx;
   check(of2(k1) === 'sconce' && (!k2 || of2(k2) === 'strip'), 'a sconce on the wall, an under-cabinet light as a strip', kfx2);
-  // many lights share: seven lights in a room draw six fixtures between them
+  // many lights share: nine lights in a room draw eight fixtures between them
   const shared = await C(() => {
     const L = (id, kind) => ({ id, name: 'L' + id, kind, level: 50, kelvin: 2700, hex: null });
     return import('/ui/roomscene.js').then(m => {
-      const svg = m.sceneSVG({ id: 'x', name: 'Living room', kind: 'living', lights: ['ceiling-pendant', 'table-lamp', 'table-lamp', 'floor-lamp', 'wall-sconce', 'table-lamp', 'table-lamp'].map((k, i) => L(String(i + 1), k)), fans: [], shades: [] });
+      const svg = m.sceneSVG({ id: 'x', name: 'Living room', kind: 'living', lights: ['ceiling-pendant', 'table-lamp', 'table-lamp', 'floor-lamp', 'wall-sconce', 'table-lamp', 'table-lamp', 'table-lamp', 'table-lamp'].map((k, i) => L(String(i + 1), k)), fans: [], shades: [] });
       const d = new DOMParser().parseFromString(svg, 'image/svg+xml');
       const g = [...d.querySelectorAll('[data-fx]')];
       return { n: g.length, ids: g.flatMap(x => x.getAttribute('data-lamp').split(' ')).sort(), bytes: svg.length };
     });
   });
-  check(shared.n === 6 && shared.ids.length === 7, 'seven lights share six fixtures, none left out', shared);
+  check(shared.n === 8 && shared.ids.length === 9, 'nine lights share eight fixtures, none left out', shared);
   await C(async ([a, b]) => { const c = window.__copper; const s = c.S.config.settings; delete s.light_kinds[a]; if (b) delete s.light_kinds[b]; await c.save('', { quiet: true }); }, [k1, k2]);
   await wait(600);
 
@@ -94,7 +94,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await go(`room/${r0.id}`);
   const hero = '#screen .room-photo-card';
   check(await C(h => !!document.querySelector(`${h}.scene .room-scene > svg.rs-svg`) && !document.querySelector(`${h} .rp-light`), hero), 'the room page\'s hero is the illustration');
-  check((await fixtures(hero)).length === Math.min(r0.lights.length, 6), 'the page draws the same fixtures', await fixtures(hero));
+  check((await fixtures(hero)).length === Math.min(r0.lights.length, 8), 'the page draws the same fixtures', await fixtures(hero));
   await level(id0, 0); await wait(1000);
   const off = await lamp(hero, id0);
   check(off && off.op === 0, 'off: the lamp is dark, no glow at all', off);

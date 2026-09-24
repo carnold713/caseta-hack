@@ -64,9 +64,12 @@ export function roomModel(c, aid) {
   const lights = c.H.roomLights(aid).slice().sort(byId).map(d => {
     const col = (c.S.states[d.device_id] || {}).color;
     const lv = c.data.level(d.device_id) || 0;
+    // a Nanoleaf carries which panels it is, so it is drawn as those panels until someone says it is something else
+    const nano = String(d.device_id).startsWith('nanoleaf_') || d.type === 'NanoleafLight';
     return {
       id: d.device_id, name: d.name || '', kind: c.H.lightKind(d.device_id), level: d.domain === 'switch' ? (lv > 0 ? 100 : 0) : lv,
       kelvin: kelvinOf(d, col), hex: d.color && col && col.mode === 'xy' && col.hex ? col.hex : null,
+      panel: nano ? panelShape(d.model, d.name) : null,
     };
   });
   const devs = c.data.controllable().filter(d => c.data.devArea(d) === aid).sort(byId);
@@ -121,13 +124,13 @@ function lightOf(lamps) {
 // A kind (kinds.js) is place and fixture; the picture needs only which drawing and where it may go.
 const BY_KIND = {
   'ceiling-flush': 'flush', 'ceiling-downlights': 'down', 'ceiling-pendant': 'pendant', 'ceiling-chandelier': 'chand',
-  'ceiling-track': 'down', 'ceiling-fan': 'fan', 'ceiling-spots': 'down', 'ceiling-tape': 'cove',
-  'wall-sconce': 'sconce', 'wall-picture': 'sconce', 'wall-uplight': 'sconce', 'wall-track': 'down', 'wall-tape': 'cove',
-  'wall-mirror': 'sconce', 'wall-panels': 'sconce', 'window-track': 'shelf', 'window-tape': 'shelf', 'window-pendant': 'pendant',
-  'window-spots': 'down', 'window-string': 'string', 'floor-lamp': 'floor', 'floor-reading': 'floor', 'floor-uplight': 'torch',
-  'floor-torchiere': 'torch', 'bed-lamp': 'table', 'bed-headboard': 'bed', 'bed-reading': 'bed', 'bed-tape': 'underbed',
-  'outside-porch': 'lantern', 'outside-path': 'bollard', 'outside-flood': 'lantern', 'outside-string': 'string',
-  'outside-landscape': 'bollard', 'outside-step': 'bollard',
+  'ceiling-track': 'track', 'ceiling-fan': 'fan', 'ceiling-spots': 'spots', 'ceiling-tape': 'cove',
+  'wall-sconce': 'sconce', 'wall-picture': 'picture', 'wall-uplight': 'uplight', 'wall-track': 'walltrack', 'wall-tape': 'cove',
+  'wall-mirror': 'mirror', 'wall-panels': 'panels', 'window-track': 'wintrack', 'window-tape': 'wintape',
+  'window-pendant': 'winpendant', 'window-spots': 'winspots', 'window-string': 'winstring', 'floor-lamp': 'floor',
+  'floor-reading': 'floor', 'floor-uplight': 'torch', 'floor-torchiere': 'torch', 'bed-lamp': 'table', 'bed-headboard': 'bed',
+  'bed-reading': 'bed', 'bed-tape': 'underbed', 'outside-porch': 'lantern', 'outside-path': 'bollard', 'outside-flood': 'lantern',
+  'outside-string': 'string', 'outside-landscape': 'bollard', 'outside-step': 'bollard',
 };
 const BY_PLACE = { desk: 'desk', table: 'table', cabinet: 'cabinet', shelf: 'shelf' };
 function drawingOfKind(k) {
@@ -136,43 +139,82 @@ function drawingOfKind(k) {
 }
 // a light nobody has given a kind: its name usually says
 const BY_NAME = [
-  [/fan/, 'fan'], [/chandelier/, 'chand'], [/pendant|island/, 'pendant'], [/sconce|vanity|mirror|picture/, 'sconce'],
-  [/\bcans?\b|recess|downlight|pot ?light|spot|track/, 'down'], [/floor|torch|\barc\b/, 'floor'], [/desk|task/, 'desk'],
+  [/nanoleaf|aurora|light ?panels?|\bcanvas\b|hexagons?|\bshapes\b/, 'panels'],
+  [/fan/, 'fan'], [/chandelier/, 'chand'], [/pendant|island/, 'pendant'], [/mirror|vanity/, 'mirror'], [/picture|art light/, 'picture'],
+  [/sconce/, 'sconce'], [/track/, 'track'], [/spot/, 'spots'],
+  [/\bcans?\b|recess|downlight|pot ?light/, 'down'], [/floor|torch|\barc\b/, 'floor'], [/uplight/, 'uplight'], [/desk|task/, 'desk'],
   [/under ?cab|cabinet|counter/, 'cabinet'], [/shelf|cove|strip|tape|\bled\b/, 'shelf'], [/headboard|reading/, 'bed'],
   [/porch|lantern|outdoor|exterior|flood/, 'lantern'], [/path|landscape|garden|step/, 'bollard'], [/string|bistro|fairy/, 'string'],
   [/table|bedside|nightstand|lamp/, 'table'], [/ceiling|overhead|flush|main/, 'flush'],
 ];
 const drawingOfName = name => { const s = String(name || '').toLowerCase(); for (const [re, k] of BY_NAME) if (re.test(s)) return k; return null; };
+// What a light with no kind is drawn as. A Nanoleaf is always a set of panels on the wall, whatever it is called, since
+// that is the only thing Nanoleaf makes that the app can reach; anyone else is read from their name. Nothing here is
+// saved: setting a kind in the app still wins.
+const drawingOfLight = l => drawingOfKind(l.kind) || (l.panel ? 'panels' : null) || drawingOfName(l.name);
+
+// Which panels a set of Nanoleaf panels is, from the model number its controller reports or, failing that, its name:
+// the Light Panels (the Aurora) are triangles, Canvas squares, Shapes hexagons, and Lines a zigzag of bars. The
+// Shapes triangles and mini triangles are triangles too. Anything unknown is the Aurora's triangles, the first and
+// most common of them.
+export function panelShape(model, name) {
+  const s = `${model || ''} ${name || ''}`.toLowerCase();
+  if (/nl59|\blines?\b/.test(s)) return 'line';
+  if (/nl42|nl52|hexagon|\belements\b/.test(s)) return 'hex';
+  if (/nl29|canvas|squares?\b/.test(s)) return 'square';
+  if (/nl22|nl47|nl48|aurora|light ?panels|triangles?\b/.test(s)) return 'tri';
+  if (/\bshapes\b/.test(s)) return 'hex';
+  return 'tri';
+}
 
 // Where each drawing may go, in order of preference. A scene offers slots of these sorts; a light that finds none of
 // its own sort takes the next, and is drawn as what that place holds (a table lamp with no table is a floor lamp).
-const CEIL = ['pendant', 'flush', 'chand', 'down', 'fan'];
+// `win` is the room's window, which each scene with a window offers as one slot of its own; `panel` is a stretch of
+// clear wall wide enough for a set of light panels, which otherwise take a sconce's place, drawn smaller.
+const CEIL = ['pendant', 'flush', 'chand', 'down', 'fan', 'track', 'spots'];
+const WALL = ['sconce', 'picture', 'uplight', 'mirror', 'panels', 'walltrack'];
+const WIN = ['wintrack', 'winspots', 'wintape', 'winpendant', 'winstring'];
 const PREFER = {
-  pendant: ['ceil'], flush: ['ceil'], chand: ['ceil'], down: ['ceil'], fan: ['ceil'],
-  sconce: ['wall', 'ceil'], table: ['table', 'floor', 'wall', 'ceil'], floor: ['floor', 'table', 'wall', 'ceil'],
+  pendant: ['ceil'], flush: ['ceil'], chand: ['ceil'], down: ['ceil'], fan: ['ceil'], track: ['ceil'], spots: ['ceil'],
+  sconce: ['wall', 'ceil'], picture: ['wall', 'ceil'], uplight: ['wall', 'ceil'], mirror: ['wall:mirror', 'wall', 'ceil'],
+  panels: ['panel', 'wall', 'ceil'], walltrack: ['wall', 'ceil'],
+  wintrack: ['win', 'ceil'], winspots: ['win', 'ceil'], wintape: ['win', 'strip:shelf', 'strip', 'ceil'], winpendant: ['win', 'ceil'],
+  winstring: ['win', 'string', 'ceil'],
+  table: ['table', 'floor', 'wall', 'ceil'], floor: ['floor', 'table', 'wall', 'ceil'],
   torch: ['floor', 'table', 'wall', 'ceil'], desk: ['desk', 'table', 'floor', 'wall', 'ceil'],
   cabinet: ['strip:cabinet', 'strip:shelf', 'strip', 'wall', 'ceil'], shelf: ['strip:shelf', 'strip:cabinet', 'strip', 'wall', 'ceil'],
   cove: ['strip:cove', 'strip', 'ceil'], underbed: ['strip:underbed', 'strip', 'table', 'ceil'], bed: ['bed', 'table', 'wall', 'ceil'],
   lantern: ['door', 'wall', 'ceil'], bollard: ['ground', 'floor', 'table', 'wall'], string: ['string', 'ceil'],
 };
 function drawingAt(sort, want) {
-  if (sort === 'ceil') return CEIL.includes(want) ? want : 'pendant';
+  // a light kept from its own place still looks like itself where it can: a window's track on the ceiling is a track
+  if (sort === 'ceil') return CEIL.includes(want) ? want : { walltrack: 'track', wintrack: 'track', winspots: 'spots', winpendant: 'pendant' }[want] || 'pendant';
+  if (sort === 'wall') return WALL.includes(want) ? want : 'sconce';
+  if (sort === 'win') return WIN.includes(want) ? want : 'wintrack';
   if (sort === 'floor') return want === 'torch' ? 'torch' : 'floor';
   if (sort === 'table') return want === 'desk' ? 'desk' : 'table';
-  return { wall: 'sconce', desk: 'desk', bed: 'bed', door: 'lantern', ground: 'bollard', string: 'string', strip: 'strip' }[sort] || 'table';
+  return { panel: 'panels', desk: 'desk', bed: 'bed', door: 'lantern', ground: 'bollard', string: 'string', strip: 'strip' }[sort] || 'table';
 }
-export const MAX_FIXTURES = 6;
+export const MAX_FIXTURES = 8;
+
+// The window as a place for a light: its middle, at its head, with the window itself for the drawing to fit.
+const winSlot = w => ({ x: w.x + w.w / 2, y: w.y, win: w });
 
 // Which light goes where. Stable for a room: lights are taken in the order of their ids and the slots in the order
 // the scene lists them, so nothing moves between redraws, and only a light's kind or a new light changes the plan.
+// A light added later (a new dimmer gets the next id) takes a place nobody holds, so what was drawn stays where it
+// was and only the new lamp appears. A slot marked `only` (the round mirror a mirror light rings) is kept for the
+// lights that ask for it by its tag.
 export function plan(model, scene) {
   const free = {};
-  for (const [sort, list] of Object.entries(scene.slots)) free[sort] = list.map((s, i) => ({ ...s, sort, i }));
+  const slots = scene.win && !scene.slots.win ? { ...scene.slots, win: [winSlot(scene.win)] } : scene.slots;
+  for (const [sort, list] of Object.entries(slots)) free[sort] = list.map((s, i) => ({ ...s, sort, i }));
+  const ok = (x, tag) => (tag ? x.tag === tag : !x.only);
   const take = (sorts) => {
     for (const s of sorts) {
       const [sort, tag] = s.split(':');
       const list = free[sort] || [];
-      const at = list.findIndex(x => !tag || x.tag === tag);
+      const at = list.findIndex(x => ok(x, tag));
       if (at >= 0) return list.splice(at, 1)[0];
     }
     return null;
@@ -185,7 +227,7 @@ export function plan(model, scene) {
   }
   const fanFx = fx[0];
   // a light with no kind and no telling name becomes the first thing in the scene's order that is not drawn yet
-  const fits = w => (PREFER[w] || []).some(s => { const [sort, tag] = s.split(':'); return (free[sort] || []).some(x => !tag || x.tag === tag); });
+  const fits = w => (PREFER[w] || []).some(s => { const [sort, tag] = s.split(':'); return (free[sort] || []).some(x => ok(x, tag)); });
   const defaultFor = () => {
     // the order may name a drawing twice (a bedroom's two bedside lamps): each fixture already drawn uses up one
     const drawn = {};
@@ -195,7 +237,7 @@ export function plan(model, scene) {
   };
   const extra = [];
   model.lights.forEach(l => {
-    const want = drawingOfKind(l.kind) || drawingOfName(l.name) || defaultFor();
+    const want = drawingOfLight(l) || defaultFor();
     if (want === 'fan' && fanFx && !fanFx.lamps.length) { fanFx.lamps.push(l); return; }
     const lightFx = fx.filter(f => f.lamps.length).length;
     const slot = lightFx < MAX_FIXTURES ? take(PREFER[want] || ['table', 'floor', 'wall', 'ceil']) : null;
@@ -256,7 +298,9 @@ export function sceneSVG(model, opts = {}) {
     const Lt = f.lamps.length ? lightOf(f.lamps) : { on: false, L: 0, I: 0, core: '#FFC78A', body: '#FFB46B', wash: '#B86C35' };
     const q = `${p}l${i}`;
     const at = Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, v.length]));
-    const src = DRAW[f.draw](K, f.slot, Lt, q, f);
+    // each lamp's own variations (a dome or a bell, an arc or a stand) come from its place in the room, not from the
+    // lamps drawn before it, so a light added or changed elsewhere in the room never restyles this one
+    const src = DRAW[f.draw]({ ...K, rnd: rngOf(`${model.id}|${model.kind}|${f.slot.sort}${f.slot.i}`) }, f.slot, Lt, q, f);
     // every part of this lamp's light says which lamp it is, so a scene's wave can light it when it arrives (room.js)
     for (const k in at) for (let j = at[k]; j < layers[k].length; j++) layers[k][j] = layers[k][j].replace(/class="rl"/g, `class="rl" data-l="${i}"`);
     const ids = f.lamps.map(l => l.id).join(' ');
@@ -274,7 +318,7 @@ export function sceneSVG(model, opts = {}) {
     grads.push([`${q}f`, `<radialGradient id="${q}f">${st(0, Lt.body, 0.5)}${st(0.5, Lt.wash, 0.18)}${st(1, Lt.wash, 0)}</radialGradient>`]);
     lampGrads.push(...grads.map(g => [...g, i]));
     // the fixture's own group carries which lights it shows, for the tests and for the wave (room.js)
-    layers.fx.push(`<g data-fx="${f.draw}" data-i="${i}" data-lamp="${ids}"${f.lamps.length ? '' : ' data-empty="1"'}>${src ? src.body.replace(/class="rl"/g, `class="rl" data-l="${i}"`) : ''}</g>`);
+    layers.fx.push(`<g data-fx="${f.draw}" data-i="${i}" data-lamp="${ids}"${f.lamps.length ? '' : ' data-empty="1"'}${src && src.shape ? ` data-shape="${src.shape}"` : ''}>${src ? src.body.replace(/class="rl"/g, `class="rl" data-l="${i}"`) : ''}</g>`);
   });
 
   const pal = [...used].map(k => {
@@ -365,7 +409,7 @@ const DRAW = {
   },
   flush(K, s, L, q) {
     const { layers } = K;
-    const x = s.x, y = Math.max(s.y, 86);
+    const x = s.x, y = s.fy || Math.max(s.y, 86);
     const shape = half(x, y, 24, 'down');
     layers.pool.push(`<circle class="rl" cx="${x}" cy="${y}" r="150" fill="url(#${q}g)" ${op(L.I * 0.5)}/>`);
     layers.pool.push(`<path class="rl" d="${ell(x, F + 18, 110, 13).d}" fill="url(#${q}f)" ${op(L.I * 0.9)}/>`);
@@ -566,13 +610,245 @@ const DRAW = {
       body: `<path d="M${x1} ${y}Q${(x1 + x2) / 2} ${y + 2 * sag} ${x2} ${y}" stroke="${LINE}" stroke-width="1.2" fill="none"/>${bulbs}`,
     };
   },
+
+  // A track on the ceiling: a bar hung on two thin rods with three heads under it, each turned a different way, so
+  // it reads as a track and not as a row of cans. The lower the slot hangs a pendant, the lower the bar, so two
+  // tracks side by side sit at different heights.
+  track(K, s, L, q) {
+    const { layers } = K;
+    const x = s.x, y = Math.round(24 + (Math.max(40, s.y) - 40) * 0.3);
+    let body = `<path d="M${x - 15} -4V${y}M${x + 15} -4V${y}" stroke="${LINE}" stroke-width="1.3"/>`;
+    for (const [dx, a] of [[-16, 22], [0, -5], [16, -26]]) {
+      const h = head(K, x + dx, y + 3, a, L);
+      const b = beam(h, F + 12, 0.17);
+      layers.cone.push(`<path class="rl" d="${b.d}" fill="url(#${q}k)" ${op(L.I * 0.5)}/>`);
+      layers.pool.push(`<path class="rl" d="${ell(b.ex, F + 14, 28, 6).d}" fill="url(#${q}f)" ${op(L.I * 0.9)}/>`);
+      body += h.body;
+    }
+    layers.pool.push(`<circle class="rl" cx="${x}" cy="${y + 10}" r="96" fill="url(#${q}g)" ${op(L.I * 0.35)}/>`);
+    body += `<rect x="${x - 24}" y="${y - 2.5}" width="48" height="5" rx="2.5" fill="${K.G('char', 'v')}"/>`;
+    return { x, y: y + 14, r: 120, body };
+  },
+  // A track on the wall: a shorter bar on a bracket, its heads aimed down the wall in scallops.
+  walltrack(K, s, L, q) {
+    const { layers } = K;
+    const x = s.x, y = s.y - 14;
+    let body = `<rect x="${x - 4}" y="${y - 8}" width="8" height="7" rx="1.5" fill="#35302D"/>`;
+    for (const [dx, a] of [[-14, 12], [0, 0], [14, -12]]) {
+      const h = head(K, x + dx, y + 2.5, a, L, 10, 6);
+      const b = beam(h, y + 74, 0.26);
+      layers.cone.push(`<path class="rl" d="${b.d}" fill="url(#${q}k)" ${op(L.I * 0.45)}/>`);
+      layers.pool.push(`<path class="rl" d="${ell(b.ex, y + 48, 12, 32).d}" fill="url(#${q}f)" ${op(L.I * 0.7)}/>`);
+      body += h.body;
+    }
+    body += `<rect x="${x - 21}" y="${y - 2}" width="42" height="4.5" rx="2.2" fill="${K.G('char', 'v')}"/>`;
+    return { x, y: y + 20, r: 90, body };
+  },
+  // Spotlights on the ceiling: three small heads on their own round canopies, each aimed at the wall in a tight beam
+  // that ends in a bright oval, where downlights throw one broad cone each.
+  spots(K, s, L, q) {
+    const { layers } = K;
+    let body = '';
+    for (const [dx, a, to] of [[-30, 24, 128], [0, -14, 150], [30, -32, 118]]) {
+      const hx = s.x + dx;
+      const h = head(K, hx, 4, a, L, 11, 8);
+      const b = beam(h, to, 0.09);
+      layers.cone.push(`<path class="rl" d="${b.d}" fill="url(#${q}k)" ${op(L.I * 0.55)}/>`);
+      layers.pool.push(`<path class="rl" d="${ell(b.ex, b.ey, 13, 17).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
+      layers.pool.push(`<path class="rl" d="${ell(b.ex, b.ey, 5, 7).d}" ${lit(L.body, L.I * 0.22)}/>`);
+      body += `<path d="${half(hx, -1, 5.5, 'down').d}" fill="#35302D"/>${h.body}`;
+    }
+    return { x: s.x, y: 60, r: 110, body };
+  },
+  // A picture light: a slim hood on a short arm over a small framed picture, its light washing down the canvas.
+  picture(K, s, L, q) {
+    const { layers, G } = K;
+    const x = s.x, y = s.y;
+    layers.back.push(`<path d="${rr(x - 18, y + 3, 36, 27, 1.5).d}" fill="#2B2623"/><path d="${rr(x - 15, y + 6, 30, 21, 1).d}" fill="${G('D', 'd')}"/>`
+      + `<path d="${half(x - 4, y + 27, 8, 'up').d}" fill="${G('clay', 'd')}"/><path d="M${x + 3} ${y + 24}L${x + 11} ${y + 10}" stroke="${LINE}" stroke-width="1.2" stroke-linecap="round"/>`);
+    layers.pool.push(`<path class="rl" d="${ell(x, y + 16, 26, 20).d}" fill="url(#${q}f)" ${op(L.I * 0.9)}/>`);
+    layers.cone.push(`<path class="rl" d="M${x - 12} ${y + 1}L${x + 12} ${y + 1}L${x + 19} ${y + 30}L${x - 19} ${y + 30}Z" fill="url(#${q}k)" ${op(L.I * 0.75)}/>`);
+    return {
+      x, y: y + 8, r: 70,
+      body: `<path d="M${x} ${y + 3}V${y - 2}" stroke="${LINE}" stroke-width="1.6"/><path d="${rr(x - 14, y - 5, 28, 5, [2.5, 2.5, 1, 1]).d}" fill="${G('stone', 'v')}"/>`
+        + `<rect class="rl" x="${x - 12}" y="${y - 0.8}" width="24" height="1.6" rx=".8" ${lit(L.core, L.I)}/>`,
+    };
+  },
+  // A wall uplight: a cup on the wall, open at the top, throwing a tall fan of light up the wall to the ceiling.
+  uplight(K, s, L, q) {
+    const { layers } = K;
+    const x = s.x, y = s.y;
+    layers.pool.push(`<path class="rl" d="${ell(x, y - 54, 22, 58).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
+    layers.pool.push(`<path class="rl" d="${ell(x, y - 16, 11, 16).d}" fill="url(#${q}f)" ${op(L.I * 0.8)}/>`);
+    // drawn narrow at the top and turned over, so it opens upward and its gradient is brightest at the lamp
+    layers.cone.push(`<path class="rl" d="M${x - 6} ${y - 104}L${x + 6} ${y - 104}L${x + 26} ${y - 6}L${x - 26} ${y - 6}Z" fill="url(#${q}k)" transform="rotate(180 ${x} ${y - 55})" ${op(L.I * 0.7)}/>`);
+    return {
+      x, y: y - 20, r: 90,
+      body: `<rect x="${x - 2}" y="${y + 8}" width="4" height="8" rx="1" fill="#35302D"/><path d="${poly([[x - 7, y - 5], [x + 7, y - 5], [x + 4, y + 11], [x - 4, y + 11]]).d}" fill="${K.G('stone', 'v')}"/>`
+        + `<path class="rl" d="${ell(x, y - 5, 7, 1.8).d}" ${lit(L.core, L.I)}/>`,
+    };
+  },
+  // A mirror light: a round mirror lit from behind, a ring of light round its edge and a halo on the wall. Where the
+  // scene already hangs a round mirror (a bathroom's, a hall's), the slot says so and the light rings that one.
+  mirror(K, s, L, q) {
+    const { layers } = K;
+    const own = !s.mirror, r = s.mirror || 16, x = s.x, y = own ? s.y + 6 : s.y;
+    layers.pool.push(`<path class="rl" d="${ell(x, y, r + 20, r + 20).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
+    layers.pool.push(`<circle class="rl" cx="${x}" cy="${y}" r="${r + 3}" fill="none" stroke-width="6" stroke="currentColor" style="color:${L.body};opacity:${n(L.I * 0.3 * 1000) / 1000}"/>`);
+    return {
+      x, y, r: 80,
+      body: (own ? `<circle cx="${x}" cy="${y}" r="${r}" fill="${K.G('glass', 'd')}"/><path d="M${x - 8} ${y - 2}L${x - 2} ${y - 8}M${x - 6} ${y + 4}L${x + 4} ${y - 6}" stroke="#3A4560" stroke-width="1.2" stroke-linecap="round"/>` : '')
+        + `<circle cx="${x}" cy="${y}" r="${r + 1}" fill="none" stroke="#3A3431" stroke-width="2.4"/>`
+        + `<circle class="rl" cx="${x}" cy="${y}" r="${r + 1}" fill="none" stroke-width="1.8" stroke="currentColor" style="color:${L.core};opacity:${n(L.I * 1000) / 1000}"/>`,
+    };
+  },
+  // Light panels (Nanoleaf and the like): a cluster of flat tiles on the wall, each glowing the light's own colour,
+  // in the shape the panels really are. A panel is dark grey when off and its colour when on, a little brighter or
+  // dimmer from one tile to the next as real panels read. On a sconce's place, where the wall is narrower, the cluster
+  // is drawn smaller.
+  panels(K, s, L, q, f) {
+    const { layers } = K;
+    const x = s.x, y = s.y, sc = s.sort === 'panel' ? s.sc || 1 : 0.64;
+    const shape = (f.lamps.find(l => l.panel) || {}).panel || panelShape('', (f.lamps[0] || {}).name);
+    const V = [1, 0.78, 0.92, 0.7, 0.96, 0.82, 0.88, 0.74];
+    layers.pool.push(`<circle class="rl" cx="${x}" cy="${y}" r="96" fill="url(#${q}g)" ${op(L.I * 0.4)}/>`);
+    layers.pool.push(`<path class="rl" d="${ell(x, y, 56 * sc, 44 * sc).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
+    let body = '';
+    if (shape === 'line') {
+      // Lines: bars joined end to end at their connectors, zigzagging along the wall
+      const b = 20 * sc, pts = [];
+      for (let i = 0; i <= 6; i++) pts.push([x + (i - 3) * b * 0.5, y + (i % 2 ? -1 : 1) * b * 0.433]);
+      for (let i = 0; i < 6; i++) {
+        const [a, c] = [pts[i], pts[i + 1]], d = `M${n(a[0])} ${n(a[1])}L${n(c[0])} ${n(c[1])}`;
+        body += `<path d="${d}" stroke="#34302D" stroke-width="${n(5 * sc + 0.6)}" stroke-linecap="round"/>`
+          + `<path class="rl" d="${d}" fill="none" stroke-width="${n(3.8 * sc + 0.4)}" stroke-linecap="round" stroke="currentColor" style="color:${L.body};opacity:${n(L.I * V[i] * 1000) / 1000}"/>`;
+      }
+      body += pts.map(([px, py]) => `<circle cx="${n(px)}" cy="${n(py)}" r="${n(2 * sc + 0.4)}" fill="#26221F"/>`).join('');
+      return { x, y, r: 100, shape, body };
+    }
+    const tiles = panelTiles(shape, sc);
+    tiles.forEach((pts, j) => {
+      const [cx, cy] = [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+      const at = k => pts.map(([px, py]) => [x + cx + (px - cx) * k, y + cy + (py - cy) * k]);
+      const tile = poly(at(0.9)).d, core = poly(at(0.42)).d;
+      body += `<path d="${tile}" fill="#2E2A27" stroke="#3B3633" stroke-width=".8" stroke-linejoin="round"/>`
+        + `<path class="rl" d="${tile}" ${lit(L.body, L.I * V[j % V.length])}/><path class="rl" d="${core}" ${lit(L.core, L.I * V[j % V.length] * 0.6)}/>`;
+    });
+    return { x, y, r: 100, shape, body };
+  },
+  // The window's own lights. Each is drawn at the window's head, fitted to its width.
+  // A track along the head: a bar with a head over each part of the window, and a curtain at each side for the outer
+  // heads to wash, so it reads as a window lit from above.
+  wintrack(K, s, L, q) {
+    const { layers, G } = K;
+    const w = s.win, y = w.y - 7, x1 = w.x - 14, x2 = w.x + w.w + 14, sill = w.y + w.h;
+    for (const cx of [w.x - 12, w.x + w.w - 2]) {
+      const c = rr(cx, y + 3, 14, sill + 8 - y - 3, [2, 2, 3, 3]);
+      layers.back.push(`<path d="${c.d}" fill="${G('shade', 'v')}"/><path d="M${cx + 5} ${y + 7}V${sill + 6}M${cx + 10} ${y + 7}V${sill + 6}" stroke="#2A2522" stroke-width="1"/>`);
+      layers.cone.push(`<path class="rl" d="${c.d}" fill="url(#${q}k)" ${op(L.I * 0.9)}/>`);
+    }
+    const glass = w.round ? arch(w.x, w.y, w.w, w.h) : rr(w.x, w.y, w.w, w.h, 4);
+    layers.cone.push(`<path class="rl" d="${glass.d}" fill="url(#${q}k)" ${op(L.I * 0.4)}/>`);
+    layers.pool.push(`<path class="rl" d="${ell(w.x + w.w / 2, sill + 3, w.w / 2 + 14, 6).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
+    const count = w.w >= 56 ? 4 : 3;
+    let body = '';
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1), hx = x1 + 9 + (x2 - x1 - 18) * t, a = 6 - 12 * t;
+      const h = head(K, hx, y + 2.5, a, L, 10, 6);
+      const b = beam(h, sill, 0.16);
+      layers.cone.push(`<path class="rl" d="${b.d}" fill="url(#${q}k)" ${op(L.I * 0.45)}/>`);
+      body += h.body;
+    }
+    body += `<rect x="${x1}" y="${y - 2.5}" width="${x2 - x1}" height="5" rx="2.5" fill="${G('char', 'v')}"/>`;
+    return { x: (x1 + x2) / 2, y: y + 20, r: 110, body };
+  },
+  // Two spots over the window's top corners, each aimed across the glass at the sill.
+  winspots(K, s, L, q) {
+    const { layers } = K;
+    const w = s.win, y = w.y - 9, sill = w.y + w.h;
+    let body = '';
+    for (const [hx, a] of [[w.x + 6, -16], [w.x + w.w - 6, 16]]) {
+      const h = head(K, hx, y, a, L, 10, 8);
+      const b = beam(h, sill - 2, 0.13);
+      layers.cone.push(`<path class="rl" d="${b.d}" fill="url(#${q}k)" ${op(L.I * 0.55)}/>`);
+      layers.pool.push(`<path class="rl" d="${ell(b.ex, sill - 2, 16, 9).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
+      body += `<rect x="${hx - 5}" y="${y - 4}" width="10" height="3" rx="1.5" fill="#35302D"/>${h.body}`;
+    }
+    return { x: s.x, y: y + 30, r: 90, body };
+  },
+  // Tape run round the window's frame: the frame itself glows, with a soft halo on the wall and the glass.
+  wintape(K, s, L, q) {
+    const { layers } = K;
+    const w = s.win, g = w.round ? arch(w.x - 3, w.y - 3, w.w + 6, w.h + 3) : rr(w.x - 3, w.y - 3, w.w + 6, w.h + 3, 5);
+    layers.pool.push(`<path class="rl" d="${g.d}" fill="none" stroke-width="10" stroke="currentColor" style="color:${L.body};opacity:${n(L.I * 0.22 * 1000) / 1000}"/>`);
+    layers.pool.push(`<path class="rl" d="${ell(w.x + w.w / 2, w.y + w.h / 2, w.w * 0.75, w.h * 0.7).d}" fill="url(#${q}f)" ${op(L.I * 0.7)}/>`);
+    return {
+      x: w.x + w.w / 2, y: w.y + w.h / 2, r: 100,
+      body: `<path d="${g.d}" fill="none" stroke="#3A3431" stroke-width="3"/><path class="rl" d="${g.d}" fill="none" stroke-width="2" stroke="currentColor" style="color:${L.core};opacity:${n(L.I * 1000) / 1000}"/>`,
+    };
+  },
+  // A pendant hung in the window, and a string of bulbs swagged across its head.
+  winpendant(K, s, L, q, f) { const w = s.win; return DRAW.pendant(K, { x: s.x, y: w.y + Math.min(w.h * 0.5, 46) }, L, q, f); },
+  winstring(K, s, L, q, f) { const w = s.win; return DRAW.string(K, { x1: w.x - 12, x2: w.x + w.w + 12, y: w.y - 6, sag: Math.max(10, Math.min(18, w.h * 0.22)) }, L, q, f); },
 };
+
+// ---------- the newer fixtures' small parts ----------
+// A lit part: its colour and strength, as every lit part carries them (so the standalone copy can write them out).
+const lit = (col, v) => `fill="currentColor" style="color:${col};opacity:${n(v * 1000) / 1000}"`;
+// One small head on a track or a spot: a short cylinder hung at (x, y) and turned `a` degrees from pointing straight
+// down, its lit face at the far end. Says where that face is and which way it points, for its beam.
+function head(K, x, y, a, L, len = 12, w = 7) {
+  const r = a * Math.PI / 180, dx = -Math.sin(r), dy = Math.cos(r);
+  return {
+    fx: x + dx * len, fy: y + dy * len, dx, dy,
+    body: `<g transform="translate(${n(x)} ${n(y)}) rotate(${n(a)})"><circle r="2.2" fill="#3A3431"/><rect x="${-w / 2}" y="1" width="${w}" height="${len - 1}" rx="2" fill="${K.G('stone', 'v')}"/>`
+      + `<rect class="rl" x="${n(-w / 2 + 1)}" y="${n(len - 2)}" width="${w - 2}" height="2" rx="1" ${lit(L.core, L.I)}/></g>`,
+  };
+}
+// A head's beam: from its face along the way it points until it reaches the height `to`, widening as it goes.
+function beam(h, to, spread, w0 = 2.5) {
+  const t = Math.max(1, (to - h.fy) / h.dy), ex = h.fx + h.dx * t, ey = h.fy + h.dy * t, w1 = w0 + spread * t;
+  const px = h.dy, py = -h.dx;
+  return { ex, ey, d: `M${n(h.fx - px * w0)} ${n(h.fy - py * w0)}L${n(h.fx + px * w0)} ${n(h.fy + py * w0)}L${n(ex + px * w1)} ${n(ey + py * w1)}L${n(ex - px * w1)} ${n(ey - py * w1)}Z` };
+}
+// The tiles of a set of panels as polygons around (0, 0), at scale `sc`: the Aurora's triangles, Canvas's squares or
+// Shapes' hexagons, laid out as a small, uneven cluster the way people hang them.
+function panelTiles(shape, sc) {
+  let tiles;
+  if (shape === 'square') {
+    const a = 14 * sc;
+    tiles = [[0, 0], [1, 0], [2, 0], [1, 1], [2, 1], [3, 1], [3, 2]].map(([c, r]) => [[c * a, r * a], [(c + 1) * a, r * a], [(c + 1) * a, (r + 1) * a], [c * a, (r + 1) * a]]);
+  } else if (shape === 'hex') {
+    const R = 10 * sc, hx = Math.sqrt(3) * R;
+    tiles = [[0, 0], [1, 0], [2, -1], [-1, 1], [0, 1], [2, 0]].map(([qq, r]) => {
+      const cx = hx * (qq + r / 2), cy = 1.5 * R * r;
+      return [0, 1, 2, 3, 4, 5].map(k => [cx + R * Math.cos((60 * k - 90) * Math.PI / 180), cy + R * Math.sin((60 * k - 90) * Math.PI / 180)]);
+    });
+  } else {
+    // equilateral triangles on a lattice, pointing up and down in turn, each sharing an edge with the next
+    const a = 17 * sc, h = a * Math.sqrt(3) / 2;
+    tiles = [[2, 0], [3, 0], [4, 0], [0, 1], [1, 1], [2, 1], [4, 1], [5, 1]].map(([c, r]) => {
+      const x0 = c * a / 2;
+      return (c + r) % 2 === 0 ? [[x0, (r + 1) * h], [x0 + a, (r + 1) * h], [x0 + a / 2, r * h]] : [[x0, r * h], [x0 + a, r * h], [x0 + a / 2, (r + 1) * h]];
+    });
+  }
+  // centred on the slot
+  const xs = tiles.flat().map(p => p[0]), ys = tiles.flat().map(p => p[1]);
+  const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
+  return tiles.map(t => t.map(([px, py]) => [px - mx, py - my]));
+}
 
 // ---------- the scenes ----------
 // Each lays out its room in the 372 x 300 frame and says where lights can go: `ceil` (x, and how low a pendant
 // hangs), `wall` (a sconce), `table` and `desk` (a surface's middle and top), `floor`, `bed` (by the headboard),
-// `strip` (under a cabinet or a shelf, or along the ceiling), `door`, `ground` and `string`. A slot's `hide` names the
-// decor a lamp there replaces. `order` is what lights with no kind and no telling name become, first to last.
+// `strip` (under a cabinet or a shelf, or along the ceiling), `door`, `ground` and `string`, and `panel` (a stretch of
+// clear wall for a set of light panels). The window (`win`) is a place too, for the lights that hang in or over it. A
+// slot's `hide` names the decor a lamp there replaces; `fy` is where a flush light sits when the slot's own height would
+// put it into something; `mirror` is the radius of a round mirror the scene already hangs there, for a mirror light to
+// ring; `sc` is how large a set of panels is drawn where the wall is tighter. Every scene has at least two places each
+// for floor lamps, table lamps, wall lights and ceiling lights, so a second one of anything is a second lamp in the
+// picture. New places are added after the old ones, so a light keeps the place it had. `order` is what lights with no
+// kind and no telling name become, first to last.
 const plant = (K, x, y, s = 1, pot = 'clay') => {
   const { put, G } = K;
   put('furn', K.rr(x - 8 * s, y - 12 * s, 16 * s, 12 * s, [0, 0, 5 * s, 5 * s]), G(pot, 'd'));
@@ -590,7 +866,6 @@ const SCENES = {
     const { rr, half, quarter, arch, solid, put, G, legs } = K;
     shell(K);
     solid(arch(-40, 72, 76, F - 72), G('D', 'r'));
-    art(K, 112, 54);
     // the sofa: a tall arm, a long seat, a quarter-disc and a rounded cushion for its back
     solid(rr(66, 124, 26, 66, [13, 13, 0, 13]), G('A', 'v'));
     solid(quarter(142, 150, 46, 'tl'), G('B', 'r'));
@@ -606,14 +881,17 @@ const SCENES = {
     return {
       win: { x: 256, y: 62, w: 62, h: 90, round: true },
       slots: {
-        ceil: [{ x: 176, y: 96, loop: true }, { x: 226, y: 76 }, { x: 124, y: 78 }],
-        wall: [{ x: 234, y: 104 }, { x: 52, y: 100 }],
+        ceil: [{ x: 176, y: 96, loop: true }, { x: 226, y: 76, fy: 64 }, { x: 124, y: 78 }],
+        wall: [{ x: 226, y: 100 }, { x: 348, y: 60 }],
         table: [{ x: 296, y: 172, hide: 'side' }, { x: 176, y: 198, hide: 'coffee' }],
-        floor: [{ x: 50, y: 214, arc: false }, { x: 336, y: 214, arc: false }],
+        floor: [{ x: 50, y: 214, arc: false }, { x: 350, y: 214, arc: false }],
         strip: [{ x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
+        panel: [{ x: 132, y: 76, sc: 0.85, hide: 'art' }],
       },
       order: ['pendant', 'table', 'floor', 'sconce', 'table', 'floor'],
       decor(K) {
+        // the picture over the sofa steps aside for a set of light panels, which hang where it did
+        if (!K.hidden.has('art')) art(K, 112, 54);
         if (!K.hidden.has('side')) plant(K, 296, 172, 1);
         if (!K.hidden.has('coffee')) { vase(K, 168, 198, 'stone'); K.put('furn', K.rr(182, 190, 10, 8, 2), K.G('clay', 'v')); }
       },
@@ -640,9 +918,10 @@ const SCENES = {
       slots: {
         ceil: [{ x: 186, y: 118 }, { x: 132, y: 112 }, { x: 236, y: 112 }],
         strip: [{ x1: 22, x2: 152, y: 104, dir: 'down', tag: 'cabinet' }, { x1: 258, x2: 336, y: 58, dir: 'down', tag: 'shelf' }, { x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
-        wall: [{ x: 214, y: 90 }],
-        table: [{ x: 50, y: 150, hide: 'plant' }],
-        floor: [{ x: 350, y: 214, arc: false }],
+        wall: [{ x: 210, y: 82 }, { x: 358, y: 58 }],
+        table: [{ x: 50, y: 150, hide: 'plant' }, { x: 262, y: 170 }],
+        floor: [{ x: 350, y: 214, arc: false }, { x: 22, y: 214, arc: false }],
+        panel: [{ x: 212, y: 134, sc: 0.75 }],
       },
       order: ['pendant', 'cabinet', 'pendant', 'down', 'sconce'],
       decor(K) {
@@ -668,11 +947,12 @@ const SCENES = {
     return {
       win: { x: 300, y: 50, w: 50, h: 52, round: true },
       slots: {
-        ceil: [{ x: 178, y: 64 }],
+        ceil: [{ x: 178, y: 64 }, { x: 100, y: 44, fy: 66 }],
         table: [{ x: 42, y: 170, hide: 'l' }, { x: 325, y: 150, hide: 'r' }],
         bed: [{ x: 116, y: 112 }, { x: 232, y: 112 }],
-        wall: [{ x: 78, y: 96 }],
-        floor: [{ x: 18, y: 214, arc: false }],
+        wall: [{ x: 64, y: 100 }, { x: 270, y: 92 }],
+        floor: [{ x: 18, y: 214, arc: false }, { x: 364, y: 214, arc: false }],
+        panel: [{ x: 178, y: 104 }],
         strip: [{ x1: 90, x2: 274, y: 194, dir: 'down', tag: 'underbed' }, { x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
       },
       order: ['flush', 'table', 'table', 'bed', 'floor'],
@@ -701,9 +981,10 @@ const SCENES = {
         desk: [{ x: 278, y: 146 }],
         ceil: [{ x: 140, y: 76 }, { x: 250, y: 62 }],
         strip: [{ x1: 188, x2: 314, y: 100, dir: 'down', tag: 'shelf' }, { x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
-        wall: [{ x: 124, y: 96 }],
-        table: [{ x: 120, y: 146, hide: 'mug' }],
+        wall: [{ x: 124, y: 96 }, { x: 164, y: 100 }],
+        table: [{ x: 120, y: 146, hide: 'mug' }, { x: 226, y: 146 }],
         floor: [{ x: 340, y: 214, arc: false }, { x: 60, y: 214, arcDir: 1 }],
+        panel: [{ x: 300, y: 70, sc: 0.85 }],
       },
       order: ['flush', 'desk', 'floor', 'shelf'],
       decor(K) {
@@ -727,13 +1008,14 @@ const SCENES = {
     solid(rr(288, 176, 46, 8, 3), G('A', 'd'));
     legs([[294], [328]], 184, 216);
     return {
-      win: { x: 318, y: 56, w: 48, h: 60, round: true },
+      win: { x: 306, y: 56, w: 48, h: 60, round: true },
       slots: {
         ceil: [{ x: 186, y: 110, big: true }, { x: 132, y: 98 }, { x: 240, y: 98 }],
-        wall: [{ x: 34, y: 92 }, { x: 290, y: 90 }],
-        table: [{ x: 186, y: 162, hide: 'vase' }],
-        floor: [{ x: 16, y: 214, arc: false }],
+        wall: [{ x: 40, y: 64 }, { x: 284, y: 90 }],
+        table: [{ x: 186, y: 162, hide: 'vase' }, { x: 110, y: 162 }],
+        floor: [{ x: 16, y: 214, arc: false }, { x: 372, y: 214, arc: false }],
         strip: [{ x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
+        panel: [{ x: 86, y: 76, sc: 0.85 }],
       },
       order: ['chand', 'sconce', 'pendant', 'sconce'],
       decor(K) { if (!K.hidden.has('vase')) { vase(K, 186, 162, 'stone'); K.put('furn', K.ell(206, 159, 8, 3), K.G('clay', 'v')); } },
@@ -755,10 +1037,11 @@ const SCENES = {
     return {
       win: { x: 228, y: 62, w: 70, h: 62 },
       slots: {
-        wall: [{ x: 26, y: 96 }, { x: 122, y: 96 }],
+        wall: [{ x: 26, y: 96 }, { x: 122, y: 96 }, { x: 74, y: 96, mirror: 30, tag: 'mirror', only: true }],
         ceil: [{ x: 250, y: 60 }, { x: 170, y: 70 }],
-        table: [{ x: 116, y: 150, hide: 'soap' }],
-        floor: [{ x: 360, y: 214, arc: false }],
+        table: [{ x: 116, y: 150, hide: 'soap' }, { x: 196, y: 150 }],
+        floor: [{ x: 360, y: 214, arc: false }, { x: 152, y: 214, arc: false }],
+        panel: [{ x: 332, y: 70, sc: 0.8 }],
         strip: [{ x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
       },
       order: ['sconce', 'flush', 'sconce', 'down'],
@@ -782,15 +1065,17 @@ const SCENES = {
     line('furn', s0 - 6, F - 44, s0 + 150, F - 150, 1.6);
     for (let i = 0; i < 5; i++) line('furn', s0 + 8 + i * 28, F - 20 * (i + 1), s0 + 8 + i * 28, F - 20 * (i + 1) - 36 + i * 0, 1.2);
     return {
+      win: { x: 218, y: 50, w: 32, h: 60, round: true },
       slots: {
         ceil: [{ x: 286, y: 64 }, { x: 64, y: 50 }],
-        wall: [{ x: 116, y: 104 }, { x: 16, y: 104 }],
-        table: [{ x: 196, y: 150, hide: 'vase' }],
-        floor: [{ x: 356, y: 214, arc: false }],
+        wall: [{ x: 116, y: 66 }, { x: 16, y: 104 }, { x: 172, y: 100, mirror: 22, tag: 'mirror', only: true }],
+        table: [{ x: 196, y: 150, hide: 'vase' }, { x: 134, y: 150, hide: 'plant' }],
+        floor: [{ x: 356, y: 214, arc: false }, { x: 112, y: 214, arc: false }],
+        panel: [{ x: 330, y: 72, sc: 0.85 }],
         strip: [{ x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
       },
       order: ['flush', 'sconce', 'table', 'pendant'],
-      decor(K) { if (!K.hidden.has('vase')) vase(K, 196, 150, 'clay'); plant(K, 146, 150, 0.8); },
+      decor(K) { if (!K.hidden.has('vase')) vase(K, 196, 150, 'clay'); if (!K.hidden.has('plant')) plant(K, 146, 150, 0.8); },
     };
   },
   porch(K) {
@@ -813,10 +1098,12 @@ const SCENES = {
       slots: {
         door: [{ x: 132, y: 118 }, { x: 240, y: 118 }],
         string: [{ x1: 12, x2: 360, y: 30, sag: 16 }],
-        ceil: [{ x: 186, y: 54 }],
+        ceil: [{ x: 186, y: 54 }, { x: 300, y: 48, fy: 60 }],
         ground: [{ x: 60, y: 226 }, { x: 318, y: 226 }],
-        wall: [{ x: 300, y: 100 }],
-        table: [{ x: 90, y: 172, hide: 'bench' }],
+        wall: [{ x: 300, y: 100 }, { x: 18, y: 100 }],
+        table: [{ x: 90, y: 172, hide: 'bench' }, { x: 40, y: 172, hide: 'bench' }],
+        floor: [{ x: 266, y: 214, arc: false }, { x: 352, y: 214, arc: false }],
+        panel: [{ x: 240, y: 72 }],
       },
       order: ['lantern', 'lantern', 'string', 'bollard', 'bollard'],
       decor(K) {
@@ -829,8 +1116,8 @@ const SCENES = {
     const { rr, solid, put, G, legs, line } = K;
     shell(K, { rug: false });
     // the big door in panels, a workbench with a pegboard over it, a shelf of boxes
-    solid(rr(162, 66, 196, 138, [6, 6, 0, 0]), G('stone', 'v'));
-    for (let y = 92; y < 204; y += 26) line('furn', 166, y, 354, y, 1.2);
+    solid(rr(174, 66, 184, 138, [6, 6, 0, 0]), G('stone', 'v'));
+    for (let y = 92; y < 204; y += 26) line('furn', 178, y, 354, y, 1.2);
     put('back', rr(22, 70, 106, 58, 3), G('char', 'v'));
     for (let x = 34; x < 128; x += 12) for (let y = 80; y < 126; y += 12) put('back', { d: `M${x} ${y}h1.4v1.4h-1.4Z`, bb: [] }, '#3F3935');
     line('back', 46, 84, 46, 108, 2); line('back', 62, 84, 70, 110, 2);
@@ -839,13 +1126,15 @@ const SCENES = {
     legs([[24], [128]], 154, 214);
     solid(rr(26, 176, 40, 28, 2), G('B', 'd'));
     return {
+      win: { x: 136, y: 70, w: 30, h: 54 },
       slots: {
-        ceil: [{ x: 260, y: 40 }, { x: 80, y: 40 }],
-        desk: [{ x: 110, y: 146 }],
+        ceil: [{ x: 240, y: 40 }, { x: 80, y: 40 }],
+        desk: [{ x: 96, y: 146 }],
         strip: [{ x1: 22, x2: 128, y: 66, dir: 'down', tag: 'shelf' }, { x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
-        wall: [{ x: 146, y: 96 }],
-        floor: [{ x: 362, y: 214, arc: false }],
-        table: [{ x: 46, y: 176 }],
+        wall: [{ x: 196, y: 46 }, { x: 348, y: 46 }],
+        floor: [{ x: 362, y: 214, arc: false }, { x: 6, y: 214, arc: false }],
+        table: [{ x: 46, y: 176 }, { x: 24, y: 146 }],
+        panel: [{ x: 300, y: 48 }],
       },
       order: ['flush', 'flush', 'desk', 'shelf'],
     };
@@ -854,7 +1143,6 @@ const SCENES = {
     const { rr, half, quarter, arch, solid, put, G, legs } = K;
     shell(K);
     solid(arch(-40, 72, 76, F - 72), G('D', 'r'));
-    art(K, 112, 48, 0.9);
     // a lounge chair from a big quarter disc, a bowl table, and the tall plant stand
     solid(quarter(156, 176, 62, 'tl'), G('A', 'r'));
     solid(rr(100, 164, 96, 22, [0, 12, 12, 0]), G('B', 'd'));
@@ -868,13 +1156,15 @@ const SCENES = {
       win: { x: 58, y: 58, w: 50, h: 80, round: true },
       slots: {
         ceil: [{ x: 196, y: 92 }, { x: 262, y: 70 }],
-        wall: [{ x: 200, y: 118 }],
+        wall: [{ x: 200, y: 118 }, { x: 266, y: 104 }],
         table: [{ x: 236, y: 172, hide: 'a' }, { x: 306, y: 128, hide: 'b' }],
         floor: [{ x: 52, y: 214, arcDir: 1 }, { x: 350, y: 214, arc: false }],
         strip: [{ x1: 10, x2: 362, y: 26, dir: 'down', tag: 'cove' }],
+        panel: [{ x: 150, y: 66, sc: 0.85, hide: 'art' }],
       },
       order: ['pendant', 'table', 'floor', 'sconce', 'table'],
       decor(K) {
+        if (!K.hidden.has('art')) art(K, 112, 48, 0.9);
         if (!K.hidden.has('a')) K.put('furn', K.rr(228, 162, 16, 10, 2), K.G('clay', 'v'));
         if (!K.hidden.has('b')) plant(K, 306, 128, 1.1);
       },
