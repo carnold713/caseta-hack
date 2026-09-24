@@ -411,19 +411,18 @@ export const actions = {
   'dev-on'(c, el, r) {
     const d = c.data.dev(r.id); if (!d || c.data.isOn(r.id)) return;
     if (d.domain === 'fan') { fanTo(c, r.id, 'Medium'); return; }
-    c.assume([r.id], d.domain === 'light' ? c.onLevel(r.id, `d:${r.id}`) : 100); c.soon();
-    c.run({ type: 'level', target: `d:${r.id}`, level: 'on' });
+    c.turn({ type: 'level', target: `d:${r.id}`, level: 'on' });
   },
   'dev-off'(c, el, r) {
     const d = c.data.dev(r.id); if (!d || !c.data.isOn(r.id)) return;
     if (d.domain === 'fan') { fanTo(c, r.id, 'Off'); return; }
-    c.assume([r.id], 0); c.soon();
-    c.run({ type: 'level', target: `d:${r.id}`, level: 'off' });
+    c.turn({ type: 'level', target: `d:${r.id}`, level: 'off' });
   },
   nudge(c, el, r) {
     if (Date.now() - nudgeHeldAt < 500) return;   // the lift that ends a hold is not a tap as well
     const v = Math.max(1, Math.min(100, (c.data.level(r.id) || 0) + Number(el.dataset.by)));
-    c.assume([r.id], v); c.soon();
+    // held like the dial's own level, so the bridge's report of the level it left does not pull the number back
+    c.assume([r.id], v, { held: true }); c.soon();
     c.gate.sendLevel(`d:${r.id}`, v);
   },
   'fan-speed'(c, el, r) { fanTo(c, r.id, el.dataset.speed); },

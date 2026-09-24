@@ -39,8 +39,7 @@ export function onReady(c) {
 async function allOff(c) {
   c.go('home');
   if (c.conn() === 'off') { c.toast(OFFLINE_TAP, { icon: 'wifi' }); return; }
-  c.assume(c.H.litLights().map(d => d.device_id), 0); c.soon();
-  if (!await c.run({ type: 'level', target: 'h:all', level: 'off' })) return;
+  if (!await c.turn({ type: 'level', target: 'h:all', level: 'off' })) return;
   // from the icon the rooms may be out of sight, so it says what it did; no Undo (the owner's rule: a toast is not an undo button)
   c.toast('Everything off');
 }

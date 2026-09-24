@@ -294,3 +294,130 @@ test('a light a finger just set keeps its level and colour against the bridge ec
   d.apply({ type: 'state', states: { 1: { level: 60 } } });
   assert.equal(d.S.states[1].level, 60, 'once the moment has passed, the bridge is the truth again');
 });
+
+// ---------- a light this phone switches lands once ----------
+// A fake clock and a fake timer list, so a hold running out is a step the test takes.
+function rig() {
+  const c = { t: 1000, timers: [] };
+  const inv = home();
+  inv.devices[6] = { device_id: '6', name: 'Porch', domain: 'switch', area: 'a2', type: 'WallSwitch' };
+  const d = CD.create({ now: () => c.t, setTimeout: (f, ms) => { c.timers.push({ at: c.t + ms, f }); return c.timers.length; } });
+  d.apply(snapshot({ inventory: inv, states: { 1: { level: 0 }, 2: { level: 0 }, 3: { level: 40 }, 6: { level: 0 } } }));
+  // move the clock on, running every timer that has come due, in order
+  c.step = ms => {
+    const end = c.t + ms;
+    for (;;) {
+      const due = c.timers.filter(x => x.at <= end).sort((a, b) => a.at - b.at)[0];
+      if (!due) break;
+      c.timers.splice(c.timers.indexOf(due), 1); c.t = Math.max(c.t, due.at); due.f();
+    }
+    c.t = end;
+  };
+  return { d, c };
+}
+const echo = (d, states) => d.apply({ type: 'state', states });
+
+test('a light switched on is shown on at once and stays on while the bridge reports its fade', () => {
+  const { d, c } = rig();
+  const n = d.expect({ 1: 100 }, 0.5);
+  assert.equal(d.level('1'), 100, 'shown where it is going from the tap');
+  c.step(40); d.sent(n, true);
+  // a Lutron dimmer reports where it was, then where it is on the way
+  assert.equal(echo(d, { 1: { level: 0 } }).changed, false, 'the level it was at is not news');
+  assert.equal(d.level('1'), 100);
+  c.step(150); assert.equal(echo(d, { 1: { level: 33 } }).changed, false);
+  c.step(150); assert.equal(echo(d, { 1: { level: 67 } }).changed, false);
+  c.step(200); echo(d, { 1: { level: 100 } });
+  assert.equal(d.level('1'), 100, 'and it lands where it was shown');
+  assert.equal(d.S.truth['1'].level, 100, 'the bridge is heard the whole time');
+});
+
+test('a report of the old brightness just after the new one is not shown as a step back', () => {
+  const { d, c } = rig();
+  const n = d.expect({ 2: 100 }, 0.5);
+  c.step(20); echo(d, { 2: { level: 100 } });      // the connector says the new level as soon as the bridge takes it
+  d.sent(n, true);
+  c.step(120); echo(d, { 2: { level: 70 } });      // the event stream: "on", at the brightness it had before
+  assert.equal(d.level('2'), 100);
+  c.step(60); echo(d, { 2: { level: 100 } });      // and then its new brightness
+  c.step(CD.REACH_SETTLE);
+  assert.equal(d.level('2'), 100);
+  assert.deepEqual(Object.keys(d.S.expect), [], 'let go once it has got there');
+});
+
+test('a light that does not change is shown as the bridge has it once its fade should be over, and says so', () => {
+  const { d, c } = rig();
+  let told = 0; d.hooks.changed = () => { told++; };
+  const n = d.expect({ 1: 100 }, 0.5);
+  c.step(50); d.sent(n, true);
+  c.step(500 + CD.ECHO_MARGIN - 100);
+  assert.equal(d.level('1'), 100, 'held for the fade and its margin');
+  assert.equal(told, 0);
+  c.step(200);
+  assert.equal(d.level('1'), 0, 'then shown as the bridge last said: it never came on');
+  assert.equal(told, 1, 'once');
+});
+
+test('a command that was not sent puts its lights back at once', () => {
+  const { d } = rig();
+  const n = d.expect({ 1: 100, 3: 0 }, 0.5);
+  assert.equal(d.level('3'), 0);
+  assert.equal(d.sent(n, false), true, 'the screen changed');
+  assert.equal(d.level('1'), 0);
+  assert.equal(d.level('3'), 40);
+});
+
+test('an answer to an older command does not let go of a newer one', () => {
+  const { d } = rig();
+  const first = d.expect({ 1: 100 }, 0.5);
+  d.expect({ 1: 0 }, 0.5);
+  d.expect({ 1: 100 }, 0.5);
+  d.sent(first, false);
+  assert.equal(d.level('1'), 100, 'still where the newest tap put it');
+});
+
+test('only the lights this phone changed are held: a change at the wall shows at once', () => {
+  const { d, c } = rig();
+  const n = d.expect({ 1: 100 }, 0.5);
+  d.sent(n, true);
+  c.step(100);
+  const r = echo(d, { 3: { level: 75 } });
+  assert.equal(r.changed, true);
+  assert.equal(d.level('3'), 75);
+  // and the held one too, once it has landed
+  c.step(100); echo(d, { 1: { level: 100 } });
+  c.step(CD.REACH_SETTLE + 10);
+  echo(d, { 1: { level: 20 } });
+  assert.equal(d.level('1'), 20);
+});
+
+test('a room lands at once: every light held, and one already there is left alone', () => {
+  const { d, c } = rig();
+  const n = d.expect({ 1: 0, 2: 0, 3: 0 }, 0.5);
+  assert.deepEqual(Object.keys(d.S.expect), ['3'], 'only the light that was on has anything to hold');
+  assert.equal(d.roomSummary('a2'), '2 lights · all off');
+  d.sent(n, true);
+  c.step(30); echo(d, { 3: { level: 40 } });
+  assert.equal(d.roomSummary('a2'), '2 lights · all off', 'the level it left is not shown');
+});
+
+test('a switch has landed when it is on, whatever level it reports', () => {
+  const { d, c } = rig();
+  assert.equal(d.landing('6', 30), 100, 'a Lutron switch reports 100 whatever it is sent');
+  const n = d.expect({ 6: 100 }, 0.5);
+  d.sent(n, true);
+  c.step(60); echo(d, { 6: { level: 100 } });
+  c.step(CD.REACH_SETTLE + 10);
+  assert.deepEqual(Object.keys(d.S.expect), []);
+});
+
+test('a slider hold ends quietly: the finger\'s level stays until the bridge says otherwise', () => {
+  const { d, c } = rig();
+  let told = 0; d.hooks.changed = () => { told++; };
+  d.S.states[1] = { level: 55 };
+  d.hold(['1']);
+  echo(d, { 1: { level: 30 } });
+  c.step(CD.ECHO_QUIET + 20);
+  assert.equal(d.level('1'), 55, 'not pulled back to an echo of a value it passed');
+  assert.equal(told, 0);
+});

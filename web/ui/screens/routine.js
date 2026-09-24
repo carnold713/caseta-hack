@@ -220,8 +220,8 @@ export const sunriseActions = {
   'wake-put-back'(c) {
     const t = c.ui.wakeTry; if (!t) return;
     stopTry(c); c.ui.wakeTry = null;
-    c.assume([t.id], t.prev); c.render();
-    c.run(t.prev ? { type: 'level', target: `d:${t.id}`, level: t.prev } : { type: 'level', target: `d:${t.id}`, level: 'off', fade: 0.4 });
+    c.turn(t.prev ? { type: 'level', target: `d:${t.id}`, level: t.prev } : { type: 'level', target: `d:${t.id}`, level: 'off', fade: 0.4 });
+    c.render();
   },
 };
 export function after(c, r, scr) { wireSunrise(c, scr); }

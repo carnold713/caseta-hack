@@ -364,9 +364,7 @@ const cur = (c, r) => c.data.presets().find(x => x.id === r.id);
 async function runScene(c, p) {
   const before = {};
   for (const id of Object.keys(p.levels || {})) if (c.data.dev(id)) before[id] = c.data.level(id) || 0;
-  for (const [id, v] of Object.entries(p.levels || {})) if (c.data.dev(id)) c.S.states[id] = { ...(c.S.states[id] || {}), level: typeof v === 'object' && v ? Number(v.level) || 0 : typeof v === 'number' ? v : v && v !== 'Off' ? 100 : 0 };
-  c.soon();
-  const ok = await c.run({ type: 'preset', preset_id: p.id });
+  const ok = await c.turn({ type: 'preset', preset_id: p.id });
   if (!ok) return;
   // Put back is worded as what it does; at night it stays up longer so it is easy to reach
   const night = isNight(c.DAY.homeNow(), c.S.config.settings.night_start, c.S.config.settings.night_end);

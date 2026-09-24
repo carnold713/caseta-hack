@@ -188,7 +188,14 @@ ws.on('message', raw => {
     const a = m.action;
     // LAG_MS simulates a slow bridge round trip: the result and the echo come back late, like the real thing
     const lag = a.type === 'level' || a.type === 'color' ? Number(process.env.LAG_MS || 0) : 0;
-    setTimeout(() => send({ type: 'result', id: m.id, ok: m.action.type !== 'fan', error: m.action.type === 'fan' ? 'simulated failure' : undefined }), lag);
+    const result = () => send({ type: 'result', id: m.id, ok: m.action.type !== 'fan', error: m.action.type === 'fan' ? 'simulated failure' : undefined });
+    // With the bridge's own pace (ECHO=bridge, below) a light command is answered once every light has been sent
+    // its part, as the connector's run() is; the echoes come on their own time around it.
+    if (ECHO === 'bridge' && ['level', 'restore', 'preset'].includes(a.type)) echoCommand(a, result);
+    else { setTimeout(result, lag); plainCommand(a, lag); }
+  }
+});
+function plainCommand(a, lag) {
     if (a.type === 'restore') {
       const ids = resolve(a.target); const upd = {}; const picks = ids.filter(id => lastOn[id]);
       for (const id of (picks.length ? picks : ids)) { states[id] = { ...(states[id] || {}), level: picks.length ? lastOn[id] : 100 }; upd[id] = states[id]; }
@@ -225,8 +232,101 @@ ws.on('message', raw => {
     const tkey = t => (Array.isArray(t) ? t.join('|') : t);
     if (a.type === 'timer') send({ type: 'timer', target: tkey(a.target), ends_at: Math.floor(Date.now() / 1000) + a.minutes * 60, level: a.level || 0 });
     if (a.type === 'cancel_timer') send({ type: 'timer', target: tkey(a.target), ends_at: null, level: 0 });
+}
+
+// ----- ECHO=bridge: what a real connector sends after a light command, in its order and at its pace -----
+// The plain fake answers every command with the final state of every light in one message, at once. A real home does
+// not, and the app has to look right against what a real home sends (agent/engine.py, agent/agent.py, agent/hue.py):
+//   a Lutron dimmer is sent its level with the fade (settings.default_fade, 0.5 s, unless the command says) and the
+//     bridge reports where it is as it goes: the level it was at first, then the levels on the way, then the new one.
+//     A Lutron switch just reports 100 or 0. Each light of a room or house command is its own request, so each
+//     light's reports start a little after the last one's.
+//   a Hue or Nanoleaf lamp goes through the pacing queue, 0.1 s apart (hue.py LIGHT_GAP). Once the bridge takes the
+//     command the connector says the new level at once (set_level writes current_state); the event stream follows,
+//     and a lamp coming on from off can report "on" first, at the brightness it had before it went off, and its new
+//     brightness a moment later.
+//   the agent sends what changed in batches, 50 ms apart (agent.py _flush_states), so a room arrives light by light.
+// ECHO is set by the environment (FAKE_ECHO=bridge) or by a test through fake-do.json ({"echo": "bridge"}), and
+// {"stuck": [ids]} makes lights ignore what they are asked, to show what the app does when a light fails to change.
+let ECHO = process.env.FAKE_ECHO === 'bridge' ? 'bridge' : 'plain';
+let STUCK = new Set();
+const hueBri = {};   // the brightness a Hue lamp had when it last went off, which its event stream reports first
+const dirty = {}; let flushT = null;
+function report(id, level) {
+  dirty[id] = { ...(states[id] || {}), level };
+  if (flushT) return;
+  flushT = setTimeout(() => {
+    flushT = null;
+    const batch = { ...dirty }; for (const k of Object.keys(dirty)) delete dirty[k];
+    send({ type: 'state', states: batch });
+    for (const [k, st] of Object.entries(batch)) followZone(k, st.level);
+  }, 50);
+}
+const isLamp = id => /^(hue_|nanoleaf_)/.test(id);
+function fadeOf(f) { const d = config && config.settings && config.settings.default_fade; return f != null ? Number(f) : d != null ? Number(d) : 0.5; }
+// changes: [[id, from, to]]. Returns how long the connector takes to have sent every light its part.
+function bridgeEcho(changes, fade) {
+  const ms = fadeOf(fade) * 1000;
+  let lamps = 0, zones = 0, sent = 0;
+  for (const [id, from, to] of changes) {
+    const d = inventory.devices[id] || {};
+    const stuck = STUCK.has(id);
+    if (isLamp(id)) {
+      const at = 20 + lamps++ * 100;
+      sent = Math.max(sent, at + 20);
+      // the connector believes the bridge that took the command, stuck lamp or not
+      setTimeout(() => report(id, to), at + 20);
+      if (stuck) {
+        // an off is looked at again after it (engine.py _make_sure_off): the last look shows the app the truth
+        if (to <= 0) setTimeout(() => report(id, from), at + ms + 800 + 1500 + 2500);
+        continue;
+      }
+      if (to > 0 && from <= 0 && d.type === 'HueLight' && hueBri[id] && hueBri[id] !== to) {
+        setTimeout(() => report(id, hueBri[id]), at + 160);
+        setTimeout(() => report(id, to), at + 230);
+      } else setTimeout(() => report(id, to), at + 160);
+      if (to <= 0 && from > 0) hueBri[id] = from;
+      continue;
+    }
+    const at = 30 + zones++ * 30;
+    sent = Math.max(sent, at);
+    if (stuck) continue;   // a Lutron light that did not change: the bridge has nothing to say about it
+    if (d.domain === 'switch') { setTimeout(() => report(id, to > 0 ? 100 : 0), at + 40); continue; }
+    setTimeout(() => report(id, from), at + 40);
+    const steps = Math.max(1, Math.round(ms / 150));
+    for (let k = 1; k <= steps; k++) setTimeout(() => report(id, Math.round(from + (to - from) * k / steps)), at + 40 + Math.round(ms * k / steps));
   }
-});
+  return sent;
+}
+function echoCommand(a, result) {
+  const changes = [];
+  const set = (id, v) => {
+    const from = (states[id] || {}).level || 0;
+    const to = (inventory.devices[id] || {}).domain === 'switch' && !isLamp(id) && v > 0 ? 100 : v;
+    if (!STUCK.has(id)) states[id] = { ...(states[id] || {}), level: to };
+    changes.push([id, from, to]);
+  };
+  let fade = a.fade;
+  if (a.type === 'level') {
+    const ids = resolve(a.target);
+    if (a.level === 'off' || a.level === 0 || a.level === 'toggle') { const lit = {}; for (const [id, st] of Object.entries(states)) if ((st.level || 0) > 0) lit[id] = st.level; if (Object.keys(lit).length) lastOn = lit; }
+    const anyOn = ids.some(x => ((states[x] || {}).level || 0) > 0);
+    for (const id of ids) set(id, a.level === 'toggle' ? (anyOn ? 0 : onLevel(id, a.target)) : a.level === 'on' ? onLevel(id, a.target) : a.level === 'off' ? 0 : Number(a.level));
+  } else if (a.type === 'restore') {
+    const ids = resolve(a.target); const picks = ids.filter(id => lastOn[id]);
+    for (const id of (picks.length ? picks : ids)) set(id, picks.length ? lastOn[id] : 100);
+  } else if (a.type === 'preset') {
+    const p = ((config && config.presets) || []).find(x => x.id === a.preset_id); if (!p) { result(); return; }
+    fade = p.fade;
+    for (const [id, v] of Object.entries(p.levels)) {
+      if (!inventory.devices[id]) continue;
+      const obj = v && typeof v === 'object';
+      if (obj && (v.kelvin != null || v.hex)) states[id] = { ...(states[id] || {}), color: colorFor(id, v) };
+      set(id, obj ? (Number(v.level) || 0) : typeof v === 'number' ? v : v && v !== 'Off' ? 100 : 0);
+    }
+  }
+  setTimeout(result, bridgeEcho(changes, fade));
+}
 // a rough black-body tint for a white tone, the same fit the connector paints
 function kelvinHex(k) {
   const t = Math.max(1000, Math.min(40000, k)) / 100; let r, g, b;
@@ -248,7 +348,20 @@ function resolve(t) {
   if (t === 'h:all') return all;
   const [k, id] = [t[0], t.slice(2)];
   if (k === 'd') return inventory.devices[id] ? [id] : [];
-  if (k === 'a') return Object.values(inventory.devices).filter(d => d.area === id && ['light', 'switch'].includes(d.domain)).map(d => d.device_id);
+  if (k === 'a') {
+    // the app's own rooms once it has them, as engine.py _resolve reads them: the room that names a device has it,
+    // else the room standing for its bridge room. A lamp moved into a room in the app is switched with that room.
+    const lamp = d => d && ['light', 'switch'].includes(d.domain);
+    const rooms = ((config && config.settings && config.settings.rooms) || []).filter(r => r && r.id);
+    const room = rooms.find(r => String(r.id) === id);
+    if (room) {
+      const claimed = {};
+      for (const r of rooms) for (const did of r.device_ids || []) if (!(String(did) in claimed)) claimed[String(did)] = String(r.id);
+      const areas = [room.bridge_area, room.hue_room].filter(Boolean).map(String);
+      return Object.values(inventory.devices).filter(d => lamp(d) && (claimed[d.device_id] === id || (claimed[d.device_id] == null && areas.includes(String(d.area))))).map(d => d.device_id);
+    }
+    return Object.values(inventory.devices).filter(d => d.area === id && lamp(d)).map(d => d.device_id);
+  }
   if (k === 'g' && config) { const g = (config.groups || []).find(x => x.id === id); return g ? g.device_ids : []; }
   return [];
 }
@@ -294,6 +407,8 @@ setInterval(() => {
   for (const d of [].concat(todo)) {
     if (d.press) fakePress(d.press);
     if (d.states) { for (const [id, st] of Object.entries(d.states)) states[id] = { ...(states[id] || {}), ...st }; send({ type: 'state', states: d.states }); }
+    if (d.echo) { ECHO = d.echo === 'bridge' ? 'bridge' : 'plain'; console.log('echo', ECHO); }
+    if (d.stuck) STUCK = new Set(d.stuck);
   }
 }, 200);
 

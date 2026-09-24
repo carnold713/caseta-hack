@@ -97,12 +97,13 @@ export const actions = {
     const d = nightLamp(c); if (!d || c.conn() === 'off') return;
     const id = d.device_id, T = `d:${id}`;
     c.ui.ns = { id, until: Date.now() + MINUTES * 60000 };
-    c.assume([id], LEVEL); c.render();
     // a lamp that follows the day is already at the night's warmest; any other white lamp is asked for its warmest
     // white, so it comes on candle-warm rather than in whatever it was last left in
     const warm = d.ct && !c.DAY.isFollowing(id);
     const k = d.ct_range ? d.ct_range[0] : 2000;
-    const ok = await c.run(warm ? { type: 'color', target: T, kelvin: Math.max(1000, Math.round(k)), level: LEVEL, fade: 1.6 } : { type: 'level', target: T, level: LEVEL, fade: 1.6 });
+    const going = c.turn(warm ? { type: 'color', target: T, kelvin: Math.max(1000, Math.round(k)), level: LEVEL, fade: 1.6 } : { type: 'level', target: T, level: LEVEL, fade: 1.6 });
+    c.render();
+    const ok = await going;
     if (ok) await c.run({ type: 'timer', target: T, minutes: MINUTES, level: 0, fade: 5 });
   },
   // a tap while it is off does nothing but say how
@@ -111,8 +112,8 @@ export const actions = {
   'ns-off'(c) {
     const d = nightLamp(c); if (!d) return;
     c.ui.ns = null;
-    c.assume([d.device_id], 0); c.render();
-    c.run({ type: 'level', target: `d:${d.device_id}`, level: 'off', fade: 0.4 });
+    c.turn({ type: 'level', target: `d:${d.device_id}`, level: 'off', fade: 0.4 });
+    c.render();
   },
   'ns-pick'(c) { c.openSheet(pickSheet(c)); },
   'ns-set'(c, el) {

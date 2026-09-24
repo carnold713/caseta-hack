@@ -20,6 +20,17 @@
   const RECONNECT_GRACE = 10000;
   // How long after a slider sends a value the bridge's own echo of an older one is ignored.
   const ECHO_QUIET = 1500;
+  // A light this phone just switched is shown where it is going and held there against the bridge's reports of where
+  // it has been (expect, below). It is let go once a report says it got there, and REACH_SETTLE later, so the reports
+  // that trail the one that got there (a Hue lamp's event stream after the connector has said the new level) are not
+  // shown as a step back. Failing that, it is let go ECHO_MARGIN after its fade should have finished, counted from when
+  // the connector said the command was sent, and whatever the bridge last said is shown then. EXPECT_CAP is how long a
+  // command that never answers can hold a light at all (the hub gives up on the connector after ten seconds).
+  const REACH_SETTLE = 500;
+  const ECHO_MARGIN = 1000;
+  const EXPECT_CAP = 12000;
+  // what a command's fade is when it names none, as the connector's own settings default it (hub/validate.js)
+  const DEFAULT_FADE = 0.5;
   // How long a dropped socket waits before dialling again.
   const RECONNECT_AFTER = 2000;
   // The activity list keeps this many entries, newest first.
@@ -66,13 +77,17 @@
     const storage = deps.storage || null;
     // Things only the caller can answer, looked up when they are needed rather than when this is built: the old
     // UI defines them in files that load after this one.
-    const hooks = { roomScenes: null, signedOut: null };
+    // changed: a light this phone was holding has been let go and the screen should show it as the bridge has it.
+    const hooks = { roomScenes: null, signedOut: null, changed: null };
 
     const S = {
       token: (storage && storage.getItem('token')) || '',
       inv: { devices: {}, buttons: {}, scenes: {}, areas: {}, bridge: null, updated: null },
       states: {}, timers: {}, activity: [],
-      held: {},   // device id -> until when this phone's own level and colour for it beat the bridge's echoes
+      // What the screen shows is `states`. What the bridge last said is `truth`; the two differ only for a light in
+      // `expect`: one this phone has just switched or is moving, shown where it is going until the bridge catches up.
+      truth: {},
+      expect: {},
       config: null,
       agent: { online: false, info: null },
       ready: false, ws: null,
@@ -126,7 +141,8 @@
           // A hub that has just restarted has an empty inventory until its connector is back. Keep the home we
           // already know rather than blanking the app for the minute that takes.
           const kept = !hasDevices(m.inventory) && hasDevices(S.inv);
-          if (!kept) { S.inv = m.inventory; S.states = m.states; S.timers = m.timers || {}; }
+          // a light this phone is holding stays held through a snapshot too (a reconnect in the middle of a fade)
+          if (!kept) { S.inv = m.inventory; S.timers = m.timers || {}; S.truth = {}; const was = S.states; S.states = {}; for (const [id, st] of Object.entries(m.states || {})) heard(id, st, was[id]); }
           S.agent = m.agent; S.activity = m.activity || [];
           S.sun = m.sun || null; S.nextRuns = m.next_runs || {}; noteSunClock();
           S.follow = m.follow || null;
@@ -141,15 +157,12 @@
           S.inv = m.inventory; return { type: 'inventory', changed: true };
         }
         case 'state': {
-          // A light a finger is moving (or just let go of) keeps the level and colour this phone gave it: the
-          // bridge's echoes of the values it passed through on the way would pull the slider back.
-          const t = now();
-          for (const [id, st] of Object.entries(m.states || {})) {
-            const cur = S.states[id];
-            if (cur && S.held[id] > t) S.states[id] = { ...st, level: cur.level, ...(cur.color ? { color: cur.color } : {}) };
-            else S.states[id] = st;
-          }
-          return { type: 'state', changed: true };
+          // A light this phone has just switched, or a finger is moving, keeps what this phone gave it (heard). Only
+          // what the screen would show differently is news: a light held where it is going, told by the bridge where
+          // it has got to on the way, draws nothing new, so nothing redraws and no crossfade starts over.
+          let changed = false;
+          for (const [id, st] of Object.entries(m.states || {})) if (heard(id, st, S.states[id])) changed = true;
+          return { type: 'state', changed };
         }
         case 'timers': S.timers = m.timers || {}; return { type: 'timers', changed: true };
         // The hub broadcasts every save to every phone, including the one that made it. That echo is not news.
@@ -209,8 +222,118 @@
     // Run one action now. Throws with a message fit to show when it cannot.
     function run(action) { return api('/api/command', { method: 'POST', body: JSON.stringify(action) }); }
 
-    // Hold what this phone just set for these lights against the bridge's echoes for a moment (S.held).
-    function hold(ids, ms = ECHO_QUIET) { const until = now() + ms; for (const id of [].concat(ids)) S.held[id] = until; }
+    // ---------- a light this phone just changed, held against the bridge's reports ----------
+    // After a command the bridge does not say the new state once. A Lutron dimmer reports the level it was at, then
+    // the levels it passes through as it fades, then the new one; a Hue lamp is said at its new level by the connector
+    // and then again by its own event stream, which can first report it "on" at the brightness it had before; a room
+    // or the house arrives a light at a time. Drawn as they came, a light switched on showed on, off, on, and a room
+    // "1 of 3 on" on its way to "3 of 3". So each light this phone changes is shown at once where it will land, and
+    // held there (S.expect) until the bridge says it got there or the fade should long have finished. The bridge still
+    // has the last word: what it said meanwhile is kept (S.truth) and shown when the hold ends, so a light that did
+    // not change goes back to how it really is, once, when it is clear it is not going to. Only the lights this phone
+    // changed are held; a Pico or another phone changing any other light shows at once.
+    // the same state whatever order its fields came in (a state built here and one the connector sent)
+    const flat = v => (v && typeof v === 'object' && !Array.isArray(v) ? `{${Object.keys(v).sort().map(k => `${k}:${flat(v[k])}`).join(',')}}` : JSON.stringify(v === undefined ? null : v));
+    const same = (a, b) => flat(a || null) === flat(b || null);
+    // A report reached what was expected: a dimmer within a percent of it, a switch (whatever level it reports) on
+    // or off as expected.
+    function reached(id, e, st) {
+      if (!st || st.level == null || e.level == null) return false;
+      if ((dev(id) || {}).domain === 'switch') return (st.level > 0) === (e.level > 0);
+      return Math.abs(st.level - e.level) <= 1;
+    }
+    // One report for one light: kept as the truth, and shown unless the light is held. True when what the screen
+    // shows for it has changed. `cur` is what the screen showed for it before this report.
+    function heard(id, st, cur) {
+      S.truth[id] = st;
+      const e = S.expect[id];
+      if (e && e.until > now()) {
+        e.heard = true;
+        if (!e.slider && reached(id, e, st)) { e.until = Math.min(e.until, now() + REACH_SETTLE); plan(); }
+        // a finger's colour is held with its level; a switched light's colour is the bridge's
+        const next = { ...st, level: cur ? cur.level : e.level, ...(e.slider && cur && cur.color ? { color: cur.color } : {}) };
+        S.states[id] = next;
+        return !same(cur, next);
+      }
+      if (e) delete S.expect[id];
+      S.states[id] = st;
+      return !same(cur, st);
+    }
+    // Let go of every hold that has run out. A switched light is shown as the bridge last said it is; a slider's hold
+    // just ends, leaving the finger's level until the next report (its echo may still be on the way). True when the
+    // screen changed.
+    function settle() {
+      const t = now();
+      let changed = false;
+      for (const [id, e] of Object.entries(S.expect)) {
+        if (e.until > t) continue;
+        delete S.expect[id];
+        if (e.slider || !(id in S.truth)) continue;
+        const cur = S.states[id], next = S.truth[id];
+        if (!same(cur, next)) { S.states[id] = next; changed = true; }
+      }
+      return changed;
+    }
+    // One timer for the next hold to run out. When letting go changes the screen, hooks.changed says so.
+    let planned = null;
+    function plan() {
+      const ends = Object.values(S.expect).map(e => e.until);
+      if (!ends.length) return;
+      const at = Math.min(...ends);
+      if (planned && planned.at <= at) return;
+      const handle = later(() => {
+        if (planned && planned.handle === handle) planned = null;
+        if (settle() && hooks.changed) hooks.changed();
+        plan();
+      }, Math.max(0, at - now()) + 5);
+      // a timer never keeps a test (or anything else in node) alive by itself
+      if (handle && typeof handle.unref === 'function') handle.unref();
+      planned = { at, handle };
+    }
+    // This phone is switching these lights: {id: level} is where each will land, `fade` the command's fade in seconds.
+    // Each is shown there now and held until the command is answered (sent) and the bridge has caught up. Returns the
+    // command's number, which sent() takes, so an answer to an older command never lets go of a newer one's lights.
+    let commands = 0;
+    function expect(levels, fade) {
+      const t = now(), n = ++commands;
+      const ms = (fade != null ? Number(fade) : DEFAULT_FADE) * 1000;
+      for (const [id, level] of Object.entries(levels)) {
+        const cur = S.states[id];
+        // a light already showing that level (a room's lamp that was already off) has nothing to hold
+        if (!S.expect[id] && cur && cur.level === level) continue;
+        S.states[id] = { ...(cur || {}), level };
+        S.expect[id] = { level, n, fade: ms, since: t, until: t + ms + EXPECT_CAP, heard: false };
+      }
+      plan();
+      return n;
+    }
+    // The command for these lights was answered. Sent: each is held until its fade and a margin have passed from now,
+    // or less if the bridge has already said it got there. Not sent: nothing is going to change, so each is shown as
+    // the bridge last said at once. True when the screen changed.
+    function sent(n, ok) {
+      const t = now();
+      for (const e of Object.values(S.expect)) {
+        if (e.n !== n) continue;
+        e.until = ok ? Math.min(e.until, t + e.fade + ECHO_MARGIN) : t;
+      }
+      const changed = settle();
+      plan();
+      return changed;
+    }
+    // Hold what a finger just set for these lights, level and colour, against the bridge's echoes of the values it
+    // passed through on the way, for a moment after each move.
+    function hold(ids, ms = ECHO_QUIET) {
+      const t = now();
+      for (const id of [].concat(ids)) { const cur = S.states[id] || {}; S.expect[id] = { level: cur.level, slider: true, since: t, until: t + ms, heard: false }; }
+      plan();
+    }
+    // Where a light switched to `level` will say it has landed: a Lutron switch reports 100 whatever level it is sent
+    // (the connector sends it the on level like any other light), where a Hue plug reports the level it was sent.
+    function landing(id, level) {
+      const d = dev(id) || {};
+      if (level > 0 && d.domain === 'switch' && !/^(hue_|nanoleaf_)/.test(id)) return 100;
+      return clamp(Math.round(level), 0, 100);
+    }
 
     // While a finger is moving: one command in flight per target and kind (brightness, colour), the newest value
     // always goes next and everything between is dropped. Echoes from the bridge are ignored for a moment after.
@@ -469,7 +592,7 @@
       // connection
       connState, connOk, connLost, noteConn, noteSunClock,
       // the socket and the wire
-      apply, noteLive, api, lightHistory, run, gate, hold, saveConfig, restoreConfig, connectWS,
+      apply, noteLive, api, lightHistory, run, gate, hold, expect, sent, settle, landing, saveConfig, restoreConfig, connectWS,
       // inventory and rooms
       hiddenDevices, devices, dev, appRooms, appRoom, roomIndex, devArea, devAreaName, areaName, areas,
       controllable, remotes, byName, level, isOn, buttonsOf, groups, presets, lutronScenes,
@@ -484,7 +607,7 @@
 
   const CasetaData = {
     create,
-    RECONNECT_GRACE, ECHO_QUIET, RECONNECT_AFTER, ACTIVITY_MAX,
+    RECONNECT_GRACE, ECHO_QUIET, REACH_SETTLE, ECHO_MARGIN, EXPECT_CAP, DEFAULT_FADE, RECONNECT_AFTER, ACTIVITY_MAX,
     MODEL_NAMES, LAYOUTS, GESTURE_LABEL,
     esc, uid, clamp, cap, plural, fmtDur, fanName, fmtTime, levelOf, colorOf, tlist, tsplit, userGestureOf, friendlyError,
   };

@@ -50,7 +50,7 @@ function before(c, id) { const col = colOf(c, id); return { level: c.data.level(
 function undoTo(c, d, was) {
   return async () => {
     const id = d.device_id, t = `d:${id}`;
-    if (!(was.level > 0)) { c.assume([id], 0); c.soon(); await c.run({ type: 'level', target: t, level: 'off' }); return; }
+    if (!(was.level > 0)) { await c.turn({ type: 'level', target: t, level: 'off' }); return; }
     if (was.kelvin) setWhite(c, d, was.kelvin);
     else if (was.hex) setColour(c, d, was.hex);
     c.soon();
@@ -565,14 +565,14 @@ export const actions = {
     const full = fullMinutes(c, { key, ends: t.ends, minutes: Number(((c.S.timers || {})[key] || {}).minutes) || 0 });
     const ids = c.data.targetDevices(targetOf(key));
     const lit = ids.filter(id => isOn(c, id)).map(id => [id, c.data.level(id)]);
-    c.assume(ids, 0); c.soon();
-    await c.run({ type: 'cancel_timer', target: targetOf(key) });
-    const ok = await c.run({ type: 'level', target: targetOf(key), level: 'off' });
+    // the timer is dropped first; the lights are shown off from the tap (turn), not from its answer
+    const cancelled = c.run({ type: 'cancel_timer', target: targetOf(key) });
+    const off = c.turn({ type: 'level', target: targetOf(key), level: 'off' });
+    await cancelled;
+    const ok = await off;
     if (ok) c.toast('Off now', {
       undo: async () => {
-        for (const [id, lv] of lit) c.assume([id], lv);
-        c.soon();
-        for (const [id, lv] of lit) await c.run({ type: 'level', target: `d:${id}`, level: lv });
+        await Promise.all(lit.map(([id, lv]) => c.turn({ type: 'level', target: `d:${id}`, level: lv })));
         await startTimer(c, key, minsLeft(t.ends - Date.now()), t.level, full);
       },
     });
