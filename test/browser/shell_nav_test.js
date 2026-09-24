@@ -115,7 +115,7 @@ async function through(page, what, act, { settle = 700 } = {}) {
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); } catch (_) {} }, process.env.APP_TOKEN);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(`${W} pageerror: ${e.message}`));
-    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push(`${W} console: ${m.text()}`); });
+    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text())) errors.push(`${W} console: ${m.text()}`); });
     await page.goto(`${ROOT}?night=0#home`);
     if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.keyboard.press('Enter'); }
     await page.waitForFunction(() => window.__copper && window.__copper.S && window.__copper.S.ready, null, { timeout: 15000 });
@@ -383,9 +383,14 @@ async function through(page, what, act, { settle = 700 } = {}) {
     await ctx.close();
   }
 
-  // a file that is not there is a 404, not the app's page in its place (the fonts are not in the repository)
-  const font = await fetch(`${ROOT}ui/font/LutronSansScreen-Regular.woff2`).then(r => ({ status: r.status, type: r.headers.get('content-type') || '' }));
-  check('a missing file under /ui/ is a 404, not the app\'s page', font.status === 404 && !/html/.test(font.type), font);
+  // a file that is not there is a 404, not the app's page in its place
+  const gone = await fetch(`${ROOT}ui/font/NoSuchFace.woff2`).then(r => ({ status: r.status, type: r.headers.get('content-type') || '' }));
+  check('a missing file under /ui/ is a 404, not the app\'s page', gone.status === 404 && !/html/.test(gone.type), gone);
+  // and the face that is there is served as a font, kept for a year
+  for (const f of ['Figtree-latin.woff2', 'Figtree-latin-ext.woff2']) {
+    const r = await fetch(`${ROOT}ui/font/${f}`).then(async r => ({ status: r.status, type: r.headers.get('content-type') || '', cache: r.headers.get('cache-control') || '', bytes: (await r.arrayBuffer()).byteLength }));
+    check(`${f} is served as font/woff2 with a long cache`, r.status === 200 && r.type === 'font/woff2' && /max-age=31536000/.test(r.cache) && r.bytes > 5000, r);
+  }
   const routeOk = await fetch(`${ROOT}ui/`).then(r => r.status === 200 && /html/.test(r.headers.get('content-type') || ''));
   check('and the app\'s page is still the app\'s page', routeOk);
   check('no page errors', !errors.length, errors);

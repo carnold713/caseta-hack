@@ -164,7 +164,7 @@ const LOCAL = ([full]) => {
   const errors = [];
   const watch = (p, tag) => {
     p.on('pageerror', e => errors.push(`${tag} pageerror: ${e.message}`));
-    p.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push(`${tag} console: ${m.text()}`); });
+    p.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text())) errors.push(`${tag} console: ${m.text()}`); });
   };
   let prev = null;
 
@@ -176,6 +176,30 @@ const LOCAL = ([full]) => {
     if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.keyboard.press('Enter'); }
     await page.waitForFunction(() => window.__copper && window.__copper.S && window.__copper.S.ready, null, { timeout: 15000 });
     await wait(800);
+    // The app is set in Figtree, served from /ui/font/. For a long time the face it named was never there and every
+    // page quietly fell back to the phone's own; this is what keeps that from happening again. Three ways: the face
+    // has loaded, the digits 0 to 9 at 100 px Regular measure what Figtree's own advance widths add up to (563.6,
+    // where this machine's DejaVu Sans gives 636.2 and its generic sans-serif 556.2), and the glyphs Chromium actually
+    // drew for Home's headline came from Figtree and nothing else.
+    const face = await page.evaluate(async () => {
+      await document.fonts.ready;
+      const faces = [...document.fonts].filter(f => f.family.replace(/["']/g, '') === 'Figtree').map(f => f.status);
+      const s = document.createElement('span');
+      s.style.cssText = 'position:absolute;left:-9999px;font:400 100px Figtree;font-variant-numeric:normal;white-space:pre';
+      s.textContent = '0123456789'; document.body.appendChild(s);
+      const width = +s.getBoundingClientRect().width.toFixed(1); s.remove();
+      return { faces, check: document.fonts.check('16px Figtree'), width, body: getComputedStyle(document.body).fontFamily };
+    });
+    check(`${W}: Figtree has loaded`, face.check && face.faces.includes('loaded'), face);
+    check(`${W}: the body is set in Figtree first`, /^"?Figtree"?,/.test(face.body), face.body);
+    check(`${W}: and it measures as Figtree (0 to 9 at 100 px: 563.6)`, Math.abs(face.width - 563.6) < 0.6, face.width);
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+    const { root } = await cdp.send('DOM.getDocument');
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: '#screen h1' });
+    const drawn = nodeId ? (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts : [];
+    check(`${W}: Home's headline is drawn in Figtree`, drawn.length > 0 && drawn.every(f => /^Figtree/.test(f.familyName) && f.isCustomFont), drawn);
+    await cdp.detach();
     if (!prev) prev = await page.evaluate(() => JSON.stringify(window.__copper.S.config));
     await page.evaluate(SEED, [LONG, HOME]);
     const ids = await page.evaluate(() => { const c = window.__copper; return { room: c.data.areas()[0].id, light: c.data.controllable()[0].device_id, remote: (c.data.remotes()[0] || {}).device_id || null }; });

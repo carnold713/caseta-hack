@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 4400;
   const errors = [];
   const fav = async (label) => console.log(label, await page.evaluate(() => JSON.stringify(S.config.favorites)));
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/fonts.googleapis|net::ERR/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/fonts.googleapis|net::ERR/.test(m.text())) errors.push('console: ' + m.text()); });
   await page.goto(`http://127.0.0.1:${PORT}/classic/`);
   await page.screenshot({ path: 'r-login.png' });
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); }

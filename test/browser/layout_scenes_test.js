@@ -217,7 +217,7 @@ function frames() {
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|502|404|Failed to load resource/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
+    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|502|404|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
     const C = (fn, arg) => page.evaluate(fn, arg);
     await page.goto(`http://127.0.0.1:${PORT}/ui/#home`);
     if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('.login-form button'); }

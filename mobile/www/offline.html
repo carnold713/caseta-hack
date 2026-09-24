@@ -8,8 +8,11 @@
 <style>
   /* Shown by the Android shell when the hub cannot be reached as the app opens: the same dark, calm room as the
      app's own offline page (18), one ember and one sentence, and a way to try again. The remotes keep working. */
+  /* The app's face, Figtree (SIL OFL 1.1, font/OFL.txt), bundled beside this page: it is shown
+     exactly when the hub, which serves the app's own copy, cannot be reached. */
+  @font-face { font-family: 'Figtree'; src: url('font/Figtree-latin.woff2') format('woff2'); font-weight: 300 900; font-style: normal; font-display: swap; }
   :root { --bg: #121212; --t1: #FFFFFF; --t2: #9E9E9E; --copper: #D98A4E; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--t1); font-family: 'Lutron Sans Screen', 'DM Sans', system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--t1); font-family: 'Figtree', system-ui, Roboto, 'Segoe UI', sans-serif; -webkit-user-select: none; user-select: none; }
   main { position: relative; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 20px 72px; box-sizing: border-box; overflow: hidden; }
   .ember { position: absolute; left: 50%; top: 28%; width: 360px; height: 360px; margin: -180px 0 0 -180px; border-radius: 50%;
     background: radial-gradient(closest-side, rgba(217, 138, 78, .34), rgba(184, 108, 53, .12) 55%, transparent); filter: blur(24px);

@@ -54,6 +54,11 @@ function liveWave(aid) {
 const fading = (w, id) => !!(w && w.kind === 'run' && w.id === id && w.fade > 1 && since(w) < w.fade * 1000);
 
 const levelOf = v => (typeof v === 'object' && v ? Number(v.level) || 0 : typeof v === 'number' ? v : v && v !== 'Off' ? 100 : 0);
+// A long name steps down a size, then another, before it has to end in an ellipsis. On the owner's 412 the line, clear
+// of the count, holds twelve or thirteen letters of Figtree at 40, thirteen or fourteen at 32 (a line cut 20 shorter for
+// the pin) and fourteen to sixteen at 28: "Master bedroom" was cut at 40 and at 32, and is whole at 28. A small phone
+// has less line and still cuts sooner.
+const titleFit = name => (name.length > 13 ? 'fit2' : name.length > 12 ? 'fit1' : '');
 const countText = (n, onN) => `${n === 1 ? '1 device' : `${n} devices`}${onN ? ` · ${onN} on` : ''}`;
 
 // The warmest light a scene brings, which is the colour its ring of light carries: a scene with a colour lamp in it
@@ -154,7 +159,7 @@ export function view(c, r) {
       <button class="hdr-btn a1" data-go="room/${esc(aid)}/setup" aria-label="Room setup">${icon('dots', 22, 2.4)}</button>
     </header>
     <div class="room-title bar-pin">
-      <h1 class="t-h1 bar-t ${a.name.length > 24 ? 'fit2' : a.name.length > 14 ? 'fit1' : ''}">${esc(a.name)}</h1>
+      <h1 class="t-h1 bar-t ${titleFit(a.name)}">${esc(a.name)}</h1>
       ${countHTML}
     </div>
     <div class="room-photo-card ${photo ? '' : 'scene'}">

@@ -27,7 +27,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(`${W}: ${e.message}`));
-    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|woff2|404|Failed to load resource/.test(m.text())) errors.push(`${W} console: ${m.text()}`); });
+    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|404|Failed to load resource/.test(m.text())) errors.push(`${W} console: ${m.text()}`); });
     const C = (fn, arg) => page.evaluate(fn, arg);
     const ready = () => page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 });
     const go = async hash => { await C(h => { location.hash = h; }, hash); await wait(1000); };

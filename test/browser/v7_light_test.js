@@ -27,7 +27,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/fonts.googleapis|net::ERR/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/fonts.googleapis|net::ERR/.test(m.text())) errors.push('console: ' + m.text()); });
   const C = (fn, arg) => page.evaluate(fn, arg);
   const goto = async (h, ms = 900) => { await C(x => { location.hash = x; }, h); await wait(ms); };
   await page.goto(`http://127.0.0.1:${PORT}/#home`);

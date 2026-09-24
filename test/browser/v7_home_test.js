@@ -15,7 +15,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|woff2|404/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
+    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|404/.test(m.text())) errors.push('console: ' + m.text()); });
     return { ctx, page };
   };
   const root = `http://127.0.0.1:${PORT}/ui/`;

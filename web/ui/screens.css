@@ -41,6 +41,10 @@
 .card.house { padding: 22px 20px 18px; }
 .house .t-over { line-height: 14px; }
 .house-head { margin-top: 6px; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.02em; }
+/* Figtree's figures are proportional: a number that changes under a finger or counts on its own is set in its
+   tabular ones, so it does not shuffle sideways at every step (here, the dial, the shade, the white sheet, the
+   light's On pill, the pairing countdown and the Sunrise scrub; the timers already were). */
+.house-head [data-hlv], .dev [data-lv] { font-variant-numeric: tabular-nums; }
 .house .hbar { margin-top: 16px; touch-action: pan-y; cursor: pointer; }
 .house-cap { margin: 8px 0 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
 .house-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
@@ -366,7 +370,7 @@
 .dial .lbl { position: absolute; left: 0; right: 0; top: 78px; text-align: center; font-size: 14px; line-height: 17px; color: var(--text-2); pointer-events: none; }
 /* the number a gap under its label (the label where the file puts it, 78; the two used to touch, 95 on 96) */
 .dial .num { position: absolute; left: 0; right: 0; top: calc(95px + var(--gap)); display: flex; justify-content: center; align-items: flex-start; pointer-events: none; }
-.dial .num b { font-weight: 300; font-size: 88px; line-height: 88px; letter-spacing: -.03em; }
+.dial .num b { font-weight: 300; font-size: 88px; line-height: 88px; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .dial .num span { font-weight: 300; font-size: 36px; line-height: 42px; color: var(--text-2); margin-top: 12px; margin-left: 1px; }
 .dial .nudge {
   position: absolute; top: 196px; width: 48px; height: 48px; border-radius: 24px; border: 0;
@@ -435,7 +439,7 @@
 .window .hem-grab { position: absolute; left: 0; right: 0; top: calc(var(--down) * 3px - 28px); height: 56px; touch-action: none; cursor: grab; }
 .window .handle i { position: absolute; left: 28px; top: 9px; width: 24px; height: 2px; border-radius: 1px; background: rgba(0, 0, 0, .25); }
 .readout { position: absolute; left: calc(50% + 90px); top: calc(336px + var(--down) * 3px - 34px); pointer-events: none; }
-.readout b { display: block; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.02em; }
+.readout b { display: block; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .readout span:last-child { display: block; margin: 2px 0 0 2px; font-size: 14px; line-height: 17px; color: var(--text-2); }
 .readout .tick { position: absolute; left: -16px; top: 34px; width: 10px; height: 1px; background: rgba(255, 255, 255, .3); }
 /* On a narrow phone the window moves left so the readout beside it (up to "100%") stays on the screen */
@@ -474,7 +478,7 @@
 .ws { height: 452px; }
 .ws:not(:has(.seg2)) { height: 408px; margin-top: -26px; }
 .ws-val { position: absolute; left: var(--gutter); top: 64px; display: flex; align-items: center; }
-.ws-val b { font-size: 56px; font-weight: 300; line-height: 64px; letter-spacing: -.03em; }
+.ws-val b { font-size: 56px; font-weight: 300; line-height: 64px; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .ws-val .dot { width: 10px; height: 10px; border-radius: 5px; margin: 23px 0 0 12px; }
 .ws-val span { font-size: 16px; line-height: 19px; color: var(--text-2); margin: 23px 0 0 6px; }
 .ws-limit { position: absolute; right: var(--gutter); top: 156px; font-size: 12px; font-weight: 500; line-height: 14px; color: var(--text-2); }
@@ -1223,7 +1227,7 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .ad-steps .as i { transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease); }
 .ad-steps .as { transition: color var(--standard) var(--ease); }
 .ad-status { margin: 10px 0 0; text-align: center; font-size: 20px; font-weight: 500; line-height: 24px; }
-.ad-status .left { font-size: 14px; font-weight: 400; color: var(--text-3); }
+.ad-status .left { font-size: 14px; font-weight: 400; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .ad-say { margin: 6px 46px 0; text-align: center; font-size: 16px; line-height: 22px; color: var(--text-2); }
 .ad-btns { display: flex; justify-content: center; margin-top: 16px; }
 .ad-btns .pill { height: 48px; min-width: 180px; font-size: 16px; }

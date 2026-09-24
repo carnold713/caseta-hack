@@ -114,8 +114,9 @@ export function view(c) {
   const lv = H.houseLevel();
   const name = (S.config.settings.home_name || 'Home');
   // A long name steps down a size, then another, before it has to end in an ellipsis, as a room's title does: beside
-  // the clock on a 360 screen the line holds about eleven letters at 40, fourteen at 32 and sixteen at 28 (more on a
-  // wider screen, whose line runs further), where at 40 alone a longer name was cut to its first nine.
+  // the clock on a 360 screen the line holds eleven to thirteen letters of Figtree at 40, fifteen to seventeen at 32
+  // and seventeen to twenty at 28 (more on a wider screen, whose line runs further), where at 40 alone a longer name
+  // was cut to its first nine. The steps take the fewest, so no name is cut at a size it was stepped down to.
   const fit = name.length > 14 ? 'fit2' : name.length > 11 ? 'fit1' : '';
   // connected: nothing. The first ten seconds of a drop: a grey breathing dot after the greeting. After that: a red
   // dot and "Offline · showing last known state" in its place, and a card that says what to do.

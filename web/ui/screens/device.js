@@ -103,9 +103,11 @@ function dialHTML(c, lv, tone, label) {
   </div>`;
 }
 
-// A long name steps down a size, then another, before it has to end in an ellipsis: at 44 the line holds about
-// twelve letters on a small phone, so "Pendant over the kitchen island" said only "Pendant ove...".
-const heroFit = name => (name.length > 22 ? 'fit2' : name.length > 14 ? 'fit1' : '');
+// A long name steps down a size, then another, before it has to end in an ellipsis: on a small phone the line holds
+// fourteen to sixteen letters of Figtree at 44, eighteen to twenty at 36 and twenty-two to twenty-five at 30, so
+// "Pendant over the kitchen island" no longer says only "Pendant ove...". The steps take the fewest: at 36 a name of
+// 21 or 22 letters ("Kitchen island pendant") was still cut, and at 30 it is whole.
+const heroFit = name => (name.length > 18 ? 'fit2' : name.length > 14 ? 'fit1' : '');
 
 function header(c, d) {
   const { icon, esc } = c;

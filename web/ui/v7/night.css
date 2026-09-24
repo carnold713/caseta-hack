@@ -139,7 +139,7 @@ html:has(.ns-page) .sheet .radio.on { background: #B86C35; border-color: #B86C35
 .sr-clock { position: absolute; left: 23px; top: 19px; line-height: 56px; color: #fff; font-variant-numeric: tabular-nums; }
 .sr-hm { font-size: 48px; font-weight: 300; letter-spacing: -.02em; }
 .sr-ap { font-size: 20px; color: #D1D1D1; }
-.sr-level { position: absolute; left: 23px; top: 77px; font-size: 14px; color: #D1D1D1; }
+.sr-level { position: absolute; left: 23px; top: 77px; font-size: 14px; color: #D1D1D1; font-variant-numeric: tabular-nums; }
 .sr-scrub { position: relative; margin-top: 48px; }
 /* a grip: the knob takes the finger at once; the track moves sideways and lets a vertical swipe scroll */
 .sr-track { position: relative; height: 56px; border-radius: 28px; background: var(--surface-2); overflow: hidden; touch-action: pan-y; cursor: pointer; }

@@ -158,8 +158,10 @@ icon circle inside a grouped row is lighter than the group behind it.
 
 ## Type
 
-**Lutron Sans Screen**, fallback DM Sans. Three weights: Light (300), Regular
-(400), Medium (500).
+**Figtree** (SIL Open Font License 1.1), served by the hub from `web/ui/font/`,
+falling back to the system face. The design was drawn in Lutron Sans Screen, which
+never shipped; the owner chose Figtree in its place. Three weights carry the type
+scale: Light (300), Regular (400), Medium (500).
 
 | Role | Size / weight | Line | Tracking |
 |---|---|---|---|
@@ -677,12 +679,14 @@ system, keyframe scripts), drawn in the file's App · current screens section. I
 is concept work: nothing in it is built yet, and this spec stays the source of
 truth for what is.
 
-**Open: the webfont.** `tokens.css` declares Lutron Sans Screen at
-`/ui/font/LutronSansScreen-{Light,Regular,Medium}.woff2`. Those three files are
-not in the repo, because whether the face can ship as a webfont in the PWA is
-still unanswered. Until they land the stack falls back to DM Sans and the three
-requests 404 harmlessly. Drop the files in and it starts working with no other
-change.
+**The webfont.** `tokens.css` used to declare Lutron Sans Screen from files that
+were never in the repo, so every phone fell back to its own face. The app is now
+set in Figtree: one variable woff2 per subset (latin, latin-ext, as Fontsource cuts
+them) in `web/ui/font/` with its licence as `OFL.txt`, the latin file preloaded by
+the page, both in the service worker's offline list, and served for a year under
+names that never change (a new cut ships under a new name). `layout_shell_test`
+checks the face has loaded, measures as Figtree and is what Chromium draws, so it
+cannot quietly fall back again.
 
 ## Motion
 

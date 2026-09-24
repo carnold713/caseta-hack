@@ -11,6 +11,9 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
+<!-- The app's face, fetched with the page rather than when the first word is laid out, so the first paint is already
+     in Figtree and nothing reflows. One variable file carries every weight the app uses. -->
+<link rel="preload" href="/ui/font/Figtree-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/ui/tokens.css">
 <link rel="stylesheet" href="/ui/components.css">
 <link rel="stylesheet" href="/ui/screens.css">

@@ -281,6 +281,10 @@ const WEB = path.join(__dirname, '..', 'web');
 app.use(express.static(WEB, {
   setHeaders(res, filePath) {
     if (filePath.endsWith('sw.js') || filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+    // The app's typeface (web/ui/font/) is kept for a year without asking again: the files never change under the
+    // same name. A new cut of the face ships under a new file name, and tokens.css, which is always revalidated,
+    // is what points at it.
+    else if (filePath.endsWith('.woff2')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   }
 }));
 app.get('*', (req, res) => {

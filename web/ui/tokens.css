@@ -90,22 +90,23 @@
   --spring-quick: linear(0, 0.03, 0.1077, 0.2165, 0.342, 0.4728, 0.6001, 0.7175, 0.8208, 0.9077, 0.9776, 1.0307, 1.0684, 1.0925, 1.1051, 1.1084, 1.1047, 1.096, 1.084, 1.0703, 1.0561, 1.0424, 1.0297, 1.0187, 1.0094, 1.0019, 0.9963, 0.9923, 0.9898, 0.9885, 0.9882, 0.9887, 0.9897, 0.991, 0.9925, 0.994, 0.9955, 0.9969, 0.9981, 0.9991, 0.9998, 1.0004, 1.0009, 1.0011, 1.0012, 1.0013, 1.0012, 1.0011, 1.001, 1.0008, 1.0006);
 }
 
-/* The face the whole app is set in. Three weights ship, not eight: the file's generator drew in
-   Extralight/Light/Book/Regular/Medium and a later pass folded them down to these. */
+/* The face the whole app is set in: Figtree (SIL Open Font License 1.1, web/ui/font/OFL.txt), served from the hub
+   itself so the app needs nothing from anyone else and reads the same offline. One variable file per subset covers
+   every weight from 300 to 900, which is smaller than the static Light, Regular and Medium it replaces and also gives
+   the one bold glyph (the error badge's "!") a real 700 instead of a smeared one. The two subsets and their ranges
+   are the ones Fontsource cuts (@fontsource-variable/figtree 5.3.0); a character in neither, like an arrow, comes
+   from the next face in the stack. */
 @font-face {
-  font-family: 'Lutron Sans Screen';
-  src: url('/ui/font/LutronSansScreen-Light.woff2') format('woff2');
-  font-weight: 300; font-style: normal; font-display: swap;
+  font-family: 'Figtree';
+  src: url('/ui/font/Figtree-latin-ext.woff2') format('woff2');
+  font-weight: 300 900; font-style: normal; font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Lutron Sans Screen';
-  src: url('/ui/font/LutronSansScreen-Regular.woff2') format('woff2');
-  font-weight: 400; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Lutron Sans Screen';
-  src: url('/ui/font/LutronSansScreen-Medium.woff2') format('woff2');
-  font-weight: 500; font-style: normal; font-display: swap;
+  font-family: 'Figtree';
+  src: url('/ui/font/Figtree-latin.woff2') format('woff2');
+  font-weight: 300 900; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -115,7 +116,7 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text-1);
-  font-family: 'Lutron Sans Screen', 'DM Sans', system-ui, -apple-system, Roboto, 'Segoe UI', sans-serif;
+  font-family: 'Figtree', system-ui, Roboto, 'Segoe UI', sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;

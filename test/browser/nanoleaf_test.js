@@ -13,7 +13,7 @@ const SHOT = process.env.SHOT_DIR || __dirname;
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/fonts.googleapis|net::ERR|502/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/fonts.googleapis|net::ERR|502/.test(m.text())) errors.push('console: ' + m.text()); });
   const shot = n => page.screenshot({ path: `${SHOT}/s22-${n}.png` });
   const text = async sel => ((await page.textContent(sel)) || '').replace(/\s+/g, ' ').trim();
 

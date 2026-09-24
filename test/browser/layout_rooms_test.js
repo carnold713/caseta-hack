@@ -187,7 +187,7 @@ function badFrames(before, after, frames) {
     await ctx.addInitScript(src => { window.__lr = new Function(`${src}; return { textStates, sampleFlight };`)(); }, `${textStates}\n${sampleFlight}`);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(`${width}: ${e.message}`));
-    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|woff2|404|Failed to load resource/.test(m.text())) errors.push(`${width} console: ${m.text()}`); });
+    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|404|Failed to load resource/.test(m.text())) errors.push(`${width} console: ${m.text()}`); });
     return { ctx, page };
   };
   let { ctx, page } = await open(412, 915);
