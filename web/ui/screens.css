@@ -290,6 +290,26 @@
    smaller drawing gave back (--lift), and so does everything under them. */
 /* and everything under the title moves up with it, by the same amount, so the page keeps its rhythm with no gap */
 .dev > :is(.onoff, .looks, .feats, .dial, .speeds, .window, .readout, .shade-btns, .shade-gn) { translate: 0 calc(-1 * var(--lift, 0px)); }
+/* The page's main control sits where the thumb is: a light's dial, a fan's speeds, a shade's window with its buttons
+   and the row under them. Where the page is shorter than the screen, the page fills the screen and the control sinks
+   to its bottom by the room left over (--sink), keeping the 24 and the safe area a page with no tab bar keeps under it
+   (#app.notabs .screen); the drawing, the names, On and Off and the cards stay at the top where they were. Where the
+   page is taller, --sink is 0, and the control follows the content and the page scrolls as it always did.
+   --end is where the page as drawn ends: the file's 890 (a light's dial and a fan's speeds end there, 6 and 8 under
+   their buttons), less what the drawing gave back and what a light with neither white nor colour closes up; a shade's
+   ends 6 under its Goodnight row, as a light's does under its buttons. It is the small viewport's height (svh), not the
+   dynamic one: in a browser whose address bar hides as the page scrolls, the dynamic height changes mid-scroll and
+   would move the control under the thumb, and in the installed app and the Android shell the two are the same.
+   It is all the stylesheet's, worked out from the screen, so a redraw, which draws the page again from the state,
+   puts the control exactly where it was, and nothing is measured. (A switch has no control but its On and Off, which
+   stays under its name; the Follow the day page is a .dev too and scrolls as a list.) */
+.dev:is(:has(> .dial), .is-fan, .is-shade) {
+  --end: calc(890px - var(--lift, 0px) + var(--shift, 0px));
+  --sink: max(0px, 100svh - 24px - env(safe-area-inset-bottom, 0px) - var(--end));
+  min-height: calc(var(--end) + var(--sink));
+}
+.dev.is-shade { --end: calc(854px - var(--lift, 0px)); }
+.dev > :is(.dial, .speeds, .window, .readout, .shade-btns, .shade-gn) { translate: 0 calc(var(--sink, 0px) - var(--lift, 0px)); }
 .dev .hero-art { position: absolute; left: calc(50% - var(--art-w, 72px) / 2); top: var(--art-top, 98px); width: var(--art-w, 72px); height: var(--art-h, 72px); opacity: .2; transition: opacity var(--dimmer) var(--ease-both); }
 .dev.on .hero-art { opacity: 1; }
 .dev .hdr { position: absolute; inset: 0 0 auto 0; }

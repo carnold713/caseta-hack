@@ -30,6 +30,11 @@ const ROOM = [
 // nobody has given a kind, is 72, where the file had 180), resting 14 over the room's name, and the name, the title
 // and everything under them 56 higher than the file's 04 Light, the room the smaller drawing gave back.
 const LIFT = 56;
+// The dial is anchored to the bottom of the screen where the page is shorter than it (screens.css, --sink): its box
+// ends 24 above the screen's bottom, the gap a page with no tab bar keeps under it. On this 412 x 915 phone the page
+// as drawn ends at 890 - LIFT = 834, so the dial and a fan's speeds sink by the 57 left over, which puts them back
+// within a pixel of where the file's 04 Light and 17 Fan have them. Everything over them stays where it was.
+const MARGIN = 24, SINK = 915 - MARGIN - (890 - LIFT);
 const LIGHT = [
   ['hero art', '.hero-art', 170, 226 - LIFT - 72, 72, 72],
   ['pin', '.hdr .a2', 272, 52, 56, 56],
@@ -42,12 +47,12 @@ const LIGHT = [
   ['White circle', '.looks .look:nth-child(1) .c', 34, 428 - LIFT, 44, 44],
   ['first pill', '.feats .feat:nth-child(1)', 20, 558 - LIFT, 180, 64],
   ['pill circle', '.feats .feat:nth-child(1) .c', 28, 566 - LIFT, 48, 48],
-  ['arc', '.dial > svg', 36, 640 - LIFT, 340, 190],
-  ['minus', '.dial .minus', 32, 836 - LIFT, 48, 48],
-  ['plus', '.dial .plus', 332, 836 - LIFT, 48, 48],
-  ['moon', '.dial .lo', 102, 849 - LIFT, 22, 22],
-  ['sun', '.dial .hi', 288, 849 - LIFT, 22, 22],
-  ['Brightness', '.dial .lbl', null, 718 - LIFT, null, 17],
+  ['arc', '.dial > svg', 36, 640 - LIFT + SINK, 340, 190],
+  ['minus', '.dial .minus', 32, 836 - LIFT + SINK, 48, 48],
+  ['plus', '.dial .plus', 332, 836 - LIFT + SINK, 48, 48],
+  ['moon', '.dial .lo', 102, 849 - LIFT + SINK, 22, 22],
+  ['sun', '.dial .hi', 288, 849 - LIFT + SINK, 22, 22],
+  ['Brightness', '.dial .lbl', null, 718 - LIFT + SINK, null, 17],
 ];
 const ROOMS = [
   ['Rooms H1', '.rooms-head h1', 20, 58, null, 44],
@@ -59,15 +64,15 @@ const ROOMS = [
   ['room power', '.room-big:nth-of-type(1) .pwr', 332, 352, 44, 44],
   ['room name', '.room-big:nth-of-type(1) .nm', 40, 340, null, 30],
 ];
-// a fan's page moves up the same 56 under its 80 tall drawing
+// a fan's page moves up the same 56 under its 80 tall drawing, and its speeds sink to the bottom as the dial does
 const FAN = [
   ['hero art', '.hero-art', 166, 226 - LIFT - 40, 80, 80],
   ['on / off', '.onoff', 20, 326 - LIFT, 372, 72],
   ['first pill', '.feats .feat:nth-child(1)', 20, 414 - LIFT, 180, 64],
-  ['Off step', '.speeds .step:nth-of-type(1)', 60, 740 - LIFT, 44, 40],
-  ['High step', '.speeds .step:nth-of-type(5)', 308, 612 - LIFT, 44, 168],
-  ['minus', '.speeds .minus', 20, 826 - LIFT, 56, 56],
-  ['plus', '.speeds .plus', 336, 826 - LIFT, 56, 56],
+  ['Off step', '.speeds .step:nth-of-type(1)', 60, 740 - LIFT + SINK, 44, 40],
+  ['High step', '.speeds .step:nth-of-type(5)', 308, 612 - LIFT + SINK, 44, 168],
+  ['minus', '.speeds .minus', 20, 826 - LIFT + SINK, 56, 56],
+  ['plus', '.speeds .plus', 336, 826 - LIFT + SINK, 56, 56],
 ];
 
 (async () => {
@@ -82,6 +87,29 @@ const FAN = [
   const go = async hash => { await page.goto(base + '#' + hash); await page.waitForSelector('#screen > div', { timeout: 10000 }); await wait(900); };
   const C = (fn, arg) => page.evaluate(fn, arg);
   const lv = id => C(id => window.__copper.data.level(id), id);
+  // Where a device page's main control (sel) ends, against the screen and against the cards over it, in page
+  // coordinates: its box's top and bottom, the bottom of the pills over it, the page's own bottom and how far the
+  // document scrolls.
+  const anchor = sel => C(s => {
+    const y = n => { const b = document.querySelector(n).getBoundingClientRect(); return [Math.round((b.top + scrollY) * 10) / 10, Math.round((b.bottom + scrollY) * 10) / 10]; };
+    const [top, bottom] = y(s);
+    return { vh: innerHeight, top, bottom, feats: y('#screen .feats')[1], page: y('#screen .dev')[1], scrolls: document.scrollingElement.scrollHeight - innerHeight };
+  }, sel);
+  // On a short page the control ends MARGIN above the screen's bottom and nothing scrolls; on a tall one it follows
+  // the pills over it by the file's gap (a light's pills end at 622 and its dial starts at 640, a fan's end at 478 and
+  // its speeds start at 490) and the page, which ends with it, scrolls.
+  const anchored = async (what, sel, tall, gap = 18) => {
+    await page.setViewportSize({ width: 412, height: 915 }); await wait(300);
+    const a = await anchor(sel);
+    check(`${what}: on a short page its bottom sits ${MARGIN} above the screen's bottom`, Math.abs(a.bottom - (a.vh - MARGIN)) <= 0.6 && a.page === a.bottom && a.scrolls <= 0, a);
+    await C(() => window.__copper.render()); await wait(300);
+    const r = await anchor(sel);
+    check(`${what}: and a redraw leaves it there`, r.top === a.top && r.bottom === a.bottom, { was: a, now: r });
+    await page.setViewportSize({ width: 412, height: tall }); await wait(300);
+    const t = await anchor(sel);
+    check(`${what}: on a page taller than the screen (${tall}) it follows the content, ${gap} under the pills, and the page scrolls`, Math.abs(t.top - t.feats - gap) <= 0.6 && t.page === t.bottom && t.scrolls > 0 && t.bottom > t.vh - MARGIN, t);
+    await page.setViewportSize({ width: 412, height: 915 }); await wait(300);
+  };
 
   await page.goto(base);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('.login-form button'); }
@@ -114,6 +142,7 @@ const FAN = [
     await go(`light/${lamp}`);
     if (!(await lv(lamp))) { await page.click('[data-act="dev-on"]'); await wait(1500); }
     await measure('04 Light', LIGHT);
+    await anchored('a colour lamp\'s dial', '#screen .dial', 700);
     check('no tab bar on a light', await C(() => document.querySelector('#tabs').hidden));
 
     // ---- 05b White, 05 Colour: sheets over the light, measured from the sheet's own top
@@ -180,6 +209,8 @@ const FAN = [
   await go('light/5');
   check('a dimmer has no White or Colour', !(await page.$('.looks')));
   check('and its pills close up under the switch', await C(() => Math.round(document.querySelector('.feats').getBoundingClientRect().top)) === 414 - LIFT);
+  // a dimmer's page as drawn ends 144 higher still (690), so it is short on most phones: a 660 tall screen is shorter
+  await anchored('a dimmer\'s dial', '#screen .dial', 660);
   const pinned0 = await C(() => window.__copper.S.config.favorites.includes('d:5'));
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await page.click('[data-act="pin"]'); await wait(1200);
@@ -244,6 +275,7 @@ const FAN = [
   // ---- 17 Fan
   await go('light/8');
   await measure('17 Fan', FAN);
+  await anchored('a fan\'s speeds', '#screen .speeds', 700, 12);
   await page.click('[data-speed="High"]'); await wait(800);
   check('a speed bar sets the fan', (await page.textContent('.speeds .big')) === 'High', await page.textContent('.speeds .big'));
   // flat bars: the chosen speed and those under it a flat blue, the rest the surface grey, no gradient and no glow
@@ -251,6 +283,14 @@ const FAN = [
   check('the speed bars are flat: blue up to the speed, grey past it, no gradient, no glow', bars.length === 5 && bars.every(([img, , sh]) => img === 'none' && sh === 'none') && bars.every(([, col]) => col === 'rgb(0, 109, 204)'), bars);
   await page.click('.speeds .minus'); await wait(800);
   check('minus steps down', (await page.textContent('.speeds .big')) === 'Medium high', await page.textContent('.speeds .big'));
+
+  // ---- 18 Shade (none on the rig: one put on the page for this, as layout_rooms_test does). Its window, its buttons
+  // and its Goodnight row sink together, the row ending 6 above where the page ends, as a light's buttons do.
+  await C(() => { const c = window.__copper, S = c.S, a = c.data.areas()[0]; S.inv.devices.cu_shade = { device_id: 'cu_shade', name: 'Shade', type: 'SerenaRollerShade', domain: 'cover', area: a && a.id, zone: 'cus' }; S.states.cu_shade = { level: 40 }; location.hash = 'light/cu_shade'; });
+  await wait(900);
+  const sh = await C(() => { const y = s => Math.round(document.querySelector('#screen ' + s).getBoundingClientRect().bottom + scrollY); return { vh: innerHeight, gn: y('.shade-gn'), win: Math.round(document.querySelector('#screen .window').getBoundingClientRect().top + scrollY), name: y('.t-hero') }; });
+  check('a shade\'s Goodnight row ends 6 over the page\'s end, the page filling the screen, and its window sinks with it', sh.gn === sh.vh - MARGIN - 6 && sh.win - sh.gn === 336 - 848 && sh.name === 308 - LIFT, sh);
+  await C(() => { const S = window.__copper.S; delete S.inv.devices.cu_shade; delete S.states.cu_shade; });
 
   // ---- the house
   await go('home');
