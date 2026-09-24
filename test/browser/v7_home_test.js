@@ -78,28 +78,31 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const z = await C(() => [getComputedStyle(document.querySelector('.home-head')).zIndex, getComputedStyle(document.querySelector('.house-light')).zIndex]);
   check('the words sit above the light', Number(z[0]) > Number(z[1]), z);
 
-  // ---- 2 · Rooms: each card's glow is the room's light; turning one on blooms from its power button
+  // ---- 2 · Rooms: a room with no photograph shows its illustration, whose lamps are the room's lights
+  // (roomscene.js): a lit room's lamps glow, a room that is off is asleep (dim, cool, no light drawn), and turning a
+  // room on lights its lamps on the dimmer. (A room with a photograph keeps the glow that blooms from its power
+  // button: roomopen_test and roomart_test hold photographed cards.)
   await go('rooms');
-  const rooms0 = await C(() => [...document.querySelectorAll('.room-big')].map(el => ({ name: el.querySelector('.nm').textContent, lit: el.classList.contains('lit'), glows: el.querySelectorAll('.glow').length, on: el.querySelectorAll('.glow:not(.off)').length, veil: getComputedStyle(el.querySelector('.rm-veil') || el).opacity })));
-  const kitchen = rooms0.find(r => r.name === 'Kitchen');
-  check('a lit room\'s card carries its light', kitchen && kitchen.lit && kitchen.on >= 1 && Number(kitchen.veil) === 0, kitchen);
-  const offRoom = rooms0.find(r => !r.lit && r.glows);
-  check('an off room is asleep under its veil, with no light drawn', offRoom && offRoom.on === 0 && Number(offRoom.veil) === 1, offRoom);
-  const kbody = await C(() => { const el = [...document.querySelectorAll('.room-big')].find(x => x.querySelector('.nm').textContent === 'Kitchen'); return Math.round(el.querySelector('.glow:not(.off) .g-body').getBoundingClientRect().width); });
-  // card scale at 60%: 140 + 180 x sqrt(.6) = 279
-  check('the card glow is sized by the level (card D 279 at 60%)', Math.abs(kbody - 279) <= 3, kbody);
+  // a card's lamps: the strongest glow drawn, and the veil a dark room sleeps under
+  const cardLight = sel => C(s => { const el = document.querySelector(s); const rl = [...el.querySelectorAll('.rs-svg [data-l]')].filter(p => p.classList.contains('rl')); const veil = el.querySelector('.rs-svg .rs-veil'); return { scene: el.classList.contains('scene'), lit: el.classList.contains('lit'), glow: Math.max(0, ...rl.map(p => Number(p.style.opacity) || 0)), veil: veil ? Number(veil.style.opacity) : null }; }, sel);
+  const kname = await C(() => { const el = [...document.querySelectorAll('.room-big')].find(x => x.querySelector('.nm').textContent === 'Kitchen'); return el && el.dataset.go; });
+  const kitchen = kname && await cardLight(`.room-big[data-go="${kname}"]`);
+  check('a lit room\'s card is its illustration, its lamps lit and no veil', kitchen && kitchen.scene && kitchen.lit && kitchen.glow > 0 && kitchen.veil === 0, kitchen);
+  const offSel = await C(() => { const el = [...document.querySelectorAll('.room-big.scene')].find(x => !x.classList.contains('lit') && x.querySelector('.rs-svg [data-fx]:not([data-empty])')); return el && `.room-big[data-go="${el.dataset.go}"]`; });
+  const offRoom = offSel && await cardLight(offSel);
+  check('an off room is asleep under its veil, with no light drawn', offRoom && offRoom.glow === 0 && offRoom.veil > 0.2, offRoom);
+  const kmax = await C(() => { const c = window.__copper; const a = c.data.areas().find(x => x.name === 'Kitchen'); return Math.max(...c.H.roomLights(a.id).map(d => c.data.level(d.device_id) || 0)); });
+  // the house's level curve: strength 0.35 + 0.65 x level
+  check('the lamps\' strength is the room\'s level on the house\'s curve', Math.abs(kitchen.glow - (0.35 + 0.65 * kmax / 100)) < 0.02, { glow: kitchen.glow, level: kmax });
   // the Bedroom (22) off: turn it on with its power circle
   await cmd({ type: 'level', target: 'a:22', level: 'off' }); await wait(900);
   const bsel = '.room-big[data-go="room/22"]';
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   await tap(`${bsel} .pwr`); await wait(50);
   const bloom = await anims(bsel);
-  const g = bloom.filter(a => /glow/.test(a.cls));
-  check('on: the glow opens out from the power circle (left and top), 0.4 s EASE_IN_AND_OUT', g.some(a => a.props.includes('left') && a.dur === 400 && a.ease === 'ease-in-out') && g.some(a => a.props.includes('top')), g.map(a => [a.props.join('+'), a.dur, a.delay]));
-  check('from a fifth of its size (scale .2 to 1)', g.some(a => a.props.includes('transform') && /0\.2/.test(JSON.stringify(a.from))), g.filter(a => a.props.includes('transform')).map(a => [a.from, a.to]));
-  check('0.12 s after the press lands (three staggers)', g.some(a => a.props.includes('left') && a.delay === 120), g.map(a => a.delay));
-  const veil = bloom.find(a => /rm-veil/.test(a.cls));
-  check('the veil lifts on the dimmer, 0.08 s behind the glow', veil && veil.dur === 400 && veil.delay === 200 && Number(veil.to.opacity) === 0, veil);
+  const g = bloom.filter(a => a.props.includes('opacity') && /\brl\b/.test(a.cls));
+  check('on: its lamps light on the dimmer, 0.4 s EASE_IN_AND_OUT', g.some(a => a.dur === 400 && a.ease === 'ease-in-out' && Number(a.to.opacity) > 0), g.slice(0, 4).map(a => [a.dur, a.ease, a.to.opacity]));
+  check('and the veil lifts with them', g.some(a => Number(a.from.opacity) > 0.2 && Number(a.to.opacity) === 0), g.map(a => [a.from.opacity, a.to.opacity]).slice(0, 6));
   check('the status line crossfades, 0.24 s standard', bloom.some(a => /xf-old/.test(a.cls) && a.dur === 240), bloom.filter(a => /xf/.test(a.cls)).map(a => [a.cls, a.dur]));
   await wait(900);
   // the card lighting is the answer: no toast and no Undo (2ca8d0a)
@@ -108,11 +111,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.screenshot({ path: 'v7-rooms.png' });
   await cmd({ type: 'level', target: 'a:22', level: 'off' }); await wait(1200);
   check('set back off directly', (await C(() => window.__copper.H.roomLights('22').every(d => !window.__copper.data.level(d.device_id)))));
-  // off: it draws back into the button
+  // off: the lamps go out on the dimmer, at once
   await cmd({ type: 'level', target: 'a:22', level: 60 }); await wait(1200);
   await tap(`${bsel} .pwr`); await wait(50);
-  const back = (await anims(bsel)).filter(a => /glow/.test(a.cls) && a.props.includes('left'));
-  check('off: the glow draws back into the button, with no delay', back.some(a => a.dur === 400 && a.delay === 0), back.map(a => [a.dur, a.delay]));
+  const back = (await anims(bsel)).filter(a => a.props.includes('opacity') && /\brl\b/.test(a.cls) && Number(a.to.opacity) === 0 && Number(a.from.opacity) > 0.3);
+  check('off: its lamps go out on the dimmer, with no delay', back.some(a => a.dur === 400 && a.delay === 0), back.map(a => [a.dur, a.delay]).slice(0, 4));
   await wait(900);
   check('and the card is asleep again', (await C(s => !document.querySelector(s).classList.contains('lit'), bsel)));
 

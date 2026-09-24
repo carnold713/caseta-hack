@@ -24,12 +24,6 @@ function cardGlow(c, aid, night) {
   return g(white, !!(L && L.kelvin), false) + g(col, !!(L && L.colour), true);
 }
 
-// A room with no photograph takes one of the file's four warm gradients, by its id, so it keeps the same one.
-export function roomTone(aid) {
-  let h = 0; for (const ch of String(aid)) h = (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0;
-  return `rg-${h % 4}`;
-}
-
 export function view(c) {
   const { data, H, S, esc, icon } = c;
   const scenes = data.presets().length + data.lutronScenes().length;
@@ -43,10 +37,12 @@ export function view(c) {
     // A room with only a fan or a shade has no light to draw. The warmth over the picture is 10% at full, by level.
     const lights = H.roomLights(a.id).length > 0;
     const L = lit ? roomLight(c, a.id) : null;
-    return `<div class="room-big ${photo ? 'photo' : roomTone(a.id)} ${lit ? 'lit' : ''}" data-go="room/${esc(a.id)}" role="link" aria-label="${esc(a.name)}">
-      ${roomPicture(c, a.id, a.name, true)}
-      <span class="rm-veil" aria-hidden="true"></span>
-      ${lights ? `<span class="rm-warm" aria-hidden="true" style="--warm:${L ? (0.1 * L.level / 100).toFixed(3) : 0}"></span>${cardGlow(c, a.id, night)}` : ''}
+    // A room with no photograph shows its illustration, whose lamps are its lights: the illustration is the room's
+    // light there, so the veil, the warmth and the glow a photograph needs are left off.
+    return `<div class="room-big ${photo ? 'photo' : 'scene'} ${lit ? 'lit' : ''}" data-go="room/${esc(a.id)}" role="link" aria-label="${esc(a.name)}">
+      ${roomPicture(c, a.id, a.name, 'card')}
+      ${photo ? `<span class="rm-veil" aria-hidden="true"></span>
+      ${lights ? `<span class="rm-warm" aria-hidden="true" style="--warm:${L ? (0.1 * L.level / 100).toFixed(3) : 0}"></span>${cardGlow(c, a.id, night)}` : ''}` : ''}
       <span class="nm nm-cut">${esc(a.name)}</span><span class="vl" data-xf="standard">${esc(roomStatus(c, a.id))}</span>
       ${canToggle ? `<button class="pwr" data-act="room-toggle" data-id="${esc(a.id)}" aria-label="${lit ? 'Turn off' : 'Turn on'} ${esc(a.name)}">${icon('power', 20, 2)}</button>` : ''}
     </div>`;

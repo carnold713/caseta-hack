@@ -1,6 +1,7 @@
 // Pieces more than one screen draws: a device tile, a scene chip, a room card, the offline card. Each takes the
 // context the app hands every screen and returns HTML. Geometry is the file's (docs/design-spec-v6.md).
 import { CasetaDaylight } from '/data/index.js';
+import { roomScene } from '/ui/roomscene.js';
 
 // A Caseta fan has five steps counting Off, which is why the file's fan tile carries five dots.
 const FAN_SPEEDS = ['Off', 'Low', 'Medium', 'MediumHigh', 'High'];
@@ -94,13 +95,14 @@ export function roomStatus(c, aid) {
   return `${lit.length} of ${ls.length} on · ${mean}%`;
 }
 
-// A room's picture: its photograph, or the file's fallback of a warm gradient with the room's own icon faint in the
-// corner and "Add a photo". `big` is the Rooms tab's 372 x 180 card, otherwise Home's 200 x 132.
-export function roomPicture(c, aid, name, big) {
+// A room's picture: its photograph, or until it has one, its illustration (roomscene.js), a drawing of a room of its
+// kind whose lamps are its own lights, lit as they are. `where` is 'card' (the Rooms tab's 372 x 180 card, which
+// shows the middle of the room page's picture), 'page' (the room page's 300 tall hero) or 'home' (Home's 200 x 132
+// card, the whole scene scaled down). A photograph still wins, and "Add a photo" stays on the room page and in setup.
+export function roomPicture(c, aid, name, where) {
   const src = c.H.roomPhotoURL(aid);
   if (src) return `<img class="room-photo" src="${c.esc(src)}" alt="" decoding="async">`;
-  const art = c.roomArt(name);
-  return `${art ? `<img class="room-art" src="${c.artSrc(art)}" alt="">` : ''}${big ? `<span class="add-photo">${c.icon('camera', 16, 1.8)}Add a photo</span>` : ''}`;
+  return roomScene(c, aid, where === 'home' ? 'thumb' : 'page');
 }
 
 // The offline card, after ten quiet seconds. v7: the card says which link is out in one calm sentence (conn.js, 18 · Offline, calmly).

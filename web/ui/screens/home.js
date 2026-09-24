@@ -161,7 +161,7 @@ export function view(c) {
 
     ${rooms.length ? `<div class="t-over sec">Rooms</div><div class="tile-strip rooms" data-keep="rooms">${rooms.map(a => `
       <button class="room-card" data-go="room/${esc(a.id)}" data-xf>
-        ${roomPicture(c, a.id, a.name, false)}
+        ${roomPicture(c, a.id, a.name, 'home')}
         <span class="nm">${esc(a.name)}</span><span class="vl">${esc(roomStatus(c, a.id))}</span>
       </button>`).join('')}</div>` : ''}
     ${homeCards(c)}

@@ -249,7 +249,7 @@ function crossfade(old, el, kind) {
   const copy = old.cloneNode(true);
   copy.querySelectorAll('.xf-old').forEach(n => n.remove());
   copy.removeAttribute('data-xf'); copy.removeAttribute('data-go'); copy.removeAttribute('data-act'); copy.removeAttribute('role');
-  copy.querySelectorAll('[data-act],[data-go],[id]').forEach(n => { n.removeAttribute('data-act'); n.removeAttribute('data-go'); n.removeAttribute('id'); });
+  copy.querySelectorAll('[data-act],[data-go],[id]').forEach(n => { n.removeAttribute('data-act'); n.removeAttribute('data-go'); if (!n.closest('.rs-svg')) n.removeAttribute('id'); });
   copy.setAttribute('aria-hidden', 'true'); copy.inert = true;
   copy.classList.add('xf-old');
   const fade = () => copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur, easing: ease, fill: 'forwards' }).finished
@@ -283,7 +283,9 @@ export function capture(screen, { live = false } = {}) {
   g.className = 'page-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
   Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, pointerEvents: 'none', zIndex: '1' });
   for (const k of [...screen.children]) g.appendChild(live ? k : k.cloneNode(true));
-  g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  // an illustration's gradient ids stay (they are made fresh on every draw, so they never collide): without them its
+  // shapes would lose their fills while it animates
+  g.querySelectorAll('[id]').forEach(n => { if (!n.closest('.rs-svg')) n.removeAttribute('id'); });
   if (live) g.querySelectorAll('[data-go], [data-act]').forEach(n => { n.removeAttribute('data-go'); n.removeAttribute('data-act'); });
   ghost = g;
   return g;

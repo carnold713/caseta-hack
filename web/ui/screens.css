@@ -128,11 +128,6 @@
   display: grid; place-items: center; background: var(--bg); color: var(--icon-2);
 }
 .room-big.lit .pwr { background: var(--copper); color: var(--icon-1); }
-/* The file's fallback gradients, one per room card it draws. A room with no photograph takes one by its id. */
-.rg-0 { --rg-hi: #4A3A2E; --rg-lo: #231C17; }
-.rg-1 { --rg-hi: #56402C; --rg-lo: #26201A; }
-.rg-2 { --rg-hi: #553631; --rg-lo: #271B19; }
-.rg-3 { --rg-hi: #7A6452; --rg-lo: #2A211B; }
 
 /* ---- 03 Room --------------------------------------------------------------------------------- */
 

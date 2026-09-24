@@ -3,6 +3,7 @@
 import { roomPicker, confirmSheet, nameSheet, undoMove } from '/ui/screens/pickers.js';
 import { roomTimer, actions as lookActions } from '/ui/screens/looks.js';
 import { photoBlob, sendPhoto, pickFile } from '/ui/photo.js';
+import { roomScene } from '/ui/roomscene.js';
 
 const seenKey = aid => `roomInfoSeen:${aid}`;
 const seen = aid => { try { return localStorage.getItem(seenKey(aid)) === '1'; } catch (_) { return false; } };
@@ -40,7 +41,8 @@ export function setup(c, r) {
       <button class="row" data-act="setup-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val">${esc(a.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <div class="row photo-row"><span class="row-txt"><span class="t">Photo</span></span>
         ${photo ? `<button class="link blue" data-act="setup-photo-remove">Remove</button><button class="link blue" data-act="setup-photo">Change</button><img class="ph-thumb" src="${esc(photo)}" alt="">`
-          : `<button class="link blue" data-act="setup-photo">Add a photo</button>`}</div>
+          // until there is a photograph the room shows its illustration, so that is what the row shows beside Add a photo
+          : `<button class="link blue" data-act="setup-photo">Add a photo</button><span class="ph-thumb ph-scene">${roomScene(c, aid, 'thumb')}</span>`}</div>
     </div>
     <div class="group">
       ${lamps.length ? `<div class="row"><span class="row-txt"><span class="t">Follow the day for ${lamps.length === 1 ? esc(lamps[0].name) : `all ${lamps.length} lamps`}</span></span><button class="toggle" role="switch" aria-checked="${!!allFollow}" data-act="setup-follow" aria-label="Follow the day in this room"></button></div>` : ''}
