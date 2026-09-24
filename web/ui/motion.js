@@ -119,18 +119,35 @@ export function snap(root) {
       for (const p in t) v[p] = cs.getPropertyValue(p);
       (rec.v || (rec.v = {}))[ps] = v; any = true;
     }
-    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = el; rec.size = sizeOf(el); any = true; }
+    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = frozen(el); rec.size = sizeOf(el); any = true; }
     if (el.hasAttribute('data-enter')) { rec.enter = el.getAttribute('data-enter') || 'rise'; rec.node = el; rec.rect = el.getBoundingClientRect(); any = true; }
     if (any) s.set(path, rec);
   });
   return s;
 }
 // An element's own laid out size (not as a press or a flight has it scaled) and where its edges were on screen, so a
-// copy of it can keep its words laid out exactly as they were.
+// copy of it can keep its words laid out exactly as they were. An inline element has no size of its own: its box on
+// screen stands in, and if its words made one line, its copy (taken out of the line) must not wrap where it never did.
 function sizeOf(el) {
   const cs = getComputedStyle(el), r = el.getBoundingClientRect();
   const w = parseFloat(cs.width), h = parseFloat(cs.height);
-  return { w: Number.isFinite(w) ? w : r.width, h: Number.isFinite(h) ? h : r.height, left: r.left, right: r.right };
+  const inline = cs.display === 'inline';
+  return { w: Number.isFinite(w) && !inline ? w : r.width, h: Number.isFinite(h) && !inline ? h : r.height, left: r.left, right: r.right, oneLine: inline && el.getClientRects().length === 1 };
+}
+// A copy of an element to fade out, taken while it is still on the page, with the type and ink of every part of it
+// written onto the copy. The copy fades inside the new element, where a rule that set its words through an ancestor
+// no longer reaches it: the Nightstand's line under its title is 14 while the lamp is on (.ns-area.on), and laid in
+// the new, unlit area at 16 it went to two lines as it faded.
+const FROZEN = ['font-size', 'font-weight', 'font-family', 'line-height', 'letter-spacing', 'color', 'white-space', 'text-align', 'text-transform'];
+function frozen(el) {
+  const c = el.cloneNode(true);
+  const from = [el, ...el.querySelectorAll('*')], to = [c, ...c.querySelectorAll('*')];
+  from.forEach((f, i) => {
+    if (f.classList.contains('xf-old') || f.closest('.xf-old') || !to[i] || !to[i].style) return;
+    const cs = getComputedStyle(f);
+    for (const p of FROZEN) to[i].style.setProperty(p, cs.getPropertyValue(p));
+  });
+  return c;
 }
 // the parts of an element that make it look different: its classes, inline style and words
 // (a copy still fading inside it is not part of its look)
@@ -278,6 +295,7 @@ function crossfade(old, el, kind, was) {
     width: `${was.w}px`, height: `${was.h}px`, margin: '0', pointerEvents: 'none', zIndex: '3',
     transform: 'none', animation: 'none',
   });
+  if (was.oneLine) copy.style.whiteSpace = 'nowrap';
   if (cs.position === 'static') el.style.position = 'relative';
   el.appendChild(copy);
   fade();
@@ -298,7 +316,10 @@ export function capture(screen, { live = false } = {}) {
   g.className = 'page-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
   // its header stays where the page's was stuck, as collapsed as it was (header.js)
   freeze(g);
-  Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, pointerEvents: 'none', zIndex: '1' });
+  // the page's own layout width, not its box on screen: a page caught mid-slide or mid-press measures the same, and
+  // its words wrap in the copy exactly as they did on the page
+  const w = parseFloat(getComputedStyle(screen).width) || box.width;
+  Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${w}px`, pointerEvents: 'none', zIndex: '1' });
   for (const k of [...screen.children]) g.appendChild(live ? k : k.cloneNode(true));
   // an illustration's gradient ids stay (they are made fresh on every draw, so they never collide): without them its
   // shapes would lose their fills while it animates
@@ -370,6 +391,9 @@ export function sheetOut(root) {
   g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
   document.body.appendChild(g);
   const sheet = g.querySelector('.sheet'), scrim = g.querySelector('.scrim');
+  // a sheet scrolled down falls as it was, not jumped back to its top
+  const was = root.querySelector('.sheet');
+  if (sheet && was) sheet.scrollTop = was.scrollTop;
   const opts = { duration: T.sheetOut, easing: T.easeIn, fill: 'forwards' };
   const runs = [];
   if (sheet) runs.push(sheet.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }], opts).finished);

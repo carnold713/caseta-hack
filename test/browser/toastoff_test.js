@@ -15,7 +15,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/net::ERR|502|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/net::ERR|502|Failed to load resource/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
   const C = (fn, arg) => page.evaluate(fn, arg);
   // the hash is changed in place, never with page.goto, so the watcher below lives through the whole test
   const hash = async h => { await C(x => { location.hash = x; }, h); await wait(900); };

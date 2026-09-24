@@ -285,6 +285,11 @@ app.use(express.static(WEB, {
 }));
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/ws/')) return res.status(404).json({ error: 'not found' });
+  // A file under /ui/ that is not there (a font, an image, a script: anything with an extension) is a 404, not the
+  // app's page: answered with the HTML, a missing font was taken for a broken one and a missing script failed to
+  // parse. An address without an extension is one of the app's own routes and still gets the page. (The classic
+  // app, outside /ui/, probes for pictures that may not exist and is left as it was.)
+  if (req.path.startsWith('/ui/') && path.extname(req.path)) return res.status(404).type('text/plain').send('not found');
   res.sendFile(path.join(WEB, 'index.html'));
 });
 

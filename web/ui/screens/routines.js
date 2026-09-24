@@ -197,7 +197,7 @@ function windDownPage(c) {
       : `Lights you turn on after ${esc(RT.fmtTime(RT.curveStart()))} come on softer, down to ${w.to_level || 50}% by ${esc(quiet)}, then ${s.night_level}% until ${esc(RT.fmtTime(s.night_end))}.`;
   return `<div class="wd-page">
     <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
-    <h1 class="t-h1 page-h1">Evening wind-down</h1>
+    <h1 class="t-h1 page-h1">Evening <span class="nobr">wind-down</span></h1>
     <p class="t-cap muted fd-sub">${md.on ? 'On · every evening' : 'Off'}</p>
     <section class="wd-card ${md.on ? '' : 'off'}">
       <p class="wd-head" data-xf="standard">${esc(head)}</p>
@@ -207,9 +207,9 @@ function windDownPage(c) {
     ${s.location ? '' : `<div class="loc-card wd-loc">${whereBlock(c, { compact: true })}</div>`}
     <div class="group wd-rows">
       <div class="row has-ic"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Evening wind-down</span></span><button class="toggle" role="switch" aria-checked="${md.on}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div>
-      ${md.on ? `<button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic sunrise">${icon('sunset', 20, 1.4)}</span><span class="row-txt"><span class="t">Starts dimming</span></span><span class="row-val">${pointsMode ? 'By the hour' : esc(RT.fmtTime(RT.curveStart()))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-      <button class="row has-ic" data-go="routines/winddown-night"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Quiet from</span></span><span class="row-val">${esc(RT.fmtTime(s.night_start))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-      <button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic">${icon('bulb', 20, 1.4)}</span><span class="row-txt"><span class="t">Night level</span></span><span class="row-val">${s.night_level}% until ${esc(RT.fmtTime(s.night_end))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      ${md.on ? `<button class="row has-ic kv" data-go="routines/winddown-levels"><span class="row-ic sunrise">${icon('sunset', 20, 1.4)}</span><span class="row-txt"><span class="t">Starts dimming</span></span><span class="row-val">${pointsMode ? 'By the hour' : esc(RT.fmtTime(RT.curveStart()))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row has-ic kv" data-go="routines/winddown-night"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Quiet from</span></span><span class="row-val">${esc(RT.fmtTime(s.night_start))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row has-ic kv" data-go="routines/winddown-levels"><span class="row-ic">${icon('bulb', 20, 1.4)}</span><span class="row-txt"><span class="t">Night level</span></span><span class="row-val">${s.night_level}% until ${esc(RT.fmtTime(s.night_end))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic">${icon('tune', 20, 1.4)}</span><span class="row-txt"><span class="t">The levels and the curve</span><span class="d">Early morning, how low it goes, by the hour</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
     </div>
     <p class="fd-drift wd-foot">${icon('clock', 16, 1.7)}Buttons with a night version use these hours too</p>
@@ -311,7 +311,7 @@ function levels(c) {
     ${block('Start dimming', '', chips('sunset_offset_min', [[0, 'At sunset'], [30, '30 min after'], [60, '1 hour after']], wd.sunset_offset_min))}
     ${block('Down to', 'By the time the house goes quiet', chips('to_level', [[60, '60%'], [50, '50%'], [40, '40%']], wd.to_level))}
     ${block('At night', 'While the house is quiet, until night ends', chips('night_level', [[35, '35%'], [25, '25%'], [15, '15%']], s.night_level))}
-    <div class="group"><button class="row" data-act="night-hours"><span class="row-txt"><span class="t">Night ends</span></span><span class="row-val">${esc(RT.fmtTime(s.night_end))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>
+    <div class="group"><button class="row kv" data-act="night-hours"><span class="row-txt"><span class="t">Night ends</span></span><span class="row-val">${esc(RT.fmtTime(s.night_end))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>
     <p class="t-cap sheet-p wd-today">${esc(RT.windDownToday())}</p>
     <div class="group">
       <div class="row"><span class="row-txt"><span class="t">Also lower lights nobody has touched for 20 minutes</span><span class="d">Gently, over a minute, only lights above the curve. Turn it off if it ever fights you.</span></span><button class="toggle" role="switch" aria-checked="${!!wd.nudge}" data-act="wd-nudge" aria-label="Lower untouched lights"></button></div>

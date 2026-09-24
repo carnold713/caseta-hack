@@ -45,8 +45,8 @@ export function view(c, r) {
     ${RT.canHaveOff(sc) ? `<div class="cl"><span class="w">${off.lead}</span>${tok(esc(off.text), `${base}/off`, !RT.pairOf(sc))}</div>` : ''}
     <div class="cl"><span class="w">${only[0]}</span>${tok(esc(only[1]), `${base}/onlyif`)}</div>
   </div>`;
-  const offRow = RT.canHaveOff(sc) ? `<button class="row" data-go="${base}/off"><span class="row-txt"><span class="t">${RT.pairOf(sc) && RT.pairOf(sc).actions.some(a => a.type === 'raise') ? 'Open again' : 'Off again'}</span></span><span class="row-val">${esc(RT.pairOf(sc) ? RT.whenValue(RT.pairOf(sc).at) : 'Leave them')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : '';
-  const row = (t, v, go) => `<button class="row" data-go="${base}/${go}"><span class="row-txt"><span class="t">${t}</span></span><span class="row-val nm-cut">${esc(v)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`;
+  const offRow = RT.canHaveOff(sc) ? `<button class="row kv" data-go="${base}/off"><span class="row-txt"><span class="t">${RT.pairOf(sc) && RT.pairOf(sc).actions.some(a => a.type === 'raise') ? 'Open again' : 'Off again'}</span></span><span class="row-val">${esc(RT.pairOf(sc) ? RT.whenValue(RT.pairOf(sc).at) : 'Leave them')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : '';
+  const row = (t, v, go) => `<button class="row kv" data-go="${base}/${go}"><span class="row-txt"><span class="t">${t}</span></span><span class="row-val">${esc(v)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`;
   const nl = RT.nextLine(sc);
   const warn = nl && typeof nl === 'object' ? nl.text : '';
   const sun = sc.at && sc.at.type !== 'time';
@@ -237,7 +237,8 @@ function whenSheet(c, sc, mode) {
   const at = w.type === 'time' ? { type: 'time', time: w.time, offset_min: 0 } : { type: w.type, time: null, offset_min: w.rel === 'at' ? 0 : (w.rel === 'before' ? -w.mins : w.mins) };
   const chip = (act, v, l, on) => `<button class="chip sm" aria-pressed="${on}" data-act="${act}" data-v="${v}">${l}</button>`;
   let body = `<div class="chip-wrap">${[['time', 'At a time'], ['sunset', 'Sunset'], ['sunrise', 'Sunrise']].map(([v, l]) => chip('w-type', v, l, w.type === v)).join('')}</div>`;
-  if (mode === 'off') body = `<div class="group"><button class="row way ${RT.pairOf(sc) ? '' : 'sel'}" data-act="off-leave"><span class="radio ${RT.pairOf(sc) ? '' : 'on'}"></span><span class="row-txt"><span class="t">Leave them as they are</span></span></button>
+  // the chosen way carries its tick, as every other list of ways does
+  if (mode === 'off') body = `<div class="group"><button class="row way ${RT.pairOf(sc) ? '' : 'sel'}" data-act="off-leave"><span class="radio ${RT.pairOf(sc) ? '' : 'on'}">${RT.pairOf(sc) ? '' : c.icon('check', 14, 2.2)}</span><span class="row-txt"><span class="t">Leave them as they are</span></span></button>
       <button class="row way" data-act="off-bedtime"><span class="radio"></span><span class="row-txt"><span class="t">At bedtime (${esc(RT.fmtTime(c.S.config.settings.night_start))})</span></span></button></div>` + body;
   if (w.type === 'time') body += `<div class="when-time"><input class="time-big" type="time" value="${esc(w.time)}" data-change="w-time" aria-label="Time"></div>`;
   else {
@@ -293,7 +294,7 @@ function moreSheet(c, sc) {
   const fade = RT.fadeOf(sc);
   const FADE = [['', 'As usual'], [0, 'At once'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [30, '30 seconds'], [120, '2 minutes'], [600, '10 minutes'], [1200, '20 minutes'], [1800, '30 minutes']];
   return { over: 'Routine', title: sc.name || 'Routine', body: `<div class="group">
-      <button class="row" data-act="name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val nm-cut">${esc(sc.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row kv" data-act="name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val">${esc(sc.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       ${sc.actions.some(a => a.type === 'level') ? `<label class="row"><span class="row-txt"><span class="t">Change gradually over</span></span><select class="field sel" data-change="fade" aria-label="Change gradually over">${FADE.map(([v, l]) => `<option value="${v}" ${String(fade ?? '') === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
       <button class="row" data-act="steps"><span class="row-txt"><span class="t">Build it step by step</span><span class="d">Several steps, timers, fades</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
@@ -346,14 +347,15 @@ export const actions = {
     const at = whenAt(w);
     if (w.mode === 'off') c.RT.setOff(sc, at); else c.RT.setWhen(sc, at);
     c.ui.when = null;
-    c.closeSheet(); history.replaceState(null, '', `#routine/${sc.id}`);
+    // closed as its X closes it: a step back to the routine, not the routine written over the sheet's step
+    c.dismiss();
     done(c, sc, w.mode === 'off' ? `Off again ${c.RT.whenClause(at)}` : `Runs ${c.RT.whenClause(at)}`);
   },
-  'off-leave'(c, el, r) { const sc = sc0(c, r); if (!sc) return; c.RT.setOff(sc, null); c.ui.when = null; c.closeSheet(); history.replaceState(null, '', `#routine/${sc.id}`); done(c, sc, 'Left as they are'); },
+  'off-leave'(c, el, r) { const sc = sc0(c, r); if (!sc) return; c.RT.setOff(sc, null); c.ui.when = null; c.dismiss(); done(c, sc, 'Left as they are'); },
   'off-bedtime'(c, el, r) {
     const sc = sc0(c, r); if (!sc) return;
     const at = { type: 'time', time: c.S.config.settings.night_start, offset_min: 0 };
-    c.RT.setOff(sc, at); c.ui.when = null; c.closeSheet(); history.replaceState(null, '', `#routine/${sc.id}`);
+    c.RT.setOff(sc, at); c.ui.when = null; c.dismiss();
     done(c, sc, `Off again at bedtime`);
   },
   what(c, el, r) {
@@ -408,9 +410,9 @@ export const actions = {
     const sc = sc0(c, r); if (!sc) return;
     const prev = JSON.stringify(c.S.config);
     c.RT.remove(sc.id);
-    c.closePicker(); c.closeSheet();
+    // off the page it was on, as Back would go: to Routines, or wherever the routine was opened from
+    c.leave('routines');
     await c.save('', { quiet: true });
-    history.replaceState(null, '', '#routines'); c.render();
     c.toast(`${sc.name || 'Routine'} deleted`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };

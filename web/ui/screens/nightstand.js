@@ -79,7 +79,7 @@ export function view(c) {
 export function after(c) {
   const n = nightNow(c);
   const ns = c.ui.nsNight || (c.ui.nsNight = { was: n });
-  if (ns.was && !n) { c.ui.nsNight = null; setTimeout(() => c.go('home'), 0); return; }
+  if (ns.was && !n) { c.ui.nsNight = null; setTimeout(() => c.goTab('home'), 0); return; }
   ns.was = n;
 }
 export function leave(c) { c.ui.nsNight = null; }

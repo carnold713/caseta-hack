@@ -115,7 +115,7 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text-1);
-  font-family: 'Lutron Sans Screen', 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Lutron Sans Screen', 'DM Sans', system-ui, -apple-system, Roboto, 'Segoe UI', sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -126,6 +126,10 @@ html, body {
   -webkit-touch-callout: none;
 }
 input, textarea, select, [contenteditable], [contenteditable] *, code, pre { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+/* Controls are set in the app's face and ink, not the browser's own control face (Arial at 13.3 px, black): a chip,
+   a pill or a link drawn as a <button> read in a different typeface from the words around it. A control that wants
+   another size or colour says so in its own rule, as they all do. */
+button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
 
 /* The type ramp. Sizes and tracking are the file's; tracking is stated in per cent there and
    converted here, so -2% at 40px is -0.8px. */

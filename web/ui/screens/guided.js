@@ -94,7 +94,7 @@ export function view(c, r) {
   const { esc, icon } = c;
   const kind = r.id;
   if (!KINDS[kind] || (kind === 'goodnight' || kind === 'leaving') && !c.data.remotes().length) {
-    return `<header class="hdr"><button class="hdr-btn back" data-go="routines" aria-label="Back">${icon('back', 22, 1.7)}</button></header><h1 class="t-h1 page-h1">${esc(KINDS[kind] || 'Set up')}</h1><p class="t-body muted soon">${kind === 'goodnight' || kind === 'leaving' ? 'This needs a remote. Pair a Pico first and it shows up here.' : 'Nothing to set up here.'}</p>`;
+    return `<header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header><h1 class="t-h1 page-h1">${esc(KINDS[kind] || 'Set up')}</h1><p class="t-body muted soon">${kind === 'goodnight' || kind === 'leaving' ? 'This needs a remote. Pair a Pico first and it shows up here.' : 'Nothing to set up here.'}</p>`;
   }
   const gs = state(c, kind);
   const all = steps(c, gs); const live = all.filter(x => !x.skip);
@@ -121,21 +121,24 @@ export function after(c, r, scr) { wireSunrise(c, scr); }
 export const actions = {
   ...whereActions,
   ...sunriseActions,
-  'gs-back'(c) { const gs = c.ui.gs; if (gs && gs.step > 0) { gs.step -= 1; gs.other = false; c.render(); window.scrollTo(0, 0); } else { c.ui.gs = null; c.go('routines'); } },
+  // back through the questions, and from the first one out the way it came in (a step back, not Routines pushed on top)
+  'gs-back'(c) { const gs = c.ui.gs; if (gs && gs.step > 0) { gs.step -= 1; gs.other = false; c.render(); window.scrollTo(0, 0); } else { c.ui.gs = null; c.back(); } },
   'gs-next'(c, el, r) {
     const gs = c.ui.gs; if (!gs) return;
     const live = steps(c, gs).filter(x => !x.skip);
     if (!live[gs.step] || !live[gs.step].ok) return;
     if (gs.step < live.length - 1) { gs.step += 1; gs.other = false; gs.pickDays = false; c.render(); window.scrollTo(0, 0); return; }
-    // the last Next sets it up
+    // The last Next sets it up and goes to what it made: back to Routines, where the walk was started, or the
+    // remote's page in the walk's own place in the history. Either way Back no longer goes into the walk again at
+    // its first question, which it did when the page was pushed on top of it.
     const g = gs.g;
-    if (gs.kind === 'welcome') { if (!c.RT.saveWelcome(g)) return; c.ui.gs = null; c.save('Welcome lights set up'); c.go('routines'); return; }
-    if (gs.kind === 'wakeup') { if (!c.RT.saveWakeup(g)) return; c.ui.gs = null; c.save('Wake-up light on'); c.go('routines'); return; }
+    if (gs.kind === 'welcome') { if (!c.RT.saveWelcome(g)) return; c.ui.gs = null; c.save('Welcome lights set up'); c.finish('routines'); return; }
+    if (gs.kind === 'wakeup') { if (!c.RT.saveWakeup(g)) return; c.ui.gs = null; c.save('Wake-up light on'); c.finish('routines'); return; }
     if (!c.RT.saveButton(g)) return;
     c.ui.gs = null;
     c.ui.remoteKey = { ...(c.ui.remoteKey || {}), [g.remote]: g.button };
     c.save(`${gs.kind === 'goodnight' ? 'Goodnight' : 'Leaving'} button set up`);
-    c.go(`remote/${g.remote}`);
+    c.replace(`remote/${g.remote}`);
   },
   'gs-day'(c, el) { const g = G(c); const d = Number(el.dataset.d); const next = toggleIn(g.days, d); if (!next.length) { c.toast('Pick at least one day'); return; } g.days = next.sort(); c.ui.gs.pickDays = true; c.render(); },
   // welcome
