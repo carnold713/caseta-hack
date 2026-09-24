@@ -33,7 +33,8 @@ function readCard(card) {
   const box = card.getBoundingClientRect();
   const k = box.width / (card.offsetWidth || box.width) || 1;
   const q = s => card.querySelector(s);
-  const photo = card.classList.contains('photo');
+  // an illustrated room (roomscene.js) is a picture like a photograph: the card shows the middle of the page's own
+  const photo = card.classList.contains('photo') || card.classList.contains('scene');
   const glows = [...card.querySelectorAll('.glow:not(.off)')].map(g => {
     const cs = getComputedStyle(g); const r = g.getBoundingClientRect();
     return { el: g, x: r.left, y: r.top, transform: cs.transform, opacity: cs.opacity };
