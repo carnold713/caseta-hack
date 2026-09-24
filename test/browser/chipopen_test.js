@@ -204,7 +204,14 @@ function instrument() {
   // the orbs rise from where the chip was, left to right
   const n = frames[frames.length - 1].orbs.length;
   const T = frames.find(f => f.at != null && f.at > 50); const base = T.t - T.at;
-  const firstSeen = [...Array(n).keys()].map(i => { const f = frames.find(x => x.orbs[i] && x.orbs[i].o > 0.3); return f ? f.t - base : null; });
+  // when each orb's opacity crosses 0.3, read between the two frames either side of it: a long frame on a busy machine
+  // would otherwise give two orbs 0.05 s apart the same frame and the same time
+  const firstSeen = [...Array(n).keys()].map(i => {
+    const k = frames.findIndex(x => x.orbs[i] && x.orbs[i].o > 0.3); if (k < 0) return null;
+    const f = frames[k], p = frames[k - 1], o0 = p && p.orbs[i] ? p.orbs[i].o : null;
+    if (o0 == null || f.orbs[i].o === o0) return f.t - base;
+    return Math.round(p.t + (0.3 - o0) / (f.orbs[i].o - o0) * (f.t - p.t) - base);
+  });
   check('the stage has its orbs', n >= 2, n);
   check('the orbs rise in order, left to right, about 0.05 s apart, after the surface has opened', firstSeen.every(x => x != null && x >= 380) && firstSeen.every((x, i) => !i || x >= firstSeen[i - 1]) && firstSeen[n - 1] - firstSeen[0] >= 30 * (n - 1), firstSeen);
   const rest = frames[frames.length - 1].orbs;
