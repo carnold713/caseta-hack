@@ -6,7 +6,7 @@
 // ring reaches it or when its light's state arrives, whichever is later, so a slow bridge shows as a tile catching up
 // and never as a lie. The count and the badge settle last, and the toast offers Put back.
 import { tile, roomPicture } from '/ui/screens/parts.js';
-import { roomTone, roomPower } from '/ui/screens/rooms.js';
+import { roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
 import { sceneSheet, actions as sceneActions, LIST_ACTS } from '/ui/screens/scenes.js';
 import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
@@ -140,9 +140,9 @@ export function view(c, r) {
       <h1 class="t-h1 bar-t">${esc(a.name)}</h1>
       ${countHTML}
     </div>
-    <div class="room-photo-card ${photo ? '' : roomTone(aid)}">
-      ${roomPicture(c, aid, a.name, false)}
-      ${roomLight(c, aid, lights)}
+    <div class="room-photo-card ${photo ? '' : 'scene'}">
+      ${roomPicture(c, aid, a.name, 'page')}
+      ${photo ? roomLight(c, aid, lights) : ''}
       ${badgeHTML}
       ${photo ? '' : `<button class="add-photo" data-go="room/${esc(aid)}/setup">${icon('camera', 16, 1.8)}Add a photo</button>`}
       ${canToggle ? `<div class="room-acts">
@@ -209,6 +209,14 @@ export function after(c, r, scr) {
       const wait = Math.max(0, arrival(host) - now);
       if (wait < 16) continue;
       for (const a of copy.getAnimations()) a.effect.updateTiming({ delay: wait });
+    }
+    // an illustrated room's lamps (roomscene.js) each light as the ring reaches them: their fades wait too
+    for (const lamp of room.querySelectorAll('.room-scene [data-fx][data-i]')) {
+      const wait = Math.max(0, arrival(lamp) - now);
+      if (wait < 16) continue;
+      for (const part of room.querySelectorAll(`.room-scene [data-l="${lamp.dataset.i}"], .room-scene [data-l="${lamp.dataset.i}"] stop`)) {
+        for (const a of part.getAnimations()) if (!(typeof CSSAnimation !== 'undefined' && a instanceof CSSAnimation)) a.effect.updateTiming({ delay: wait });
+      }
     }
   });
 }
@@ -300,6 +308,15 @@ function gone(c) {
     <h1 class="t-h1 page-h1">That room is gone</h1><p class="t-body muted soon">It is no longer in your home.</p></div>`;
 }
 
+// Edit stays on while the room's scenes are changed over it (their editors are the room's own addresses) and is off
+// again once the room is left, so a chip tapped on a later visit runs its scene rather than opening it.
+let editUi = null;
+addEventListener('hashchange', () => {
+  const aid = editUi && editUi.roomScenesEdit; if (!aid) return;
+  let h = location.hash.replace(/^#/, ''); try { h = decodeURIComponent(h); } catch (_) { /* as it is */ }
+  if (h !== `room/${aid}` && !h.startsWith(`room/${aid}/`)) editUi.roomScenesEdit = null;
+});
+
 export const actions = {
   ...setupActions,
   ...sheetActs,
@@ -314,7 +331,7 @@ export const actions = {
   },
   // a scene's editor opens over the room, and closing it is the room again
   'scene-edit'(c, el, r) { if (el.dataset.id) c.go(`room/${r.id}/scene/${el.dataset.id}`); },
-  'room-scenes-edit'(c, el) { const aid = el.dataset.id; c.ui.roomScenesEdit = c.ui.roomScenesEdit === aid ? null : aid; c.render(); },
+  'room-scenes-edit'(c, el) { const aid = el.dataset.id; c.ui.roomScenesEdit = c.ui.roomScenesEdit === aid ? null : aid; editUi = c.ui; c.render(); },
   // a new scene is the room as it is now (every light in it, so the ones that are off stay off), opened to change
   'room-scene-new'(c, el) {
     const aid = el.dataset.id;

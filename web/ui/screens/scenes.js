@@ -125,7 +125,7 @@ function lightEditor(c, p, d) {
 //
 // The stage is a preview. It never touches the house unless "Show it on the room" is on, and that is off each time
 // the editor opens. "Try it" plays the whole scene on the room, with Put back.
-const SG = { H: 356, TOP: 60, BOT: 266, FLOOR: 290, OFF: 312 };
+const SG = { H: 356, TOP: 60, BOT: 266, FLOOR: 290, OFF: 308 };
 const FAN_STEPS = ['Off', 'Low', 'Medium', 'MediumHigh', 'High'];
 const FAN_WORD = { Off: 'Off', Low: 'Low', Medium: 'Medium', MediumHigh: 'Medium high', High: 'High' };
 const entryLevel = (d, v) => (d.domain === 'fan' ? Math.max(0, FAN_STEPS.indexOf(v)) * 25 : typeof v === 'object' && v ? Number(v.level) || 0 : typeof v === 'number' ? v : v && v !== 'Off' ? 100 : 0);

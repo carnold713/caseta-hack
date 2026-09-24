@@ -1,0 +1,42 @@
+/* A room's illustration (roomscene.js): the picture a room shows until it has a photograph. */
+
+/* The frame is always the room page's 300 tall picture at scale 1. On the page it fills the hero; on a Rooms card
+   it sits with its middle on the card's middle, so the card shows the middle 180 of it, as a photograph does. */
+.room-scene { position: absolute; left: 0; right: 0; top: 0; height: 300px; overflow: hidden; pointer-events: none; background: #1D1A18; }
+.room-big .room-scene { top: calc(50% - 150px); }
+.room-scene.thumb { inset: 0; height: auto; }
+.room-scene > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* The grain: one tile made once at load (roomscene.js), laid over the scene. Overlay lifts the specks in the light
+   and leaves the dark wall nearly alone, which is how film grain reads in the reference. */
+.room-scene::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: var(--rs-grain, none); background-size: 96px 96px;
+  mix-blend-mode: overlay; opacity: .6;
+}
+
+/* Everything a light changes moves on the dimmer: a glow's strength, a shade rolling, a lamp's colour. motion.js
+   plays these from the last redraw's values, so a lamp fades rather than jumps. */
+.rs-svg .rl { transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both), color var(--dimmer) var(--ease-both); }
+.rs-svg stop[style] { stop-color: currentColor; transition: color var(--dimmer) var(--ease-both); }
+/* A scene arriving takes the scene's 1.0 s, as the tiles do (motion.js), and room.js starts each lamp's fade when
+   the ring of light reaches it. */
+body.scene-arriving .rs-svg .rl, body.scene-arriving .rs-svg stop[style] { transition-duration: var(--scene); }
+.rs-svg .rs-shade { transform-box: fill-box; transform-origin: 50% 0; }
+/* A fan turns slowly while it is on, and not at all for a phone that asks for less motion. */
+.rs-svg .rs-spin { transform-origin: 0 0; }
+.rs-svg .rs-spin.on { animation: rs-spin 5s linear infinite; }
+@keyframes rs-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rs-svg .rs-spin.on { animation: none; } }
+
+/* On a Rooms card the scene is the picture: a lighter shade under the name than a photograph needs, since the
+   scene is dark already. */
+.room-big.scene { background: #1D1A18; }
+.room-big.scene::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 45%, rgba(10, 9, 8, .62) 100%);
+}
+.room-photo-card.scene { background: #1D1A18; }
+.room-card .room-scene { z-index: 0; }
+
+/* Room setup's photo row, before there is a photograph: the illustration, small. */
+.ph-thumb.ph-scene { position: relative; display: block; overflow: hidden; }

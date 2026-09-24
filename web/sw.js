@@ -8,7 +8,7 @@
    It also keeps the lock screen's one notification per running sleep timer (20 · Beyond the app, web/ui/beyond.js):
    the app hands it the timers and its sign-in; "Off now" and "Add 15 min" act through the API with that sign-in, and
    nothing here ever turns a light on. */
-const VERSION = 'v45';
+const VERSION = 'v46';
 const APP = [
   '/', '/index.html', '/ui/', '/ui/index.html', '/ui/app.js', '/ui/art.js', '/ui/art/light-arc-lamp.svg',
   '/ui/art/light-bedside-lamp.svg', '/ui/art/light-ceiling-fan.svg', '/ui/art/light-chandelier.svg',
@@ -28,7 +28,7 @@ const APP = [
   '/ui/screens/remote.js', '/ui/screens/remotes.js', '/ui/screens/room.js', '/ui/screens/rooms.js',
   '/ui/screens/routine.js', '/ui/screens/routines.js', '/ui/screens/scenes.js', '/ui/screens/settings.js',
   '/ui/screens/setup.js', '/ui/screens/soon.js', '/ui/screens/steps.js', '/ui/screens/timing.js',
-  '/ui/screens/where.js', '/ui/tint.js', '/ui/tokens.css', '/ui/glow.js', '/ui/beyond.js', '/ui/native.js', '/ui/screens/onboard.js',
+  '/ui/screens/where.js', '/ui/tint.js', '/ui/tokens.css', '/ui/glow.js', '/ui/roomscene.js', '/ui/roomscene.css', '/ui/beyond.js', '/ui/native.js', '/ui/screens/onboard.js',
   '/ui/screens/nightstand.js', '/ui/v7/home.css', '/ui/v7/light.css', '/ui/v7/scenes.css', '/ui/v7/night.css',
   '/ui/v7/log.css', '/ui/v7/setup.css', '/data/caseta-data.js', '/data/daylight.js',
   '/data/edit.js', '/data/home.js', '/data/index.js', '/data/remotes.js', '/data/routines.js', '/js/kinds.js',
