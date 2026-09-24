@@ -43,7 +43,10 @@ export const holdFor = hold;
 // The path of an element is its chain of child indexes from the root, with its tag. Two redraws of the same state
 // give the same paths, so an element is paired with the one that stood in its place.
 const TRACKED = ['opacity', 'transform', 'left', 'top', 'width', 'height', 'background-color', 'color', 'border-color', 'box-shadow', 'stroke-dashoffset'];
-const hasTransition = new Map();   // tag + class + pressed state -> whether it declares any transition at all
+// tag + class + pressed state, and the parent's class -> whether it declares any transition at all. The parent is in
+// the key because a glow's light is the same `i` everywhere and only its glow's class says whether it fades (a strip's
+// does, the sunrise preview's never): keyed by itself, whichever was drawn first would decide for all of them.
+const hasTransition = new Map();
 function walk(root, fn) {
   const go = (el, path) => {
     if (el.classList.contains('xf-old')) return;   // a fading copy is carried by its element, not paired itself
@@ -102,7 +105,7 @@ export function snap(root) {
   const s = new Map();
   const run = playing(root);
   walk(root, (el, path) => {
-    const key = sig(el);
+    const key = sig(el) + '<' + ((el.parentElement && el.parentElement.getAttribute('class')) || '');
     const xf = el.hasAttribute('data-xf');
     const rec = { tag: el.tagName, act: el.getAttribute('data-act') || el.getAttribute('data-go') || '' };
     let any = false;

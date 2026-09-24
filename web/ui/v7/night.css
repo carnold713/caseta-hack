@@ -63,13 +63,6 @@ html:has(.ns-page) #app .screen { padding-bottom: 0; }
 }
 /* off is a tap, and a tap gets the press */
 .ns-area.on:active { transform: scale(.96); }
-/* the area's own light: a warm radial inside it while the lamp is on, rising on the night fade, going on the dimmer */
-.ns-inner {
-  position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; mix-blend-mode: screen;
-  background: radial-gradient(250px 230px at 50% 34%, rgba(255, 154, 60, .12) 0%, rgba(255, 154, 60, 0.118) 6.2%, rgba(255, 154, 60, 0.114) 12.5%, rgba(255, 154, 60, 0.106) 18.8%, rgba(255, 154, 60, 0.096) 25%, rgba(255, 154, 60, 0.084) 31.2%, rgba(255, 154, 60, 0.072) 37.5%, rgba(255, 154, 60, 0.058) 43.8%, rgba(255, 154, 60, 0.045) 50%, rgba(255, 154, 60, 0.034) 56.2%, rgba(255, 154, 60, 0.023) 62.5%, rgba(255, 154, 60, 0.015) 68.8%, rgba(255, 154, 60, 0.008) 75%, rgba(255, 154, 60, 0.004) 81.2%, rgba(255, 154, 60, 0.001) 87.5%, rgba(255, 154, 60, 0.000) 93.8%, transparent 100%);
-  transition: opacity var(--dimmer) var(--ease-both);
-}
-.ns-area.on .ns-inner { opacity: 1; transition-duration: var(--night-fade); }
 .ns-ring { position: relative; width: 112px; height: 112px; display: block; margin-top: -24px; }
 .ns-ring svg { position: absolute; inset: 0; overflow: visible; }
 .ns-ring circle { fill: none; stroke-width: 1; }
@@ -79,18 +72,11 @@ html:has(.ns-page) #app .screen { padding-bottom: 0; }
 .ns-ring .ns-fill { stroke: #E0B48A; stroke-width: 2; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0;
   transition: stroke-dashoffset var(--exit) var(--ease-in), opacity var(--exit) var(--ease-in); }
 .ns-area[data-holding='1'] .ns-fill { stroke-dashoffset: 0; opacity: 1; transition: stroke-dashoffset 250ms linear, opacity 70ms ease-out; }
-/* The lamp's glow sits on the ring and spills well past the area: scale and opacity together, on the night fade
-   coming on (eyes that were asleep) and the dimmer going off (turning off is always easy). */
+/* The lamp's glow, the page's one light, sits on the ring and spills well past the area: scale and opacity together,
+   on the night fade coming on (eyes that were asleep) and the dimmer going off (turning off is always easy). */
 .ns-glow { z-index: 0; }
 .ns-glow > i { transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both); }
 .ns-area.on .ns-glow > i { transition-duration: var(--night-fade); }
-.ns-candle {
-  position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
-  pointer-events: none; mix-blend-mode: screen; opacity: 0; transform: scale(.85);
-  background: radial-gradient(closest-side, rgba(255, 180, 107, .38) 0%, rgba(255, 180, 107, 0.375) 6.2%, rgba(255, 180, 107, 0.360) 12.5%, rgba(255, 180, 107, 0.336) 18.8%, rgba(255, 180, 107, 0.304) 25%, rgba(255, 180, 107, 0.267) 31.2%, rgba(255, 180, 107, 0.227) 37.5%, rgba(255, 180, 107, 0.185) 43.8%, rgba(255, 180, 107, 0.144) 50%, rgba(255, 180, 107, 0.106) 56.2%, rgba(255, 180, 107, 0.073) 62.5%, rgba(255, 180, 107, 0.046) 68.8%, rgba(255, 180, 107, 0.026) 75%, rgba(255, 180, 107, 0.012) 81.2%, rgba(255, 180, 107, 0.004) 87.5%, rgba(255, 180, 107, 0.001) 93.8%, transparent 100%);
-  transition: opacity var(--dimmer) var(--ease-both), transform var(--dimmer) var(--ease-both);
-}
-.ns-area.on .ns-candle { opacity: 1; transform: scale(1); transition-duration: var(--night-fade); }
 .ns-moon { margin-top: 54px; color: #D9B896; position: relative; }
 .ns-lbl { position: relative; display: flex; flex-direction: column; align-items: center; margin-top: 18px; min-height: 80px; padding: 0 20px; }
 .ns-title { font-size: 24px; font-weight: 500; line-height: 30px; color: #BFA38A; }

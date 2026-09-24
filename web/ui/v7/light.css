@@ -2,42 +2,23 @@
    Screens 3 (a light, the lamp's own glow), 4 (Colour, painting with light), 5 (White, the time of day) and 15 (the
    sleep timer, a candle burning down). Every light here is drawn from a lamp's real level and colour. */
 
-/* ---- 3 · the lamp's own glow ----------------------------------------------------------------------------------
-   The v6 halo (one 560 disc at 0.10) becomes the three-layer hero glow, centred on the bulb at (206, 112), plus a pool
-   of light on the floor under the lamp and a filament lighting the bulb from inside. The halo box still fades and
-   scales on the dimmer as a whole (0.85 to 1, the pair), so off is the light going, not a grey glow. */
-.dev .halo.lamp-halo {
-  left: 0; top: 0; width: 100%; height: 260px; border-radius: 0; background: none; transform-origin: 50% 112px;
-}
-.lamp-pool {
-  position: absolute; left: 50%; top: 236px; width: var(--pool-w, 255px); height: 36px; border-radius: 50%;
-  transform: translate(-50%, -50%); pointer-events: none; mix-blend-mode: screen; filter: blur(8px);
-  background: radial-gradient(closest-side, var(--pool-c, transparent) 0%, color-mix(in srgb, var(--pool-c, transparent) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--pool-c, transparent) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--pool-c, transparent) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--pool-c, transparent) 80.1%, transparent) 25%, color-mix(in srgb, var(--pool-c, transparent) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--pool-c, transparent) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--pool-c, transparent) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--pool-c, transparent) 37.9%, transparent) 50%, color-mix(in srgb, var(--pool-c, transparent) 28%, transparent) 56.2%, color-mix(in srgb, var(--pool-c, transparent) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--pool-c, transparent) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--pool-c, transparent) 6.8%, transparent) 75%, color-mix(in srgb, var(--pool-c, transparent) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--pool-c, transparent) 1%, transparent) 87.5%, color-mix(in srgb, var(--pool-c, transparent) 0.1%, transparent) 93.8%, transparent 100%);
-  transition: width var(--dimmer) var(--ease-both), opacity var(--dimmer) var(--ease-both);
-}
-.lamp-filament {
-  position: absolute; left: calc(50% - 32px); top: 72px; width: 64px; height: 72px; border-radius: 50%; pointer-events: none;
-  mix-blend-mode: screen; background: radial-gradient(closest-side, var(--fil-c, transparent) 0%, color-mix(in srgb, var(--fil-c, transparent) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--fil-c, transparent) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--fil-c, transparent) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--fil-c, transparent) 80.1%, transparent) 25%, color-mix(in srgb, var(--fil-c, transparent) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--fil-c, transparent) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--fil-c, transparent) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--fil-c, transparent) 37.9%, transparent) 50%, color-mix(in srgb, var(--fil-c, transparent) 28%, transparent) 56.2%, color-mix(in srgb, var(--fil-c, transparent) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--fil-c, transparent) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--fil-c, transparent) 6.8%, transparent) 75%, color-mix(in srgb, var(--fil-c, transparent) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--fil-c, transparent) 1%, transparent) 87.5%, color-mix(in srgb, var(--fil-c, transparent) 0.1%, transparent) 93.8%, transparent 100%);
-  opacity: var(--fil-o, 0); transition: opacity var(--dimmer) var(--ease-both);
-}
-.dev:not(.on) .lamp-filament { opacity: 0; }
+/* ---- 3 · the lamp's own light ---------------------------------------------------------------------------------
+   One soft light centred on the lamp (components.css, .onelight-lamp; device.js places it on the drawing with --lamp-y),
+   in its colour, as strong as its level, and none when it is off: it fades and draws in to 0.85 on the dimmer, so off
+   is the light going, not a grey glow. No halo rings, no pool on the floor, no filament. */
 
 /* Under a finger the light is locked to it: LINEAR, no easing, no lag (M6). The dimmer's transitions are for the
    light arriving from the bridge, not for a thumb. */
-.dev.held .glow > i, .dev.held .lamp-pool, .dev.held .lamp-filament { transition-duration: 0s; }
+.dev.held .onelight { transition-duration: 0s; }
 
-/* The knob holds the light: a 72 radial of the lamp's body tone under it, and while a finger is on it a 44 disc of
-   white 22% (in on the standard 0.12, out EASE_IN 0.2, as the file's touch mark). */
-.dial .kglow, .dial .ktouch {
+/* While a finger is on the knob, a 44 disc of white 22% under it (in on the standard 0.12, out EASE_IN 0.2, as the
+   file's touch mark). The knob itself is flat: no glow round it, and the number under the arc casts none either. */
+.dial .ktouch {
   position: absolute; left: calc(50% - 170px + var(--kx)); top: var(--ky); border-radius: 50%; pointer-events: none;
   transform: translate(-50%, -50%);
 }
-.dial .kglow { width: 96px; height: 96px; mix-blend-mode: screen; background: radial-gradient(closest-side, var(--kglow) 0%, color-mix(in srgb, var(--kglow) 98.7%, transparent) 6.2%, color-mix(in srgb, var(--kglow) 94.7%, transparent) 12.5%, color-mix(in srgb, var(--kglow) 88.4%, transparent) 18.8%, color-mix(in srgb, var(--kglow) 80.1%, transparent) 25%, color-mix(in srgb, var(--kglow) 70.3%, transparent) 31.2%, color-mix(in srgb, var(--kglow) 59.6%, transparent) 37.5%, color-mix(in srgb, var(--kglow) 48.6%, transparent) 43.8%, color-mix(in srgb, var(--kglow) 37.9%, transparent) 50%, color-mix(in srgb, var(--kglow) 28%, transparent) 56.2%, color-mix(in srgb, var(--kglow) 19.3%, transparent) 62.5%, color-mix(in srgb, var(--kglow) 12.2%, transparent) 68.8%, color-mix(in srgb, var(--kglow) 6.8%, transparent) 75%, color-mix(in srgb, var(--kglow) 3.1%, transparent) 81.2%, color-mix(in srgb, var(--kglow) 1%, transparent) 87.5%, color-mix(in srgb, var(--kglow) 0.1%, transparent) 93.8%, transparent 100%); transition: opacity var(--dimmer) var(--ease-both); }
-.dev:not(.on) .dial .kglow { opacity: 0; }
 .dial .ktouch { width: 44px; height: 44px; background: #fff; opacity: 0; transition: opacity var(--exit) var(--ease-in); }
 .dev.held .dial .ktouch { opacity: .22; transition: opacity var(--tap) var(--ease); }
-/* the number glows only while the light is on: an off light draws no light, whatever level it will come back at */
-.dev.on .dial.bright .num b { text-shadow: 0 0 24px var(--numglow); }
 
 /* Off: the dial is still there, greyed, at the level On will bring back. */
 .dial .fil, .dial .kn, .dial .num b { transition: stroke var(--dimmer) var(--ease-both), fill var(--dimmer) var(--ease-both), color var(--dimmer) var(--ease-both); }
@@ -91,19 +72,17 @@
 .ws-moment { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, .32); transform: translate(-50%, -50%); pointer-events: none; }
 /* the band a sideways finger drags the white along: the sun's path, card x 24 to 348, the sky's whole height */
 .ws.lk-sheet .ws-track { left: 24px; right: 24px; top: 0; bottom: 0; height: auto; border-radius: 0; overflow: visible; background: none; touch-action: pan-y; }
-/* the lamp's own white, a sun on the path: a 28 disc of it with a 1 px rim, its light doubled round it, and a grip */
+/* the lamp's own white, a sun on the path: a flat 28 disc of it in a 2 px white ring, and a grip */
 .ws.lk-sheet .ws-thumb {
   width: 0; height: 0; border-radius: 0; background: none; box-shadow: none; pointer-events: none; z-index: 2;
   transition: left var(--standard) var(--ease), top var(--standard) var(--ease);
 }
 .ws-sky.held .ws-thumb { transition: none; }
 .ws-thumb .disc, .ws-thumb .touch { position: absolute; left: 0; top: 0; border-radius: 50%; transform: translate(-50%, -50%); }
-.ws-thumb .disc { width: 28px; height: 28px; background: var(--sun); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .4), 0 2px 10px rgba(0, 0, 0, .35); }
+.ws-thumb .disc { width: 28px; height: 28px; background: var(--sun); box-shadow: 0 0 0 2px #fff; }
 .ws-thumb.unlit .disc { background: #3A3633; }
 .ws-thumb .touch { width: 48px; height: 48px; background: #fff; opacity: 0; pointer-events: auto; cursor: grab; touch-action: none; transition: opacity var(--exit) var(--ease-in); }
 .ws-sky.held .ws-thumb .touch { opacity: .22; transition: opacity var(--tap) var(--ease); }
-.ws-thumb .ws-sunglow { transform: scale(.83); }
-.ws-sky.held .ws-thumb .glow > i { transition-duration: 0s; }
 /* where the day is now: "Now outside" over a sun glyph. A tap sets that white once; a hold (0.6 s) fills it with light
    and starts following the day. */
 .ws-now {
@@ -126,20 +105,14 @@
 .ws.lk-sheet:not(:has(.ws-note)) .ws-follow { top: 400px; }
 
 /* ---- 4 · Colour, painting with light ---- */
-/* the wheel sits on its own faint light, and its handle glows with the colour under it */
+/* the wheel sits on its own faint light; its handle is a flat disc of the colour under it in a white ring */
 .cs.lk-sheet .wheel::before { content: ''; position: absolute; left: -20px; top: -20px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none; background: radial-gradient(closest-side, rgba(255, 255, 255, .04) 0%, rgba(255, 255, 255, 0.039) 6.2%, rgba(255, 255, 255, 0.038) 12.5%, rgba(255, 255, 255, 0.035) 18.8%, rgba(255, 255, 255, 0.032) 25%, rgba(255, 255, 255, 0.028) 31.2%, rgba(255, 255, 255, 0.024) 37.5%, rgba(255, 255, 255, 0.019) 43.8%, rgba(255, 255, 255, 0.015) 50%, rgba(255, 255, 255, 0.011) 56.2%, rgba(255, 255, 255, 0.008) 62.5%, rgba(255, 255, 255, 0.005) 68.8%, rgba(255, 255, 255, 0.003) 75%, rgba(255, 255, 255, 0.001) 81.2%, rgba(255, 255, 255, 0.000) 87.5%, rgba(255, 255, 255, 0.000) 93.8%, transparent 100%); }
-.cs.lk-sheet .wheel .handle { box-shadow: inset 0 0 0 3px #fff, 0 4px 12px rgba(0, 0, 0, .45), 0 0 26px 12px var(--hc, transparent); }
+.cs.lk-sheet .wheel .handle { box-shadow: inset 0 0 0 3px #fff, 0 0 0 1px rgba(0, 0, 0, .2); }
 /* the controls move on the standard 0.24 s because the person moved them; the colour crossfades (data-xf), never slides */
 .cs.lk-sheet .wheel:not(.held) .handle { transition: left var(--standard) var(--ease), top var(--standard) var(--ease); }
 .cs.lk-sheet .cs-val .dot { transition: none; }
-/* the twelve colours as beads of lit glass: glow, colour, deep, lit from the upper left, with a specular spot */
-.cs.lk-sheet .cs-sw .sw {
-  position: relative; background: radial-gradient(circle at 35% 30%, var(--b-glow) 0%, var(--b) 45%, var(--b-deep) 100%);
-  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, .25), 0 4px 12px var(--b-shadow);
-}
-.cs.lk-sheet .cs-sw .sw::after { content: ''; position: absolute; left: 7px; top: 5px; width: 12px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .55); filter: blur(2px); }
-.cs.lk-sheet .cs-sw:has(.sw-ring) .sw.sel { box-shadow: inset 0 -2px 4px rgba(0, 0, 0, .25), 0 4px 12px var(--b-shadow); }
-.cs.lk-sheet .cs-sw .sw-ring .glow { z-index: -1; }
+/* the twelve colours as flat swatches; the chosen one wears a 2 px white ring with a small gap (screens.css) */
+.cs.lk-sheet .cs-sw .sw { position: relative; background: var(--b); }
 .cs-paused .link { font-size: 14px; }
 
 /* ---- 15 · the sleep timer, a candle burning down ---------------------------------------------------------------

@@ -7,8 +7,8 @@
 //               page's own photograph card is the window: it starts moved and clipped to the card's box and ends
 //               where it is. The picture inside is never rescaled, because the card already shows the middle of
 //               the page's photograph at the page's scale (screens.css, .room-big .room-photo).
-//   the face    what the card lays over its picture (the grey veil of a room that is off, the warmth, its light,
-//               the dark shade under the name) is laid over the window where it was on the card and fades in the
+//   the face    what the card lays over its picture (the grey veil of a room that is off, the warmth, the dark
+//               shade under the name) is laid over the window where it was on the card and fades in the
 //               first 0.3 s. The shade stays on the window's bottom edge and the rest covers the whole window, so
 //               no edge ever crosses the photograph.
 //   the name    the page's title flies from the card's label, width matched, on the window's curve; the two
@@ -16,8 +16,7 @@
 //   the list    the other cards step aside (up 40 above, down 120 below) and fade, 0.25 s EASE_IN, nearest first
 //               0.03 s apart, and "Rooms" lifts away; the card's status and power fade in 0.12 s.
 //   the room    fills in in reading order: the header, the count badge, the room's On and Off, the count, the scenes,
-//               the tiles (each lit one blooming with its own light as it lands), and a spill of the card's light
-//               over the page as it opens.
+//               the tiles, and the room's one light at the top of the screen, fading in as it opens.
 // BACK is the same run the other way, faster (0.45 s on (0.4, 0, 0.2, 1)), with the room's content gone first. A room
 // let go by Android's back swipe (M13) closes from the shrunk pose the finger left (opening.js starts its ghost there).
 import { T } from '/ui/motion.js';
@@ -35,10 +34,6 @@ function readCard(card) {
   const q = s => card.querySelector(s);
   // an illustrated room (roomscene.js) is a picture like a photograph: the card shows the middle of the page's own
   const photo = card.classList.contains('photo') || card.classList.contains('scene');
-  const glows = [...card.querySelectorAll('.glow:not(.off)')].map(g => {
-    const cs = getComputedStyle(g); const r = g.getBoundingClientRect();
-    return { el: g, x: r.left, y: r.top, transform: cs.transform, opacity: cs.opacity };
-  });
   const veil = q('.rm-veil'), warm = q('.rm-warm');
   // a room pinned on Home: a smaller card that shows the whole room, so its picture is matched point for point
   const home = card.classList.contains('pin-room');
@@ -50,28 +45,10 @@ function readCard(card) {
     art: q('.room-art') && { r: q('.room-art').getBoundingClientRect(), opacity: opacityOf(q('.room-art')) },
     veil: veil && opacityOf(veil) > 0.01 ? { bg: getComputedStyle(veil).backgroundColor, filter: getComputedStyle(veil).backdropFilter, opacity: opacityOf(veil) } : null,
     warm: warm && opacityOf(warm) > 0.001 ? { bg: getComputedStyle(warm).backgroundColor, blend: getComputedStyle(warm).mixBlendMode, opacity: opacityOf(warm) } : null,
-    glows,
   };
 }
 
 // ---------- building ----------
-// A glow of the card's, standing alone: the card's rules placed it, so its place, scale and strength are copied.
-function glowCopy(g, x, y) {
-  const c = g.el.cloneNode(true);
-  Object.assign(c.style, { left: px(x), top: px(y), transform: g.transform, opacity: g.opacity, transition: 'none' });
-  return c;
-}
-// The light spilling over the page: the card's own glow, or a soft warm pool when the room is dark.
-function spill(O, after) {
-  const b = O.box;
-  const S = el('m10-spill', { position: 'fixed', left: px(b.left), top: px(b.top), width: px(b.width), height: px(b.height), mixBlendMode: 'screen' });
-  const at = O.glows[0] ? { x: O.glows[0].x - b.left, y: O.glows[0].y - b.top } : { x: b.width - 100 * O.k, y: 44 * O.k };
-  if (O.glows.length) for (const g of O.glows) S.appendChild(glowCopy(g, g.x - b.left, g.y - b.top));
-  else S.appendChild(el('m10-pool', { position: 'absolute', left: px(at.x - 120), top: px(at.y - 120), width: '240px', height: '240px', borderRadius: '50%', background: 'radial-gradient(closest-side, rgba(255, 184, 112, .32), rgba(255, 184, 112, .12) 55%, transparent)' }));
-  S.style.transformOrigin = `${px(at.x)} ${px(at.y)}`;
-  after.after(S);
-  return S;
-}
 
 // The window's geometry: the photograph card moved and scaled so its middle sits on the card, and clipped to the
 // card's box. From a pinned card on Home, which shows the whole room smaller, the photograph card is scaled down
@@ -90,8 +67,7 @@ function around2(root, card, O) {
 
 // The card's face over the window. Each part is [element, keyframe when shut, keyframe when open]; the caller
 // plays them one way or the other. Only the shade is locked to an edge (the bottom, where the name was); the veil
-// and the warmth are even all over, so they simply cover the window, and the light stays where it was on the
-// picture, which is where the room's light is.
+// and the warmth are even all over, so they simply cover the window.
 function face(hero, O, G) {
   const parts = [];
   if (O.bg) {
@@ -107,13 +83,6 @@ function face(hero, O, G) {
   if (O.warm) {
     const w = el('m10-warm', { position: 'absolute', inset: '0', backgroundColor: O.warm.bg, mixBlendMode: O.warm.blend });
     hero.appendChild(w); parts.push([w, { opacity: O.warm.opacity }, { opacity: 0 }]);
-  }
-  if (O.glows.length) {
-    // composited as the card composites them: each glow is its own group there (its scale(1) makes it one), so the
-    // light lands on the picture the same way on both
-    const box = el('m10-glows', { position: 'absolute', inset: '0' });
-    for (const g of O.glows) { const p = G.loc(g.x, g.y); box.appendChild(glowCopy(g, p.x, p.y)); }
-    hero.appendChild(box); parts.push([box, { opacity: 1 }, { opacity: 0 }]);
   }
   if (O.shade) {
     const s = el('m10-shade', { position: 'absolute', left: '0', right: '0', bottom: '0', height: px(G.cardH), backgroundImage: O.shade });
@@ -217,10 +186,9 @@ export function open({ O, ghost }, screen, F) {
   const lift = { duration: 200, easing: T.easeIn, fill: 'forwards' };
   if (head) { for (const n of barParts(head)) F.core(n, [{ opacity: 1, transform: 'translateY(0px)' }, { opacity: 0, transform: 'translateY(-16px)' }], lift); scrim(F, head, 1, 0, lift); }
 
-  // the light spills over the page as the room opens
-  const sp = spill(O, top);
-  sp.animate([{ opacity: 0, transform: 'scale(1)' }, { opacity: 0.55, offset: 0.3 }, { opacity: 0, transform: 'scale(1.45)' }], { duration: 1100, delay: 50, easing: 'ease-out', fill: 'both' })
-    .finished.catch(() => {}).then(() => sp.remove());
+  // the room's one light comes up at the top of the screen as it opens (the list's own went with the list)
+  const lamp = q('.room > .onelight');
+  if (lamp && opacityOf(lamp) > 0.001) play(lamp, [{ opacity: 0 }, { opacity: opacityOf(lamp) }], { duration: OPEN.dur, easing: 'ease-in-out', delay: 100 });
 
   // the room fills in, in reading order
   const rise = (n, delay, dur = T.enter, dy = 12) => play(n, [{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: 'translateY(0px)' }], { duration: dur, easing: T.ease, delay });
@@ -236,13 +204,6 @@ export function open({ O, ghost }, screen, F) {
   tiles.forEach((t, i) => {
     const at = 460 + i * 50;
     play(t, [{ opacity: 0, transform: 'translateY(24px) scale(0.96)' }, { opacity: 1, transform: 'translateY(0px) scale(1)' }], { duration: 400, easing: T.ease, delay: at });
-    // a lit tile blooms with its own light as it lands (the stylesheet draws the bloom, .tile.on::before)
-    if (t.matches('.tile.on')) {
-      try {
-        t.animate([{ opacity: 0, transform: 'scale(0.5)' }, { opacity: 1, offset: 0.3 }, { opacity: 0, transform: 'scale(1.2)' }],
-          { duration: 900, delay: at + 120, easing: 'ease-out', fill: 'both', pseudoElement: '::before' });
-      } catch (_) { /* a browser that cannot animate a pseudo-element goes without */ }
-    }
   });
   return true;
 }
@@ -294,9 +255,5 @@ export function close(p, screen, F, { ghost: g, O, el: card }) {
   for (const n of barParts(head)) F.extra(n, [L ? { opacity: 1, transform: `translateY(${L.head}px)` } : { opacity: 0, transform: 'translateY(-16px)' }, { opacity: 1, transform: 'translateY(0px)' }], down);
   if (!L) scrim(F, head, 0, 1, down, 'extra');
 
-  // a softer spill of light is drawn back into the card
-  const sp = spill(O, top);
-  F.extra(sp, [{ opacity: 0, transform: 'scale(1.45)' }, { opacity: 0.35, offset: 0.4 }, { opacity: 0, transform: 'scale(1)' }], { duration: 700, delay: 100, easing: 'ease-in-out', fill: 'both' })
-    .finished.catch(() => {}).then(() => sp.remove());
   return true;
 }

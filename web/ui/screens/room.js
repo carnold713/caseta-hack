@@ -10,6 +10,7 @@ import { roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
 import { sceneSheet, actions as sceneActions, LIST_ACTS } from '/ui/screens/scenes.js';
 import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
+import { roomTop } from '/ui/screens/home.js';
 import { reduced } from '/ui/motion.js';
 
 // Room setup and the room's sleep timer are sheets over it (setup.js), and so is a scene's editor
@@ -78,15 +79,14 @@ function sceneTone(c, p) {
 const rgba = (hex, a) => { const h = hex.replace('#', ''); return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`; };
 function toneCSS(t) { return t.hex ? rgba(t.hex, 0.10) : rgba(whiteStops(t.kelvin).body, 0.14); }
 
-// The room's own light on its photograph: a pool in the warmest white that is on, as big and strong as the room is
-// bright, and a grey veil when everything is off (the lighting system's rule for a room photo).
+// The room's own light on its photograph: a faint warmth from its top as bright as the room, and a grey veil when
+// everything is off (the lighting system's rule for a room photo). The page's one light is at the top of the screen
+// (roomTop), so the photograph carries no glow of its own.
 function roomLight(c, aid, lights) {
   const lit = lights.filter(d => (c.data.level(d.device_id) || 0) > 0);
   if (!lit.length) return `<span class="rp-light dark" data-xf aria-hidden="true"></span>`;
   const mean = Math.round(lit.reduce((a, d) => a + (c.data.level(d.device_id) || 0), 0) / lit.length);
-  let k = null;
-  for (const d of lit) { const col = (c.S.states[d.device_id] || {}).color; if (col && col.mode === 'ct' && col.kelvin && (k == null || col.kelvin < k)) k = col.kelvin; }
-  return `<span class="rp-light" data-xf style="--rl:${mean}" aria-hidden="true">${glowHTML({ level: mean, kelvin: k || 2700, ctx: 'card', x: '70%', y: '34%' })}</span>`;
+  return `<span class="rp-light" data-xf style="--rl:${mean}" aria-hidden="true"></span>`;
 }
 
 // The room's On and Off: the light page's switch, so the room's state is plain at a glance. The copper pill sits under
@@ -153,6 +153,7 @@ export function view(c, r) {
   const layer = w ? waveLayer(w) : '';
 
   return `<div class="room">
+    ${roomTop(c, aid)}
     <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       ${pinButton(c, `a:${aid}`, a.name)}

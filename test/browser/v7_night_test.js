@@ -83,8 +83,8 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   check((await look()).night, 'Night look always: night');
   await C(() => { const c = window.__copper; c.S.config.settings.night_look = 'auto'; c.render(); });
   // glows can take it: glowHTML with night is dimmer by 0.7
-  const g = await C(async () => { const m = await import('/ui/glow.js'); const a = m.glowSpec({ level: 60, kelvin: 2700, ctx: 'card' }), b = m.glowSpec({ level: 60, kelvin: 2700, ctx: 'card', night: true }); return [a.bodyC, b.bodyC]; });
-  check(g[0] !== g[1], 'a glow handed night is quieter', g);
+  const g = await C(async () => { const m = await import('/ui/glow.js'); const a = m.glowSpec({ level: 60, kelvin: 2700, ctx: 'card' }), b = m.glowSpec({ level: 60, kelvin: 2700, ctx: 'card', night: true }); return [a.c, b.c, m.lightStrength(60), m.lightStrength(60, true)]; });
+  check(g[0] !== g[1] && Math.abs(g[3] - 0.7 * g[2]) < 1e-9, 'a light handed night is quieter (0.7 of its day strength)', g);
   await force('0');
 
   // ================= nightstand =================
@@ -118,7 +118,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   // a resting thumb: a quarter of a second and the lamp comes up, 10%, on the night fade, with its 15 min timer
   await finger('.ns-area', [[186, 200]], 320);
   await wait(60);
-  const anim = await C(() => (document.querySelector('.ns-glow > i.g-body') || document.body).getAnimations().map(a => Math.round(a.effect.getTiming().duration)));
+  const anim = await C(() => (document.querySelector('.ns-glow > i') || document.body).getAnimations().map(a => Math.round(a.effect.getTiming().duration)));
   await wait(400);
   let a = await acts();
   const up = a.find(x => (x.type === 'level' || x.type === 'color') && x.target === 'd:10');
@@ -130,8 +130,10 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   await wait(1800);
   const on = await C(() => ({ on: document.querySelector('.ns-area').classList.contains('on'), glowOff: document.querySelector('.ns-glow').classList.contains('off'),
     title: document.querySelector('.ns-title').textContent, sub: document.querySelector('.ns-sub').textContent, level: window.__copper.data.level('10'),
-    glowOp: getComputedStyle(document.querySelector('.ns-glow .g-body')).opacity }));
+    glowOp: getComputedStyle(document.querySelector('.ns-glow > i')).opacity,
+    lights: document.querySelectorAll('.ns-page .glow:not(.off), .ns-page .onelight:not(.off), .ns-inner, .ns-candle').length }));
   check(on.on && !on.glowOff && on.glowOp === '1' && on.level === 10, 'the lamp is on at 10% and its glow is lit', on);
+  check(on.lights === 1, 'and it is the page\'s one soft light (no second glow in the area or the ring)', on.lights);
   check(on.title === 'Off' && new RegExp(`^${lamp} · 10% · off by itself at \\d{1,2}:\\d\\d (am|pm)$`).test(on.sub), 'the area now says Off, and when it goes out', on.sub);
   await page.screenshot({ path: 'v7-night-nightstand-on.png' });
   // the page never scrolls
@@ -141,7 +143,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   await clearActs();
   await finger('.ns-area', [[186, 200]]);
   await wait(120);
-  const offAnim = await C(() => (document.querySelector('.ns-glow > i.g-body') || document.body).getAnimations().map(x => Math.round(x.effect.getTiming().duration)));
+  const offAnim = await C(() => (document.querySelector('.ns-glow > i') || document.body).getAnimations().map(x => Math.round(x.effect.getTiming().duration)));
   await wait(600);
   a = await acts();
   check(a.some(x => x.type === 'level' && x.target === 'd:10' && x.level === 'off'), 'a tap on Off turns it off', a);

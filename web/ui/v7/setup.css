@@ -94,29 +94,24 @@
   box-shadow: inset 0 0 0 .5px var(--line); animation: none; }
 .conn-dot.lost::after { content: ''; position: absolute; left: 5px; top: 5px; width: 8px; height: 8px; border-radius: 4px;
   background: var(--text-3); animation: breathe var(--breathe) var(--ease-both) infinite; }
-/* Home's light collapses into one ember that rests on the ember token (4.8 s: opacity 0.6 to 1, scale 0.96 to 1,
-   the wash's blur 40 to 48), centred at 206, 110: a fire banked for the night, not a warning light. Two layers of
-   one pseudo each, since the wash is blurred and the body and core are not. The field itself goes out. */
+/* Home's light collapses into one ember that rests on the ember token (4.8 s: opacity 0.6 to 1, scale 0.96 to 1),
+   centred at 206, 110: a fire banked for the night, not a warning light. One soft light, as every light is now, and
+   the house's own light at the top goes out into it. */
 #app.offline .home { position: relative; --ember-a: 1; }
 body.nightlook #app.offline .home { --ember-a: .6; }
-#app.offline .home .house-light { opacity: 0; }
-#app.offline .home::before, #app.offline .home::after {
-  content: ''; position: absolute; left: 50%; top: 110px; border-radius: 50%; pointer-events: none; z-index: 0;
-  mix-blend-mode: screen; animation: ember var(--ember) var(--ease-both) infinite; }
-#app.offline .home::before { width: 416px; height: 416px; margin: -208px 0 0 -208px; filter: blur(40px);
-  background: radial-gradient(closest-side, rgba(184, 108, 53, calc(.16 * var(--ember-a))) 0%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.987)) 6.2%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.947)) 12.5%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.884)) 18.8%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.801)) 25%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.703)) 31.2%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.596)) 37.5%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.486)) 43.8%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.379)) 50%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.280)) 56.2%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.193)) 62.5%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.122)) 68.8%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.068)) 75%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.031)) 81.2%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.010)) 87.5%, rgba(184, 108, 53, calc(.16 * var(--ember-a) * 0.001)) 93.8%, transparent 100%);
-  animation-name: ember, ember-wash; }
-#app.offline .home::after { width: 260px; height: 260px; margin: -130px 0 0 -130px;
-  background: radial-gradient(closest-side, rgba(217, 138, 78, calc(.26 * var(--ember-a))) 0%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.987)) 2%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.947)) 4%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.884)) 6%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.801)) 8%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.703)) 10%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.596)) 12%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.486)) 14%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.379)) 16%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.280)) 18%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.193)) 20%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.122)) 22%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.068)) 24%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.031)) 26%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.010)) 28%, rgba(217, 138, 78, calc(.26 * var(--ember-a) * 0.001)) 30%, transparent 32%),
-    radial-gradient(closest-side, rgba(184, 108, 53, calc(.2 * var(--ember-a))) 0%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.987)) 6.2%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.947)) 12.5%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.884)) 18.8%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.801)) 25%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.703)) 31.2%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.596)) 37.5%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.486)) 43.8%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.379)) 50%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.280)) 56.2%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.193)) 62.5%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.122)) 68.8%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.068)) 75%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.031)) 81.2%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.010)) 87.5%, rgba(184, 108, 53, calc(.2 * var(--ember-a) * 0.001)) 93.8%, transparent 100%); }
+#app.offline .home .house-light { opacity: 0 !important; }
+#app.offline .home::before {
+  content: ''; position: absolute; left: 50%; top: 110px; width: 360px; height: 360px; margin: -180px 0 0 -180px;
+  border-radius: 50%; pointer-events: none; z-index: 0; mix-blend-mode: screen;
+  background: radial-gradient(closest-side, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 1.000)) 0%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.994)) 4.2%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.976)) 8.3%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.947)) 12.5%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.907)) 16.7%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.858)) 20.8%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.801)) 25%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.737)) 29.2%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.668)) 33.3%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.596)) 37.5%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.523)) 41.7%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.450)) 45.8%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.379)) 50%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.312)) 54.2%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.249)) 58.3%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.193)) 62.5%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.144)) 66.7%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.102)) 70.8%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.068)) 75%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.042)) 79.2%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.023)) 83.3%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.010)) 87.5%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.003)) 91.7%, rgba(217, 138, 78, calc(.2 * var(--ember-a) * 0.000)) 95.8%, rgba(217, 138, 78, 0) 100%);
+  animation: ember var(--ember) var(--ease-both) infinite; }
 @keyframes ember { 0%, 100% { opacity: .6; scale: .96; } 50% { opacity: 1; scale: 1; } }
-@keyframes ember-wash { 0%, 100% { filter: blur(40px); } 50% { filter: blur(48px); } }
 /* Everything stays readable at its last known state. What was lit keeps its colour under a 35% veil, its glow at
    half: memories, not light. */
-#app.offline .screen .glow { opacity: .5; }
+#app.offline .screen .glow, #app.offline .screen .onelight .ol-c { opacity: .5; }
 #app.offline .tile::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: rgba(18, 18, 18, .35); pointer-events: none; }
 /* coming back, each glow returns to its true light on the dimmer (motion.js carries it across the redraw) */
-.screen .glow, .home .house-light { transition: opacity var(--dimmer) var(--ease-both); }
+.screen .glow, .screen .onelight .ol-c { transition: opacity var(--dimmer) var(--ease-both); }
 
 /* ---- 20 · Beyond the app ----------------------------------------------------------------------------------- */
 

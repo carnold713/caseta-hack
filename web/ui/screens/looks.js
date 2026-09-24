@@ -7,7 +7,7 @@ import { track } from '/ui/gesture.js';
 import { K_MIN, K_MAX, kelvinAt, posOfKelvin, kelvinHex, WHITES, LAMP_COLOURS, hexHsv, hsvHex, colourName, sameHex } from '/ui/colour.js';
 import { CasetaDaylight } from '/data/index.js';
 import { endsMs } from '/ui/screens/parts.js';
-import { glowHTML, setGlow, whiteStops, colourStops } from '/ui/glow.js';
+import { glowHTML, whiteStops, colourStops } from '/ui/glow.js';
 
 const lampRange = d => (d.ct_range && d.ct_range.length === 2 ? d.ct_range : [2000, 6500]).map(Number);
 const colOf = (c, id) => (c.S.states[id] || {}).color || {};
@@ -91,7 +91,6 @@ function white(c, r) {
   const dayK = c.DAY.followKelvinFor(id);
   const now = dayK != null ? (() => { const t = posOfKelvin(dayK); return `<button class="ws-now" data-act="white-now" data-hold="white-follow" data-ms="600" data-k="${dayK}" style="left:${skyX(t)};top:${skyY(t).toFixed(1)}px" aria-label="Now outside, ${dayK}K. Tap to set it, hold to follow the day"><span class="l">Now outside</span>${c.icon('sun', 22, 1.7)}</button>`; })()
     : `<button class="ws-loc linkish" data-go="light/${c.esc(id)}/follow">Add where home is to see today’s light here</button>`;
-  const sun = glowHTML({ level: lit ? 100 : 0, kelvin: k, ctx: 'tile', name: 'sun', cls: 'ws-sunglow' }).replace('<span class="glow', '<span data-xf="" class="glow');
   return {
     over: whiteSub(d, k), title: 'White',
     body: `<div class="sheet-abs ws lk-sheet">
@@ -106,7 +105,7 @@ function white(c, r) {
         ${moments}
         <div class="ws-track" data-drag="kelvin" role="slider" aria-label="Warmth" aria-valuemin="${kmin}" aria-valuemax="${kmax}" aria-valuenow="${k}"></div>
         ${now}
-        <span class="ws-thumb ${lit ? '' : 'unlit'}" style="${sunStyle(k)}">${sun}<i class="disc"></i><i class="touch"></i></span>
+        <span class="ws-thumb ${lit ? '' : 'unlit'}" style="${sunStyle(k)}"><i class="disc"></i><i class="touch"></i></span>
       </div>
       <div class="ws-ends"><span>Candle · dusk</span><span>Daylight · noon</span></div>
       <div class="ws-chips">${chips}</div>
@@ -136,7 +135,6 @@ function paintKelvin(root, d, k) {
   const t = root.querySelector('.ws-thumb'); if (!t) return;
   t.setAttribute('style', sunStyle(k));
   t.classList.remove('unlit');
-  setGlow(t.querySelector('[data-glow="sun"]'), { level: 100, kelvin: k, ctx: 'tile' });
   const sky = root.querySelector('.ws-sky'); if (sky) sky.style.setProperty('--noon', noonAt(posOfKelvin(k)));
   root.querySelector('[data-k]').textContent = `${k}K`;
   root.querySelector('[data-kname]').textContent = CasetaDaylight.warmthName(k);
@@ -172,9 +170,9 @@ const WHEEL = 236;   // the disc; the wheel's box is 260 with 12 round it for th
 // The sheet's sub names the colour: one of the twelve by its name, anything picked on the wheel "Custom".
 const pickName = hex => { const f = LAMP_COLOURS.find(([, x]) => sameHex(x, hex)); return f ? f[0] : 'Custom'; };
 // A bead of lit glass: the tint's glow, the colour, the tint's deep stop, lit from the upper left.
+// A swatch: a flat disc of the colour (no light, no specular, no shadow); the chosen one wears the ring.
 function bead(n, x, sel) {
-  const st = colourStops(x);
-  return `<button class="sw ${sel ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="--b:${x};--b-glow:${st.core};--b-deep:${st.wash};--b-shadow:${rgba(x, 0.3)}" aria-label="${n}"></button>`;
+  return `<button class="sw ${sel ? 'sel' : ''}" data-act="colour-pick" data-hex="${x}" style="--b:${x}" aria-label="${n}"></button>`;
 }
 function colour(c, r) {
   const d = c.data.dev(r.id); if (!d || !d.color) return null;
@@ -194,7 +192,7 @@ function colour(c, r) {
       ${segmented(c, d, 'colour')}
       <div class="wheel" data-drag="wheel" role="slider" aria-label="Colour">
         <span class="disc"></span>
-        <span class="handle" data-xf="standard" style="left:${hx.toFixed(1)}px;top:${hy.toFixed(1)}px;background:${hex};--hc:${rgba(hex, 0.35)}"></span>
+        <span class="handle" data-xf="standard" style="left:${hx.toFixed(1)}px;top:${hy.toFixed(1)}px;background:${hex}"></span>
       </div>
       <div class="cs-val" data-cval>
         <i class="dot" data-xf="standard" style="background:${hex}"></i><b data-xf="standard">${c.esc(colourName(hex))}</b><span data-xf="standard">· ${hex}</span>
@@ -223,23 +221,22 @@ function setColour(c, d, hex, root) {
   c.gate.sendColor(`d:${id}`, { hex, ...extra });
   if (root) paintColour(root, d, hex);
 }
-// The ring round the chosen swatch is one element that slides to the next choice (M1, 42 px a swatch), and the bead's
-// own light goes with it, crossfading from the old colour to the new.
+// The ring round the chosen swatch, a plain 2 px white ring with a small gap, is one element that slides to the next
+// choice (M1, 42 px a swatch).
 function ringAt(hex) { const i = LAMP_COLOURS.findIndex(([, x]) => sameHex(x, hex)); return i; }
 function ring(hex) {
   const i = hex ? ringAt(hex) : -1;
-  const g = hex ? glowHTML({ level: 100, hex, ctx: 'dot', name: 'bead' }).replace('<span class="glow', '<span data-xf="" class="glow') : '';
-  return `<i class="sw-ring" aria-hidden="true" style="transform:translateX(${Math.max(0, i) * 42}px)" ${i < 0 ? 'hidden' : ''}>${g}</i>`;
+  return `<i class="sw-ring" aria-hidden="true" style="transform:translateX(${Math.max(0, i) * 42}px)" ${i < 0 ? 'hidden' : ''}></i>`;
 }
 function paintColour(root, d, hex) {
   const { h, s } = hexHsv(hex); const [x, y] = wheelPoint(h, s);
   const hd = root.querySelector('.wheel .handle'); if (!hd) return;
-  hd.style.left = `${x.toFixed(1)}px`; hd.style.top = `${y.toFixed(1)}px`; hd.style.background = hex; hd.style.setProperty('--hc', rgba(hex, 0.35));
+  hd.style.left = `${x.toFixed(1)}px`; hd.style.top = `${y.toFixed(1)}px`; hd.style.background = hex;
   const v = root.querySelector('[data-cval]');
   v.querySelector('.dot').style.background = hex; v.querySelector('b').textContent = colourName(hex); v.querySelector('span').textContent = `· ${hex}`;
   root.querySelectorAll('.cs-sw .sw').forEach(b => b.classList.toggle('sel', sameHex(b.dataset.hex, hex)));
   const rg = root.querySelector('.cs-sw .sw-ring'), i = ringAt(hex);
-  if (rg) { rg.hidden = i < 0; if (i >= 0) { rg.style.transform = `translateX(${i * 42}px)`; setGlow(rg.querySelector('.glow'), { level: 100, hex, ctx: 'dot' }); } }
+  if (rg) { rg.hidden = i < 0; if (i >= 0) rg.style.transform = `translateX(${i * 42}px)`; }
   const w = root.querySelector('.lk-wash'); if (w) w.style.setProperty('--wash', rgba(hex, 0.2));
   const o = root.querySelector('.sheet-head .t-over'); if (o) o.textContent = `${d.name} · ${pickName(hex)}`;
 }

@@ -7,9 +7,9 @@
 //   the surface  the tile's surface grows from its box to the whole screen, 0.55 s on (0.2, 0, 0, 1), its corners 28
 //                to 0. It is the page's own dark with the tile's face (copper, a lamp's colour, or grey when off) laid
 //                over it, stretched with it. The face gives way from 0.08 s, EASE_OUT, and is gone as the surface
-//                lands, so the page arrives already mostly dark and copper never fills the screen. The tile's glow
-//                grows with it toward the page's halo and fades from 0.25 s; the page's own halo fades in from 0.12 s
-//                (EASE_IN_AND_OUT) and is the warmth that stays.
+//                lands, so the page arrives already mostly dark and copper never fills the screen. The page's one
+//                light rides in with the lamp's drawing: it leaves the tile's drawing small and lands on the lamp at
+//                its own size, fading in from 0.12 s (EASE_IN_AND_OUT), and is the warmth that stays.
 //   the words    the tile's name flies to the page's title, its level ("75", "%") to the big readout and its drawing
 //                to the page's lamp, each matched on width, crossing only in the first 0.15 s at the tile's end.
 //                Anything else on the tile (its "· Warm", a fan's dots) fades in 0.12 s EASE_IN.
@@ -22,7 +22,7 @@
 //                the dial (its track, then its arc drawing on, its label and buttons), then the tiles and rows below,
 //                0.05 s apart, rising 24 from 0.96.
 // BACK runs it the other way in 0.45 s on (0.4, 0, 0.2, 1): the page's controls go first (0.13 s EASE_IN), the surface
-// shrinks into the tile and its face comes back only in the last 0.2 s, the halo is drawn back into the tile's glow,
+// shrinks into the tile and its face comes back only in the last 0.2 s, the light is drawn back into the tile's drawing,
 // the words fly back and cross in the last 0.15 s, and the room returns around it, nearest first.
 import { T } from '/ui/motion.js';
 import { OPEN, CLOSE, last, textBox, centre, px, opacityOf, part, words, chars, span, copyText, copyButton, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim, homeParts } from '/ui/flight.js';
@@ -32,8 +32,7 @@ const FACE_GO = 80;     // the face starts giving way this far into the open (a 
 // (a plain EASE_OUT still left the screen half copper at 0.25 s, which reads as the flash the owner turned down)
 const GIVE = 'cubic-bezier(0.1, 0.6, 0.3, 1)';
 const FACE_BACK = 200;  // and comes back over the last 0.2 s of the close
-const GLOW_GO = 250;    // the tile's glow holds this long before it fades into the halo
-const HALO_IN = 120;    // the page's halo starts arriving here
+const HALO_IN = 120;    // the page's light starts arriving here
 const OUT = 120;        // what is not carried across goes in this much
 
 // ---------- the kind, for opening.js ----------
@@ -52,7 +51,7 @@ export function read(tile) {
   const k = box.width / (tile.offsetWidth || box.width) || 1;
   const cs = getComputedStyle(tile);
   const q = s => tile.querySelector(s);
-  const vl = q('.vl'), glow = q('.glow');
+  const vl = q('.vl');
   const tabs = document.getElementById('tabs'), fade = document.querySelector('#app .scroll-fade');
   const visible = n => n && !n.hidden && getComputedStyle(n).display !== 'none';
   return {
@@ -65,7 +64,6 @@ export function read(tile) {
     pwr: part(q('.pwr'), k),
     art: part(q('.art'), k),
     extras: [...tile.querySelectorAll('.speed, .shade-bar, .tile-timer')].map(n => part(n, k)),
-    glow: glow && { el: glow, r: glow.getBoundingClientRect() },
     // the room's tab bar and its fade, which the page has none of: they go down with the room
     // (copied now, as they are: the redraw that follows lights the tab of the page coming, and a light from Home is
     // under Rooms)
@@ -98,12 +96,12 @@ function readouts(O, page) {
 function readPage(page, O) {
   const h1 = page.querySelector('.t-hero');
   const art = page.querySelector('.hero-art');
-  const halo = page.querySelector('.halo');
-  const hg = halo && (halo.querySelector('.glow .g-body') || halo);
+  // the page's one light (glow.js, lightHTML), centred on the lamp: none on a fan's or a shade's page
+  const halo = page.querySelector(':scope > .onelight');
   return {
     page, h1, Ht: textBox(h1), Hb: h1.getBoundingClientRect(),
     art, artR: art && art.getBoundingClientRect(), artO: opacityOf(art),
-    halo, haloO: opacityOf(halo), haloR: hg && hg.getBoundingClientRect(), haloBox: halo && halo.getBoundingClientRect(),
+    halo, haloO: opacityOf(halo), haloBox: halo && halo.getBoundingClientRect(),
     ...readouts(O, page),
   };
 }
@@ -116,35 +114,27 @@ export function readClose(screen) {
 
 // ---------- building ----------
 // The surface: the page's own dark, the size of the screen, moved and clipped onto the tile; the tile's face over it,
-// stretched with it; the tile's glow in it where it was. (The tile's faint 1 px line is left out: drawn at the tile's
-// size inside a surface that is already growing, it showed as a hard edge within it.) Under the new page (it is the
-// page's ground) and over the old one.
+// stretched with it. (The tile's faint 1 px line is left out: drawn at the tile's size inside a surface that is
+// already growing, it showed as a hard edge within it.) Under the new page (it is the page's ground) and over the old
+// one.
 function surface(O, G) {
   const bgc = getComputedStyle(document.body).backgroundColor;
   const S = el('m11-surface', { position: 'fixed', left: '0px', top: '0px', width: px(G.W), height: px(G.H), backgroundColor: bgc, overflow: 'hidden', ...G.open });
   const face = el('m11-face', { position: 'absolute', inset: '0', backgroundImage: O.bg.image, backgroundColor: O.bg.color });
   S.appendChild(face);
-  let glow = null;
-  if (O.glow) {
-    const g = O.glow.el.cloneNode(true);
-    const q = G.loc(O.glow.r.left, O.glow.r.top);
-    Object.assign(g.style, { position: 'absolute', left: px(q.x), top: px(q.y), right: 'auto', width: px(O.glow.r.width / G.k), height: px(O.glow.r.height / G.k), transformOrigin: '50% 50%', transition: 'none' });
-    S.appendChild(g);
-    glow = { el: g, c: { x: q.x + O.glow.r.width / G.k / 2, y: q.y + O.glow.r.height / G.k / 2 }, w: O.glow.r.width / G.k };
-  }
   // the tile's shadow falls outside it, on the room, under the surface
   const shadow = el('m11-shadow', { position: 'fixed', left: px(O.box.left), top: px(O.box.top), width: px(O.box.width), height: px(O.box.height), borderRadius: px(O.radius * G.k), boxShadow: outsetOnly(O.shadow) });
-  return { S, face, glow, shadow, stretch: `scale(${G.cardW / G.W}, ${G.cardH / G.H})` };
+  return { S, face, shadow, stretch: `scale(${G.cardW / G.W}, ${G.cardH / G.H})` };
 }
 const shadows = s => (s && s !== 'none' ? s.split(/,(?![^(]*\))/).map(x => x.trim()) : []);
 const outsetOnly = s => shadows(s).filter(x => !/inset/.test(x)).join(', ') || 'none';
-// The glow's flight into the page's halo: from where it is on the tile to the halo's middle, growing to its size
-// (at most five times, as the frame has it).
-function glowFlight(sf, D) {
-  if (!sf.glow || !D.haloR) return null;
-  const hc = centre(D.haloR);
-  const s = Math.min(5, Math.max(1, D.haloR.width / (sf.glow.w || 1)));
-  return `translate(${px(hc.x - sf.glow.c.x)}, ${px(hc.y - sf.glow.c.y)}) scale(${s})`;
+// Where the page's light is when it sits on the tile's drawing: moved from the lamp to the tile's drawing and scaled
+// by the two drawings' sizes. It is centred on the lamp (its transform-origin, components.css), so this is the light
+// riding with the drawing as it flies.
+function onTile(O, D) {
+  if (!O.art || !D.artR || !D.artR.width) return null;
+  const a = centre(O.art.r), b = centre(D.artR);
+  return `translate(${px(a.x - b.x)}, ${px(a.y - b.y)}) scale(${Math.max(0.2, Math.min(1, O.art.r.width / D.artR.width)).toFixed(3)})`;
 }
 // The room around the tile: what steps aside for it (only what is on screen). Its header's circles step aside one by
 // one and its scrim fades where it is (flight.js, scrim): the header row itself is never faded.
@@ -195,7 +185,7 @@ function arrivals(page, flown) {
   let at = dial || sp ? 720 : 620;
   for (const n of all('.looks > *, .feats > *, .shade-btns > *, .shade-gn')) { add(n, at, { scale: 0.96 }); at += 50; }
   // anything else the page draws comes in after them
-  const known = new Set(['hdr', 'where', 't-hero', 'onoff', 'dial', 'speeds', 'window', 'readout', 'looks', 'feats', 'shade-btns', 'shade-gn', 'halo', 'hero-art', 'lamp-filament']);
+  const known = new Set(['hdr', 'where', 't-hero', 'onoff', 'dial', 'speeds', 'window', 'readout', 'looks', 'feats', 'shade-btns', 'shade-gn', 'onelight', 'hero-art']);
   for (const n of page.children) if (![...n.classList].some(c => known.has(c))) add(n, at, { scale: 0.96 });
   return list;
 }
@@ -216,7 +206,7 @@ export function open({ O, ghost }, screen, F) {
   const fil = page.querySelector('.dial .fil');
   const flown = new Set([D.h1, ...D.out.map(o => o.dest), ...(D.art && O.art ? [D.art] : [])]);
   const arrive = arrivals(page, flown);
-  const knob = [page.querySelector('.dial .kn'), page.querySelector('.dial .kglow')];
+  const knob = [page.querySelector('.dial .kn')];
 
   // then write
   const top = topLayer(screen, 'm11-top');
@@ -229,16 +219,12 @@ export function open({ O, ghost }, screen, F) {
   F.core(sf.face, [{ transform: sf.stretch }, { transform: 'scale(1, 1)' }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
   F.core(sf.face, [{ opacity: 1 }, { opacity: 1, offset: FACE_GO / OPEN.dur, easing: GIVE }, { opacity: 0 }], { duration: OPEN.dur, easing: 'linear', fill: 'forwards' });
   F.core(sf.shadow, [{ opacity: 1 }, { opacity: 0 }], { duration: 250, easing: T.easeIn, fill: 'forwards' });
-  const gf = glowFlight(sf, D);
-  if (gf) {
-    F.core(sf.glow.el, [{ transform: 'translate(0px, 0px) scale(1)' }, { transform: gf }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
-    F.core(sf.glow.el, [{ opacity: 1 }, { opacity: 1, offset: GLOW_GO / OPEN.dur, easing: 'ease-in-out' }, { opacity: 0 }], { duration: OPEN.dur, easing: 'linear', fill: 'forwards' });
-  } else if (sf.glow) F.core(sf.glow.el, [{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: T.easeIn, fill: 'forwards' });
-  // the page's own light: its halo, then the filament and the pool under the lamp
-  if (D.halo && D.haloO > 0.01) F.extra(D.halo, [{ opacity: 0 }, { opacity: D.haloO }], { duration: OPEN.dur - HALO_IN, delay: HALO_IN, easing: 'ease-in-out', fill: 'backwards' });
-  for (const [s, at, dur] of [['.lamp-filament', 500, 300], ['.lamp-pool', 600, 350]]) {
-    const n = page.querySelector(s);
-    if (n && opacityOf(n) > 0.001) F.extra(n, [{ opacity: 0 }, { opacity: opacityOf(n) }], { duration: dur, delay: at, easing: 'ease-in-out', fill: 'backwards' });
+  // the page's one light rides in with the drawing: from the tile's drawing, small, to the lamp at its own size,
+  // fading in from 0.12 s
+  if (D.halo && D.haloO > 0.01) {
+    const from = onTile(O, D);
+    if (from) F.extra(D.halo, [{ transform: from }, { transform: 'translate(0px, 0px) scale(1)' }], { duration: OPEN.dur, easing: OPEN.ease, fill: 'backwards' });
+    F.extra(D.halo, [{ opacity: 0 }, { opacity: D.haloO }], { duration: OPEN.dur - HALO_IN, delay: HALO_IN, easing: 'ease-in-out', fill: 'backwards' });
   }
 
   // the words and the drawing fly; the rest of the tile goes where it is
@@ -314,7 +300,7 @@ export function close(p, screen, F, { ghost, O, el: tile }) {
   const keep = new Set([D.h1, ...D.out.map(o => o.dest), D.art, D.halo, page.querySelector('.hdr')].filter(Boolean));
   const leaving = controls(page, keep);
   const hdr = page.querySelector('.hdr');
-  const glowTo = D.haloR && O.glow ? { c: centre(O.glow.r), s: O.glow.r.width / (D.haloR.width || 1) } : null;
+  const lightTo = D.halo ? onTile(O, D) : null;
   const tabs = document.getElementById('tabs'), fade = document.querySelector('#app .scroll-fade');
   const showTabs = tabs && !tabs.hidden;
 
@@ -326,7 +312,6 @@ export function close(p, screen, F, { ghost, O, el: tile }) {
 
   // the page's controls go first, together
   for (const n of leaving) going(F, n, { dur: n.matches('.onoff') ? 60 : 130 });
-  going(F, page.querySelector('.lamp-pool'));
   if (hdr && !shared) going(F, hdr);
   else if (hdr) {
     for (const b of hdr.querySelectorAll('.a2')) going(F, b);
@@ -340,18 +325,9 @@ export function close(p, screen, F, { ghost, O, el: tile }) {
   F.core(sf.face, [{ transform: 'scale(1, 1)' }, { transform: sf.stretch }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
   F.core(sf.face, [{ opacity: 0 }, { opacity: 1 }], last(FACE_BACK, { easing: 'ease-in-out' }));
   F.core(sf.shadow, [{ opacity: 0 }, { opacity: 1 }], last(150, { easing: T.ease }));
-  // the halo is drawn back into the tile's glow, and the glow comes back as it arrives
-  if (D.halo && glowTo) {
-    const hc = centre(D.haloR);
-    D.halo.style.transformOrigin = `${px(hc.x - D.haloBox.left)} ${px(hc.y - D.haloBox.top)}`;
-    F.core(D.halo, [{ transform: getComputedStyle(D.halo).transform === 'none' ? 'translate(0px, 0px) scale(1)' : getComputedStyle(D.halo).transform }, { transform: `translate(${px(glowTo.c.x - hc.x)}, ${px(glowTo.c.y - hc.y)}) scale(${glowTo.s})` }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
-  }
+  // the light is drawn back into the tile's drawing with it, going out as it goes
+  if (D.halo && lightTo) F.core(D.halo, [{ transform: 'translate(0px, 0px) scale(1)' }, { transform: lightTo }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
   if (D.halo) F.core(D.halo, [{ opacity: D.haloO }, { opacity: 0 }], { duration: 350, easing: T.easeIn, fill: 'forwards' });
-  const gf = glowFlight(sf, D);
-  if (sf.glow) {
-    if (gf) F.core(sf.glow.el, [{ transform: gf }, { transform: 'translate(0px, 0px) scale(1)' }], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
-    F.core(sf.glow.el, [{ opacity: 0 }, { opacity: 0, offset: 150 / CLOSE.dur, easing: 'ease-in-out' }, { opacity: 1, offset: 400 / CLOSE.dur }, { opacity: 1 }], { duration: CLOSE.dur, easing: 'linear', fill: 'forwards' });
-  }
 
   // the words and the drawing fly back, crossing in the last 0.15 s
   const cross = { crossEase: 'ease-in-out' };

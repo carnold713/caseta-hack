@@ -38,11 +38,11 @@
   --copper-hi: #E6A06A;
   --copper-lo: #B86C35;
   --copper-pale: #F3D9C3;
-  --tile-on: linear-gradient(180deg, #E6A06A 0%, #D98A4E 50%, #B86C35 100%);
-  --arc-fill: linear-gradient(90deg, #F3D9C3 0%, #E6A06A 45%, #D98A4E 100%);
+  /* flat fills: the owner's calmer, flatter look has no gradients on the things that are lit */
+  --tile-on: #D98A4E;
+  --arc-fill: #D98A4E;
   --arc-track: #2A2724;
   --tile-on-line: rgba(255, 255, 255, .14);
-  --tile-on-shadow: 0 10px 28px rgba(217, 138, 78, .28);
 
   /* state */
   --ok: #3A7934;

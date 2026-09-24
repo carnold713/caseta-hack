@@ -84,7 +84,7 @@ const running = () => document.getAnimations().map(a => {
   check('back runs the other way: in from -24 px', a.some(x => x.dur === 300 && !x.ghost && /translateX\(-24px\)/.test(x.from.transform || '')), a.filter(x => x.dur === 300));
   await wait(600);
 
-  // ---- M2 · a light turns off: the copper pill slides 0.24 s standard; the glow fades and shrinks to .85, 0.4 s EASE_IN_AND_OUT
+  // ---- M2 · a light turns off: the copper pill slides 0.24 s standard; its light fades and shrinks to .85, 0.4 s EASE_IN_AND_OUT
   const light = await C(() => { const c = window.__copper; const d = c.data.controllable().find(x => x.domain === 'light' && c.data.isOn(x.device_id) && c.data.level(x.device_id) > 0) || c.data.controllable().find(x => x.domain === 'light'); return d.device_id; });
   await C(id => { location.hash = `light/${id}`; }, light); await wait(700);
   const wasOn = await C(() => !!document.querySelector('.dev.on'));
@@ -92,8 +92,8 @@ const running = () => document.getAnimations().map(a => {
   a = await anims();
   const pill = a.find(x => /onoff-pill/.test(x.cls) && x.props.includes('transform'));
   check('M2: the copper pill slides to the other half, 0.24 s standard', !!pill && pill.dur === 240 && pill.ease === 'cubic-bezier(0.2, 0.8, 0.2, 1)', a.map(x => [x.cls, x.dur, x.props.join('+')]));
-  const halo = a.filter(x => /halo/.test(x.cls));
-  check('M2: the glow fades and scales on the dimmer, 0.4 s EASE_IN_AND_OUT', halo.some(x => x.props.includes('opacity') && x.dur === 400 && x.ease === 'ease-in-out') && halo.some(x => x.props.includes('transform') && /0\.85/.test((x.from.transform || '') + (x.to.transform || ''))), halo);
+  const halo = a.filter(x => /onelight/.test(x.cls));
+  check('M2: the lamp\'s one light fades and scales on the dimmer, 0.4 s EASE_IN_AND_OUT', halo.some(x => x.props.includes('opacity') && x.dur === 400 && x.ease === 'ease-in-out') && halo.some(x => x.props.includes('transform') && /0\.85/.test((x.from.transform || '') + (x.to.transform || ''))), halo);
   await wait(600);
   await tap(wasOn ? '[data-act="dev-on"]' : '[data-act="dev-off"]'); await wait(700);
 

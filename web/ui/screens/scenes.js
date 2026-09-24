@@ -3,7 +3,7 @@
 // #scenes/lutron-<id> a Lutron scene's (which is run and pinned here, and changed in the Lutron app).
 import { roomPicker, confirmSheet, nameSheet } from '/ui/screens/pickers.js';
 import { kelvinHex, WHITES, LAMP_COLOURS, sameHex } from '/ui/colour.js';
-import { glowHTML, setGlow, whiteStops, colourStops, isNight } from '/ui/glow.js';
+import { glowHTML, setGlow, whiteStops, isNight } from '/ui/glow.js';
 import { track } from '/ui/gesture.js';
 
 const HIDE_KEY = 'scenesNotNow';
@@ -42,7 +42,7 @@ export function view(c, r) {
     const cur = showing(c, p);
     const n = Object.keys(p.levels).length;
     return `<div class="scene-tile ${cur ? 'current' : ''}" data-act="scene-run" data-hold="scene-edit" data-ms="500" data-id="${esc(p.id)}" role="button" tabindex="0" aria-label="Run ${esc(H.sceneShortName(p))}">
-      ${cur ? '<span class="glow"></span>' : ''}${dots(c, p, 16, cur ? '#D98A4E' : 'var(--surface-1)')}
+      ${dots(c, p, 16, cur ? '#D98A4E' : 'var(--surface-1)')}
       <span class="st pin pinned">${icon('pin', 20, 1.8)}</span>
       <span class="nm">${esc(H.sceneShortName(p))}</span>
       <span class="vl">${esc([p.area ? data.areaName(p.area) : null, EDIT.lightsText(n)].filter(Boolean).join(' · '))}</span>
@@ -117,10 +117,10 @@ function lightEditor(c, p, d) {
   return `<div class="sl-edit">${h}</div>`;
 }
 // ---------- 7 · the stage ----------
-// v7 · 7 (12815:48891): each light in the scene is an orb of its own light hung over a dark stage, as high as it is
-// bright, with a wire down to the floor and a pool of its light landing there. Raise or lower an orb to set that
-// light in the scene: the orb is a grip (it takes the finger at once, so the sheet never scrolls under it), the orb,
-// its glow, its wire and its pool are locked to the finger (LINEAR) and the number steps with it. Drop it under the
+// v7 · 7 (12815:48891): each light in the scene is a flat orb of its own colour hung over a dark stage, as high as it
+// is bright, with a wire down to the floor. Raise or lower an orb to set that light in the scene: the orb is a grip
+// (it takes the finger at once, so the sheet never scrolls under it), the orb, its glow and its wire are locked to the
+// finger (LINEAR) and the number steps with it. Drop it under the
 // floor line and it is off in this scene; carry it on down onto the shelf and it is left out.
 //
 // The stage is a preview. It never touches the house unless "Show it on the room" is on, and that is off each time
@@ -153,16 +153,14 @@ function orbTone(c, d, v) {
   if (col && col.mode === 'ct' && col.kelvin) return { kelvin: col.kelvin };
   return { kelvin: 2700 };
 }
-const stops = t => (t.hex ? colourStops(t.hex) : whiteStops(t.kelvin));
-const alpha = (hex, a) => { const h = String(hex).replace('#', ''); return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a.toFixed(3)})`; };
-// The orb's own body (a lit bead: hot core, body, a rim of its deep tone) and the pool its light lands in.
+// The orb: a flat disc in the light's colour (its white's body tone on the ramp, or its colour), where its level puts
+// it. No highlight, no shading, no rim, and no pool on the floor: the owner asked for flat circles.
 function orbVars(d, t, lv) {
-  const s = stops(t), L = lv / 100, m = 0.35 + 0.65 * L;
-  const pw = Math.round(40 + 80 * Math.sqrt(L));
-  const ball = d.domain === 'fan' ? 'radial-gradient(circle at 50% 42%, #5A5A5A, #3C3C3C 70%)' : `radial-gradient(circle at 50% 42%, ${s.core} 0%, ${s.body} 60%, ${s.wash} 100%)`;
-  return `--y:${orbY(lv).toFixed(1)}px;--ball:${ball};--pool:${alpha(s.body, 0.42 * m)};--pw:${pw}px;--pa:${lv ? 1 : 0}`;
+  const ball = d.domain === 'fan' ? '#3C3C3C' : t.hex || whiteStops(t.kelvin).body;
+  return `--y:${orbY(lv).toFixed(1)}px;--ball:${ball}`;
 }
-const orbGlow = (d, t, lv) => (d.domain === 'fan' ? null : t.hex ? { level: lv, hex: t.hex, ctx: 'orb' } : { level: lv, kelvin: t.kelvin, ctx: 'orb' });
+// A lit orb keeps one soft glow round it, at about 0.25 at full; an orb off in the scene, and a fan, cast none.
+const orbGlow = (d, t, lv) => (d.domain === 'fan' ? null : t.hex ? { level: lv, hex: t.hex, ctx: 'orb', peak: 0.25 } : { level: lv, kelvin: t.kelvin, ctx: 'orb', peak: 0.25 });
 
 function stageHTML(c, p, ds) {
   const { esc, icon } = c;
@@ -170,20 +168,18 @@ function stageHTML(c, p, ds) {
   const lanes = ds.map(d => {
     const v = p.levels[d.device_id], lv = entryLevel(d, v), t = orbTone(c, d, v), g = orbGlow(d, t, lv);
     return `<div class="sc-lane" data-lane="${esc(d.device_id)}" style="${orbVars(d, t, lv)}">
-      <span class="sc-stem"></span><span class="sc-pool"></span>
+      <span class="sc-stem"></span>
       <div class="sc-orb ${lv ? '' : 'off'}" data-orb="${esc(d.device_id)}" data-drag role="slider" tabindex="0" aria-label="${esc(d.name)} in this scene" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${lv}">
         ${g ? glowHTML({ ...g, cls: 'sc-glow' }) : ''}<span class="sc-ball">${t.follow ? icon('sun', 14, 2) : d.domain === 'fan' ? icon('fan', 18, 1.7) : ''}</span></div>
       <span class="sc-lv">${esc(levelWordOf(d, lv))}</span>
       <span class="sc-nm">${esc(d.name)}</span></div>`;
   }).join('');
-  const lit = ds.filter(d => d.domain !== 'fan').map(d => entryLevel(d, p.levels[d.device_id]));
-  const avg = lit.length ? lit.reduce((a, b) => a + b, 0) / lit.length / 100 : 0;
   // lights in the scene's room that are not in the scene wait on a shelf below the stage, as hollow rings
   const shelf = p.area ? c.data.controllable().filter(d => c.data.devArea(d) === p.area && d.domain !== 'cover' && !(d.device_id in p.levels)) : [];
   const shelfHTML = shelf.length ? `<div class="sc-shelf" data-keep="sc-shelf"><span class="sc-shelf-t">Also in the room</span>${shelf.map(d => `<button class="sc-ring" data-act="stage-add" data-id="${esc(d.device_id)}" aria-label="Add ${esc(d.name)} to this scene"><i></i>${esc(d.name)}</button>`).join('')}</div>` : '';
   const empty = !ds.length ? `<p class="sc-empty">Tap a light below to add it</p>` : '';
-  return `<div class="sc-stage ${off ? 'offline' : ''}" style="--wash:${(0.25 + 0.75 * avg).toFixed(3)};--lanes:${Math.max(1, ds.length)}">
-      <span class="sc-wash" aria-hidden="true"></span><span class="sc-floor" aria-hidden="true"></span>
+  return `<div class="sc-stage ${off ? 'offline' : ''}" style="--lanes:${Math.max(1, ds.length)}">
+      <span class="sc-floor" aria-hidden="true"></span>
       <div class="sc-lanes" data-keep="sc-lanes">${lanes}</div>${empty}
     </div>
     ${off ? `<p class="sc-off">Can't change scenes while the house is out of reach.</p>` : ''}
@@ -216,7 +212,7 @@ function wireStage(c, p, root) {
     const lane = orb.closest('.sc-lane'), glow = orb.querySelector('.glow');
     const lvEl = lane.querySelector('.sc-lv');
     let g = null;
-    // what the orb shows while the finger has it: its height, light, wire, pool and number, straight from the finger
+    // what the orb shows while the finger has it: its height, light, wire and number, straight from the finger
     const show = (lv, out) => {
       const t = orbTone(c, d, p.levels[id]);
       lane.setAttribute('style', orbVars(d, t, lv));
@@ -225,8 +221,6 @@ function wireStage(c, p, root) {
       orb.setAttribute('aria-valuenow', String(lv));
       if (glow) { const o = orbGlow(d, t, lv); setGlow(glow, o); }
       lvEl.textContent = out ? 'Leave out' : levelWordOf(d, lv);
-      const all = [...stage.querySelectorAll('.sc-orb')].filter(o => o !== orb).map(o => Number(o.getAttribute('aria-valuenow')) || 0);
-      stage.style.setProperty('--wash', (0.25 + 0.75 * ((all.reduce((a, b) => a + b, 0) + lv) / (all.length + 1)) / 100).toFixed(3));
     };
     track(orb, {
       c, grab: () => true, accept: () => c.conn() !== 'off',
