@@ -40,6 +40,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     return { fx: g.dataset.fx, op: Math.max(...lit.map(p => Number(p.style.opacity) || 0)), colour: stops.length ? getComputedStyle(stops[0]).color : null, anims };
   }, [sel, id]);
 
+  // every light's level and colour as the test found them, so it leaves the house as it was for the tests after it
+  const was = await C(() => { const c = window.__copper; return c.data.controllable().filter(d => d.domain === 'light' || d.domain === 'switch').map(d => ({ id: d.device_id, level: c.data.level(d.device_id) || 0, color: (c.S.states[d.device_id] || {}).color || null })); });
+
   // ---- the rooms, and which have lights
   const rooms = await C(() => { const c = window.__copper; return c.data.areas().map(a => ({ id: a.id, name: a.name, lights: c.H.roomLights(a.id).map(d => d.device_id), photo: !!c.H.roomPhotoURL(a.id) })); });
   const withLights = rooms.filter(r => r.lights.length && !r.photo);
@@ -191,6 +194,16 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.click('#screen .hdr-btn.back'); await wait(1300);
   check((await C(() => location.hash)) === '#rooms', 'and closes back into its card');
 
+  // put every light back as it was
+  await C(async w => {
+    const c = window.__copper;
+    for (const l of w) {
+      if (l.color && l.level > 0 && l.color.mode === 'ct' && l.color.kelvin) await c.run({ type: 'color', target: `d:${l.id}`, kelvin: l.color.kelvin });
+      if (l.color && l.level > 0 && l.color.mode === 'xy' && l.color.hex) await c.run({ type: 'color', target: `d:${l.id}`, hex: l.color.hex });
+      await c.run({ type: 'level', target: `d:${l.id}`, level: l.level || 'off' });
+    }
+  }, was);
+  await wait(800);
   check(!errors.length, 'no errors on the page', errors);
   await browser.close();
   console.log(fails.length ? `\n${fails.length} failed` : '\nall passed');
