@@ -127,6 +127,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const off = await C(id => { const c = window.__copper; const g = document.querySelector('.dev [data-glow="lamp"]'); const d = document.querySelector('.dial'); return { glowOff: g.classList.contains('off'), at: Number(d.getAttribute('aria-valuenow')), want: Math.round(c.onLevel(id, `d:${id}`)), stroke: getComputedStyle(d.querySelector('.fil')).stroke, num: getComputedStyle(d.querySelector('.num b')).color, fil: Number(getComputedStyle(document.querySelector('.lamp-filament')).opacity) }; }, dim);
   check('3: off draws no light (the glow is off, the filament dark)', off.glowOff && off.fil === 0, off);
   check('3: the dial stays, greyed, at the level On will bring back', off.at === off.want && /58, 54, 51/.test(off.stroke) && /158, 158, 158/.test(off.num), off);
+  // the number's glow is light too: off, it has none even at a level of 50 or more (where a lit dial's number glows)
+  const offGlow = await C(() => { const d = document.querySelector('.dial'); const was = d.classList.contains('bright'); d.classList.add('bright'); const sh = getComputedStyle(d.querySelector('.num b')).textShadow; d.classList.toggle('bright', was); return sh; });
+  check('3: off, the number does not glow at any level', offGlow === 'none', offGlow);
   await page.screenshot({ path: 'v7-light-off.png' });
   const gapOff = await dialGap();
   check('3: off, the same gap', gapOk(gapOff), gapOff);

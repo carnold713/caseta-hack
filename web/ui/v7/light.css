@@ -36,7 +36,8 @@
 .dev:not(.on) .dial .kglow { opacity: 0; }
 .dial .ktouch { width: 44px; height: 44px; background: #fff; opacity: 0; transition: opacity var(--exit) var(--ease-in); }
 .dev.held .dial .ktouch { opacity: .22; transition: opacity var(--tap) var(--ease); }
-.dial.bright .num b { text-shadow: 0 0 24px var(--numglow); }
+/* the number glows only while the light is on: an off light draws no light, whatever level it will come back at */
+.dev.on .dial.bright .num b { text-shadow: 0 0 24px var(--numglow); }
 
 /* Off: the dial is still there, greyed, at the level On will bring back. */
 .dial .fil, .dial .kn, .dial .num b { transition: stroke var(--dimmer) var(--ease-both), fill var(--dimmer) var(--ease-both), color var(--dimmer) var(--ease-both); }
