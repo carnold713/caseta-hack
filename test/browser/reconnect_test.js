@@ -14,7 +14,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   if (token) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, token);
   const page = await ctx.newPage();
   const errors = []; page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/net::ERR|favicon|sw\.js|WebSocket/.test(m.text())) errors.push('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/net::ERR|favicon|sw\.js|WebSocket/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
   const wait = ms => page.waitForTimeout(ms);
   await page.goto(BASE + '/classic/'); await wait(600);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); }

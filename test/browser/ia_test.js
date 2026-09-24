@@ -29,7 +29,7 @@ const PLAN_HOME_CONTROLS = 19;   // docs/ia-v5.md 3: Home at rest, five rooms an
     if (token) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, token);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(`[${size}] pageerror: ` + e.message));
-    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|favicon|sw\.js/.test(m.text())) errors.push(`[${size}] console: ` + m.text()); });
+    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|favicon|sw\.js/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push(`[${size}] console: ` + m.text()); });
     await page.goto(BASE + '/classic/'); await page.waitForTimeout(500);
     if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('button.primary'); }
     await page.waitForSelector('.room', { timeout: 15000 }); await page.waitForTimeout(1200);

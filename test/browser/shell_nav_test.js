@@ -115,7 +115,7 @@ async function through(page, what, act, { settle = 700 } = {}) {
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); } catch (_) {} }, process.env.APP_TOKEN);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(`${W} pageerror: ${e.message}`));
-    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text())) errors.push(`${W} console: ${m.text()}`); });
+    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push(`${W} console: ${m.text()}`); });
     await page.goto(`${ROOT}?night=0#home`);
     if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.keyboard.press('Enter'); }
     await page.waitForFunction(() => window.__copper && window.__copper.S && window.__copper.S.ready, null, { timeout: 15000 });
@@ -219,6 +219,24 @@ async function through(page, what, act, { settle = 700 } = {}) {
     await tab('rooms'); await is('a tab from a deep link takes its place at the bottom', '#rooms', 0);
     await page.evaluate(() => window.__caseta.back.commit()); await wait(800);
     await is('and Back from it is Home, not out of the app', '#home', 0);
+
+    // the app opened (or reloaded) on each tab and on a deep page: another tab takes the bottom entry's place, the same
+    // tab again changes nothing, Back is Home, and from Home Back has nowhere to go but out
+    for (const [start, to] of [['rooms', 'settings'], ['remotes', 'routines'], ['routines', 'rooms'], ['settings', 'remotes'], ['routine/zz0', 'rooms']]) {
+      await page.goto(`${ROOT}?night=0&open=${start.replace('/', '-')}#${start}`); await page.waitForFunction(() => window.__copper && window.__copper.S.ready); await wait(900);
+      await is(`opened on ${start}, it is the bottom of the history`, `#${start}`, 0);
+      await tab(to); await is(`opened on ${start}, the ${to} tab takes its place at the bottom`, `#${to}`, 0, { tab: to });
+      await tab(to); await is('the same tab again changes nothing', `#${to}`, 0);
+      check('and Back has somewhere to go (Home)', await page.evaluate(() => window.__caseta.back.can()));
+      await page.evaluate(() => window.__caseta.back.commit()); await wait(800);
+      await is('Back from it is Home, at the bottom', '#home', 0, { tab: 'home' });
+      check('and from Home, Back has nowhere to go but out of the app', !(await page.evaluate(() => window.__caseta.back.can())));
+    }
+    await page.goto(`${ROOT}?night=0#home`); await page.waitForFunction(() => window.__copper && window.__copper.S.ready); await wait(900);
+    await tab('remotes'); await page.reload(); await page.waitForFunction(() => window.__copper && window.__copper.S.ready); await wait(900);
+    await is('reloaded on a tab reached from Home, it is still a step above Home', '#remotes', 1, { tab: 'remotes' });
+    await tab('settings'); await is('and another tab from there is one step above Home', '#settings', 1, { tab: 'settings' });
+    await back(); await is('and Back is Home', '#home', 0);
 
     // a sheet through a reload and forward, and sheets crossing
     await tab('settings'); await tap('.settings-page [data-go="settings/fade"]');

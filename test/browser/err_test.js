@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 4400;
   if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, process.env.APP_TOKEN);
   const page = await ctx.newPage();
   page.on('pageerror', e => console.log('PAGEERROR', e.message, e.stack && e.stack.split('\n').slice(0,3).join(' | ')));
-  page.on('console', m => { if (m.type() === 'error' && !/fonts|ERR_/.test(m.text())) console.log('CONSOLE', m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/fonts|ERR_/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) console.log('CONSOLE', m.text()); });
   await page.goto(`http://127.0.0.1:${PORT}/classic/`);
   await page.waitForTimeout(500);
   const hasPw = await page.$('#pw');

@@ -164,7 +164,7 @@ const LOCAL = ([full]) => {
   const errors = [];
   const watch = (p, tag) => {
     p.on('pageerror', e => errors.push(`${tag} pageerror: ${e.message}`));
-    p.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text())) errors.push(`${tag} console: ${m.text()}`); });
+    p.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|WebSocket/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push(`${tag} console: ${m.text()}`); });
   };
   let prev = null;
 

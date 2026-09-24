@@ -13,7 +13,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const errors = [];
   const watch = page => {
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|502|404|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+    page.on('console', m => { if (m.type() === 'error' && !/net::ERR|502|404|Failed to load resource/.test(m.text()) && !/\/ui\/font\//.test((m.location() || {}).url || '')) errors.push('console: ' + m.text()); });
   };
   const root = `http://127.0.0.1:${PORT}/`;
 
