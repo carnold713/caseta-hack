@@ -54,3 +54,16 @@ export function colourName(hex) {
   return best;
 }
 export const sameHex = (a, b) => !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
+
+// The white nearest a colour, for a lamp going from a colour to White (M16): the white on the bar whose balance of
+// blue against red is the colour's own, so a blue lands at the cool end, an amber or a red at the warm end. Clamped
+// to what the lamp can make and rounded to 50K, as a pick on the sky is. (A formula for the "colour temperature" of
+// a colour only holds near the line of whites; a saturated blue is far off it, and this is what the eye expects.)
+const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+const blueShare = hex => { const [r, , b] = hexRgb(hex).map(lin); return r + b ? b / (r + b) : 0.5; };
+export function nearestWhite(hex, [kmin, kmax] = [K_MIN, K_MAX]) {
+  const want = blueShare(hex);
+  let best = kmin, bd = Infinity;
+  for (let k = Math.ceil(kmin / 50) * 50; k <= kmax; k += 50) { const dd = Math.abs(blueShare(kelvinHex(k)) - want); if (dd < bd) { bd = dd; best = k; } }
+  return best;
+}

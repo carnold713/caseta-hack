@@ -392,6 +392,9 @@ export function sheetOut(root) {
   g.className = 'sheet-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
   for (const k of root.children) g.appendChild(k.cloneNode(true));
   g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  // a White and Colour swap caught mid-way (lookswap.js) falls as the sheet it was becoming: its copy of the old
+  // sheet and its travelling dot would come along frozen, over the new one, without the animations that fade them
+  g.querySelectorAll('.m16-copy, .m16-dot').forEach(n => n.remove());
   document.body.appendChild(g);
   const sheet = g.querySelector('.sheet'), scrim = g.querySelector('.scrim');
   // a sheet scrolled down falls as it was, not jumped back to its top

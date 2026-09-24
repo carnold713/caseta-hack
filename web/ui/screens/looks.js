@@ -4,7 +4,8 @@
 // light (#light/<id>/white) so Back and a shared link land on it, and each is laid out from the file's numbers in the
 // sheet's own coordinates (screens.css, "sheets over a light"; v7/light.css for what v7 adds).
 import { track } from '/ui/gesture.js';
-import { K_MIN, K_MAX, kelvinAt, posOfKelvin, kelvinHex, WHITES, LAMP_COLOURS, hexHsv, hsvHex, colourName, sameHex } from '/ui/colour.js';
+import { K_MIN, K_MAX, kelvinAt, posOfKelvin, kelvinHex, WHITES, LAMP_COLOURS, hexHsv, hsvHex, colourName, sameHex, nearestWhite } from '/ui/colour.js';
+import * as gather from '/ui/lookswap.js';
 import { CasetaDaylight } from '/data/index.js';
 import { endsMs } from '/ui/screens/parts.js';
 import { glowHTML, whiteStops, colourStops } from '/ui/glow.js';
@@ -162,6 +163,20 @@ function wireKelvin(c, d, root) {
       was = null;
     },
   });
+}
+// M16 · the lamp follows the tab. White takes a lit colour lamp to the nearest white it can make; Colour straight after
+// gives it back the colour White took, and only that: a tab never makes up a colour, and a lamp that is off, or one
+// given another white since, stays as it is.
+function followTab(c, d, to) {
+  const id = d.device_id; if (!isOn(c, id)) return;
+  const col = colOf(c, id), took = c.ui.tookColour;
+  if (to === 'white' && col.mode === 'xy' && col.hex && d.ct) {
+    const k = setWhite(c, d, nearestWhite(col.hex, lampRange(d)));
+    c.ui.tookColour = { id, hex: col.hex, k };
+  } else if (to === 'colour' && col.mode === 'ct' && took && took.id === id && Math.abs((col.kelvin || 0) - took.k) <= 60) {
+    setColour(c, d, took.hex);
+    c.ui.tookColour = null;
+  }
 }
 const whiteName = k => { const n = CasetaDaylight.warmthName(k); return /white/i.test(n) ? n : `${n} white`; };
 
@@ -424,7 +439,15 @@ function startTimer(c, key, minutes, level, full) {
 function running(c, key) { const v = (c.S.timers || {})[key]; return v && v.ends_at ? { ends: endsMs(v.ends_at), level: Number(v.level) || 0 } : null; }
 
 export const actions = {
-  'look-swap'(c, el) { c.swap(el.dataset.to); },
+  // M16: the tabs swap the sheet, the lamp follows the tab, and the lamp's colour travels between them (lookswap.js)
+  'look-swap'(c, el, r) {
+    const to = /\/white$/.test(el.dataset.to) ? 'white' : 'colour';
+    const root = document.querySelector('#sheet-root');
+    const cap = gather.capture(root, to);
+    const d = c.data.dev(r.id); if (d) followTab(c, d, to);
+    c.swap(el.dataset.to);
+    gather.play(cap, root);
+  },
   'white-pick'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;
     const was = before(c, d.device_id);

@@ -168,3 +168,11 @@
   .tc-btns .pill { padding: 0 8px; }
 }
 .tc-off { position: absolute; left: var(--gutter); right: var(--gutter); top: 474px; margin: 0; font-size: 13px; line-height: 17px; color: var(--text-3); }
+
+/* ---- M16 · Colour to White and back (lookswap.js) ----
+   The lamp's colour travelling between the wheel's handle and the sun: a flat disc of the colour it leaves, the colour
+   it arrives in fading over it on the dimmer, in the white ring the handle and the sun both wear. */
+.m16-dot { border-radius: 50%; }
+.m16-dot .m16-y { position: absolute; inset: 0; border-radius: 50%; }
+.m16-dot .m16-y > b { position: absolute; inset: 0; border-radius: 50%; }
+.m16-dot .m16-y::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 var(--m16-ring, 3px) #fff; }
