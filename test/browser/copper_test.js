@@ -19,9 +19,11 @@ const ROOM = [
   ['On and Off', '.room-onoff', 32, 412, 348, 64],
   ['On half', '.room-onoff button:first-child', 38, 418, 165, 52],
   ['Off half', '.room-onoff button:nth-child(2)', 209, 418, 165, 52],
-  ['scene chips', '.room-chips', 0, 504, null, 40],
-  ['first tile', '.room-grid .tile:nth-child(1)', 20, 560, 180, 150],
-  ['second tile', '.room-grid .tile:nth-child(2)', 212, 560, 180, 150],
+  // the room's brightness (Home's 56 tall bar, 16 under the picture, at 504) pushes the rest down 72 from the file's
+  ['brightness', '.room-bright .hbar', 20, 504, null, 56],
+  ['scene chips', '.room-chips', 0, 504 + 72, null, 40],
+  ['first tile', '.room-grid .tile:nth-child(1)', 20, 560 + 72, 180, 150],
+  ['second tile', '.room-grid .tile:nth-child(2)', 212, 560 + 72, 180, 150],
   ['header dots', '.hdr .a1', 336, 52, 56, 56],
 ];
 // The light page as the calm-and-flat pass left it: the drawing at the top sized to the kind of light (a bulb, a lamp
@@ -140,7 +142,8 @@ const FAN = [
     check('dragging the bar to 4000K sets it', k >= 3900 && k <= 4100, k);
     await page.click('.ws-chips .chip:nth-child(2)'); await wait(1400);
     check('Warm sets 2700K and turns copper', (await C(id => (window.__copper.S.states[id].color || {}).kelvin, lamp)) === 2700 && (await page.textContent('.ws-chips .chip.current')) === 'Warm');
-    await page.click('.seg2 button:nth-of-type(2)'); await wait(900);
+    // the swap plays M16 (the wheel opens out of its handle, the rows rise in), about 1.3 s: measure once it has landed
+    await page.click('.seg2 button:nth-of-type(2)'); await wait(1500);
     check('the segmented control swaps to Colour in place', /\/colour$/.test(page.url()) && !!(await page.$('#sheet-root .wheel')), page.url());
     await sheetAt('05 Colour', [['wheel', '.wheel', 76, 164, 260, 260], ['value row', '.cs-val', 20, 448, 372, 28], ['first swatch', '.cs-sw .sw:first-child', 24, 506, 32, 32]]);
     await page.click('.cs-sw .sw[data-hex="#4C8DFF"]'); await wait(1400);

@@ -12,6 +12,7 @@ import { sceneSheet, actions as sceneActions, LIST_ACTS } from '/ui/screens/scen
 import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
 import { roomTop } from '/ui/screens/home.js';
 import { reduced } from '/ui/motion.js';
+import { track } from '/ui/gesture.js';
 
 // Room setup and the room's sleep timer are sheets over it (setup.js), and so is a scene's editor
 // (#room/<id>/scene/<scene id>, the same sheet All scenes opens), so changing a scene never leaves the room.
@@ -87,6 +88,57 @@ function roomLight(c, aid, lights) {
   if (!lit.length) return `<span class="rp-light dark" data-xf aria-hidden="true"></span>`;
   const mean = Math.round(lit.reduce((a, d) => a + (c.data.level(d.device_id) || 0), 0) / lit.length);
   return `<span class="rp-light" data-xf style="--rl:${mean}" aria-hidden="true"></span>`;
+}
+
+// The room's brightness: Home's house bar (components.css .hbar), for this room. It moves the room's dimmable lights
+// that are on, all to the one level, and with none on it brings them all up to where the finger is: a drag, never a
+// tap, turns a room on. Its level is the mean of the lit ones, shown beside it and counted with the finger; with the
+// room off the bar rests empty and says Off. A room with nothing to dim (only switches, a fan, a shade) has none.
+const dimmable = (c, aid) => c.H.roomLights(aid).filter(d => d.domain === 'light');
+function brightTargets(c, aid) {
+  const ls = dimmable(c, aid).map(d => d.device_id);
+  const lit = ls.filter(id => (c.data.level(id) || 0) > 0);
+  return lit.length ? lit : ls;
+}
+function brightLevel(c, aid) {
+  const lit = dimmable(c, aid).map(d => c.data.level(d.device_id) || 0).filter(v => v > 0);
+  return lit.length ? Math.round(lit.reduce((a, v) => a + v, 0) / lit.length) : 0;
+}
+function brightHTML(c, aid) {
+  if (!dimmable(c, aid).length) return '';
+  const lv = brightLevel(c, aid);
+  return `<div class="room-bright ${lv ? '' : 'off'}">
+      <div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="room-bright" data-id="${c.esc(aid)}" style="--pct:${lv}%" role="slider" aria-label="Brightness of this room's lights" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv || 0}">
+        <span class="fill"></span>
+        <span class="lo">${c.icon('sun', 22, 1.8)}</span>
+        <span class="hi">${c.icon('sun', 26, 1.6)}</span>
+        <span class="knob"></span>
+      </div>
+      <span class="rb-lv" data-rblv>${lv ? `${lv}%` : 'Off'}</span>
+    </div>`;
+}
+function wireBright(c, root) {
+  const bar = root.querySelector('[data-drag="room-bright"]'); if (!bar) return;
+  const aid = bar.dataset.id;
+  const out = root.querySelector('[data-rblv]');
+  let ids = null;
+  const set = x => {
+    const b = bar.getBoundingClientRect();
+    // as the house bar: the knob sits inside the end of the fill, so the fill ends 28 past the finger
+    const v = Math.max(1, Math.min(100, Math.round((x - b.left + 28) / b.width * 100)));
+    bar.style.setProperty('--pct', v + '%');
+    bar.classList.toggle('low', v / 100 * b.width < 100);
+    bar.setAttribute('aria-valuenow', v);
+    if (out) out.textContent = `${v}%`;
+    bar.parentElement.classList.remove('off');
+    if (!ids) ids = brightTargets(c, aid);
+    if (!ids.length) return;
+    c.assume(ids, v, { held: true });
+    c.gate.sendLevel(ids.map(id => `d:${id}`), v);
+  };
+  // a sideways drag only: a finger on its way up or down the page scrolls it (gesture.js). The lights it moves are
+  // the ones on when the finger lands, so bringing a dark room up does not start moving other lights part way.
+  track(bar, { c, axis: 'x', start: () => { ids = null; bar.classList.add('held'); }, move: e => set(e.clientX), end: () => { ids = null; } });
 }
 
 // The room's On and Off: the light page's switch, so the room's state is plain at a glance. The copper pill sits under
@@ -170,6 +222,7 @@ export function view(c, r) {
       ${badgeHTML}
       ${photo ? '' : `<button class="add-photo" data-go="room/${esc(aid)}/setup">${icon('camera', 16, 1.8)}Add a photo</button>`}
     </div>
+    ${brightHTML(c, aid)}
     ${scenesHead}
     ${scenes.length || saveLook || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${saveLook}${suggest}${newScene}</div>` : ''}
     ${ds.length
@@ -193,6 +246,7 @@ function waveLayer(w) {
 // After each redraw while a wave is out: time every part of it from the tap, so a redraw in the middle of it (a
 // light's state arriving) picks each part up exactly where it was.
 export function after(c, r, scr) {
+  wireBright(c, scr);
   const w = wave;
   if (!w || w.aid !== r.id || reduced() || since(w) > lifeOf(w) + 50) return;
   const room = scr.querySelector('.room'); if (!room) return;

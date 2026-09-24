@@ -258,6 +258,13 @@
 .room-onoff button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 400px) { .room-onoff.long button:first-child { gap: 6px; } }
 .room-onoff .onoff-pill { height: 52px; border-radius: 26px; background: var(--copper); }
+/* The room's brightness under its picture: Home's house bar, 16 below the picture, with the room's level beside it
+   (tabular, so it does not shuffle under a finger). Off, the bar rests empty and the words say Off. */
+.room-bright { display: flex; align-items: center; gap: 12px; margin: 16px var(--gutter) 0; }
+.room-bright .hbar { flex: 1; touch-action: pan-y; cursor: pointer; }
+.room-bright .rb-lv { width: 48px; text-align: right; font-size: 18px; font-weight: 500; line-height: 22px; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.room-bright.off .rb-lv { color: var(--text-2); }
+.room-bright.off .hbar .fill { background: var(--surface-3); }
 
 /* The room's scenes at 504: 16 under the photograph; the grid at 560, 16 under the chips. */
 .room-chips { margin-top: 16px; }
