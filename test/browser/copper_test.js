@@ -112,6 +112,10 @@ const FAN = [
   await page.goto(base);
   if (await page.$('#pw')) { await page.fill('#pw', 'secret'); await page.click('.login-form button'); }
   await page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 }); await wait(800);
+  // every colour below is the day's: from 10 pm the night look deepens the chrome (night.css), so a run in the evening
+  // would read its darker blue. The day look is pinned for this test and put back after it.
+  const look0 = await C(async () => { const s = window.__copper.S.config.settings; const was = s.night_look ?? null; s.night_look = 'never'; await window.__copper.save('', { quiet: true }); window.__copper.render(); return was; });
+  await wait(300);
   // the greeting a home gets once, the first time it connects, would sit over Home: this home has had it
   await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
   // start clean: no look saved by an earlier run, and the stars as they were
@@ -322,6 +326,7 @@ const FAN = [
 
   // put back what this test changed
   await C(async favs => { const c = window.__copper; c.S.config.favorites = favs; c.S.config.presets = c.S.config.presets.filter(p => !/ · My look/.test(p.name)); await c.data.saveConfig(); }, favs0);
+  await C(async was => { const s = window.__copper.S.config.settings; if (was == null) delete s.night_look; else s.night_look = was; await window.__copper.save('', { quiet: true }); }, look0);
   check('no page errors', !errors.length, errors);
   await browser.close();
   console.log(bad ? `${bad} FAILED` : 'ALL PASS');
