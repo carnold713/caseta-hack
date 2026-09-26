@@ -76,6 +76,9 @@ html:has(.ns-page) #app .screen { padding-bottom: 0; }
 .ns-ring .ns-fill { stroke: #E0B48A; stroke-width: 2; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0;
   transition: stroke-dashoffset var(--exit) var(--ease-in), opacity var(--exit) var(--ease-in); }
 .ns-area[data-holding='1'] .ns-fill { stroke-dashoffset: 0; opacity: 1; transition: stroke-dashoffset 250ms linear, opacity 70ms ease-out; }
+/* Held to the end, the ring stays closed and gives way to the lit track on the night fade, as the lamp rises: it no
+   longer runs back round as a hold let go early does, which read as the hold not having taken. */
+.ns-area.on .ns-fill { stroke-dashoffset: 0; opacity: 0; transition: opacity var(--night-fade) var(--ease-both); }
 /* The lamp's glow, the page's one light, sits on the ring and spills well past the area: scale and opacity together,
    on the night fade coming on (eyes that were asleep) and the dimmer going off (turning off is always easy). */
 .ns-glow { z-index: 0; }

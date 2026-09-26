@@ -11,7 +11,7 @@ import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setu
 import { sceneSheet, actions as sceneActions, LIST_ACTS } from '/ui/screens/scenes.js';
 import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
 import { roomTop } from '/ui/screens/home.js';
-import { reduced } from '/ui/motion.js';
+import { reduced, count } from '/ui/motion.js';
 import { track } from '/ui/gesture.js';
 
 // Room setup and the room's sleep timer are sheets over it (setup.js), and so is a scene's editor
@@ -37,6 +37,14 @@ const sheetActs = Object.fromEntries(Object.entries(sceneActions).filter(([k]) =
 const DOMAIN_LAST = { light: 0, switch: 0, fan: 1, cover: 2 };
 // The glyphs the file puts on a scene chip: Bright's sun and Night's moon. The others carry none.
 const MOOD_GLYPH = { bright: 'sun', night: 'moon' };
+// A chip's glyph has a place of its own, there on every chip and opening as the glyph comes (the check of the scene
+// the room is in): drawn in and out of the chip's line, the chip grew 20 in a frame and every chip after it jumped. It
+// opens and closes on the standard curve, the glyph fading in it (data-enter), and one glyph turning into another
+// (Bright's sun to its check) crossfades.
+function glyphSlot(g, icon) {
+  if (!g) return '<span class="ch-g" aria-hidden="true"></span>';
+  return `<span class="ch-g on" data-xf="standard" data-xf-look="${g}" aria-hidden="true">${icon(g, 16, 1.8).replace('<svg ', '<svg data-enter="fade" ')}</span>`;
+}
 
 // ---------- the wave ----------
 // Times from the tap, read off the frame's keyframes: the press lands (tap, 0.12 s) and only then does the ring
@@ -115,13 +123,16 @@ function brightHTML(c, aid) {
         <span class="hi">${c.icon('sun', 26, 1.6)}</span>
         <span class="knob"></span>
       </div>
-      <span class="rb-lv" data-rblv>${lv ? `${lv}%` : ''}</span>
+      <span class="rb-lv" data-rblv ${lv ? `data-count="${lv}"` : ''} data-xf="standard" data-xf-look="${lv ? 'on' : 'off'}">${lv ? `${lv}%` : ''}</span>
     </div>`;
 }
+// The room's level counts to where it is as the house's does (motion.js count), and comes and goes with a fade.
+const pct = v => `${v}%`;
 function wireBright(c, root) {
   const bar = root.querySelector('[data-drag="room-bright"]'); if (!bar) return;
   const aid = bar.dataset.id;
   const out = root.querySelector('[data-rblv]');
+  count(out && out.hasAttribute('data-count') ? out : null, `room:${aid}`, pct);
   let ids = null;
   const set = x => {
     const b = bar.getBoundingClientRect();
@@ -130,7 +141,8 @@ function wireBright(c, root) {
     bar.style.setProperty('--pct', v + '%');
     bar.classList.toggle('low', v / 100 * b.width < 100);
     bar.setAttribute('aria-valuenow', v);
-    if (out) out.textContent = `${v}%`;
+    if (out) out.textContent = pct(v);
+    count.shown(`room:${aid}`, v);
     bar.parentElement.classList.remove('off');
     if (!ids) ids = brightTargets(c, aid);
     if (!ids.length) return;
@@ -172,6 +184,12 @@ export function view(c, r) {
   const photo = !!H.roomPhotoURL(aid);
   const canToggle = ds.some(d => d.domain !== 'cover');
   const w = liveWave(aid);
+  // The house changed under a scene still arriving (a light switched in it, the room turned off): what it does now is
+  // what the page shows now. The count settles at once, and what was waiting for the ring stops waiting (after()).
+  if (w && w.kind === 'run' && !w.cut && w.lands && Object.entries(w.lands).some(([id, v]) => Math.abs((data.level(id) || 0) - v) > 2)) {
+    w.cut = true;
+    w.tSet = Math.min(w.tSet == null ? Infinity : w.tSet, since(w));
+  }
 
   // the room's scenes: the one the lights are showing now is copper, and "Save this look" keeps what they are showing.
   // A chip just tapped is copper at once, before its lights have said they have arrived: the press landed.
@@ -184,9 +202,10 @@ export function view(c, r) {
     const long = fading(wave && wave.aid === aid ? wave : null, p.id);
     const now = p.id === cur || arriving || long;
     const g = now ? 'check' : MOOD_GLYPH[p.mood];
-    const sub = long ? `<span class="ch-sub">Arriving · ${esc(c.EDIT.fadeText(wave.fade))}</span><i class="wv-prog" data-wvp="prog" style="animation-duration:${wave.fade}s"></i>` : '';
+    // (in a place of its own that opens and closes as the glyph's does, so the chips after it move over rather than jump)
+    const sub = `<span class="ch-subw">${long ? `<span class="ch-sub">Arriving · ${esc(c.EDIT.fadeText(wave.fade))}</span>` : ''}</span>${long ? `<i class="wv-prog" data-wvp="prog" style="animation-duration:${wave.fade}s"></i>` : ''}`;
     if (editing) return `<button class="chip lead editing" data-act="scene-edit" data-id="${esc(p.id)}" aria-label="Change ${esc(H.sceneShortName(p))}">${icon('pencil', 16, 1.8)}${esc(H.sceneShortName(p))}</button>`;
-    return `<button class="chip ${g ? 'lead' : ''} ${now ? 'current' : ''} ${long ? 'long' : ''}" data-act="scene" data-t="p:${esc(p.id)}" data-hold="scene-edit" data-ms="500" data-id="${esc(p.id)}">${g ? icon(g, 16, 1.8) : ''}${esc(H.sceneShortName(p))}${sub}</button>`;
+    return `<button class="chip sc ${now ? 'current' : ''} ${long ? 'long' : ''}" data-act="scene" data-t="p:${esc(p.id)}" data-hold="scene-edit" data-ms="500" data-id="${esc(p.id)}">${glyphSlot(g, icon)}${esc(H.sceneShortName(p))}${sub}</button>`;
   });
   const newScene = canToggle ? `<button class="chip lead" data-act="room-scene-new" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}New scene</button>` : '';
   const scenesHead = scenes.length ? `<div class="room-sec"><span class="t-over">Scenes</span><button class="link" data-act="room-scenes-edit" data-id="${esc(aid)}" aria-pressed="${editing}">${editing ? 'Done' : 'Edit'}</button></div>` : '';
@@ -266,25 +285,43 @@ export function after(c, r, scr) {
     else if (k === 'settle') for (const s of el.matches('.wv-was, .wv-now') ? [el] : el.children) delay(s, w.tSet);
   }
   // The crossfades motion.js has just started for tiles whose light changed: each one waits for the ring. They are
-  // the scene's 1.0 s EASE_IN_AND_OUT as M3 has them; only their start moves.
+  // the scene's 1.0 s EASE_IN_AND_OUT as M3 has them; only their start moves. An illustrated room's lamps
+  // (roomscene.js) each light as the ring reaches them: their fades wait too, each holding where it was until then
+  // (backwards): left to fill as it came, a lamp showed its new light through the wait and went back to its old one
+  // to begin. A fade already timed (a redraw carries it on its own clock, motion.js) is not timed again, which moved
+  // its start by the time since the tap. Every place is read, and what is playing looked at once, before any fade is
+  // retimed: a look after each retiming worked the page's style out again, once for every lamp.
+  // Cut short (the house changed under it, view), every fade still waiting starts now, from where it stands.
   queueMicrotask(() => {
     const now = since(w);
-    for (const copy of room.querySelectorAll('.xf-old:not([data-wv])')) {
-      copy.dataset.wv = '1';
-      const host = copy.parentElement;
-      if (!host || !host.matches('.tile, .rp-light')) continue;
-      const wait = Math.max(0, arrival(host) - now);
-      if (wait < 16) continue;
-      for (const a of copy.getAnimations()) a.effect.updateTiming({ delay: wait });
-    }
-    // an illustrated room's lamps (roomscene.js) each light as the ring reaches them: their fades wait too
-    for (const lamp of room.querySelectorAll('.room-scene [data-fx][data-i]')) {
-      const wait = Math.max(0, arrival(lamp) - now);
-      if (wait < 16) continue;
-      for (const part of room.querySelectorAll(`.room-scene [data-l="${lamp.dataset.i}"], .room-scene [data-l="${lamp.dataset.i}"] stop`)) {
-        for (const a of part.getAnimations()) if (!(typeof CSSAnimation !== 'undefined' && a instanceof CSSAnimation)) a.effect.updateTiming({ delay: wait });
+    const loop = a => typeof CSSAnimation !== 'undefined' && a instanceof CSSAnimation;
+    const copies = [...room.querySelectorAll('.xf-old:not([data-wv])')].filter(k => k.parentElement && k.parentElement.matches('.tile, .rp-light'));
+    const lamps = new Map([...room.querySelectorAll('.room-scene [data-fx][data-i]')].map(l => [l.dataset.i, l]));
+    const wait = new Map();
+    for (const el of [...copies.map(k => k.parentElement), ...lamps.values()]) wait.set(el, w.cut ? 0 : Math.max(0, arrival(el) - now));
+    const anims = room.getAnimations({ subtree: true }).filter(a => !loop(a) && a.effect && a.effect.target);
+    const cut = w.cut && !w.cutDone;
+    if (w.cut) w.cutDone = true;
+    for (const a of anims) {
+      const t = a.effect.target;
+      const copy = t.closest('.xf-old');
+      if (copy && copies.includes(copy)) {
+        const d = wait.get(copy.parentElement);
+        if (d >= 16) a.effect.updateTiming({ delay: d });
+        continue;
       }
+      if (cut && (copy || t.closest('.room-scene')) && a.currentTime != null && a.currentTime < a.effect.getTiming().delay) {
+        a.effect.updateTiming({ delay: a.currentTime });
+        continue;
+      }
+      const part = t.closest('.room-scene [data-l]');
+      if (!part || / wave$/.test(a.id)) continue;
+      const d = wait.get(lamps.get(part.dataset.l));
+      if (!(d >= 16)) continue;
+      a.effect.updateTiming({ delay: d, fill: 'backwards' });
+      a.id = `${a.id || ''} wave`;
     }
+    for (const k of copies) k.dataset.wv = '1';
   });
 }
 
@@ -345,7 +382,10 @@ async function runWave(c, el, r, p) {
   const ds = c.data.controllable().filter(d => c.data.devArea(d) === aid);
   const onN = ds.filter(d => c.data.isOn(d.device_id) && d.domain !== 'cover').length;
   const fade = p.fade == null ? 1 : Number(p.fade) || 0;
-  const me = wave = { kind: 'run', id: p.id, aid, t0, x, y, fade, tone: sceneTone(c, p), countWas: countText(ds.length, onN) };
+  // where each light it touches lands (app.js landFor), so a change under it can be told from its own arrival
+  const lands = {};
+  for (const [id, v] of Object.entries(p.levels || {})) { const d = c.data.dev(id); if (d && (d.domain === 'light' || d.domain === 'switch')) lands[id] = c.data.landing(id, levelOf(v)); }
+  const me = wave = { kind: 'run', id: p.id, aid, t0, x, y, fade, tone: sceneTone(c, p), countWas: countText(ds.length, onN), lands };
   const before = snapshot(c, p);
   // the house is asked now, and each tile is shown where the scene puts it from the tap, crossfading over the scene's
   // 1.0 s rather than stepping through every level the bridge reports on the way (app.js turn)
@@ -370,6 +410,9 @@ async function runWave(c, el, r, p) {
     c.toast(m.length === 1 ? `${m[0].name} didn't change` : `${m.length} lights didn't change`, { err: true, undo: () => c.run({ type: 'preset', preset_id: p.id }), undoLabel: 'Try again', ms: 8000 });
   }, Math.max(1, fade) * 1000 + 2500);
 }
+
+// Leaving the room forgets the level it showed, so coming back does not count from an old one.
+export function leave(c, r) { for (const a of c.data.areas()) count.forget(`room:${a.id}`); }
 
 function gone(c) {
   return `<div class="room"><header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${c.icon('back', 22, 1.7)}</button></header>

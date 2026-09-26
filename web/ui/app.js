@@ -170,10 +170,15 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
     // someone typing in the sheet (a name) is never redrawn out from under
     const a = document.activeElement;
     if (a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return root;
-    const snap = motion.snap(root.querySelector('.sheet'));
+    const sheet = root.querySelector('.sheet');
+    const snap = motion.snap(sheet);
+    const box = sheet ? sheet.getBoundingClientRect() : null;
     const h = root.querySelector('.sheet-head'); if (h) h.outerHTML = headHTML;
     const b = root.querySelector('.sheet-body'); if (b) b.innerHTML = body;
-    motion.carry(snap, root.querySelector('.sheet'));
+    motion.carry(snap, sheet);
+    // a sheet that grows or shrinks with what it now holds (a sleep timer set, its candle; stopped, the choices again)
+    // moves its top edge there rather than jumping it (the White and Colour swap does the same, lookswap.js)
+    if (sheet) motion.resized(sheet, box);
     return root;
   }
   // one sheet replacing another (White to Colour) swaps in place rather than rising again
@@ -362,9 +367,19 @@ function render() {
   // the app opening on a screen is a load, like a tab
   const how = arriving || (wasScreen ? null : 'load');
   arriving = null; wasScreen = true;
-  const snap = how ? null : motion.snap(scr);
   applyNight();
-  scr.innerHTML = screen.view(ctx, r);
+  const html = screen.view(ctx, r);
+  // A redraw of the same page that would draw exactly what is on it already is not drawn: the bridge confirming what
+  // a tap already shows (app.js turn) redrew the whole page in the middle of the tap's own crossfades, and on a busy
+  // phone that is a hundred milliseconds with no frame at all. Only when nothing has touched the page since it was
+  // drawn (the dial's glide, a finger on a bar and a count all write to it; a crossfade's fading copy does not).
+  if (!how && same(scr, r, html)) { redrawn(screen, r); return; }
+  // parsed first, so the carry can see what is about to change before the page it is taken from is gone
+  const next = document.createElement('template');
+  next.innerHTML = html;
+  const snap = how ? null : motion.snap(scr, next.content);
+  scr.replaceChildren(next.content);
+  drawn(scr, r, html);
   scr.querySelectorAll('[data-keep]').forEach(el => { if (keep[el.dataset.keep] != null) el.scrollLeft = keep[el.dataset.keep]; });
   const st = data.connState();
   // a pushed detail page (a light, a fan, a shade) has no tab bar in the file; everything else does
@@ -388,9 +403,44 @@ function render() {
   else if (how === 'swipe-back') swipeBack.arrive(scr);
   else if (how) motion.arrive(how, scr); else motion.carry(snap, scr);
   motion.settle(scr);
+  // what the page's own after() and the carry wrote to it is part of the drawing, not a touch after it
+  if (touches) touches.takeRecords();
+  redrawn(screen, r);
+}
+// What every redraw does beyond the page itself: the sheet over it, and the lock screen's question.
+function redrawn(screen, r) {
   routedSheet(screen, r);
   // an icon shortcut landing (Goodnight's hold in view), and the one question about the lock screen
   beyond.after(ctx);
+}
+// The last drawing, and whether anything has written to the page since. An illustration's gradient ids are made fresh
+// on every draw (roomscene.js), so two drawings of the same state differ only in those: they are left out of the
+// comparison. A crossfade's copy arriving or leaving is not a change to the page.
+let last = null, touched = false;
+const plain = html => html.replace(/\brs[0-9a-z]+/g, 'rs');
+const note = recs => {
+  for (const m of recs) {
+    const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+    if (t && t.closest('.xf-old')) continue;
+    if (m.type === 'childList' && [...m.addedNodes, ...m.removedNodes].every(n => n.nodeType === 1 && n.classList.contains('xf-old'))) continue;
+    // a press and hold marks its element while the finger is down, and a drawing never carries the mark
+    if (m.type === 'attributes' && m.attributeName === 'data-holding') continue;
+    // a number counting to what the drawing says, and a dial gliding there, go on to it on the elements they are on:
+    // what they write on the way is not a change the next drawing needs to undo
+    if (t && t.closest('[data-count], [data-drag="dial"]')) continue;
+    touched = true; return;
+  }
+};
+const touches = typeof MutationObserver === 'function' ? new MutationObserver(note) : null;
+function drawn(scr, r, html) {
+  last = { page: `${r.name}/${r.id}/${r.sub}`, html: plain(html) };
+  touched = false;
+  if (touches) { touches.disconnect(); touches.observe(scr, { subtree: true, childList: true, attributes: true, characterData: true }); }
+}
+function same(scr, r, html) {
+  if (!touches || !last || !scr.firstElementChild) return false;
+  note(touches.takeRecords());
+  return !touched && last.page === `${r.name}/${r.id}/${r.sub}` && last.html === plain(html);
 }
 // ---------- night ----------
 // design-v7-ui.md, "A lighting system · 7": from the evening wind-down's start (10 pm without one) until the wake-up

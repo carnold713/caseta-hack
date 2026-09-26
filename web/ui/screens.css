@@ -47,8 +47,15 @@
    light's On pill, the pairing countdown and the Sunrise scrub; the timers already were). */
 .house-head [data-hlv], .dev [data-lv] { font-variant-numeric: tabular-nums; }
 .house .hbar { margin-top: 16px; touch-action: pan-y; cursor: pointer; }
-.house-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
-.house-pills.one { grid-template-columns: 1fr; }
+/* The bar's place opens and closes as the house goes on and off, on the standard curve, so the pills and everything
+   under the card move with it rather than jumping 72: the place's height is carried from one drawing to the next
+   (motion.js), and the bar fades in it (data-enter="fade") and fades as it closes over it. */
+.house-bar { overflow: hidden; transition: height var(--standard) var(--ease); }
+.house-pills { display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; margin-top: 16px;
+  transition: grid-template-columns var(--standard) var(--ease), column-gap var(--standard) var(--ease); }
+.house-pills.one { grid-template-columns: 0fr 1fr; column-gap: 0; }
+.house-pills .pill.solid { transition: transform var(--tap) var(--spring-quick), opacity var(--standard) var(--ease); }
+.house-pills .pill.folded { min-width: 0; padding: 0; overflow: hidden; opacity: 0; pointer-events: none; }
 /* A tap on a held button: its own label says Hold for a moment, in copper. */
 .pill.hold-pill.hint, .goodnight .gn-label.hint { color: var(--copper-hi); }
 /* Held to turn the house on: copper fills the pill from the left over the hold, and empties if the finger lets go
@@ -131,8 +138,10 @@
 /* the x's come in once, as Edit is tapped, not again with every redraw while editing */
 .pin-x.in { animation: pin-x-in var(--standard) var(--ease) both; }
 .pin-x::before { content: ''; position: absolute; inset: -6px; }   /* a 44 touch area around the 32 circle */
-/* the drawing, a fan's dots and a shade's bar sit where the x goes, and step back while it is there */
-.pin-grid.editing .tile :is(.art, .speed, .shade-bar) { opacity: 0; transition: opacity var(--standard) var(--ease); }
+/* the drawing, a fan's dots and a shade's bar sit where the x goes, and step back while it is there (and come back
+   when it goes: the fade is theirs in both states, or Edit put them out in a frame) */
+.pin-grid .tile :is(.art, .speed, .shade-bar) { transition: opacity var(--standard) var(--ease); }
+.pin-grid.editing .tile :is(.art, .speed, .shade-bar) { opacity: 0; }
 @keyframes pin-x-in { from { opacity: 0; scale: .6; } }
 /* An item held: it lifts a little over the others with a shadow under it and follows the finger; the others make room
    on the standard curve; let go, it settles into its place on the same curve. */
@@ -398,6 +407,9 @@
 .speeds .step.fill { background: var(--blue); }
 .speeds .steplbl { position: absolute; top: 302px; transform: translateX(-50%); font-size: 12px; line-height: 14px; color: var(--text-2); white-space: nowrap; }
 .speeds .steplbl.sel { color: var(--text-1); font-weight: 500; }
+/* a speed's word under its step lights with the step, rather than a frame before it (the step fills on the standard
+   curve; the big word over them crossfades, device.js) */
+.speeds .steplbl { transition: color var(--standard) var(--ease); }
 .speeds .nudge { position: absolute; top: 336px; width: 56px; height: 56px; border-radius: 28px; border: 0; display: grid; place-items: center; background: var(--surface-2); color: var(--icon-1); }
 .speeds .nudge.minus { left: 20px; }
 .speeds .nudge.plus { left: auto; right: var(--gutter); }
