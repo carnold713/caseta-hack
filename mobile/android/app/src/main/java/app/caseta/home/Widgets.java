@@ -215,7 +215,7 @@ final class Widgets {
                 default: return b.note(R.drawable.wi_home, "Caseta", "Tap to open", "home");
             }
         } catch (Exception e) {
-            return b.note(R.drawable.wi_home, "Caseta", "Tap to open", "home");
+            return new B(c, id, cfg, w, h).note(R.drawable.wi_home, "Caseta", "Tap to open", "home");
         }
     }
 
@@ -233,6 +233,10 @@ final class Widgets {
         void look(String lampHex) {
             L = Widgets.look(cfg, lampHex);
             root = new RemoteViews(c.getPackageName(), R.layout.wg_root);
+            // Every container is emptied before it is filled. A launcher may apply a widget's new drawing to the views
+            // it already shows (the same layout, reapplied), and addView then adds to what is there: without this,
+            // each tap drew the widget again under itself.
+            root.removeAllViews(R.id.wg_body);
             root.setImageViewResource(R.id.wg_bg, L.card());
             tint(root, R.id.wg_bg, L.bg, L.bgAlpha);
             int p = px(L.pad());
@@ -302,7 +306,11 @@ final class Widgets {
             head.setChronometerCountDown(R.id.wg_chrono, true);
         }
 
-        RemoteViews row(boolean fill) { return new RemoteViews(c.getPackageName(), fill ? R.layout.wg_row_fill : L.rowLayout()); }
+        RemoteViews row(boolean fill) {
+            RemoteViews r = new RemoteViews(c.getPackageName(), fill ? R.layout.wg_row_fill : L.rowLayout());
+            r.removeAllViews(R.id.wg_row);
+            return r;
+        }
 
         /** A pill in a row: filled with "on" when `on`, the look's button colour otherwise. */
         RemoteViews button(String label, int icon, boolean on, PendingIntent pi) {
