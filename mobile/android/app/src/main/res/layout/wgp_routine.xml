@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Next routine widget in the picker -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" android:src="@drawable/wg_card" android:tint="#1E1E1E" android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+      <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginEnd="10dp" android:src="@drawable/wi_sunset" android:tint="#D98A4E" />
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+        <TextView style="@style/WgText.Bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Evening lights" android:textColor="#FFFFFF" android:textSize="15sp" /><LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:orientation="horizontal"><TextView style="@style/WgText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tonight at 7:30pm" android:textColor="#9E9E9E" android:textSize="13sp" /></LinearLayout></LinearLayout></LinearLayout><FrameLayout android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" /><LinearLayout android:layout_width="match_parent" android:layout_height="44dp" android:gravity="center_vertical" android:orientation="horizontal"><FrameLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent">
+      <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" android:src="@drawable/wg_pill" android:tint="#2B2B2B" />
+      <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:gravity="center_vertical" android:orientation="horizontal" android:paddingStart="10dp" android:paddingEnd="10dp">
+        <TextView style="@style/WgText.Bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Skip tonight" android:textColor="#FFFFFF" android:textSize="14sp" /></LinearLayout></FrameLayout></LinearLayout>
+    </LinearLayout>
+</FrameLayout>

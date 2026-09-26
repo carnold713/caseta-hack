@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The widgets' words in Figtree, the app's font: Android 12 and later draw an app's own font in a widget -->
+    <style name="WgText">
+        <item name="android:fontFamily">@font/figtree</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+</resources>

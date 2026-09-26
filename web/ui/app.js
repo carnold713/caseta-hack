@@ -35,6 +35,8 @@ import { OFFLINE_TAP } from '/ui/screens/conn.js';
 import * as beyond from '/ui/beyond.js';
 import * as native from '/ui/native.js';
 import * as nightstandScreen from '/ui/screens/nightstand.js';
+import * as widgetsScreen from '/ui/screens/widgets.js';
+import * as widgetData from '/ui/widgetdata.js';
 
 const data = create({ storage: localStorage });
 const H = CasetaHome.create(data);
@@ -216,9 +218,9 @@ const SCREENS = {
   home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen, scenes: scenesScreen,
   remotes: remotesScreen, remote: remoteScreen, timing: timingScreen,
   routines: routinesScreen, routine: routineScreen, setup: guidedScreen, activity: activityScreen,
-  settings: settingsScreen, add: addScreen, nightstand: nightstandScreen,
+  settings: settingsScreen, add: addScreen, nightstand: nightstandScreen, widgets: widgetsScreen,
 };
-const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'settings', add: 'settings', activity: 'home' };
+const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'settings', add: 'settings', widgets: 'settings', activity: 'home' };
 const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines'], ['settings', 'gear', 'Settings']];
 // A screen draws the pages under it that it declares (screen.subs); any other sub page is not built yet.
 function screenFor(r) {
@@ -350,6 +352,8 @@ function render() {
   if (!S.ready || !S.config) { wasScreen = false; app.className = 'plain'; tabs.hidden = true; scr.innerHTML = onboard.loadingHTML(); return; }
   // the Android app's widget shows the house as Home says it
   native.house(H.litLights().length, Math.round(H.houseLevel()));
+  // and its ten widgets the home as this page sees it, a moment after the redraws stop (only in the Android app)
+  widgetData.soon(ctx);
   const r = route();
   // the page the app opened on, known once the home has loaded (hashchange compares against it)
   if (lastPage === null) lastPage = pageOf(r);
@@ -569,7 +573,8 @@ let lastPage = null, lastName = route().name;
 const DEPTH = { home: 0, rooms: 0, remotes: 0, routines: 0, room: 1, scenes: 1, remote: 1, routine: 1, setup: 1, activity: 1, settings: 0, nightstand: 1, light: 2, timing: 2, add: 2 };
 // The evening wind-down is a page of its own under the Routines tab (#routines/winddown, its sheets
 // #routines/winddown-*), so it sits one deeper than the tab even though it shares the tab's route name.
-const depthOf = r => (r.name === 'routines' && /^winddown/.test(r.id || '') ? 1 : DEPTH[r.name] ?? 1);
+// A widget's own page sits under the list of them (#widgets, then #widgets/<id>).
+const depthOf = r => (r.name === 'routines' && /^winddown/.test(r.id || '') ? 1 : r.name === 'widgets' && r.id ? 2 : DEPTH[r.name] ?? 1);
 let lastDepth = depthOf(route());
 // The page an address shows, under any sheet on it. #settings/name is Settings with the Name sheet up, and
 // #routines/winddown-curve is a sheet over a sheet over the wind-down page: opening one is not a new page, so the

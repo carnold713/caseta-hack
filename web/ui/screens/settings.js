@@ -9,6 +9,7 @@ import { nameSheet, confirmSheet } from '/ui/screens/pickers.js';
 import { ideasSheet, installSheet, nextActions } from '/ui/screens/next.js';
 import { nightLamp } from '/ui/screens/nightstand.js';
 import { houseTop } from '/ui/screens/home.js';
+import * as native from '/ui/native.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const info = c => (c.S.agent && c.S.agent.info) || {};
@@ -92,6 +93,8 @@ export function view(c, r) {
       ${row(c, 'Restore', '', 'settings/restore')}
     </div>
 
+    ${phoneGroup(c)}
+
     <div class="t-over sec">This app</div>
     <div class="group">
       ${row(c, 'Activity', '', 'activity')}
@@ -103,6 +106,26 @@ export function view(c, r) {
     <div class="group logout"><button class="row" data-act="logout"><span class="row-txt"><span class="t">Log out</span></span></button></div>
     <p class="set-foot">Caseta Hack${i.version ? ` · v${esc(String(i.version).replace(/^v/, ''))}` : ''}</p>
   </div>`;
+}
+
+// ---------- This phone (the Android app only) ----------
+// What this phone does with the house outside the app, which is the phone's own choice and not the house's: how a
+// running sleep timer shows, and its widgets. Saved on the phone (native.js setPhone), never in the house's config.
+let phoneAsked = false;
+function phoneGroup(c) {
+  if (!native.isNative) return '';
+  const p = native.phone;
+  if (!p) { if (!phoneAsked) { phoneAsked = true; native.loadPhone().then(() => c.render()); } return ''; }
+  const mode = p.timerMode || 'live';
+  const d = !p.notifications ? 'Notifications are off for this app'
+    : mode === 'live' && p.android >= 36 && !p.liveUpdates ? "Live updates are off in Android's settings"
+    : 'A live countdown while a timer runs';
+  return `<div class="t-over sec">This phone</div>
+    <div class="group phone-group">
+      ${toggle('Timer in the status bar', mode === 'live', 'phone-live', d)}
+      ${mode === 'live' ? '' : toggle('Quiet notification instead', mode === 'quiet', 'phone-quiet', 'One you can swipe away')}
+      ${row(c, 'Widgets', p.widgets ? plural(p.widgets, 'widget') : 'None', 'widgets')}
+    </div>`;
 }
 
 // ---------- the sheets ----------
@@ -241,6 +264,19 @@ function restore(c, text) {
 }
 
 export const actions = {
+  // This phone: the status bar timer on or off; off, a quiet notification or none at all
+  async 'phone-live'(c) {
+    const p = native.phone || {};
+    const on = (p.timerMode || 'live') !== 'live';
+    if (on && !p.notifications) await native.askNotifications();
+    await native.setPhone({ timerMode: on ? 'live' : 'quiet' });
+    c.render();
+  },
+  async 'phone-quiet'(c) {
+    const p = native.phone || {};
+    await native.setPhone({ timerMode: p.timerMode === 'quiet' ? 'none' : 'quiet' });
+    c.render();
+  },
   ...whereActions,
   ...connActions,
   ...nextActions,
