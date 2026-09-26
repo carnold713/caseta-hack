@@ -177,6 +177,10 @@
 }
 .onoff-pill.off { transform: translateX(calc(100% + 6px)); }
 .onoff.blue .onoff-pill { background: var(--blue); }
+/* Copper means a light is on, so under Off the pill is a quiet grey, not copper (nor blue): it turns grey as it
+   slides over, and copper again as it slides back under On. */
+.onoff-pill { transition: transform var(--standard) var(--ease), background-color var(--standard) var(--ease); }
+.onoff .onoff-pill.off, .onoff.blue .onoff-pill.off { background: var(--surface-3); }
 
 .pill {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
