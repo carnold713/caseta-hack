@@ -38,7 +38,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     check(!back.sheet && Math.abs(back.y - y0) < 2, 'closing it by Back leaves the page where it was', { before: y0, after: back.y, hash: back.hash });
   }
 
-  // however tall its content, a sheet stops 80 from the top of the screen (About this light is the tallest)
+  // however tall its content, a sheet stops 80 from the top of the screen and scrolls inside itself. About this light is
+  // the tallest, and since the restraint pass it fits a tall phone, so this is looked at on a short one (412 x 600)
+  await page.setViewportSize({ width: 412, height: 600 }); await wait(300);
   const lamp = await page.evaluate(() => (window.__copper.data.devices().find(d => d.domain === 'light') || {}).device_id);
   await page.evaluate(id => { location.hash = `#light/${id}`; }, lamp); await wait(900);
   await page.evaluate(id => { location.hash = `#light/${id}/about`; }, lamp);
@@ -48,6 +50,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check(!!tall && tall.top >= 80, 'a tall sheet leaves at least 80 of the page above it', tall);
   check(!!tall && tall.scrolls, 'and scrolls inside itself', tall);
   await page.goBack(); await wait(600);
+  await page.setViewportSize({ width: 412, height: 915 }); await wait(300);
 
   // a real page change still starts at the top
   await page.evaluate(() => { location.hash = '#activity'; }); await wait(900);
