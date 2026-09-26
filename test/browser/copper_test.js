@@ -19,8 +19,9 @@ const ROOM = [
   ['On and Off', '.room-onoff', 32, 412, 348, 64],
   ['On half', '.room-onoff button:first-child', 38, 418, 165, 52],
   ['Off half', '.room-onoff button:nth-child(2)', 209, 418, 165, 52],
-  // the room's brightness (Home's 56 tall bar, 16 under the picture, at 504) pushes the rest down 72 from the file's
-  ['brightness', '.room-bright .hbar', 20, 504, null, 56],
+  // the room's brightness (Home's 56 tall bar, 16 under the picture, at 504, the full width of the page as Home's is;
+  // its level is in the count beside the title) pushes the rest down 72 from the file's
+  ['brightness', '.room-bright .hbar', 20, 504, 372, 56],
   ['scene chips', '.room-chips', 0, 504 + 72, null, 40],
   ['first tile', '.room-grid .tile:nth-child(1)', 20, 560 + 72, 180, 150],
   ['second tile', '.room-grid .tile:nth-child(2)', 212, 560 + 72, 180, 150],
@@ -120,7 +121,7 @@ const FAN = [
   await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
   // start clean: no look saved by an earlier run, and the stars as they were
   const favs0 = await C(() => window.__copper.S.config.favorites.slice());
-  await C(async () => { const c = window.__copper; const n = c.S.config.presets.length; c.S.config.presets = c.S.config.presets.filter(p => !/ · My look/.test(p.name)); if (c.S.config.presets.length !== n) await c.data.saveConfig(); });
+  await C(async () => { const c = window.__copper; const n = c.S.config.presets.length; c.S.config.presets = c.S.config.presets.filter(p => !/ · (My look|New scene)/.test(p.name)); if (c.S.config.presets.length !== n) await c.data.saveConfig(); });
 
   const measure = async (what, list) => {
     const got = await C(L => L.map(([n, s]) => { const e = document.querySelector(s); if (!e) return [n, null]; const r = e.getBoundingClientRect(); return [n, [r.left, r.top + scrollY, r.width, r.height].map(v => Math.round(v * 10) / 10)]; }), list);
@@ -257,16 +258,20 @@ const FAN = [
   check('On turns on every light in the room', (await C(() => window.__copper.H.roomLights('20').every(d => window.__copper.data.level(d.device_id) > 0))));
   const pill = async () => C(() => { const o = document.querySelector('.room-onoff'); return { on: o.querySelector('[data-act="room-on"]').getAttribute('aria-pressed'), off: o.querySelector('.onoff-pill').classList.contains('off'), word: o.querySelector('[data-act="room-on"]').textContent.trim(), count: document.querySelector('.room-title .count').textContent.trim() }; });
   const lit = await pill();
-  // how much is on is said once, beside the title; the pill says just On
-  check('the pill sits under On, the pill says On and the count beside the title says how many are on', lit.on === 'true' && !lit.off && /^\d+ on$/.test(lit.count) && lit.word === 'On', lit);
+  // how much is on, and how bright, is said once, beside the title, as the Rooms card says it; the pill says just On
+  check('the pill sits under On, the pill says On and the count beside the title says how many are on and how bright', lit.on === 'true' && !lit.off && /^\d+ on · \d+%$/.test(lit.count) && lit.word === 'On', lit);
   await measure('03 Room', ROOM);
   // a lit tile is a flat fill of its light, with no glow in its corner and no coloured shadow
   const tiles = await C(() => [...document.querySelectorAll('.room-grid .tile.on')].map(t => { const cs = getComputedStyle(t); return { img: cs.backgroundImage, col: cs.backgroundColor, tinted: t.classList.contains('tinted'), glow: !!t.querySelector('.glow'), sh: cs.boxShadow }; }));
   check('lit tiles are flat fills (copper for a white light), no corner glow, no coloured shadow', tiles.length && tiles.every(t => t.img === 'none' && !t.glow && !/217, 138, 78|0px 10px/.test(t.sh) && (t.tinted || t.col === 'rgb(217, 138, 78)')), tiles);
+  // New scene is the one way to make a scene on a room's page: it keeps the room as it is and opens its editor
+  check('there is no second way to keep the look: no Save this look beside New scene', !(await page.$('[data-act="save-look"]')) && !!(await page.$('[data-act="room-scene-new"]')));
   const n0 = await C(() => window.__copper.data.presets().length);
-  await page.click('[data-act="save-look"]'); await wait(1400);
-  check('Save this look makes a scene', (await C(() => window.__copper.data.presets().length)) === n0 + 1);
-  check('and it is the current one, in copper', (await page.textContent('.chip.current').catch(() => '')).trim() === 'My look');
+  await page.click('[data-act="room-scene-new"]'); await wait(1400);
+  check('New scene makes a scene and opens it over the room', (await C(() => window.__copper.data.presets().length)) === n0 + 1 && /#room\/20\/scene\//.test(page.url()), page.url());
+  await page.click('#sheet-root .sheet-close'); await wait(900);
+  check('closing it is the room again', /#room\/20$/.test(page.url()) && !(await page.$('#sheet-root .sheet')), page.url());
+  check('and it is the room as it was, so it is the current one, in copper', /^New scene/.test((await page.textContent('.chip.current').catch(() => '')).trim()), await page.textContent('.chip.current').catch(() => ''));
   await page.click('[data-act="room-off"]'); await wait(1600);
   check('Off turns off every light in the room', (await C(() => window.__copper.H.roomLights('20').every(d => !window.__copper.data.level(d.device_id)))));
   const dark = await pill();
@@ -278,6 +283,8 @@ const FAN = [
   // ---- 17 Fan
   await go('light/8');
   await measure('17 Fan', FAN);
+  // one pill, the sleep timer: a Goodnight pill that did nothing when tapped is gone, as a light's page has none
+  check('a fan\'s only pill is its sleep timer, with no Goodnight pill beside it', await C(() => { const f = [...document.querySelectorAll('#screen .feats .feat')]; return f.length === 1 && f[0].dataset.go.endsWith('/timer') && !/Goodnight/.test(document.querySelector('#screen .dev').textContent); }));
   await anchored('a fan\'s speeds', '#screen .speeds', 700, 12);
   await page.click('[data-speed="High"]'); await wait(800);
   check('a speed bar sets the fan', (await page.textContent('.speeds .big')) === 'High', await page.textContent('.speeds .big'));
@@ -287,12 +294,14 @@ const FAN = [
   await page.click('.speeds .minus'); await wait(800);
   check('minus steps down', (await page.textContent('.speeds .big')) === 'Medium high', await page.textContent('.speeds .big'));
 
-  // ---- 18 Shade (none on the rig: one put on the page for this, as layout_rooms_test does). Its window, its buttons
-  // and its Goodnight row sink together, the row ending 6 above where the page ends, as a light's buttons do.
+  // ---- 18 Shade (none on the rig: one put on the page for this, as layout_rooms_test does). Its window and its
+  // buttons sink together, the buttons ending 6 above where the page ends, as a light's do. Nothing under them says
+  // what Goodnight does: that is Goodnight's to say, not every shade's.
   await C(() => { const c = window.__copper, S = c.S, a = c.data.areas()[0]; S.inv.devices.cu_shade = { device_id: 'cu_shade', name: 'Shade', type: 'SerenaRollerShade', domain: 'cover', area: a && a.id, zone: 'cus' }; S.states.cu_shade = { level: 40 }; location.hash = 'light/cu_shade'; });
   await wait(900);
-  const sh = await C(() => { const y = s => Math.round(document.querySelector('#screen ' + s).getBoundingClientRect().bottom + scrollY); return { vh: innerHeight, gn: y('.shade-gn'), win: Math.round(document.querySelector('#screen .window').getBoundingClientRect().top + scrollY), name: y('.t-hero') }; });
-  check('a shade\'s Goodnight row ends 6 over the page\'s end, the page filling the screen, and its window sinks with it', sh.gn === sh.vh - MARGIN - 6 && sh.win - sh.gn === 336 - 848 && sh.name === 308 - LIFT, sh);
+  const sh = await C(() => { const y = s => Math.round(document.querySelector('#screen ' + s).getBoundingClientRect().bottom + scrollY); return { vh: innerHeight, btns: y('.shade-btns .sbtn'), win: Math.round(document.querySelector('#screen .window').getBoundingClientRect().top + scrollY), name: y('.t-hero'), gn: !!document.querySelector('#screen .shade-gn'), page: Math.round(document.querySelector('#screen .dev').getBoundingClientRect().height) }; });
+  check('a shade\'s buttons end 6 over the page\'s end, the page filling the screen, and its window sinks with them', sh.btns === sh.vh - MARGIN - 6 && sh.win - sh.btns === 336 - 755 && sh.name === 308 - LIFT && sh.page === sh.vh - MARGIN, sh);
+  check('and no Goodnight row under them', !sh.gn, sh);
   await C(() => { const S = window.__copper.S; delete S.inv.devices.cu_shade; delete S.states.cu_shade; });
 
   // ---- the house
@@ -325,7 +334,7 @@ const FAN = [
   check('held for a second, everything goes off', (await C(() => window.__copper.H.litLights().length)) === 0);
 
   // put back what this test changed
-  await C(async favs => { const c = window.__copper; c.S.config.favorites = favs; c.S.config.presets = c.S.config.presets.filter(p => !/ · My look/.test(p.name)); await c.data.saveConfig(); }, favs0);
+  await C(async favs => { const c = window.__copper; c.S.config.favorites = favs; c.S.config.presets = c.S.config.presets.filter(p => !/ · (My look|New scene)/.test(p.name)); await c.data.saveConfig(); }, favs0);
   await C(async was => { const s = window.__copper.S.config.settings; if (was == null) delete s.night_look; else s.night_look = was; await window.__copper.save('', { quiet: true }); }, look0);
   check('no page errors', !errors.length, errors);
   await browser.close();

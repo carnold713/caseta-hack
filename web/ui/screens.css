@@ -222,7 +222,8 @@
    (header.css), is cut shorter where it rests so that at no step of the way does it reach the pin. */
 .room-title h1.fit1 { max-width: calc(100% - 150px); }
 .room-title h1.fit2 { max-width: calc(100% - 168px); }
-.room-title .count { position: absolute; right: 22px; top: 43px; font-size: 14px; line-height: 17px; color: var(--text-2); }
+/* how much is on and how bright ("2 on · 70%"): tabular, so it does not shuffle while a finger moves the bar */
+.room-title .count { position: absolute; right: 22px; top: 43px; font-size: 14px; line-height: 17px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .room-photo-card {
   position: relative; margin: 16px var(--gutter) 0; height: 300px; overflow: hidden;
@@ -249,12 +250,10 @@
 .room-onoff.onoff button[aria-pressed='true'] { box-shadow: none; }
 .room-onoff button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .room-onoff .onoff-pill { height: 52px; border-radius: 26px; background: var(--copper); }
-/* The room's brightness under its picture: Home's house bar, 16 below the picture, with the room's level beside it
-   (tabular, so it does not shuffle under a finger). Off, the bar rests empty and says nothing: the Off pill has. */
-.room-bright { display: flex; align-items: center; gap: 12px; margin: 16px var(--gutter) 0; }
-.room-bright .hbar { flex: 1; touch-action: pan-y; cursor: pointer; }
-.room-bright .rb-lv { width: 48px; text-align: right; font-size: 18px; font-weight: 500; line-height: 22px; color: var(--text-1); font-variant-numeric: tabular-nums; }
-.room-bright.off .rb-lv { color: var(--text-2); }
+/* The room's brightness under its picture: Home's house bar, 16 below the picture and the full width of the page, as
+   Home's is. Its level is said once, in the count beside the title. Off, the bar rests empty. */
+.room-bright { margin: 16px var(--gutter) 0; }
+.room-bright .hbar { touch-action: pan-y; cursor: pointer; }
 .room-bright.off .hbar .fill { background: var(--surface-3); }
 
 /* The room's scenes at 504: 16 under the photograph; the grid at 560, 16 under the chips. */
@@ -279,7 +278,7 @@
    while the light is off, whole while it is on. The room's name and the title sit under it, moved up by what the
    smaller drawing gave back (--lift), and so does everything under them. */
 /* and everything under the title moves up with it, by the same amount, so the page keeps its rhythm with no gap */
-.dev > :is(.onoff, .looks, .feats, .dial, .speeds, .window, .readout, .shade-btns, .shade-gn) { translate: 0 calc(-1 * var(--lift, 0px)); }
+.dev > :is(.onoff, .looks, .feats, .dial, .speeds, .window, .readout, .shade-btns) { translate: 0 calc(-1 * var(--lift, 0px)); }
 /* The page's main control sits where the thumb is: a light's dial, a fan's speeds, a shade's window with its buttons
    and the row under them. Where the page is shorter than the screen, the page fills the screen and the control sinks
    to its bottom by the room left over (--sink), keeping the 24 and the safe area a page with no tab bar keeps under it
@@ -287,7 +286,7 @@
    page is taller, --sink is 0, and the control follows the content and the page scrolls as it always did.
    --end is where the page as drawn ends: the file's 890 (a light's dial and a fan's speeds end there, 6 and 8 under
    their buttons), less what the drawing gave back and what a light with neither white nor colour closes up; a shade's
-   ends 6 under its Goodnight row, as a light's does under its buttons. It is the small viewport's height (svh), not the
+   ends 6 under its Open, Stop and Close, as a light's does under its buttons. It is the small viewport's height (svh), not the
    dynamic one: in a browser whose address bar hides as the page scrolls, the dynamic height changes mid-scroll and
    would move the control under the thumb, and in the installed app and the Android shell the two are the same.
    It is all the stylesheet's, worked out from the screen, so a redraw, which draws the page again from the state,
@@ -298,8 +297,9 @@
   --sink: max(0px, 100svh - 24px - env(safe-area-inset-bottom, 0px) - var(--end));
   min-height: calc(var(--end) + var(--sink));
 }
-.dev.is-shade { --end: calc(854px - var(--lift, 0px)); }
-.dev > :is(.dial, .speeds, .window, .readout, .shade-btns, .shade-gn) { translate: 0 calc(var(--sink, 0px) - var(--lift, 0px)); }
+/* the buttons at 664 are 91 tall with their words (a 64 circle, 10, a 17 line), so they end at 755 */
+.dev.is-shade { --end: calc(761px - var(--lift, 0px)); }
+.dev > :is(.dial, .speeds, .window, .readout, .shade-btns) { translate: 0 calc(var(--sink, 0px) - var(--lift, 0px)); }
 .dev .hero-art { position: absolute; left: calc(50% - var(--art-w, 72px) / 2); top: var(--art-top, 98px); width: var(--art-w, 72px); height: var(--art-h, 72px); opacity: .2; transition: opacity var(--dimmer) var(--ease-both); }
 .dev.on .hero-art { opacity: 1; }
 .dev .hdr { position: absolute; inset: 0 0 auto 0; }
@@ -388,8 +388,6 @@
 .dev.is-fan .feats { top: 414px; }
 .dev.is-fan .feat { background: var(--surface-2); }
 .dev.is-fan .feat .c { background: var(--surface-2); color: var(--icon-1); }
-.dev.is-fan .feat:not([data-act]):not([data-go]) { cursor: default; }
-.dev.is-fan .feat:not([data-act]):not([data-go]):active { transform: none; }
 .speeds { position: absolute; left: 0; right: 0; top: 490px; height: 400px; }
 .speeds .lbl { position: absolute; left: 0; right: 0; top: 12px; text-align: center; font-size: 14px; line-height: 17px; color: var(--text-2); }
 .speeds .big { position: absolute; left: 0; right: 0; top: 32px; text-align: center; font-size: 56px; font-weight: 300; line-height: 64px; letter-spacing: -.02em; }
@@ -450,7 +448,6 @@
 .sbtn .l { margin-top: 10px; font-size: 14px; line-height: 17px; }
 .sbtn.stop.moving .c { background: var(--blue); }
 .sbtn.stop.moving .l { color: var(--blue-hi); font-weight: 500; }
-.shade-gn { position: absolute; left: 0; right: 0; top: 784px; }
 
 /* ---- sheets ---------------------------------------------------------------------------------- */
 
@@ -1030,21 +1027,19 @@
 
 /* ---- 23 a routine -------------------------------------------------------------------------------------------------- */
 
-.rs { display: flex; flex-direction: column; gap: 14px; margin: 28px var(--gutter) 0; }
-.rs .cl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The sentence: grey lead words and, between them, the words that open their sheets. Those are underlined in the
+   sentence's own grey, with no box, so the sentence reads as one; each is a 44 tall button for the finger. */
+.rs { display: flex; flex-direction: column; gap: 4px; margin: 28px var(--gutter) 0; }
+.rs .cl { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
 .rs .w { font-size: 24px; font-weight: 500; line-height: 30px; color: var(--text-2); }
-.tok { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 15px; border: 0; border-radius: 22px; background: rgba(0, 109, 204, .22); box-shadow: inset 0 0 0 1px var(--blue); color: var(--text-1); font: inherit; font-size: 24px; font-weight: 300; line-height: 30px; max-width: 100%; }
-.tok > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tok .ic { color: var(--icon-2); }
-.tok.days { height: 46px; padding: 0 5px; gap: 4px; }
+.tok { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; color: var(--text-1); font: inherit; font-size: 24px; font-weight: 300; line-height: 30px; max-width: 100%; text-align: left; }
+.tok > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--text-3); text-decoration-thickness: 1.5px; text-underline-offset: 6px; padding-bottom: 8px; margin-bottom: -8px; }
+.tok:active > span { text-decoration-color: var(--text-1); }
 .dd { width: 36px; height: 36px; border-radius: 18px; border: 0; padding: 0; display: grid; place-items: center; background: var(--blue); color: #fff; font: inherit; font-size: 14px; font-weight: 500; flex: none; }
 .dd:not(.on) { background: var(--surface-3); color: var(--text-3); }
 .dd.big { width: 44px; height: 44px; border-radius: 22px; }
-/* on a small phone the week closes up a little, so "on" stays on the line with its days */
-@media (max-width: 380px) { .tok.days { gap: 2px; } }
 .dd-row { display: flex; justify-content: space-between; padding: 0 var(--gutter); margin: 4px 0 16px; }
-.rt-short { margin-top: 28px; }
-.rt-paused { margin-top: 16px; }
+.rt-paused { margin-top: 28px; }
 .routine-page > .sunrise { margin-top: 20px; }
 .rt-btns { display: flex; gap: 12px; margin: 20px var(--gutter) 0; }
 .rt-btns .pill { height: 48px; font-size: 16px; padding: 0 24px; }

@@ -1,8 +1,9 @@
-// A room's brightness, on its own page: Home's house bar under the room's picture (room.js brightHTML).
+// A room's brightness, on its own page: Home's house bar under the room's picture, the full width of the page
+// (room.js brightHTML), with its level said once, in the count beside the title ("1 on · 70%").
 //
-//   it moves the room's dimmable lights that are on, all to the one level, and the level beside it follows the finger
+//   it moves the room's dimmable lights that are on, all to the one level, and the level in the count follows the finger
 //   with the room dark, a drag brings its lights up to where the finger is (a drag, never a tap, turns a room on)
-//   off, it rests empty and says Off; a room with nothing to dim has no bar
+//   off, it rests empty and the count says nothing (the Off pill has); a room with nothing to dim has no bar
 //   it arrives with the room when the room opens from its card
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
@@ -40,7 +41,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const x0 = b[0] + b[2] * from - 28, x1 = b[0] + b[2] * to - 28;
     await fire('pointerdown', x0);
     for (let i = 1; i <= 10; i++) { await fire('pointermove', x0 + (x1 - x0) * i / 10); await wait(20); }
-    const during = await C(() => document.querySelector('[data-rblv]').textContent);
+    const during = await C(() => document.querySelector('#screen .room-title .count').textContent);
     await fire('pointerup', x1); await wait(1200);
     return during;
   };
@@ -48,11 +49,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // ---- lit: one light at 70, the other off
   await setAll([70, 0]); await wait(1200);
   await C(id => { location.hash = `room/${id}`; }, aid); await wait(1200);
-  const lit = await C(() => { const b = document.querySelector('.room-bright'); const p = document.querySelector('.room-photo-card').getBoundingClientRect(); const r = b && b.getBoundingClientRect(); return b ? { off: b.classList.contains('off'), lv: b.querySelector('[data-rblv]').textContent, gap: Math.round(r.top - p.bottom), w: Math.round(r.width), bar: Math.round(b.querySelector('.hbar').getBoundingClientRect().height) } : null; });
-  check('the room has a brightness bar 16 under its picture, the width of the page, Home\'s 56 tall bar', lit && !lit.off && lit.gap === 16 && lit.w === 372 && lit.bar === 56, lit);
-  check('beside it, the room\'s level: the mean of the lights that are on (70%)', lit && lit.lv === '70%', lit);
+  const lit = await C(() => { const b = document.querySelector('.room-bright'); const p = document.querySelector('.room-photo-card').getBoundingClientRect(); const r = b && b.getBoundingClientRect(); const h = b && b.querySelector('.hbar').getBoundingClientRect(); return b ? { off: b.classList.contains('off'), count: document.querySelector('#screen .room-title .count').textContent, beside: b.children.length, gap: Math.round(r.top - p.bottom), x: Math.round(h.left), w: Math.round(h.width), bar: Math.round(h.height) } : null; });
+  check('the room has a brightness bar 16 under its picture, running the full width of the page as Home\'s does, Home\'s 56 tall bar', lit && !lit.off && lit.gap === 16 && lit.x === 20 && lit.w === 372 && lit.bar === 56 && lit.beside === 1, lit);
+  check('the count beside the title says the room\'s level: the mean of the lights that are on (1 on · 70%)', lit && lit.count === '1 on · 70%', lit);
   const during = await drag(0.7, 0.3);
-  check('the level beside the bar follows the finger', during === '30%', during);
+  check('the level in the count follows the finger', during === '1 on · 30%', during);
   const sent = await C(() => window.__lv.slice(-1)[0]);
   let lv = await levels();
   check('the drag moves the lights that are on, to where the finger is; the one that was off stays off', sent && sent[1] === 30 && sent[0].length === 1 && lv[0] === 30 && lv[1] === 0, { sent, lv });
@@ -61,12 +62,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // (after the 1.5 s this phone holds its own level against the bridge's echoes, data.hold)
   await wait(800);
   await setAll([0, 0]); await wait(1400);
-  const off = await C(() => { const b = document.querySelector('.room-bright'); return { off: b.classList.contains('off'), lv: b.querySelector('[data-rblv]').textContent, now: b.querySelector('.hbar').getAttribute('aria-valuenow') }; });
-  check('with the room off the bar rests empty, with no words beside it', off.off && off.lv === '' && off.now === '0', off);
+  const off = await C(() => { const b = document.querySelector('.room-bright'); return { off: b.classList.contains('off'), count: document.querySelector('#screen .room-title .count').textContent, now: b.querySelector('.hbar').getAttribute('aria-valuenow') }; });
+  check('with the room off the bar rests empty, and the count beside the title says nothing', off.off && off.count === '' && off.now === '0', off);
   await C(() => { window.__lv = []; });
-  await drag(0.1, 0.5);
+  const upDuring = await drag(0.1, 0.5);
   lv = await levels();
   check('a drag on a dark room brings all its dimmable lights up to where the finger is', lv.every(v => v === 50), lv);
+  check('and the count counts them in as they come up', upDuring === `${ids.length} on · 50%`, upDuring);
 
   // ---- a tap does not turn it on
   await wait(800);

@@ -181,9 +181,9 @@ function arrivals(page, flown) {
   add(q('.readout'), 520, { dy: 12, dur: 320 });
   // then the tiles and rows below, 0.05 s apart
   let at = dial || sp ? 720 : 620;
-  for (const n of all('.looks > *, .feats > *, .shade-btns > *, .shade-gn')) { add(n, at, { scale: 0.96 }); at += 50; }
+  for (const n of all('.looks > *, .feats > *, .shade-btns > *')) { add(n, at, { scale: 0.96 }); at += 50; }
   // anything else the page draws comes in after them
-  const known = new Set(['hdr', 'where', 't-hero', 'onoff', 'dial', 'speeds', 'window', 'readout', 'looks', 'feats', 'shade-btns', 'shade-gn', 'onelight', 'hero-art']);
+  const known = new Set(['hdr', 'where', 't-hero', 'onoff', 'dial', 'speeds', 'window', 'readout', 'looks', 'feats', 'shade-btns', 'onelight', 'hero-art']);
   for (const n of page.children) if (![...n.classList].some(c => known.has(c))) add(n, at, { scale: 0.96 });
   return list;
 }

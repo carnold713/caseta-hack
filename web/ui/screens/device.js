@@ -233,9 +233,8 @@ function fanView(c, d) {
       <button data-act="dev-off" aria-pressed="${!on}">${icon('power', 22, 2)}Off</button>
       <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>
     </div>
-    <div class="feats fan-feats">
+    <div class="feats">
       ${feature(c, { go: `light/${id}/timer`, glyph: 'timer', title: 'Sleep timer', sub: tl, on: !!tl, disabled: !on && !tl })}
-      ${feature(c, { glyph: 'moon', title: 'Goodnight', sub: 'Stops with it', on: false })}
     </div>
     <div class="speeds">
       <div class="lbl">Speed</div>
@@ -268,7 +267,6 @@ function shadeView(c, d) {
       <button class="sbtn stop ${moving ? 'moving' : ''}" data-act="shade" data-cmd="stop" aria-label="Stop"><span class="c"><i></i></span><span class="l">Stop</span></button>
       <button class="sbtn" data-act="shade" data-cmd="lower" aria-label="Close"><span class="c">${icon('chevD', 24, 1.8)}</span><span class="l">Close</span></button>
     </div>
-    <div class="group shade-gn"><div class="row has-ic"><span class="row-ic">${icon('moon', 20, 1.7)}</span><span class="row-txt"><span class="t">Closes with Goodnight</span></span></div></div>
   </div>`;
 }
 

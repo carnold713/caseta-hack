@@ -61,8 +61,6 @@ const levelOf = v => (typeof v === 'object' && v ? Number(v.level) || 0 : typeof
 // the pin) and fourteen to sixteen at 28: "Master bedroom" was cut at 40 and at 32, and is whole at 28. A small phone
 // has less line and still cuts sooner.
 const titleFit = name => (name.length > 13 ? 'fit2' : name.length > 12 ? 'fit1' : '');
-// Beside the title, how much is on, and nothing once it is all off: the Off pill says that.
-const countText = (n, onN) => (onN ? `${onN} on` : '');
 
 // The warmest light a scene brings, which is the colour its ring of light carries: a scene with a colour lamp in it
 // uses that lamp's colour, softer.
@@ -91,10 +89,11 @@ function roomLight(c, aid, lights) {
   return `<span class="rp-light" data-xf style="--rl:${mean}" aria-hidden="true"></span>`;
 }
 
-// The room's brightness: Home's house bar (components.css .hbar), for this room. It moves the room's dimmable lights
-// that are on, all to the one level, and with none on it brings them all up to where the finger is: a drag, never a
-// tap, turns a room on. Its level is the mean of the lit ones, shown beside it and counted with the finger; with the
-// room off the bar rests empty. A room with nothing to dim (only switches, a fan, a shade) has none.
+// The room's brightness: Home's house bar (components.css .hbar), for this room, the full width of the page as Home's
+// is. It moves the room's dimmable lights that are on, all to the one level, and with none on it brings them all up
+// to where the finger is: a drag, never a tap, turns a room on. Its level is the mean of the lit ones, said once, in
+// the count beside the title; with the room off the bar rests empty. A room with nothing to dim (only switches, a fan,
+// a shade) has none.
 const dimmable = (c, aid) => c.H.roomLights(aid).filter(d => d.domain === 'light');
 function brightTargets(c, aid) {
   const ls = dimmable(c, aid).map(d => d.device_id);
@@ -104,6 +103,15 @@ function brightTargets(c, aid) {
 function brightLevel(c, aid) {
   const lit = dimmable(c, aid).map(d => c.data.level(d.device_id) || 0).filter(v => v > 0);
   return lit.length ? Math.round(lit.reduce((a, v) => a + v, 0) / lit.length) : 0;
+}
+// Beside the title, how much is on and how bright, as the room's card on Rooms says it ("2 on · 70%"), and nothing
+// once it is all off: the Off pill says that, and a word beside the title would only repeat it. The level is the bar's,
+// so the number the finger moves is the one it reads. A room with nothing on to dim says only how many are on.
+function countText(c, aid) {
+  const onN = c.data.controllable().filter(d => c.data.devArea(d) === aid && d.domain !== 'cover' && c.data.isOn(d.device_id)).length;
+  if (!onN) return '';
+  const lv = brightLevel(c, aid);
+  return lv ? `${onN} on · ${lv}%` : `${onN} on`;
 }
 function brightHTML(c, aid) {
   if (!dimmable(c, aid).length) return '';
@@ -115,13 +123,11 @@ function brightHTML(c, aid) {
         <span class="hi">${c.icon('sun', 26, 1.6)}</span>
         <span class="knob"></span>
       </div>
-      <span class="rb-lv" data-rblv>${lv ? `${lv}%` : ''}</span>
     </div>`;
 }
 function wireBright(c, root) {
   const bar = root.querySelector('[data-drag="room-bright"]'); if (!bar) return;
   const aid = bar.dataset.id;
-  const out = root.querySelector('[data-rblv]');
   let ids = null;
   const set = x => {
     const b = bar.getBoundingClientRect();
@@ -130,12 +136,14 @@ function wireBright(c, root) {
     bar.style.setProperty('--pct', v + '%');
     bar.classList.toggle('low', v / 100 * b.width < 100);
     bar.setAttribute('aria-valuenow', v);
-    if (out) out.textContent = `${v}%`;
     bar.parentElement.classList.remove('off');
     if (!ids) ids = brightTargets(c, aid);
     if (!ids.length) return;
     c.assume(ids, v, { held: true });
     c.gate.sendLevel(ids.map(id => `d:${id}`), v);
+    // the count beside the title follows the finger, with the lights the drag has brought on counted in it
+    const out = root.querySelector('.room-title .count:not(.wv-two)');
+    if (out) out.textContent = countText(c, aid);
   };
   // a sideways drag only: a finger on its way up or down the page scrolls it (gesture.js). The lights it moves are
   // the ones on when the finger lands, so bringing a dark room up does not start moving other lights part way.
@@ -144,7 +152,7 @@ function wireBright(c, root) {
 
 // The room's On and Off: the light page's switch, so the room's state is plain at a glance. The copper pill sits under
 // On while anything in the room is on and under Off once it is all off, and slides on the standard curve when that
-// changes. How much is on is the count beside the title, once. It comes before the photo button on the card, which
+// changes. How much is on, and how bright, is the count beside the title, once. It comes before the photo button on the card, which
 // comes and goes, so a redraw pairs it with itself and the pill slides rather than jumps (motion.js pairs elements by
 // their place).
 function powerHTML(c, aid, onN) {
@@ -167,16 +175,15 @@ export function view(c, r) {
   const lights = H.roomLights(aid);
   // with no scene open, the next one opens with "Show it on the room" off again (as All scenes does)
   if (!/^scene\//.test(r.sub || '')) { c.ui.stageFor = null; c.ui.sceneShow = false; }
-  const litN = lights.filter(d => (data.level(d.device_id) || 0) > 0).length;
   const onN = ds.filter(d => data.isOn(d.device_id) && d.domain !== 'cover').length;
   const photo = !!H.roomPhotoURL(aid);
   const canToggle = ds.some(d => d.domain !== 'cover');
   const w = liveWave(aid);
 
-  // the room's scenes: the one the lights are showing now is copper, and "Save this look" keeps what they are showing.
-  // A chip just tapped is copper at once, before its lights have said they have arrived: the press landed.
-  // Edit (over the chips) turns every chip into a way into its scene, with a pencil, until Done; holding a chip
-  // does the same at any time. New scene, last, starts one from the room as it is and opens it.
+  // the room's scenes: the one the lights are showing now is copper. A chip just tapped is copper at once, before its
+  // lights have said they have arrived: the press landed. Edit (over the chips) turns every chip into a way into its
+  // scene, with a pencil, until Done; holding a chip does the same at any time. New scene, last, is the one way to make
+  // a scene here: it keeps the room as it is now and opens it, so what the lights are showing can be named and kept.
   const editing = c.ui.roomScenesEdit === aid;
   const cur = H.sceneMatch(aid);
   const scenes = H.roomScenes(aid).map(p => {
@@ -190,12 +197,11 @@ export function view(c, r) {
   });
   const newScene = canToggle ? `<button class="chip lead" data-act="room-scene-new" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}New scene</button>` : '';
   const scenesHead = scenes.length ? `<div class="room-sec"><span class="t-over">Scenes</span><button class="link" data-act="room-scenes-edit" data-id="${esc(aid)}" aria-pressed="${editing}">${editing ? 'Done' : 'Edit'}</button></div>` : '';
-  const saveLook = litN && !cur && !w && !editing ? `<button class="chip lead" data-act="save-look" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}Save this look</button>` : '';
   const suggest = !editing && !scenes.length && H.roomDimmers(aid).length ? `<button class="chip lead" data-act="suggest-five" data-id="${esc(aid)}">${icon('sparkle', 16, 1.8)}Suggest scenes</button>` : '';
 
   // While a wave is out, the count holds what it said before the tap and settles to what is true now at its own
   // time; the stylesheet's keyframes do it, timed from the tap in after().
-  const count = countText(ds.length, onN);
+  const count = countText(c, aid);
   const countHTML = w && w.kind === 'run'
     ? `<span class="count wv-two" data-wvp="settle"><span class="wv-was">${esc(w.countWas)}</span><span class="wv-now">${esc(count)}</span></span>`
     : `<span class="count" data-xf>${esc(count)}</span>`;
@@ -220,7 +226,7 @@ export function view(c, r) {
     </div>
     ${brightHTML(c, aid)}
     ${scenesHead}
-    ${scenes.length || saveLook || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${saveLook}${suggest}${newScene}</div>` : ''}
+    ${scenes.length || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${suggest}${newScene}</div>` : ''}
     ${ds.length
       ? `<div class="tile-grid room-grid">${ds.map(d => tile(c, d)).join('')}</div>`
       : `<div class="group room-empty"><button class="row sub has-ic" data-go="room/${esc(aid)}/setup"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Move something in here</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>`}
@@ -342,10 +348,8 @@ async function runWave(c, el, r, p) {
     c.turn({ type: 'preset', preset_id: p.id });
     return;
   }
-  const ds = c.data.controllable().filter(d => c.data.devArea(d) === aid);
-  const onN = ds.filter(d => c.data.isOn(d.device_id) && d.domain !== 'cover').length;
   const fade = p.fade == null ? 1 : Number(p.fade) || 0;
-  const me = wave = { kind: 'run', id: p.id, aid, t0, x, y, fade, tone: sceneTone(c, p), countWas: countText(ds.length, onN) };
+  const me = wave = { kind: 'run', id: p.id, aid, t0, x, y, fade, tone: sceneTone(c, p), countWas: countText(c, aid) };
   const before = snapshot(c, p);
   // the house is asked now, and each tile is shown where the scene puts it from the tap, crossfading over the scene's
   // 1.0 s rather than stepping through every level the bridge reports on the way (app.js turn)
@@ -411,10 +415,6 @@ export const actions = {
     c.ui.roomScenesEdit = null;
     c.save('', { quiet: true });
     c.go(`room/${aid}/scene/${p.id}`);
-  },
-  'save-look'(c, el) {
-    const p = c.H.saveRoomLook(el.dataset.id); if (!p) return;
-    c.save(`Saved as ${c.H.sceneShortName(p)}`);
   },
   'suggest-five'(c, el) {
     const aid = el.dataset.id;

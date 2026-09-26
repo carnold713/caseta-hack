@@ -262,10 +262,21 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const tip = await C(() => { const t = document.querySelector('.wd-tip'); return t && !t.hidden ? t.textContent : null; });
   check('9: a tap on the band only says what on means then', /^At .+: \d+%$/.test(tip || ''), tip);
   await page.screenshot({ path: 'v7-winddown.png' });
-  await page.tap('[data-go="routines/winddown-night"]'); await wait(900);
-  check('9: the night hours are still a row away', !!(await page.$('#sheet-root [data-k="night_start"]')));
-  await C(() => window.__copper.closeSheet()); await go('routines/winddown-levels');
-  check('9: and every level the sheets had', (await C(() => document.querySelectorAll('#sheet-root [data-act="wd-set"]').length)) >= 12 && !!(await page.$('#sheet-root [data-go="routines/winddown-curve"]')));
+  // one row under the drawing, Levels, saying what the headline and the drawing do not: how low the evening goes and
+  // the night's level. The quiet time is the headline's and the moon's, so no row repeats it.
+  const rows = await C(() => [...document.querySelectorAll('#screen .wd-rows .row')].map(r => [r.querySelector('.t').textContent, (r.querySelector('.row-val') || {}).textContent || '', r.dataset.go || '']));
+  check('9: under the switch, one row, Levels, with the levels the evening reaches', rows.length === 2 && rows[1][0] === 'Levels' && /^\d+%, then \d+% at night$/.test(rows[1][1]) && rows[1][2] === 'routines/winddown-levels', rows);
+  check('9: and nothing on the page says the quiet time twice over', !(await page.$('#screen .wd-say')) && !(await page.$('#screen [data-go="routines/winddown-night"]')));
+  await finger('.wd-knob', [[22, 22], [22, 30], [22, 60]], { up: false });
+  const lvMoving = await C(() => document.querySelector('#screen [data-wdlv]').textContent);
+  check('9: the Levels row follows the handle as it moves', lvMoving !== rows[1][1] && /^\d+%, then/.test(lvMoving), { was: rows[1][1], now: lvMoving });
+  await C(() => { const el = document.querySelector('.wd-knob'); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 11, pointerType: 'touch' })); });
+  await wait(1200);
+  await C(async w => { const c = window.__copper; const a = c.S.config.settings.adaptive; const v = JSON.parse(w); if (v) a.winddown = v; else delete a.winddown; await c.data.saveConfig(); c.render(); }, wd0); await wait(900);
+  await page.tap('#screen [data-go="routines/winddown-levels"]'); await wait(900);
+  check('9: Levels has every level the sheets had', (await C(() => document.querySelectorAll('#sheet-root [data-act="wd-set"]').length)) >= 12 && !!(await page.$('#sheet-root [data-go="routines/winddown-curve"]')));
+  await page.tap('#sheet-root [data-act="night-hours"]'); await wait(900);
+  check('9: and the night hours are still a row away, in Levels', !!(await page.$('#sheet-root [data-k="night_start"]')));
   await C(() => window.__copper.closeSheet()); await go('routines');
   check('9: Routines has its tab bar back', !(await C(() => document.querySelector('#tabs').hidden)));
 

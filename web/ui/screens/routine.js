@@ -1,17 +1,25 @@
-// 23 · a routine (12744:112203). The routine said as one sentence whose blue words are the things to change: when,
-// which days, what it does and to which lights, when it undoes that, and on what condition. "In short" repeats it as
-// rows. Every change saves as it is made. #routine/<id>/<when|days|what|lights|off|onlyif|more> are the sheets.
+// 23 · a routine (12744:112203). The routine said as one sentence whose underlined words are the things to change:
+// when, which days, what it does and to which lights, when it undoes that, and on what condition. Each opens its own
+// sheet, so the sentence is the only way in and nothing under it says it again. Every change saves as it is made.
+// #routine/<id>/<when|days|what|lights|off|onlyif|more> are the sheets.
 import { whereBlock, whereActions } from '/ui/screens/where.js';
 import { runActions } from '/ui/screens/routines.js';
 import { stepCards } from '/ui/screens/steps.js';
 import { confirmSheet, nameSheet } from '/ui/screens/pickers.js';
-import { icon as glyph } from '/ui/icons.js';
 import { glowHTML, setGlow, whiteStops, colourStops } from '/ui/glow.js';
 import { track } from '/ui/gesture.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const sc0 = (c, r) => c.RT.byId(r.id);
-const tok = (text, go, chev = true, extra = '') => `<button class="tok" data-go="${go}" ${extra}><span>${text}</span>${chev ? glyph('chevD', 18, 1.6) : ''}</button>`;
+// A word in the sentence that opens its sheet: underlined in the sentence's own colour, with no box and no chevron,
+// and a finger's 44 tall to land on.
+const tok = (text, go) => `<button class="tok" data-go="${go}"><span>${text}</span></button>`;
+// "every day", or a lead word and its days: "on weekdays", "at weekends", "on Mon, Wed"
+function daysParts(c, days) {
+  const p = c.RT.dayPhrase(days);
+  const m = /^(on|at) (.+)$/.exec(p);
+  return m ? [m[1], m[2]] : ['', p];
+}
 // "Porch light", "Kitchen and 2 more"
 function lightsWord(c, sc) {
   const { L, Sh } = c.RT.splitOf(sc);
@@ -37,16 +45,14 @@ export function view(c, r) {
   const at = RT.whenTokens(sc.at);
   const off = offWord(c, sc);
   const only = ONLY[sc.only_if] || ['and', 'run every time'];
-  const days = sc.days || RT.ALL_DAYS;
+  const [dayLead, dayWords] = daysParts(c, sc.days || RT.ALL_DAYS);
   const sentence = `<div class="rs">
-    <div class="cl"><span class="w">At</span>${tok(esc(at[0]), `${base}/when`, sc.at && sc.at.type !== 'time')}${at[1] ? tok(esc(at[1]), `${base}/when`, false) : ''}</div>
-    <div class="cl"><span class="w">on</span><span class="tok days">${RT.WEEK.map(i => `<button class="dd ${days.includes(i) ? 'on' : ''}" data-act="day" data-d="${i}" aria-pressed="${days.includes(i)}" aria-label="${RT.DAY_LONG[i]}">${RT.DAY_LETTER[i]}</button>`).join('')}</span></div>
+    <div class="cl"><span class="w">At</span>${tok(esc(at[0]), `${base}/when`)}${at[1] ? tok(esc(at[1]), `${base}/when`) : ''}</div>
+    <div class="cl">${dayLead ? `<span class="w">${dayLead}</span>` : ''}${tok(esc(dayWords), `${base}/days`)}</div>
     <div class="cl"><span class="w">do</span>${tok(esc(RT.whatWord(sc)), `${base}/what`)}${tok(esc(lightsWord(c, sc)), `${base}/lights`)}</div>
-    ${RT.canHaveOff(sc) ? `<div class="cl"><span class="w">${off.lead}</span>${tok(esc(off.text), `${base}/off`, !RT.pairOf(sc))}</div>` : ''}
+    ${RT.canHaveOff(sc) ? `<div class="cl"><span class="w">${off.lead}</span>${tok(esc(off.text), `${base}/off`)}</div>` : ''}
     <div class="cl"><span class="w">${only[0]}</span>${tok(esc(only[1]), `${base}/onlyif`)}</div>
   </div>`;
-  const offRow = RT.canHaveOff(sc) ? `<button class="row kv" data-go="${base}/off"><span class="row-txt"><span class="t">${RT.pairOf(sc) && RT.pairOf(sc).actions.some(a => a.type === 'raise') ? 'Open again' : 'Off again'}</span></span><span class="row-val">${esc(RT.pairOf(sc) ? RT.whenValue(RT.pairOf(sc).at) : 'Leave them')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : '';
-  const row = (t, v, go) => `<button class="row kv" data-go="${base}/${go}"><span class="row-txt"><span class="t">${t}</span></span><span class="row-val">${esc(v)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`;
   const nl = RT.nextLine(sc);
   const warn = nl && typeof nl === 'object' ? nl.text : '';
   const sun = sc.at && sc.at.type !== 'time';
@@ -60,13 +66,6 @@ export function view(c, r) {
     ${wakeOf(c, sc) ? sunriseHTML(c, wakeOf(c, sc), `r:${sc.id}`) : ''}
     ${sentence}
     ${warn ? `<p class="rt-warn big">${esc(warn)}</p>` : ''}
-    <div class="group rt-short">
-      ${row('When', RT.whenValue(sc.at), 'when')}
-      ${row('Days', RT.daysText(sc.days), 'days')}
-      ${row('What it does', RT.whatValue(sc), 'what')}
-      ${offRow}
-      ${row('Only if', RT.onlyIfText(sc.only_if), 'onlyif')}
-    </div>
     <div class="group rt-paused"><div class="row"><span class="row-txt"><span class="t">Paused</span></span><button class="toggle" role="switch" aria-checked="${sc.enabled === false}" data-act="rt-toggle" data-id="${esc(sc.id)}" aria-label="Paused"></button></div></div>
     <div class="rt-btns">
       ${sc.enabled === false ? '' : `<button class="pill ghost" data-act="${RT.skipping(sc) ? 'rt-unskip' : 'rt-skip'}" data-id="${esc(sc.id)}">${esc(RT.skipLabel(sc))}</button>`}

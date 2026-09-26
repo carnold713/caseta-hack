@@ -270,7 +270,7 @@ function badFrames(before, after, frames) {
   check('the room page has On and Off in place of All on and All off', !!t0 && !t0.old && t0.offWord === 'Off', t0);
   await C(() => document.querySelector('#screen [data-act="room-on"]').click()); await wait(1600);
   let t1 = await toggle();
-  check('with anything on, the pill is under On, On says just On, and the count beside the title says how many', t1.under === 'on' && t1.onPressed === 'true' && /^\d+ on$/.test(t1.count) && t1.word === 'On', t1);
+  check('with anything on, the pill is under On, On says just On, and the count beside the title says how many and how bright', t1.under === 'on' && t1.onPressed === 'true' && /^\d+ on( · \d+%)?$/.test(t1.count) && t1.word === 'On', t1);
   await C(() => document.querySelector('#screen [data-act="room-off"]').click());
   const moving = await C(() => new Promise(r => requestAnimationFrame(() => r(document.querySelector('#screen .room-onoff .onoff-pill').getAnimations().length))));
   await wait(1600);
