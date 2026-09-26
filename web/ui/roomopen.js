@@ -113,6 +113,11 @@ function artFlip(hero, O, G, restR, Hr) {
   return [a, { transform: `translate(${px(p.x - rest.x)}, ${px(p.y - rest.y)}) scale(${s})`, opacity: O.art.opacity }, { transform: 'translate(0px, 0px) scale(1)', opacity: own }];
 }
 
+// The light at the top of the screen (home.js, topLight). Rooms has the house's and a room its own, from the same
+// place, so one crosses into the other on one clock: left to go with Rooms' page, the house's stayed whole until that
+// page was taken away as the open landed, and went out in a single frame (and came on in one as the room closed).
+const topLight = root => root && root.querySelector(':scope > .rooms > .onelight');
+
 // Rooms' other cards, and which way each steps: those above up 40, those below down 120, nearest first.
 function around(list, card) {
   const kids = [...list.children];
@@ -186,9 +191,14 @@ export function open({ O, ghost }, screen, F) {
   const lift = { duration: 200, easing: T.easeIn, fill: 'forwards' };
   if (head) { for (const n of barParts(head)) F.core(n, [{ opacity: 1, transform: 'translateY(0px)' }, { opacity: 0, transform: 'translateY(-16px)' }], lift); scrim(F, head, 1, 0, lift); }
 
-  // the room's one light comes up at the top of the screen as it opens (the list's own went with the list)
+  // the room's one light comes up at the top of the screen as it opens, and the house's over Rooms goes out as it comes, on the same clock, so the one never dips while the other has not
+  // come (a pinned card's Home steps aside whole). Both are done as the window lands, as the house's must be: it goes
+  // with Rooms' page then.
+  const tops = { duration: OPEN.dur - 100, delay: 100, easing: 'ease-in-out' };
   const lamp = q('.room > .onelight');
-  if (lamp && opacityOf(lamp) > 0.001) play(lamp, [{ opacity: 0 }, { opacity: opacityOf(lamp) }], { duration: OPEN.dur, easing: 'ease-in-out', delay: 100 });
+  if (lamp && opacityOf(lamp) > 0.001) play(lamp, [{ opacity: 0 }, { opacity: opacityOf(lamp) }], tops);
+  const house = topLight(ghost);
+  if (house && opacityOf(house) > 0.001) F.core(house, [{ opacity: opacityOf(house) }, { opacity: 0 }], { ...tops, fill: 'both' });
 
   // the room fills in, in reading order
   const rise = (n, delay, dur = T.enter, dy = 12) => play(n, [{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: 'translateY(0px)' }], { duration: dur, easing: T.ease, delay });
@@ -220,8 +230,9 @@ export function close(p, screen, F, { ghost: g, O, el: card }) {
 
   // the room's content goes first, together
   const fade = { duration: 150, easing: T.easeIn, fill: 'forwards' };
+  const lamp = room && room.querySelector(':scope > .onelight');
   const going = [
-    ...(room ? [...room.children].filter(n => n !== hero && !n.classList.contains('room-title')) : []).flatMap(barParts),
+    ...(room ? [...room.children].filter(n => n !== hero && n !== lamp && !n.classList.contains('room-title')) : []).flatMap(barParts),
     ...[...h1.parentElement.children].filter(n => n !== h1),
     ...hero.querySelectorAll('.badge, .room-onoff, .add-photo'),
   ];
@@ -229,6 +240,12 @@ export function close(p, screen, F, { ghost: g, O, el: card }) {
   // each from where it is: the count beside the title has already faded if the room was scrolled (header.css)
   const was = going.map(opacityOf);
   going.forEach((n, i) => F.core(n, [{ opacity: was[i] }, { opacity: 0 }], fade));
+  // the room's light at the top of the screen crosses into the house's over Rooms on the close's own clock (after a back
+  // swipe Rooms is already there with its light, coming up from under the dark, so only the room's goes)
+  const light0 = { duration: CLOSE.dur, easing: 'ease-in-out' };
+  if (lamp && opacityOf(lamp) > 0.001) F.core(lamp, [{ opacity: opacityOf(lamp) }, { opacity: 0 }], { ...light0, fill: 'forwards' });
+  const house = !p.pose && topLight(screen);
+  if (house && opacityOf(house) > 0.001) F.extra(house, [{ opacity: 0 }, { opacity: opacityOf(house) }], { ...light0, fill: 'backwards' });
 
   // the window closes into the card, and the card's face comes back over it
   F.core(hero, [G.open, G.shut], { duration: CLOSE.dur, easing: CLOSE.ease, fill: 'forwards' });
@@ -250,6 +267,9 @@ export function close(p, screen, F, { ghost: g, O, el: card }) {
   // the list returns from where it stepped to, nearest first; "Rooms" comes down into place. After a back swipe
   // (M13) it returns from where the swipe showed it, already in view.
   const L = p.pose && p.pose.list;
+  // Home behind a back swipe waits with everything in its place (predictiveback.js), and comes up with the page: none
+  // of it steps back in. Stepping in from nothing, all of Home went dark the moment the finger let go.
+  if (p.pose && !L) return true;
   if (L) for (const s of steps) F.extra(s.el, [{ opacity: 1, transform: `translateY(${s.dy < 0 ? L.up : L.down}px) scale(1)` }, { opacity: 1, transform: 'translateY(0px) scale(1)' }], { duration: 400, easing: T.ease, delay: s.delay, fill: 'backwards' });
   else stepAside(F, 'close', steps, { back: 400, backFade: 400 });
   const down = { duration: 400, easing: T.ease, fill: 'backwards' };

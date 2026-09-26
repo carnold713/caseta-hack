@@ -269,7 +269,9 @@ export function open({ O, ghost }, screen, F) {
   if (fil) {
     fil.setAttribute('pathLength', '1');
     fil.style.strokeDasharray = '1 1';
-    const a = F.extra(fil, [{ strokeDashoffset: 1, opacity: 1 }, { strokeDashoffset: 0, opacity: 1 }], { duration: 520, delay: 580, easing: 'ease-in-out', fill: 'backwards' });
+    // (its round end is a whole dot even where none of it is drawn yet, so it fades in over the first moments of
+    // the draw rather than appearing at once as a copper dot)
+    const a = F.extra(fil, [{ strokeDashoffset: 1, opacity: 0 }, { opacity: 1, offset: 0.12 }, { strokeDashoffset: 0, opacity: 1 }], { duration: 520, delay: 580, easing: 'ease-in-out', fill: 'backwards' });
     const clean = () => { fil.removeAttribute('pathLength'); fil.style.strokeDasharray = ''; };
     a.finished.then(clean, clean);
   }

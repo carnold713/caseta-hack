@@ -312,30 +312,46 @@ function crossfade(old, el, kind, was) {
 }
 
 // ---------- push, back and load ----------
-// Before the page changes: a copy of it where it stood, to drift away while the new one comes in.
-// `live` moves the page's own elements into the ghost instead of copying them, for a transition that animates
-// the old page's parts one by one (a room opening): a photograph already on screen is never decoded again, so it
-// cannot blink. The page is about to be drawn over anyway, so nothing is lost by taking them. What is taken no
-// longer answers taps or selectors: its ids and its data-go and data-act are dropped.
+// Before the page changes: the page as it stood, to drift away while the new one comes in. Its own elements are moved
+// into the ghost rather than copied: a copy's photographs are decoded again and drew for a frame or two without them
+// (a Pico's photograph on Remotes went to its line drawing as the tab changed), its sideways strips started again from
+// their left end, and what was half way through a fade of its own came back whole. The page is about to be drawn over
+// anyway, so nothing is lost by taking them. What is taken no longer answers taps or selectors: its ids and its
+// data-go and data-act are dropped. (`live` is kept for the callers that ask for it by name.)
 let ghost = null;
-export function capture(screen, { live = false } = {}) {
+export function capture(screen, { live = true } = {}) {
   dropGhost();
   if (reduced() || !screen || !screen.firstElementChild) return null;
-  const box = screen.getBoundingClientRect();
+  const box = screen.getBoundingClientRect(), y = window.scrollY;
   const g = document.createElement('div');
   g.className = 'page-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
-  // its header stays where the page's was stuck, as collapsed as it was (header.js)
-  freeze(g);
   // the page's own layout width, not its box on screen: a page caught mid-slide or mid-press measures the same, and
   // its words wrap in the copy exactly as they did on the page
   const w = parseFloat(getComputedStyle(screen).width) || box.width;
   Object.assign(g.style, { position: 'fixed', left: `${box.left}px`, top: `${box.top}px`, width: `${w}px`, pointerEvents: 'none', zIndex: '1' });
+  // a strip scrolled sideways loses its place when it leaves the page; it is put back once the ghost is placed (keep)
+  g._keep = [...screen.querySelectorAll('[data-keep]')].map(n => [n, n.scrollLeft]).filter(([, x]) => x);
   for (const k of [...screen.children]) g.appendChild(live ? k : k.cloneNode(true));
-  // an illustration's gradient ids stay (they are made fresh on every draw, so they never collide): without them its
-  // shapes would lose their fills while it animates
-  g.querySelectorAll('[id]').forEach(n => { if (!n.closest('.rs-svg')) n.removeAttribute('id'); });
+  // its header stays where the page's was stuck, as collapsed as it was (header.js), at the scroll read before the
+  // page was taken (without it the document is shorter, and the window has already scrolled back to its top)
+  freeze(g, y);
+  // the ids inside a drawing stay: they name its gradients and filters, and without them its shapes lose their fills
+  // while it animates (a Pico went to a bare outline as Remotes left, a room's illustration to flat shapes). Ones
+  // the new page draws again are the same drawing, so whichever the page finds first paints it the same.
+  g.querySelectorAll('[id]').forEach(n => { if (!n.closest('svg')) n.removeAttribute('id'); });
   if (live) g.querySelectorAll('[data-go], [data-act]').forEach(n => { n.removeAttribute('data-go'); n.removeAttribute('data-act'); });
+  // a page caught part way in (a second change straight after the last) leaves from as far as it had come: its place
+  // is already its box on screen, and its fade is kept here for arrive
+  const o = Number(getComputedStyle(screen).opacity);
+  if (o < 0.999) { g._o = o; g.style.opacity = String(o); }
   ghost = g;
+  return g;
+}
+// Once a ghost is on the page again: its strips back where they were scrolled.
+export function keep(g) {
+  if (!g || !g._keep) return g;
+  for (const [n, x] of g._keep) n.scrollLeft = x;
+  g._keep = null;
   return g;
 }
 function dropGhost() { if (ghost) { ghost.remove(); ghost = null; } }
@@ -343,17 +359,47 @@ function dropGhost() { if (ghost) { ghost.remove(); ghost = null; } }
 export function takeGhost() { const g = ghost; ghost = null; return g; }
 
 // 'push' (deeper), 'back' (out again) or 'load' (a tab, or the app opening).
+//
+// A page changed again while the last change is still playing (Back straight after a tap, a second tab) goes on from
+// where things are, never from rest: the page leaving fades from as far as it had come in, and a page coming back
+// that is still drifting away as the last one's ghost takes over from that ghost where it is (the same page, drawn
+// again in the same place), so nothing is seen whole that was half there, or gone that was half there.
+let last = null;   // the last change while it plays: its ghost, and the new page's own animation
+const pageSig = n => { const p = n && n.firstElementChild; if (!p) return ''; const h = p.querySelector('h1, h2'); return `${p.className}|${h ? h.textContent.trim() : ''}`; };
 export function arrive(kind, screen) {
   const g = ghost; ghost = null;
+  const was = last && last.g.isConnected ? last : null;
+  if (last && last.anim) { try { last.anim.cancel(); } catch (_) { /* gone */ } }
+  last = null;
   if (reduced() || !screen) { if (g) g.remove(); return; }
-  if (kind === 'load') { if (g) g.remove(); stagger(screen); return; }
-  const dir = kind === 'back' ? -1 : 1;
-  if (g) {
-    document.body.appendChild(g);
-    g.animate([{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: `translateX(${-24 * dir}px)` }],
-      { duration: T.push, easing: T.ease, fill: 'forwards' }).finished.catch(() => {}).then(() => g.remove());
+  if (kind === 'load') {
+    // what stood there before (the home loading, the sign in) goes as the page arrives, rather than in a frame
+    if (g) { keep(document.body.appendChild(g)); g.animate([{ opacity: g._o == null ? 1 : g._o }, { opacity: 0 }], { duration: T.exit, easing: T.easeIn, fill: 'forwards' }).finished.catch(() => {}).then(() => g.remove()); }
+    stagger(screen, { tabs: true });
+    return;
   }
-  if (canAnimate(screen)) screen.animate([{ opacity: 0, transform: `translateX(${24 * dir}px)` }, { opacity: 1, transform: 'translateX(0)' }], { duration: T.push, easing: T.ease });
+  const dir = kind === 'back' ? -1 : 1;
+  const o = { duration: T.push, easing: T.ease };
+  if (g) {
+    keep(document.body.appendChild(g));
+    const from = g._o == null ? 1 : g._o;
+    const ga = g.animate([{ opacity: from, transform: 'translateX(0)' }, { opacity: 0, transform: `translateX(${-24 * dir}px)` }], { ...o, fill: 'forwards' });
+    ga.finished.catch(() => {}).then(() => g.remove());
+  }
+  let start = { opacity: 0, transform: `translateX(${24 * dir}px)` };
+  // the page coming back is the one the last change's ghost still shows: it starts where that ghost is, and the ghost
+  // goes (a handover, the same page in the same place)
+  if (was && was.g !== g && pageSig(was.g) === pageSig(screen)) {
+    const a = was.g.getBoundingClientRect(), b = screen.getBoundingClientRect();
+    const po = Number(getComputedStyle(was.g).opacity);
+    if (Math.abs(a.top - b.top) < 2) {
+      start = { opacity: po, transform: `translateX(${Math.round((a.left - b.left) * 100) / 100}px)` };
+      was.g.remove();
+    }
+  }
+  let sa = null;
+  if (canAnimate(screen)) sa = screen.animate([start, { opacity: 1, transform: 'translateX(0)' }], o);
+  if (g) last = { g, anim: sa };
   hold(T.push);
 }
 
@@ -361,7 +407,7 @@ export function arrive(kind, screen) {
 // its + button arrive together), then each block, one level into a list or a grid. Only what is on screen, and
 // at most ten steps: past that the rest arrive with the tenth.
 const LISTS = '.tile-strip, .tile-grid, .group, .chip-row, .chip-wrap, .rooms-list, .rm-list, .rt-list, .cards';
-export function stagger(screen) {
+export function stagger(screen, { tabs = false } = {}) {
   if (reduced() || !screen) return;
   const page = screen.firstElementChild; if (!page) return;
   const steps = [];
@@ -373,11 +419,16 @@ export function stagger(screen) {
     const b = el.getBoundingClientRect();
     return b.height > 0 && b.top <= vh;
   };
+  // the app opening: its tab bar, drawn for the first time with the page, arrives with the page's header rather than
+  // standing there whole while everything else comes in
+  let bar = tabs && document.getElementById('tabs');
+  if (!bar || bar.hidden || !canAnimate(bar)) bar = null;
   for (const el of page.children) {
-    if (el.matches('header, .hdr, .home-head')) { const g = [...el.children].filter(shown); if (g.length) steps.push(g); continue; }
+    if (el.matches('header, .hdr, .home-head')) { const g = [...el.children].filter(shown); if (bar) { g.push(bar); bar = null; } if (g.length) steps.push(g); continue; }
     if (el.matches(LISTS)) { for (const k of el.children) if (shown(k)) steps.push([k]); continue; }
     if (shown(el)) steps.push([el]);
   }
+  if (bar) steps.unshift([bar]);
   const n = Math.min(steps.length, 10);
   steps.forEach((g, i) => {
     const delay = Math.min(i, n - 1) * T.stagger;
@@ -398,10 +449,13 @@ export function sheetOut(root) {
   const g = document.createElement('div');
   g.className = 'sheet-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
   for (const k of root.children) g.appendChild(k.cloneNode(true));
-  g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  // (a drawing keeps the ids its gradients are found by, as a page's ghost does)
+  g.querySelectorAll('[id]').forEach(n => { if (!n.closest('svg')) n.removeAttribute('id'); });
   // a White and Colour swap caught mid-way (lookswap.js) falls as the sheet it was becoming: its copy of the old
   // sheet and its travelling dot would come along frozen, over the new one, without the animations that fade them
   g.querySelectorAll('.m16-copy, .m16-dot').forEach(n => n.remove());
+  // and one caught while its top edge moves to a new height falls as the new sheet, without the old surface under it
+  g.querySelectorAll('.sheet-under').forEach(n => n.remove());
   document.body.appendChild(g);
   const sheet = g.querySelector('.sheet'), scrim = g.querySelector('.scrim');
   // a sheet scrolled down falls as it was, not jumped back to its top
@@ -412,6 +466,39 @@ export function sheetOut(root) {
   if (sheet) runs.push(sheet.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }], opts).finished);
   if (scrim) runs.push(scrim.animate([{ opacity: 1 }, { opacity: 0 }], opts).finished);
   Promise.all(runs).catch(() => {}).then(() => g.remove());
+}
+
+// One sheet swapped in place for another (a picker opening inside it, its back arrow, a sheet that takes the place of
+// the one up) is the same sheet with new things on it: its top edge moves from where it was to the new sheet's
+// height, 0.32 s on the standard curve, and what is on it comes up over the first 0.24 s. Drawn at once, the edge
+// jumped a third of the screen in a frame. A sheet that gets taller rides up into place; one that gets shorter has
+// the old surface laid under it, whose top edge comes down onto the new one's, so the sheet never leaves the bottom
+// of the screen. White and Colour tell their own swap (lookswap.js).
+const LOOK = '.lk-sheet';
+export function sheetBefore(root) {
+  const s = !reduced() && root && !root.hidden && root.querySelector('.sheet');
+  if (!s || s.querySelector(LOOK)) return null;
+  const sc = root.querySelector('.scrim');
+  return { top: s.getBoundingClientRect().top, bg: getComputedStyle(s).backgroundColor, radius: getComputedStyle(s).borderTopLeftRadius, scrim: sc ? Number(getComputedStyle(sc).opacity) : 1 };
+}
+export function sheetSwap(was, root) {
+  const s = was && root.querySelector('.sheet');
+  if (!s || !canAnimate(s) || s.querySelector(LOOK)) return;
+  const lift = was.top - s.getBoundingClientRect().top;
+  const move = { duration: T.enter, easing: T.ease };
+  for (const n of s.children) n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease });
+  // a scrim still fading in (the sheet swapped as it rose) goes on from where it was, not from whole
+  const sc = root.querySelector('.scrim');
+  if (sc && canAnimate(sc) && was.scrim < 0.99) sc.animate([{ opacity: was.scrim }, { opacity: 1 }], { duration: T.standard, easing: T.ease });
+  if (lift > 1) s.animate([{ transform: `translateY(${lift}px)` }, { transform: 'none' }], move);
+  else if (lift < -1) {
+    const under = document.createElement('div');
+    under.className = 'sheet-under'; under.setAttribute('aria-hidden', 'true');
+    Object.assign(under.style, { position: 'fixed', left: '0', right: '0', top: `${was.top}px`, bottom: `${lift}px`, background: was.bg, borderRadius: `${was.radius} ${was.radius} 0 0`, pointerEvents: 'none' });
+    s.before(under);
+    under.animate([{ transform: 'none' }, { transform: `translateY(${-lift}px)` }], { ...move, fill: 'forwards' })
+      .finished.catch(() => {}).then(() => under.remove());
+  }
 }
 
 // Anything leaving: fade and drop back the way it came, 0.2 s EASE_IN, then gone.

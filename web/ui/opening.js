@@ -12,7 +12,9 @@
 //                              on every page change, before the new page is drawn: returns a word for the redraw
 //                              ('shared-open', 'shared-close' or 'still') when one of these plays, else null. `pose`
 //                              is where Android's back swipe left the page (predictiveback.js, M13): the close then
-//                              starts from it, the page shrunk as the finger had it
+//                              starts from it, the page shrunk as the finger had it. 'reverse' is Back reaching an
+//                              open part way: the open plays itself backwards, and the redraw waits for it to land
+//                              (flying) and then draws the page it came from as 'still'
 //   plays(how) / arrive(how, screen)
 //                              once the new page is drawn: arrive() plays it in place of motion.arrive()
 //   flying() / whenLanded(fn)  a redraw while one plays waits for it to land
@@ -33,7 +35,7 @@
 //   as soon as the close exists. If the close falls back to the plain back (what it closes into is not on screen),
 //   progress does nothing, commit does nothing and cancel steps forward again with the plain push.
 //   canFollow() says whether followBack() would give one, without doing anything.
-import { reduced, capture, takeGhost, arrive as plainArrive, stagger } from '/ui/motion.js';
+import { reduced, capture, takeGhost, keep, arrive as plainArrive, stagger } from '/ui/motion.js';
 import * as F from '/ui/flight.js';
 import * as room from '/ui/roomopen.js';
 import * as light from '/ui/lightopen.js';
@@ -66,10 +68,21 @@ export function openedFrom(kind) {
   for (let i = open.length - 1; i >= 0; i--) if (open[i].kind === kind) return { ...open[i], aid: open[i].to.split('/')[1] };
   return null;
 }
-export const plays = how => how === 'shared-open' || how === 'shared-close' || how === 'still';
+export const plays = how => how === 'shared-open' || how === 'shared-close' || how === 'still' || how === 'reverse';
 
 // Called when the page changes, before the new one is drawn.
 export function prepare({ from, to, r, depth, screen, pose = null }) {
+  // Back while a page is still opening out of what was tapped: the open turns round where it is and goes back into
+  // it, and the page it opened from is drawn again, still, once it has landed (app.js). Jumped to its end first, the
+  // page stood fully open for a frame before closing from there.
+  const f = F.current();
+  if (f && f.opened && !f.back && !pose && from === f.opened.to && to === f.opened.from && open[open.length - 1] === f.opened) {
+    tapped = null; pending = null;
+    open.pop();
+    scrollBack = f.opened.y;
+    F.reverse(f);
+    return 'reverse';
+  }
   F.finish();
   const t = tapped; tapped = null; pending = null;
   const fl = armed; armed = null;
@@ -91,9 +104,9 @@ export function prepare({ from, to, r, depth, screen, pose = null }) {
     if (!g) return plain(fl);
     // the old page stays under the new one while it steps aside
     g.style.zIndex = '';
-    screen.before(g);
+    screen.before(g); keep(g);
     t.el.style.visibility = 'hidden';
-    pending = { kind: K.name, dir: 'open', O, ghost: g };
+    pending = { kind: K.name, dir: 'open', O, ghost: g, entry: open[open.length - 1] };
     return plain(fl, 'shared-open');
   }
   // a close: the page on show is the last one opened, and the address is the page it opened from
@@ -128,6 +141,7 @@ export function arrive(how, screen) {
   if (how === 'still') return;
   if (how === 'shared-open' && p && p.dir === 'open') {
     const run = F.begin(F.OPEN.dur);
+    run.opened = p.entry;
     run.undo(() => p.ghost.remove());
     if (KINDS[p.kind].open(p, screen, run) === false) { F.finish(); stagger(screen); return; }
     F.go(run, run.hold || F.OPEN.dur + 50);
@@ -141,7 +155,7 @@ export function arrive(how, screen) {
       if (g) {
         // the page closing stays over the one under it until it has gone into what opened it
         g.style.zIndex = '';
-        screen.after(g);
+        screen.after(g); keep(g);
         const O = K.read(src);
         src.style.visibility = 'hidden';
         if (p.fl) F.followNext(p.fl);

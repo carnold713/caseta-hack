@@ -48,7 +48,7 @@
 // In a browser or the installed web app there is no progress from the system, only the step back, and popstate
 // plays the ordinary back (and M10's close for a room). Edge swipes belong to the system; the page never tries to
 // catch them itself. Nothing is drawn while the phone asks for reduced motion; the step back still happens.
-import { reduced, holdFor } from '/ui/motion.js';
+import { reduced, holdFor, keep } from '/ui/motion.js';
 import * as opening from '/ui/opening.js';
 import * as chipOpen from '/ui/chipopen.js';
 import { icon } from '/ui/icons.js';
@@ -214,7 +214,8 @@ function behind(g) {
     sc = document.createElement('div');
     sc.className = 'screen';
     try { sc.innerHTML = app.draw(info.prev.r); } catch (_) { sc.innerHTML = ''; }
-    sc.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    // (a drawing keeps the ids its gradients are found by: without them a Pico waited behind as a bare outline)
+    sc.querySelectorAll('[id]').forEach(n => { if (!n.closest('svg')) n.removeAttribute('id'); });
     let y = 0;
     try { y = (g.kind && g.kind.scroll && g.kind.scroll(info)) || (app.scrollOf ? app.scrollOf(info.prev) : 0) || 0; } catch (_) { y = 0; }
     if (y) sc.style.transform = `translateY(${px(-y)})`;
@@ -224,7 +225,7 @@ function behind(g) {
     pg.appendChild(sc);
     // a page with the tab bar behind one without it (a light over its room) shows the bar it will come back to
     const tabs = $('#tabs');
-    if (tabs && tabs.hidden && app.hasTabs(info.prev.r)) { const t = tabs.cloneNode(true); t.removeAttribute('id'); t.hidden = false; pg.appendChild(t); }
+    if (tabs && tabs.hidden && app.hasTabs(info.prev.r)) { const t = tabs.cloneNode(true); t.removeAttribute('id'); t.hidden = false; pg.appendChild(t); g.tabsBehind = true; }
   }
   L.append(pg, dark);
   g.scr.before(L);
@@ -301,6 +302,7 @@ function poseOf(g) {
         screen.animate([{ transform: `scale(${BEHIND})` }, { transform: 'scale(1)' }], o),
         dark.animate([{ opacity: L.dark }, { opacity: 0 }], o),
       );
+      tabsUp(pose, o);
       play(pose, dur);
     },
     // the plain slide off, when the kind's own close cannot play after all (its card is not on screen)
@@ -332,6 +334,18 @@ function comeUp(screen, ghost, pose) {
   pose.parts.push(dark);
   return dark;
 }
+// The tab bar the page behind showed (it has one and the page leaving had none) is the real one again once that page
+// is drawn. It is not part of the page, so it comes up with it on its own clock, from where the copy behind had it (at
+// the page's 0.96 about the middle of the screen) and from nothing, since it stands over the page still closing where
+// the copy was under it: left alone, it stood there whole from the first frame of the close, over a page still shrunk
+// and dark.
+function tabsUp(pose, o) {
+  const tabs = $('#tabs');
+  if (!pose.g.tabsBehind || !tabs || tabs.hidden || typeof tabs.animate !== 'function') return;
+  const b = tabs.getBoundingClientRect();
+  const dy = (b.top + b.height / 2 - innerHeight / 2) * (BEHIND - 1);
+  pose.anims.push(tabs.animate([{ translate: `0px ${px(dy)}`, scale: String(BEHIND), opacity: 0 }, { translate: '0px 0px', scale: '1', opacity: 1 }], o));
+}
 function play(pose, dur) {
   holdFor(dur + 50);
   settling = { done: pose.done };
@@ -348,11 +362,15 @@ export function prepare(screen, pose) {
     transformOrigin: pose.origin, transform: pose.transform, clipPath: pose.clip, backgroundColor: pose.bg,
   });
   gh.inert = true;
-  freeze(gh);
+  // (its sideways strips go back where they were scrolled once it is on the page again: motion.js, keep)
+  gh._keep = [...screen.querySelectorAll('[data-keep]')].map(n => [n, n.scrollLeft]).filter(([, x]) => x);
+  const y = window.scrollY;
   for (const k of [...screen.children]) gh.appendChild(k);
-  gh.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  // (at the scroll it had: taken off the page, the page is shorter and the window has already gone back to its top)
+  freeze(gh, y);
+  gh.querySelectorAll('[id]').forEach(n => { if (!n.closest('svg')) n.removeAttribute('id'); });
   gh.querySelectorAll('[data-go], [data-act]').forEach(n => { n.removeAttribute('data-go'); n.removeAttribute('data-act'); });
-  screen.after(gh);
+  screen.after(gh); keep(gh);
   pose.ghost = gh;
   pose.taken = true;
   arriving = pose;
@@ -369,7 +387,7 @@ export function arrive(screen) {
 function slide(screen, pose, ghost) {
   const { g } = pose;
   pose.taken = true;
-  if (ghost && !ghost.isConnected) screen.after(ghost);
+  if (ghost && !ghost.isConnected) { screen.after(ghost); keep(ghost); }
   g.behind.L.remove();
   const o = { ...LEAVE, fill: 'forwards' };
   const dark = comeUp(screen, ghost, pose);
@@ -378,6 +396,7 @@ function slide(screen, pose, ghost) {
     screen.animate(up, o),
     dark.animate([{ opacity: pose.dark }, { opacity: 0 }], o),
   );
+  tabsUp(pose, o);
   if (ghost) {
     // a ghost the app captured (the room's close could not play after all) is dressed as the finger left the page
     Object.assign(ghost.style, { transformOrigin: pose.origin, clipPath: pose.clip, backgroundColor: pose.bg, height: pose.height, zIndex: '1' });
@@ -400,12 +419,18 @@ register({
     g.sheet = g.info.sheet; g.scrim = root.querySelector('.scrim');
     g.h = g.sheet.offsetHeight || 1;
     g.was = [g.sheet.getAttribute('style'), g.scrim && g.scrim.getAttribute('style')];
+    // A sheet still rising (or its scrim still fading in) is taken from where it is: its rise is let go and it is held
+    // there by the gesture, which drops it from that place. Let go without that, it jumped up to where it rests in
+    // the gesture's first frame.
+    const at = g.sheet.getBoundingClientRect().top, o = g.scrim ? Number(getComputedStyle(g.scrim).opacity) : 1;
     for (const n of [g.sheet, g.scrim]) if (n) n.getAnimations().forEach(a => a.cancel());
+    g.base = Math.max(0, at - g.sheet.getBoundingClientRect().top); g.o = o;
+    this.drag(g, 0);
   },
   drag(g, p) {
-    g.dy = g.h * DROP * p;
+    g.dy = g.base + g.h * DROP * p;
     g.sheet.style.transform = `translateY(${px(g.dy)})`;
-    if (g.scrim) g.scrim.style.opacity = String(Math.max(0, 1 - g.dy / g.h));
+    if (g.scrim) g.scrim.style.opacity = String(Math.max(0, g.o * (1 - (g.dy - g.base) / g.h)));
   },
   cancel(g, now) {
     const back = () => { restore(g.sheet, g.was[0]); if (g.scrim) restore(g.scrim, g.was[1]); app.ctx.endDrag(); };

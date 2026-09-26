@@ -76,7 +76,9 @@ export function tap(el) {
   else if (el.matches('.scene-row .row-chev[data-go]')) arm(el.closest('.scene-row'));
 }
 // While the surface is growing, a second tap does nothing (it would land on a sheet still taking shape).
-export const busy = () => !!(flight && performance.now() < flight.until);
+// (and while one turned round part way is still going back into its chip)
+let turning = 0;
+export const busy = () => !!(flight && performance.now() < flight.until) || performance.now() < turning;
 
 function arm(el) {
   armed = null;
@@ -184,9 +186,10 @@ function open(root, sheet, h2, O) {
   const lvl = el => Number(getComputedStyle(el).opacity);
   const blooms = lanes.map(({ orb }) => bloomColour(orb));
 
-  const f = flight = { root, until: performance.now() + OPEN.dur, anims: [], undo: [] };
-  const core = (node, kf, o) => { const an = node.animate(kf, o); f.anims.push(an); return an; };
-  const play = (node, kf, o) => (node ? node.animate(kf, { fill: 'backwards', ...o }) : null);
+  const f = flight = { root, until: performance.now() + OPEN.dur, anims: [], all: [], undo: [] };
+  const core = (node, kf, o) => { const an = node.animate(kf, o); f.anims.push(an); f.all.push(an); return an; };
+  // (everything the open plays is kept, so a Back part way can turn all of it round: reverse)
+  const play = (node, kf, o) => { if (!node) return null; const an = node.animate(kf, { fill: 'backwards', ...o }); f.all.push(an); return an; };
   const at = { l: B.left - S.left, t: B.top - S.top };
   const layer = (cls, style) => {
     const d = document.createElement('div');
@@ -214,7 +217,8 @@ function open(root, sheet, h2, O) {
       { left: px(at.l), top: px(at.t), width: px(B.width), height: px(B.height), borderRadius: px(O.radius) },
       { left: '0px', top: '0px', width: px(S.width), height: px(S.height + R), borderRadius: px(R) },
     ], { duration: OPEN.dur, easing: OPEN.ease, fill: 'forwards' });
-    core(e, [{ opacity: 1 }, { opacity: 0 }], { duration: FACE, easing: 'ease-out', fill: 'forwards' });
+    // gone once it has faded: its box is laid out afresh on every frame it grows, and it is not seen after 0.08 s
+    core(e, [{ opacity: 1 }, { opacity: 0 }], { duration: FACE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => e.remove(), () => {});
   }
   const face = O.face;
   if (face) {
@@ -351,10 +355,59 @@ export function close(root, opts = {}) {
   // one built from outside for this very sheet: it runs on (and a second drop never plays)
   if (outside && outside.sheet === root.querySelector('.sheet')) { const c = outside.ctl; outside = null; c.play(); return true; }
   outside = null;
+  if (!opts.dy && reverse(root)) return true;
   const c = closer(root, opts);
   if (!c) return false;
   outside = null;
   c.play();
+  return true;
+}
+
+// Closed while it is still growing out of its chip (Back, the X, the scrim, a moment after the hold): the open turns
+// round where it is and goes back into the chip, as long as it had played. Jumped to its end first, the whole editor
+// stood open for a frame before gathering back. The sheet's own elements are taken off it into a layer of their own
+// (the sheet is cleared as it closes), so everything they are playing goes on, backwards. The chip's copper is not
+// brought back (the chip has let go of it by now), and the surface lets the chip show through as it lands there, as
+// the close does.
+function reverse(root) {
+  const f = flight, o = source;
+  if (!f || f.root !== root || !o || reduced()) return false;
+  const now = here();
+  if (now !== o.key && now !== o.parent) return false;
+  const sheet = root.querySelector('.sheet'), scrim = root.querySelector('.scrim');
+  if (!sheet) return false;
+  flight = null; source = null;
+  const so = scrim ? Number(getComputedStyle(scrim).opacity) : 0;
+  const g = document.createElement('div');
+  g.className = 'sheet-ghost m12-ghost'; g.setAttribute('aria-hidden', 'true'); g.inert = true;
+  Object.assign(g.style, { position: 'fixed', inset: '0', zIndex: '20', pointerEvents: 'none' });
+  document.body.appendChild(g);
+  // (the scrim's own fade in would start again on being moved: it is held where it was instead)
+  if (scrim) scrim.classList.add('still');
+  for (const k of [...root.children]) g.appendChild(k);
+  g.querySelectorAll('[id]').forEach(n => { if (!n.closest('svg')) n.removeAttribute('id'); });
+  let t = 0;
+  const back = [];
+  // (the copper is read before anything is turned round, and its own fade is left out of the turn)
+  const fl = sheet.querySelector('.m12-fill');
+  const fo = fl ? Number(getComputedStyle(fl).opacity) || 0 : 0;
+  const copper = fl ? fl.getAnimations().filter(a => a.effect.getKeyframes().some(k => 'opacity' in k)) : [];
+  for (const a of f.all) {
+    if (copper.includes(a)) continue;
+    try {
+      t = Math.max(t, Number(a.currentTime) || 0);
+      a.effect.updateTiming({ fill: 'both' });
+      a.reverse(); back.push(a.finished);
+    } catch (_) { /* gone */ }
+  }
+  t = Math.max(t, 1);
+  turning = performance.now() + t;
+  if (fl) { back.push(fl.animate([{ opacity: fo }, { opacity: 0 }], { duration: Math.min(80, t), fill: 'forwards' }).finished); copper.forEach(a => a.cancel()); }
+  if (scrim) back.push(scrim.animate([{ opacity: so }, { opacity: 0 }], { duration: t, easing: T.easeIn, fill: 'forwards' }).finished);
+  const end = Math.min(CROSS - CROSS_IN, t);
+  back.push(sheet.animate([{ opacity: 1 }, { opacity: 0 }], { duration: end, delay: t - end, easing: T.easeIn, fill: 'both' }).finished);
+  holdFor(t + 50);
+  Promise.allSettled(back).then(() => { g.remove(); for (const u of f.undo.splice(0)) { try { u(); } catch (_) { /* gone */ } } });
   return true;
 }
 
@@ -381,8 +434,8 @@ export function closer(root, { dy = 0 } = {}) {
   const keeps = [...live.querySelectorAll('[data-keep]')].map(n => n.scrollLeft);
   const top = live.scrollTop;
   for (const k of root.children) g.appendChild(k.cloneNode(true));
-  g.querySelectorAll('.xf-old, .m12-bloom').forEach(n => n.remove());
-  g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  g.querySelectorAll('.xf-old, .m12-bloom, .sheet-under').forEach(n => n.remove());
+  g.querySelectorAll('[id]').forEach(n => { if (!n.closest('svg')) n.removeAttribute('id'); });
   const sheet = g.querySelector('.sheet'), scrim = g.querySelector('.scrim');
   if (!sheet) return null;
   sheet.classList.add('still'); if (scrim) scrim.classList.add('still');
