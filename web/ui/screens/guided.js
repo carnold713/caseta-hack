@@ -44,11 +44,11 @@ function steps(c, gs) {
           <div class="group"><button class="row has-ic ${g.arrive === 'sunset' ? 'sel' : ''}" data-act="w-sunset"><span class="row-ic">${icon('sunrise', 20, 1.4)}</span><span class="row-txt"><span class="t">Or at sunset</span></span><span class="row-val">${RT.sunAt('sunset') ? `${esc(RT.fmtTime(RT.sunAt('sunset', -g.offset)))} today` : ''}</span>${g.arrive === 'sunset' ? `<span class="row-tick">${icon('check', 20, 1.9)}</span>` : `<span class="row-chev">${icon('chev', 16, 1.8)}</span>`}</button></div>
           ${g.arrive === 'sunset' ? `<div class="chip-wrap">${[0, 10, 20, 30, 45].map(m => `<button class="chip sm" aria-pressed="${g.offset === m}" data-act="w-offset" data-v="${m}">${m ? `${m} min before` : 'At sunset'}</button>`).join('')}</div>${whereBlock(c)}` : ''}` },
       { q: 'Which days?', ok: g.days.length > 0, body: `${dayTiles('w-days')}
-          <div class="group"><div class="row"><span class="row-txt"><span class="t">Only if the house is dark</span><span class="d">Skipped when someone is already home with the lights on</span></span><button class="toggle" role="switch" aria-checked="${!!g.onlyDark}" data-act="w-dark" aria-label="Only if the house is dark"></button></div></div>` },
+          <div class="group"><div class="row"><span class="row-txt"><span class="t">Only if the house is dark</span></span><button class="toggle" role="switch" aria-checked="${!!g.onlyDark}" data-act="w-dark" aria-label="Only if the house is dark"></button></div></div>` },
       { q: 'When should they go off?', ok: true, body: `<div class="answers">${tile('w-until', 'bedtime', `Bedtime, ${RT.fmtTime(s.night_start)}`, g.until === 'bedtime')}${tile('w-until', 'sunrise', 'Sunrise', g.until === 'sunrise')}${tile('w-until', 'time', g.until === 'time' ? RT.fmtTime(g.untilTime) : 'Other time…', g.until === 'time')}</div>
           ${g.until === 'time' ? `<div class="when-time"><input class="time-big" type="time" value="${esc(g.untilTime)}" data-change="w-until-time" aria-label="Off at"></div>` : ''}
           <div class="group">
-            ${outside ? `<div class="row"><span class="row-txt"><span class="t">Leave the outside lights on low until morning</span></span><button class="toggle" role="switch" aria-checked="${!!g.low}" data-act="w-low" aria-label="Outside lights low overnight"></button></div>` : ''}
+            ${outside ? `<div class="row"><span class="row-txt"><span class="t">Outside on low overnight</span></span><button class="toggle" role="switch" aria-checked="${!!g.low}" data-act="w-low" aria-label="Outside lights low overnight"></button></div>` : ''}
             <button class="row" data-act="w-level"><span class="row-txt"><span class="t">How bright</span></span><span class="row-val">${g.level}%</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
           </div>
           ${gs.levelOpen ? `<div class="chip-wrap">${[40, 60, 80, 100].map(v => `<button class="chip sm" aria-pressed="${g.level === v}" data-act="w-level-set" data-v="${v}">${v}%</button>`).join('')}</div>` : ''}
@@ -62,7 +62,7 @@ function steps(c, gs) {
     if (g.lamp && !shown.some(d => d.device_id === g.lamp) && data.dev(g.lamp)) shown.unshift(data.dev(g.lamp));
     const shade = RT.wakeShade(g);
     // 11 · the rise rehearsed on the phone once there is a lamp, a time and a length to show (routine.js)
-    const preview = g.lamp ? `<div class="t-over sec-s">See how it wakes you</div>${sunriseHTML(c, { lamp: g.lamp, start: RT.hmAdd(g.alarm, -g.minutes), minutes: g.minutes, end: g.end, days: g.days }, 'setup')}` : '';
+    const preview = g.lamp ? `<div class="g-preview">${sunriseHTML(c, { lamp: g.lamp, start: RT.hmAdd(g.alarm, -g.minutes), minutes: g.minutes, end: g.end, days: g.days }, 'setup')}</div>` : '';
     return [
       { q: 'Which lamp should wake you?', ok: !!g.lamp, body: `<div class="answers">${shown.map(d => tile('k-lamp', d.device_id, `${esc(d.name)}<small>${esc(data.devAreaName(d))}</small>`, g.lamp === d.device_id)).join('')}${gs.allLamps || dims.length === shown.length ? '' : tile('k-all', '1', 'Another light…', false)}</div>` },
       { q: 'What time do you wake up?', ok: g.days.length > 0, body: `<div class="when-time"><input class="time-big" type="time" value="${esc(g.alarm)}" data-change="k-alarm" aria-label="Wake up at"></div>${dayTiles('k-days')}` },
@@ -84,8 +84,8 @@ function steps(c, gs) {
   return [
     { q: goodnight ? 'Which remote is by your bed?' : 'Which remote is by the door you leave from?', skip: rs.length < 2, ok: !!d, body: `<div class="answers remotes">${rs.map(x => tile('b-remote', x.device_id, `<span class="ans-pico">${picoSVG({ model: REM.modelFor(x), finish: REM.finishFor(x), keys: REM.slots(x), height: 44 })}</span>${esc(x.name)}<small>${esc(data.devAreaName(x))}</small>`, g.remote === x.device_id)).join('')}</div>` },
     { q: `Which button do you hold for ${goodnight ? 'Goodnight' : 'Leaving'}?`, ok: true, body: `<div class="answers">${keys.map(k => tile('b-key', k.n, `Hold ${esc(REM.buttonName(g.remote, k.n).toLowerCase())}`, g.button === k.n)).join('')}</div>
-        ${replaces.length ? `<p class="t-cap muted sheet-p">This replaces what holding it does now: ${esc(data.describe(replaces))}</p>` : ''}` },
-    { q: goodnight ? 'Which lights light the way to bed?' : 'Which light is by that door?', ok: goodnight || g.keep.length > 0, body: `<p class="t-cap muted sheet-p">${goodnight ? 'They stay dim for two minutes after everything else goes off.' : 'It stays on for two minutes after everything else goes off.'}</p>${keepTiles}` },
+        ${replaces.length ? `<p class="t-cap muted sheet-p">Replaces ${esc(REM.shortDescribe(replaces))}</p>` : ''}` },
+    { q: goodnight ? 'Which lights light the way to bed?' : 'Which light is by that door?', ok: goodnight || g.keep.length > 0, body: keepTiles },
   ];
 }
 const summary = (c, gs) => (gs.kind === 'welcome' ? c.RT.welcomeSummary(gs.g) : gs.kind === 'wakeup' ? c.RT.wakeupSummary(gs.g) : c.RT.buttonSummary(gs.g));
@@ -94,7 +94,7 @@ export function view(c, r) {
   const { esc, icon } = c;
   const kind = r.id;
   if (!KINDS[kind] || (kind === 'goodnight' || kind === 'leaving') && !c.data.remotes().length) {
-    return `<header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header><h1 class="t-h1 page-h1">${esc(KINDS[kind] || 'Set up')}</h1><p class="t-body muted soon">${kind === 'goodnight' || kind === 'leaving' ? 'This needs a remote. Pair a Pico first and it shows up here.' : 'Nothing to set up here.'}</p>`;
+    return `<header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header><h1 class="t-h1 page-h1">${esc(KINDS[kind] || 'Set up')}</h1><p class="t-body muted soon">${kind === 'goodnight' || kind === 'leaving' ? 'This needs a remote.' : 'Nothing to set up here.'}</p>`;
   }
   const gs = state(c, kind);
   const all = steps(c, gs); const live = all.filter(x => !x.skip);
@@ -104,7 +104,7 @@ export function view(c, r) {
   const dots = live.map((_, i) => `<i class="${i < gs.step ? 'done' : i === gs.step ? 'cur' : ''}"></i>`).join('');
   return `<div class="guided">
     <header class="hdr"><button class="hdr-btn back" data-act="gs-back" aria-label="Back">${icon('back', 22, 1.7)}</button>
-      <div class="stepper">${dots}<span>${gs.step + 1} of ${live.length}</span></div></header>
+      <div class="stepper" role="img" aria-label="Step ${gs.step + 1} of ${live.length}">${dots}</div></header>
     <div class="g-art"><span class="glow"></span><img src="${c.artSrc(ART[kind])}" alt=""></div>
     <div class="t-over g-over">${esc(KINDS[kind])}</div>
     <h2 class="g-q">${esc(st.q)}</h2>

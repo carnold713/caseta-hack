@@ -41,8 +41,7 @@ function card(c, sc) {
   return `<div class="rt-card ${paused ? 'paused' : ''}" data-go="routine/${esc(sc.id)}" role="link" aria-label="${esc(sc.name || 'Routine')}">
     <div class="rt-body"><span class="rt-t nm-cut">${esc(sc.name || 'Routine')}</span><span class="rt-s">${esc(RT.sentence(sc))}</span>
       ${warn ? `<span class="rt-warn">${esc(warn)}</span>` : ''}
-      <span class="rt-days">${dayDots(c, sc.days || RT.ALL_DAYS)}<span class="dt">${esc(RT.daysText(sc.days))}</span></span></div>
-    ${paused ? '<span class="chip tag paused-chip">Paused</span>' : ''}
+      <span class="rt-days" aria-label="${esc(RT.daysText(sc.days))}">${dayDots(c, sc.days || RT.ALL_DAYS)}</span></div>
     <button class="toggle" role="switch" aria-checked="${!paused}" data-act="rt-toggle" data-id="${esc(sc.id)}" aria-label="${esc(sc.name || 'Routine')} on or off"></button></div>`;
 }
 
@@ -67,7 +66,7 @@ export function view(c, r) {
       <span class="t-row nm-cut">${esc(t.text)}</span><button class="link" data-act="timer-cancel" data-t="${esc(t.key)}">Cancel</button></div>`).join('');
   const following = DAY.followIds().filter(id => data.dev(id));
   const lamps = data.controllable().filter(d => DAY.canFollow(d));
-  const followSub = following.length ? `${following.length} ${following.length === 1 ? 'lamp' : 'lamps'} following` : lamps.length ? 'Off' : 'Needs a lamp that changes its white';
+  const followSub = following.length ? `${following.length} ${following.length === 1 ? 'lamp' : 'lamps'}` : lamps.length ? 'Off' : 'No lamp can follow';
   const habits = `<div class="group habits">
       <button class="row has-ic" data-go="routines/winddown"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Evening wind-down</span><span class="d">${esc(RT.windDownLine())}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row has-ic" data-act="follow" ${lamps.length ? '' : 'disabled'}><span class="row-ic">${icon('sunrise', 20, 1.4)}</span><span class="row-txt"><span class="t">Follow the day</span><span class="d">${esc(followSub)}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
@@ -78,11 +77,10 @@ export function view(c, r) {
     ${needLoc ? `<div class="loc-card">${whereBlock(c)}</div>` : ''}
     ${upCard}${timers}
     ${list.length ? `<div class="t-over sec">Your routines</div><div class="rt-list">${list.map(sc => card(c, sc)).join('')}</div>`
-      : `<p class="t-body muted rt-empty">What should your home do on its own? Each of these takes about a minute.</p>`}
-    <div class="t-over sec">Set up in a minute</div>
+      : `<p class="t-body muted rt-empty">No routines yet.</p>`}
+    <div class="t-over sec">Set up</div>
     ${guidedTiles(c)}
     ${habits}
-    <p class="t-cap muted foot">Have timers in the Lutron app? Keep them in one place, here or there, so they don't fight.</p>
   </div>`;
 }
 
@@ -190,29 +188,25 @@ function windDownPage(c) {
   const md = windDownModel(c);
   const s = md.s, w = md.w;
   const quiet = shortTime(s.night_start);
-  const head = md.on ? `Tonight at ${quiet} the house goes quiet.` : 'Off · lights come on as bright late as early';
+  const head = md.on ? `Quiet at ${quiet}` : 'Off';
   const pointsMode = (s.adaptive || {}).mode === 'points';
-  const under = !md.on ? ''
-    : pointsMode ? `Lights you turn on follow your curve by the hour, then ${s.night_level}% from ${esc(RT.fmtTime(s.night_start))} until ${esc(RT.fmtTime(s.night_end))}.`
-      : `Lights you turn on after ${esc(RT.fmtTime(RT.curveStart()))} come on softer, down to ${w.to_level || 50}% by ${esc(quiet)}, then ${s.night_level}% until ${esc(RT.fmtTime(s.night_end))}.`;
+  const under = !md.on || pointsMode ? '' : `Down to ${w.to_level || 50}% by ${esc(quiet)}`;
   return `<div class="wd-page">
     <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
     <h1 class="t-h1 page-h1">Evening <span class="nobr">wind-down</span></h1>
-    <p class="t-cap muted fd-sub">${md.on ? 'On · every evening' : 'Off'}</p>
     <section class="wd-card ${md.on ? '' : 'off'}">
       <p class="wd-head" data-xf="standard">${esc(head)}</p>
       ${bandHTML(c, md)}
     </section>
-    ${md.on ? `<p class="wd-say" data-xf="standard">${under}</p><p class="wd-honest">Lights that are already on stay as they are.</p>` : `<p class="wd-say">As the evening goes on, lights you turn on come on a little dimmer, so the house feels calmer late. Set a level yourself and it stays.</p>`}
+    ${md.on ? (under ? `<p class="wd-say" data-xf="standard">${under}</p>` : '') : '<p class="wd-say">Lights come on softer as the evening goes on.</p>'}
     ${s.location ? '' : `<div class="loc-card wd-loc">${whereBlock(c, { compact: true })}</div>`}
     <div class="group wd-rows">
       <div class="row has-ic"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Evening wind-down</span></span><button class="toggle" role="switch" aria-checked="${md.on}" data-act="wd-toggle" aria-label="Evening wind-down"></button></div>
-      ${md.on ? `<button class="row has-ic kv" data-go="routines/winddown-levels"><span class="row-ic sunrise">${icon('sunset', 20, 1.4)}</span><span class="row-txt"><span class="t">Starts dimming</span></span><span class="row-val">${pointsMode ? 'By the hour' : esc(RT.fmtTime(RT.curveStart()))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      ${md.on ? `<button class="row has-ic kv" data-go="routines/winddown-levels"><span class="row-ic">${icon('sunset', 20, 1.4)}</span><span class="row-txt"><span class="t">Starts dimming</span></span><span class="row-val">${pointsMode ? 'By the hour' : esc(RT.fmtTime(RT.curveStart()))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row has-ic kv" data-go="routines/winddown-night"><span class="row-ic">${icon('moon', 20, 1.4)}</span><span class="row-txt"><span class="t">Quiet from</span></span><span class="row-val">${esc(RT.fmtTime(s.night_start))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row has-ic kv" data-go="routines/winddown-levels"><span class="row-ic">${icon('bulb', 20, 1.4)}</span><span class="row-txt"><span class="t">Night level</span></span><span class="row-val">${s.night_level}% until ${esc(RT.fmtTime(s.night_end))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-      <button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic">${icon('tune', 20, 1.4)}</span><span class="row-txt"><span class="t">The levels and the curve</span><span class="d">Early morning, how low it goes, by the hour</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
+      <button class="row has-ic" data-go="routines/winddown-levels"><span class="row-ic">${icon('tune', 20, 1.4)}</span><span class="row-txt"><span class="t">Levels</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
     </div>
-    <p class="fd-drift wd-foot">${icon('clock', 16, 1.7)}Buttons with a night version use these hours too</p>
   </div>`;
 }
 
@@ -230,7 +224,7 @@ function wireWindDown(c, root) {
     const first = band.firstChild;
     tmp.querySelectorAll('.wd-step, .wd-now').forEach(n => band.insertBefore(n, first));
     const head = card.querySelector('.wd-head');
-    if (head && over.night_start) head.textContent = `Tonight at ${shortTime(over.night_start)} the house goes quiet.`;
+    if (head && over.night_start) head.textContent = `Quiet at ${shortTime(over.night_start)}`;
     return md;
   };
   const moon = band.querySelector('[data-grip="moon"]');
@@ -275,7 +269,7 @@ function wireWindDown(c, root) {
         if (low) knob.style.bottom = `${Math.max(4, Math.round(96 * low.lv / 100))}px`;
         knob.setAttribute('aria-valuenow', String(lv));
         const say = root.querySelector('.wd-say');
-        if (say) say.textContent = say.textContent.replace(/down to \d+%/, `down to ${lv}%`);
+        if (say) say.textContent = say.textContent.replace(/[Dd]own to \d+%/, `Down to ${lv}%`);
       },
       end() {
         band.classList.remove('dragging');
@@ -309,15 +303,13 @@ function levels(c) {
   return { over: 'Evening wind-down', title: 'The levels', body: `<div class="wd">
     ${block('Early morning', `Before ${esc(RT.fmtTime(wd.morning_until || '07:30'))}`, chips('morning_level', [[40, '40%'], [60, '60%'], [100, '100%']], wd.morning_level))}
     ${block('Start dimming', '', chips('sunset_offset_min', [[0, 'At sunset'], [30, '30 min after'], [60, '1 hour after']], wd.sunset_offset_min))}
-    ${block('Down to', 'By the time the house goes quiet', chips('to_level', [[60, '60%'], [50, '50%'], [40, '40%']], wd.to_level))}
-    ${block('At night', 'While the house is quiet, until night ends', chips('night_level', [[35, '35%'], [25, '25%'], [15, '15%']], s.night_level))}
+    ${block('Down to', `By ${esc(RT.fmtTime(s.night_start))}`, chips('to_level', [[60, '60%'], [50, '50%'], [40, '40%']], wd.to_level))}
+    ${block('At night', '', chips('night_level', [[35, '35%'], [25, '25%'], [15, '15%']], s.night_level))}
     <div class="group"><button class="row kv" data-act="night-hours"><span class="row-txt"><span class="t">Night ends</span></span><span class="row-val">${esc(RT.fmtTime(s.night_end))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>
-    <p class="t-cap sheet-p wd-today">${esc(RT.windDownToday())}</p>
     <div class="group">
-      <div class="row"><span class="row-txt"><span class="t">Also lower lights nobody has touched for 20 minutes</span><span class="d">Gently, over a minute, only lights above the curve. Turn it off if it ever fights you.</span></span><button class="toggle" role="switch" aria-checked="${!!wd.nudge}" data-act="wd-nudge" aria-label="Lower untouched lights"></button></div>
-      <button class="row" data-go="routines/winddown-curve"><span class="row-txt"><span class="t">Curve by the hour</span><span class="d">Set the level for each time of day yourself</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <div class="row"><span class="row-txt"><span class="t">Lower lights left alone</span><span class="d">After 20 min</span></span><button class="toggle" role="switch" aria-checked="${!!wd.nudge}" data-act="wd-nudge" aria-label="Lower untouched lights"></button></div>
+      <button class="row" data-go="routines/winddown-curve"><span class="row-txt"><span class="t">Curve by the hour</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
-    <p class="t-cap muted sheet-p">Task lights (counters, desks, mirrors) are never dimmed. Pressing a top button twice is always full brightness.</p>
   </div>` };
 }
 function curve(c) {
@@ -330,7 +322,6 @@ function curve(c) {
       <button class="link blue" data-act="pt-remove" data-i="${i}" ${pts.length <= 2 ? 'disabled' : ''}>Remove</button></div>`).join('');
   return { over: 'Evening wind-down', title: 'Curve by the hour', body: `<div class="wd">
     <div class="chip-wrap">${[['winddown', 'Follow the sun'], ['points', 'By the hour']].map(([v, l]) => `<button class="chip sm" aria-pressed="${(ad.mode || 'winddown') === v}" data-act="wd-mode" data-v="${v}">${l}</button>`).join('')}</div>
-    <p class="t-cap muted sheet-p">${ad.mode === 'points' ? 'What on means at each time of day. Between two times it slides from one to the next; after the last it holds until the first.' : 'Following the sun uses the levels on the page before. Pick By the hour to draw the curve yourself.'}</p>
     <div class="group">${rows}<button class="row" data-act="pt-add"><span class="row-txt"><span class="t">Add a time</span></span>${icon('plus', 18, 1.7)}</button></div>
   </div>` };
 }
@@ -338,7 +329,7 @@ function curve(c) {
 export function nightHours(c) {
   const s = c.S.config.settings;
   return { over: 'The house', title: 'Night', body: `<div class="group">
-    <label class="row"><span class="row-txt"><span class="t">The house goes quiet</span><span class="d">Buttons can do something different from here on</span></span><input class="field time" type="time" value="${c.esc(s.night_start)}" data-change="night-set" data-k="night_start" aria-label="The house goes quiet"></label>
+    <label class="row"><span class="row-txt"><span class="t">Quiet from</span></span><input class="field time" type="time" value="${c.esc(s.night_start)}" data-change="night-set" data-k="night_start" aria-label="Quiet from"></label>
     <label class="row"><span class="row-txt"><span class="t">Night ends</span></span><input class="field time" type="time" value="${c.esc(s.night_end)}" data-change="night-set" data-k="night_end" aria-label="Night ends"></label>
   </div>` };
 }

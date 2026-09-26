@@ -174,7 +174,6 @@
     }
 
     // ---------- the ready-made ways ----------
-    const houseExtras = () => { const f = hasFans(), sh = hasShades(); return f && sh ? ' Fans stop and shades close.' : f ? ' Fans stop.' : sh ? ' Shades close.' : ''; };
     // Everything off, one light kept (dim, or on) for two minutes, fans and shades when the house has them.
     function shutdownActions(keep, mode) {
       const acts = [{ type: 'level', target: 'h:all', level: 'off', fade: 2 }];
@@ -187,29 +186,29 @@
     // more thing before it is set (a scene, scenes in order, the light by the door, the room's five).
     const RECIPES = [
       { id: 'on', t: 'Turn on', mk: T => [{ type: 'level', target: T, level: 'on' }] },
-      { id: 'toggle', t: "Turn on or off, depending on what's lit", short: 'Turn on or off', mk: T => [{ type: 'level', target: T, level: 'toggle' }] },
+      { id: 'toggle', t: 'Turn on or off', mk: T => [{ type: 'level', target: T, level: 'toggle' }] },
       // The connector keeps how each light was the moment it went dark, its colour included.
-      { id: 'back', t: 'Bring back how it was', d: 'The lights that went off most recently, as they were', mk: T => [{ type: 'restore', target: T }] },
+      { id: 'back', t: 'Bring back how it was', mk: T => [{ type: 'restore', target: T }] },
       { id: 'off', t: 'Turn off', mk: T => [{ type: 'level', target: T, level: 'off' }] },
       { id: 'full', t: 'Full brightness', mk: T => [{ type: 'level', target: T, level: 100 }] },
       { id: 'half', t: 'Half brightness', mk: T => [{ type: 'level', target: T, level: 50 }] },
-      { id: 'night', t: 'Nightlight level', d: 'Very dim, 10%', mk: T => [{ type: 'level', target: T, level: 10, fade: 1 }] },
-      { id: 'movie', t: 'Movie mode', d: 'Slowly dims to 20% over 8 seconds', mk: T => [{ type: 'level', target: T, level: 20, fade: 8 }] },
-      { id: 'cycle', t: 'Step through brightness', d: 'Bright, half, low, off. One step per press', mk: T => [{ type: 'cycle', target: T, levels: [100, 50, 20, 0] }] },
+      { id: 'night', t: 'Nightlight level', d: '10%', mk: T => [{ type: 'level', target: T, level: 10, fade: 1 }] },
+      { id: 'movie', t: 'Movie mode', d: 'To 20% over 8 s', mk: T => [{ type: 'level', target: T, level: 20, fade: 8 }] },
+      { id: 'cycle', t: 'Step through brightness', d: '100, 50, 20, off', mk: T => [{ type: 'cycle', target: T, levels: [100, 50, 20, 0] }] },
       { id: 'up', t: 'A little brighter', mk: T => [{ type: 'step', target: T, delta: 10 }] },
       { id: 'down', t: 'A little dimmer', mk: T => [{ type: 'step', target: T, delta: -10 }] },
-      { id: 'hold_up', t: 'Brighten while held', d: 'Stops when you let go', hold: true, pair: T => ({ start: [{ type: 'raise', target: T }], end: [{ type: 'stop', target: T }] }) },
+      { id: 'hold_up', t: 'Brighten while held', hold: true, pair: T => ({ start: [{ type: 'raise', target: T }], end: [{ type: 'stop', target: T }] }) },
       // Hold to dim stops at a glow (floor 1); off is only ever a tap.
-      { id: 'hold_down', t: 'Dim while held', d: 'Stops at a glow, never off. Let go to stop.', hold: true, pair: T => ({ start: [{ type: 'lower', target: T, floor: 1 }], end: [{ type: 'stop', target: T }] }) },
-      { id: 'sleep', t: 'Sleep timer', d: 'Turns off after 20 minutes', mk: T => [{ type: 'timer', target: T, minutes: 20, fade: 5 }] },
-      { id: 'lightway', t: 'Light the way', d: 'Very dim for 15 minutes, then off by itself', mk: T => [{ type: 'level', target: T, level: 10, fade: 1 }, { type: 'timer', target: T, minutes: 15, level: 0, fade: 5 }] },
-      { id: 'goodnight', t: 'Goodnight', d: () => `Everything off, route to bed dimly lit for 2 min.${houseExtras()}`, any: true, mk: T => shutdownActions(T, 'dim') },
-      { id: 'leaving', t: 'Leaving', d: () => `Everything off, the light by the door on for 2 min.${houseExtras()}`, any: true, pick: 'door' },
-      { id: 'alloff', t: 'Turn everything off', d: 'Every light in the house', any: true, mk: () => [{ type: 'level', target: 'h:all', level: 'off' }] },
+      { id: 'hold_down', t: 'Dim while held', d: 'Never goes off', hold: true, pair: T => ({ start: [{ type: 'lower', target: T, floor: 1 }], end: [{ type: 'stop', target: T }] }) },
+      { id: 'sleep', t: 'Sleep timer', d: 'Off in 20 min', mk: T => [{ type: 'timer', target: T, minutes: 20, fade: 5 }] },
+      { id: 'lightway', t: 'Light the way', d: '10% for 15 min, then off', mk: T => [{ type: 'level', target: T, level: 10, fade: 1 }, { type: 'timer', target: T, minutes: 15, level: 0, fade: 5 }] },
+      { id: 'goodnight', t: 'Goodnight', d: 'Everything off but a dim path', any: true, mk: T => shutdownActions(T, 'dim') },
+      { id: 'leaving', t: 'Leaving', d: 'Everything off but the door light', any: true, pick: 'door' },
+      { id: 'alloff', t: 'Turn everything off', any: true, mk: () => [{ type: 'level', target: 'h:all', level: 'off' }] },
       { id: 'scene', t: 'Run a scene…', any: true, pick: 'scene' },
       // Walks through scenes you choose. On a remote with arrows it sets both: up goes forwards, down goes back.
-      { id: 'scenecycle', t: 'Step through scenes…', any: true, scenes: true, d: x => (x.arrows ? 'The arrows go forwards and backwards through scenes you pick' : 'One step per press, through scenes you pick'), pick: 'cycle' },
-      { id: 'moodsfirst', t: 'Suggest scenes', d: x => `${x.room} has none yet. Five, from what each light is for, and a press steps through them.`, any: true, moods: 'none', pick: 'moods' },
+      { id: 'scenecycle', t: 'Step through scenes…', any: true, scenes: true, pick: 'cycle' },
+      { id: 'moodsfirst', t: 'Suggest scenes', d: x => `Makes five for ${x.room}`, any: true, moods: 'none', pick: 'moods' },
       { id: 'fan_up', t: 'Fan: faster', fan: true, mk: T => [{ type: 'step', target: T, delta: 1 }] },
       { id: 'fan_down', t: 'Fan: slower', fan: true, mk: T => [{ type: 'step', target: T, delta: -1 }] },
     ];

@@ -172,12 +172,12 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   // ================= the sunrise preview =================
   const rid = await C(async () => { const c = window.__copper; const out = c.RT.saveWakeup({ lamp: '10', alarm: '06:30', days: [1, 2, 3, 4, 5], shade: false, minutes: 25, end: 50 }); await c.data.saveConfig(); return out[0].id; });
   await goto(`routine/${rid}`); await wait(500);
-  const sr = await C(() => ({ has: !!document.querySelector('.sunrise'), cap: document.querySelector('.sr-cap').textContent, clock: document.querySelector('.sr-clock').textContent, lv: document.querySelector('.sr-level').textContent,
+  const sr = await C(() => ({ has: !!document.querySelector('.sunrise'), cap: !!document.querySelector('.sr-cap'), clock: document.querySelector('.sr-clock').textContent, lv: document.querySelector('.sr-level').textContent,
     ends: [...document.querySelectorAll('.sr-ends span')].map(x => x.textContent), tryIt: document.querySelector('.sr-try').textContent.trim(), tryNow: !!document.querySelector('[data-act="try"]') }));
-  check(sr.has && sr.cap === `${lamp} · weekdays · 6:05 to 6:30 am`, 'a wake-up routine shows its sunrise, with the lamp, the days and the half hour', sr.cap);
-  check(sr.clock.replace(/\s+/g, ' ') === '6:05 am' && sr.lv === `1% · ${lamp}`, 'it starts dark: 6:05, 1%', sr);
+  check(sr.has && !sr.cap, 'a wake-up routine shows its sunrise, with no caption repeating the sentence under it', sr.cap);
+  check(sr.clock.replace(/\s+/g, ' ') === '6:05 am' && sr.lv === '1%', 'it starts dark: 6:05, 1%', sr);
   check(sr.ends.join() === '6:05 am,6:30 am', 'the strip runs from the start of the rise to the alarm', sr.ends);
-  check(sr.tryIt === 'Hold to try it on the lamp · 30 s' && !sr.tryNow, 'Try it is a hold, and the tap version is gone', sr.tryIt);
+  check(sr.tryIt === `Try it on ${lamp}` && !sr.tryNow, 'Try it is a hold, and the tap version is gone', sr.tryIt);
   await page.screenshot({ path: 'v7-night-sunrise-0.png' });
   // scrub: the knob is a grip; drag it three quarters along
   await clearActs();
@@ -197,7 +197,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
     return o;
   }, [x75]);
   check(Math.abs(mid.f - 0.76) < 0.02, 'the sun follows the finger', mid.f);
-  check(mid.clock.replace(/\s+/g, ' ') === '6:24 am' && mid.lv === `38% · ${lamp}`, 'the clock and the level step with it: 6:24, 38%', mid);
+  check(mid.clock.replace(/\s+/g, ' ') === '6:24 am' && mid.lv === '38%', 'the clock and the level step with it: 6:24, 38%', mid);
   check(mid.scrubbing && mid.labelText === '6:24 am · 38%', 'the label over the knob says the minute and the level', mid.labelText);
   check(/matrix\(1, 0, 0, 1, 0, -8[45]/.test(mid.sunY), 'the sun has climbed', mid.sunY);
   check(mid.d1 === '1' && Number(mid.d2) > 0.9 && Number(mid.d3) > 0.2 && Number(mid.d3) < 0.5 && mid.stars === '0', 'the screen brightens and warms: first light, sunrise, the morning coming', mid);
@@ -209,7 +209,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   check(Math.abs((await C(() => Number(getComputedStyle(document.querySelector('.sunrise')).getPropertyValue('--f')))) - 0.76) < 0.02, 'a redraw keeps the sun where it was left');
   // Try it: a tap says hold it, a hold runs the real lamp for 30 s and offers Put back
   await finger('.sr-try', [[100, 20]]); await wait(250);
-  check(!(await acts()).length && (await C(() => document.querySelector('.sr-try').textContent.trim())) === 'Hold it', 'a tap on Try it turns nothing on', await acts());
+  check(!(await acts()).length && (await C(() => document.querySelector('.sr-try').textContent.trim())) === 'Hold', 'a tap on Try it turns nothing on and says Hold', await acts());
   await finger('.sr-try', [[100, 20]], 700); await wait(1500);
   a = await acts();
   check(a.some(x => x.type === 'level' && x.target === 'd:10' && x.level === 50 && x.fade === 30), 'held: the real lamp rises to its end level over 30 s', a);
@@ -223,7 +223,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   await C(() => { const c = window.__copper; c.ui.gs = null; });
   await goto('setup/wakeup'); await wait(300);
   await C(() => { const c = window.__copper; c.ui.gs.step = 2; c.render(); }); await wait(300);
-  check(await C(() => !!document.querySelector('.guided .sunrise') && document.querySelector('.guided .sr-cap').textContent.includes('6:05 to 6:30 am')), 'the guided setup rehearses it too');
+  check(await C(() => !!document.querySelector('.guided .sunrise') && document.querySelector('.guided .sr-ends').textContent.includes('6:05 am') && document.querySelector('.guided .sr-ends').textContent.includes('6:30 am')), 'the guided setup rehearses it too');
   await page.screenshot({ path: 'v7-night-sunrise-setup.png', fullPage: true });
   // clean up the routine this made
   await C(async ([id]) => { const c = window.__copper; c.RT.remove(id); c.ui.gs = null; await c.data.saveConfig(); }, [rid]);

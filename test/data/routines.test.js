@@ -128,7 +128,7 @@ test('the wind-down numbers', () => {
   assert.equal(CT.winddownLevel('23:00', '19:32', '22:30', '06:30', 100, 50, 25), 25);
   assert.equal(t.curveStart(), '19:32');
   assert.equal(t.curveLevelNow(), 100);
-  assert.equal(t.windDownLine(), 'On · house goes quiet at 10:30 pm');
+  assert.equal(t.windDownLine(), 'Quiet at 10:30 pm');
   assert.equal(t.windDownToday(), 'Today: soft until 7:30 am, full until 7:32 pm, down to 50% by 10:30 pm, then 25% until 6:30 am.');
   assert.equal(t.setWindDown('to_level', '40'), 'Down to 40%');
   d.S.config.settings.adaptive.points = [{ time: '07:00', level: 100 }, { time: '21:00', level: 40 }, { time: '23:00', level: 15 }];

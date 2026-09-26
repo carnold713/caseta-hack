@@ -60,8 +60,7 @@ export function view(c, r) {
     ${wakeOf(c, sc) ? sunriseHTML(c, wakeOf(c, sc), `r:${sc.id}`) : ''}
     ${sentence}
     ${warn ? `<p class="rt-warn big">${esc(warn)}</p>` : ''}
-    <div class="t-over sec">In short</div>
-    <div class="group">
+    <div class="group rt-short">
       ${row('When', RT.whenValue(sc.at), 'when')}
       ${row('Days', RT.daysText(sc.days), 'days')}
       ${row('What it does', RT.whatValue(sc), 'what')}
@@ -71,9 +70,9 @@ export function view(c, r) {
     <div class="group rt-paused"><div class="row"><span class="row-txt"><span class="t">Paused</span></span><button class="toggle" role="switch" aria-checked="${sc.enabled === false}" data-act="rt-toggle" data-id="${esc(sc.id)}" aria-label="Paused"></button></div></div>
     <div class="rt-btns">
       ${sc.enabled === false ? '' : `<button class="pill ghost" data-act="${RT.skipping(sc) ? 'rt-unskip' : 'rt-skip'}" data-id="${esc(sc.id)}">${esc(RT.skipLabel(sc))}</button>`}
-      ${wakeOf(c, sc) ? '' : '<button class="pill ghost" data-act="try">Try it now</button>'}
+      ${wakeOf(c, sc) ? '' : '<button class="pill ghost" data-act="try">Try it</button>'}
     </div>
-    ${sun ? whereBlock(c) : ''}
+    ${sun && !c.S.config.settings.location ? whereBlock(c) : ''}
   </div>`;
 }
 
@@ -133,30 +132,25 @@ export function sunriseHTML(c, w, key) {
   const now = wakeAt(c, w, f);
   const ramp = [0, 0.5, 1].map(x => stopsOf(wakeAt(c, w, x).col).body);
   const alarm = RT.hmAdd(w.start, w.minutes);
-  // "Bedside lamp · weekdays · 6:05 to 6:30 am"
-  const t0 = RT.fmtTime(w.start), t1 = RT.fmtTime(alarm);
-  const dt = RT.daysText(w.days);
-  const cap = `${d.name} · ${/^(Weekdays|Weekends|Every day)$/.test(dt) ? dt.toLowerCase() : dt} · ${t0.slice(-2) === t1.slice(-2) ? t0.slice(0, -3) : t0} to ${t1}`;
+  // a tap on the try button only says Hold: a stray tap at 11 pm would light the room someone is sleeping in
   const hint = c.ui.wakeHint && Date.now() - c.ui.wakeHint < 2000;
-  const trying = tr ? `<button class="pill solid sr-try" data-act="wake-put-back">Put back</button><p class="t-cap muted sr-note">${esc(d.name)} ${Date.now() - tr.at < 30000 ? `is rising to ${w.end}% over 30 s` : `is at ${w.end}%`}</p>`
-    : `<button class="pill ghost hold-pill sr-try" data-hold="wake-try" data-ms="600" data-act="wake-try-hint" data-key="${esc(key)}" data-lamp="${esc(w.lamp)}" data-end="${w.end}" aria-label="Hold to try it on the lamp">${hint ? 'Hold it' : 'Hold to try it on the lamp · 30 s'}</button>`;
+  const trying = tr ? `<button class="pill solid sr-try" data-act="wake-put-back">Put back</button><p class="t-cap muted sr-note">${Date.now() - tr.at < 30000 ? `Rising to ${w.end}%` : `At ${w.end}%`}</p>`
+    : `<button class="pill ghost hold-pill sr-try" data-hold="wake-try" data-ms="600" data-act="wake-try-hint" data-key="${esc(key)}" data-lamp="${esc(w.lamp)}" data-end="${w.end}" aria-label="Hold to try it on ${esc(d.name)}">${hint ? 'Hold' : `Try it on ${esc(d.name)}`}</button>`;
   return `<div class="sunrise" data-sunrise="${esc(key)}" data-w="${esc(JSON.stringify(w))}" style="${sunriseVars(c, w, f)}">
     <div class="dawn" aria-hidden="true"><i class="d1"></i><i class="d2"></i><i class="d3"></i></div>
-    <p class="t-cap sr-cap">${esc(cap)}</p>
     <div class="sr-window" aria-hidden="true">
       <i class="sr-am"></i>
       <span class="sr-stars">${STARS.map(([x, y]) => `<i style="left:${(x / 372 * 100).toFixed(1)}%;top:${y}px"></i>`).join('')}</span>
       <span class="sr-sun">${glowHTML({ level: now.lv, ...(now.col.hex ? { hex: now.col.hex } : { kelvin: now.col.kelvin }), ctx: 'orb', cls: 'sr-glow' })}<i class="sr-disc"></i></span>
       <svg class="sr-hills" viewBox="0 0 372 100" preserveAspectRatio="none"><path class="far" d="M-72 58C8 -6 166 -8 250 58V100H-72z"/><path class="near" d="M158 64C230 2 402 2 490 64V100H158z"/><rect class="ground" x="-1" y="34" width="374" height="66"/></svg>
       <div class="sr-clock"><span class="sr-hm">${now.hm}</span><span class="sr-ap"> ${now.ap}</span></div>
-      <div class="sr-level">${now.lv}% · ${esc(d.name)}</div>
+      <div class="sr-level">${now.lv}%</div>
     </div>
     <div class="sr-scrub">
       <span class="sr-label" aria-hidden="true">${now.hm} ${now.ap} · ${now.lv}%</span>
       <div class="sr-track" role="slider" aria-label="Preview the wake-up light" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(f * 100)}" style="--ramp:linear-gradient(90deg, ${ramp.join(', ')})"><i class="sr-fill"></i><i class="sr-knob"></i></div>
       <div class="sr-ends"><span>${esc(RT.fmtTime(w.start))}</span><span>${esc(RT.fmtTime(alarm))}</span></div>
     </div>
-    ${now.col.last ? '<p class="t-cap muted sr-note">It rises in the colour it was last left in.</p>' : ''}
     ${trying}
   </div>`;
 }
@@ -165,10 +159,9 @@ function paintSunrise(c, root, f) {
   let w; try { w = JSON.parse(root.dataset.w); } catch (_) { return; }
   const now = wakeAt(c, w, f);
   root.setAttribute('style', sunriseVars(c, w, f));
-  const d = c.data.dev(w.lamp); const name = d ? d.name : '';
   root.querySelector('.sr-hm').textContent = now.hm;
   root.querySelector('.sr-ap').textContent = ` ${now.ap}`;
-  root.querySelector('.sr-level').textContent = `${now.lv}% · ${name}`;
+  root.querySelector('.sr-level').textContent = `${now.lv}%`;
   root.querySelector('.sr-label').textContent = `${now.hm} ${now.ap} · ${now.lv}%`;
   root.querySelector('.sr-track').setAttribute('aria-valuenow', String(Math.round(f * 100)));
   setGlow(root.querySelector('.sr-glow'), { level: now.lv, ...(now.col.hex ? { hex: now.col.hex } : { kelvin: now.col.kelvin }), ctx: 'orb' });
@@ -245,7 +238,7 @@ function whenSheet(c, sc, mode) {
     body += `<div class="chip-wrap">${[['at', 'On the dot'], ['before', 'Before'], ['after', 'After']].map(([v, l]) => chip('w-rel', v, l, w.rel === v)).join('')}</div>`;
     if (w.rel !== 'at') body += `<div class="chip-wrap">${[10, 20, 30, 45, 60, 90].map(m => chip('w-mins', m, `${m} min`, w.mins === m)).join('')}</div>`;
     const hm = c.S.config.settings.location ? RT.sunAt(at.type, at.offset_min) : null;
-    body += `<p class="t-body sheet-p when-say">${esc(RT.whenClause(at).replace(/^./, x => x.toUpperCase()))}.${hm ? ` Today that's ${esc(RT.fmtTime(hm))}.` : ''}</p>${whereBlock(c)}`;
+    body += `${hm ? `<p class="t-body sheet-p when-say">${esc(RT.fmtTime(hm))} today</p>` : ''}${whereBlock(c)}`;
   }
   const can = w.type === 'time' || !!c.S.config.settings.location;
   body += `<div class="sheet-btns"><button class="pill solid" data-act="w-use" ${can ? '' : 'disabled'}>Use this time</button></div>`;
@@ -257,7 +250,7 @@ function daysSheet(c, sc) {
   return { over: sc.name, title: 'Which days?', body: `<div class="days-s">
     <div class="dd-row">${RT.WEEK.map(i => `<button class="dd big ${days.includes(i) ? 'on' : ''}" data-act="day" data-d="${i}" aria-pressed="${days.includes(i)}" aria-label="${RT.DAY_LONG[i]}">${RT.DAY_LETTER[i]}</button>`).join('')}</div>
     <div class="chip-wrap">${[['all', 'Every day'], ['weekdays', 'Weekdays'], ['weekends', 'Weekends']].map(([v, l]) => `<button class="chip sm" aria-pressed="${RT.QUICK_DAYS[v].join() === [...days].sort().join()}" data-act="days-quick" data-v="${v}">${l}</button>`).join('')}</div>
-    <p class="t-cap muted sheet-p">${c.esc(RT.daysText(days))}</p></div>` };
+</div>` };
 }
 function whatSheet(c, sc) {
   const { esc, icon, RT } = c;
@@ -266,7 +259,7 @@ function whatSheet(c, sc) {
   const rows = RT.AUTO_RECIPES.filter(x => RT.recipeApplies(x, L, Sh)).map(x => `<button class="row way ${rid === x.id ? 'sel' : ''} ${x.d ? 'two' : ''}" data-act="what" data-r="${x.id}"><span class="radio ${rid === x.id ? 'on' : ''}">${rid === x.id ? icon('check', 14, 2.2) : ''}</span><span class="row-txt"><span class="t">${esc(x.t)}</span>${x.d ? `<span class="d">${esc(x.d)}</span>` : ''}</span>${x.pick ? `<span class="row-chev">${icon('chev', 16, 1.8)}</span>` : ''}</button>`).join('');
   const custom = rid === 'custom' ? `<div class="group"><div class="row way sel two"><span class="radio on">${icon('check', 14, 2.2)}</span><span class="row-txt"><span class="t">Your own steps</span><span class="d">${esc(c.data.describe(sc.actions))}</span></span></div></div>` : '';
   return { over: sc.name, title: 'What it does', body: `${custom}<div class="group">${rows}</div>
-    <button class="card-row press-steps" data-act="steps"><span class="row-ic">${icon('tune', 18, 1.6)}</span><span class="row-txt"><span class="t">Build it step by step</span><span class="d">Several steps, waits, fades</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` };
+    <button class="card-row press-steps" data-act="steps"><span class="row-ic">${icon('tune', 18, 1.6)}</span><span class="row-txt"><span class="t">Step by step</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` };
 }
 function lightsSheet(c, sc) {
   const { esc, icon, data, RT } = c;
@@ -278,16 +271,16 @@ function lightsSheet(c, sc) {
   const shades = data.controllable().filter(d => d.domain === 'cover');
   const lights = rooms.map(a => {
     const ds = data.controllable().filter(d => data.devArea(d) === a.id && d.domain !== 'cover');
-    return `<div class="t-over sec-s">${esc(a.name)}</div><div class="group">${row(`a:${a.id}`, `All of ${a.name}`, `${plural(ds.length, 'light')}`)}${ds.map(d => row(`d:${d.device_id}`, d.name, '')).join('')}</div>`;
+    return `<div class="t-over sec-s">${esc(a.name)}</div><div class="group">${row(`a:${a.id}`, `All of ${a.name}`, '')}${ds.map(d => row(`d:${d.device_id}`, d.name, '')).join('')}</div>`;
   }).join('');
-  return { over: sc.name, title: 'Which lights?', body: `<div class="group">${row('h:all', 'Everything', 'Every light in the house')}</div>${lights}
-    ${shades.length ? `<div class="t-over sec-s">Shades</div><div class="group">${row('h:shades', 'All shades', plural(shades.length, 'shade'))}${shades.map(d => row(`d:${d.device_id}`, d.name, data.devAreaName(d))).join('')}</div>` : ''}
+  return { over: sc.name, title: 'Which lights?', body: `<div class="group">${row('h:all', 'Everything', '')}</div>${lights}
+    ${shades.length ? `<div class="t-over sec-s">Shades</div><div class="group">${row('h:shades', 'All shades', '')}${shades.map(d => row(`d:${d.device_id}`, d.name, data.devAreaName(d))).join('')}</div>` : ''}
     ${data.groups().length ? `<div class="t-over sec-s">Your sets</div><div class="group">${data.groups().map(g => row(`g:${g.id}`, g.name, `${plural(g.device_ids.length, 'light')}`)).join('')}</div>` : ''}` };
 }
 function onlyIfSheet(c, sc) {
   const { icon } = c;
-  const opts = [[null, 'Every time', 'It runs whatever the lights are doing'], ['all_off', 'Only if everything is off', "Skipped when someone's already put a light on"], ['any_on', 'Only if something is on', 'Skipped when the house is already dark']];
-  return { over: sc.name, title: 'Only if', body: `<div class="group">${opts.map(([v, t, d]) => { const on = (sc.only_if || null) === v; return `<button class="row way two ${on ? 'sel' : ''}" data-act="onlyif" data-v="${v || ''}"><span class="radio ${on ? 'on' : ''}">${on ? icon('check', 14, 2.2) : ''}</span><span class="row-txt"><span class="t">${t}</span><span class="d">${d}</span></span></button>`; }).join('')}</div>` };
+  const opts = [[null, 'Every time'], ['all_off', 'Everything is off'], ['any_on', 'Something is on']];
+  return { over: sc.name, title: 'Only if', body: `<div class="group">${opts.map(([v, t]) => { const on = (sc.only_if || null) === v; return `<button class="row way ${on ? 'sel' : ''}" data-act="onlyif" data-v="${v || ''}"><span class="radio ${on ? 'on' : ''}">${on ? icon('check', 14, 2.2) : ''}</span><span class="row-txt"><span class="t">${t}</span></span></button>`; }).join('')}</div>` };
 }
 function moreSheet(c, sc) {
   const { esc, icon, RT } = c;
@@ -295,19 +288,19 @@ function moreSheet(c, sc) {
   const FADE = [['', 'As usual'], [0, 'At once'], [1, '1 second'], [3, '3 seconds'], [8, '8 seconds'], [30, '30 seconds'], [120, '2 minutes'], [600, '10 minutes'], [1200, '20 minutes'], [1800, '30 minutes']];
   return { over: 'Routine', title: sc.name || 'Routine', body: `<div class="group">
       <button class="row kv" data-act="name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val">${esc(sc.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-      ${sc.actions.some(a => a.type === 'level') ? `<label class="row"><span class="row-txt"><span class="t">Change gradually over</span></span><select class="field sel" data-change="fade" aria-label="Change gradually over">${FADE.map(([v, l]) => `<option value="${v}" ${String(fade ?? '') === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
-      <button class="row" data-act="steps"><span class="row-txt"><span class="t">Build it step by step</span><span class="d">Several steps, timers, fades</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      ${sc.actions.some(a => a.type === 'level') ? `<label class="row"><span class="row-txt"><span class="t">Fade</span></span><select class="field sel" data-change="fade" aria-label="Fade">${FADE.map(([v, l]) => `<option value="${v}" ${String(fade ?? '') === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}
+      <button class="row" data-act="steps"><span class="row-txt"><span class="t">Step by step</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
-    <div class="group"><button class="row" data-act="delete"><span class="row-txt"><span class="t">Delete this routine</span></span></button></div>` };
+    <div class="group"><button class="row" data-act="delete"><span class="row-txt"><span class="t">Delete routine</span></span></button></div>` };
 }
 function stepsSheet(c, sc) {
-  return { over: sc.name, title: 'Step by step', body: `<div class="steps"><p class="t-cap muted sheet-p">Steps run in order, top to bottom.</p>${stepCards(c, sc.actions)}
+  return { over: sc.name, title: 'Step by step', body: `<div class="steps">${stepCards(c, sc.actions)}
     <div class="sheet-btns"><button class="pill solid" data-act="st-add">Add a step</button><button class="pill ghost" data-act="try">Try it</button></div></div>` };
 }
 function scenesSheet(c, sc) {
   const { esc, data, H } = c;
-  const items = [...data.presets().map(p => [{ type: 'preset', preset_id: p.id }, H.sceneShortName(p), p.area ? data.areaName(p.area) : 'Any room']), ...data.lutronScenes().map(s => [{ type: 'scene', scene_id: s.scene_id }, s.name, 'From the Lutron app'])];
-  return { over: sc.name, title: 'Which scene?', body: items.length ? `<div class="group">${items.map(([a, n, s]) => `<button class="row two" data-act="scene" data-a="${esc(JSON.stringify(a))}"><span class="row-txt"><span class="t">${esc(n)}</span><span class="d">${esc(s)}</span></span></button>`).join('')}</div>` : '<p class="t-body muted sheet-p">No scenes yet. Make one from a room, then pick it here.</p>' };
+  const items = [...data.presets().map(p => [{ type: 'preset', preset_id: p.id }, H.sceneShortName(p), p.area ? data.areaName(p.area) : 'Any room']), ...data.lutronScenes().map(s => [{ type: 'scene', scene_id: s.scene_id }, s.name, 'Lutron app'])];
+  return { over: sc.name, title: 'Which scene?', body: items.length ? `<div class="group">${items.map(([a, n, s]) => `<button class="row two" data-act="scene" data-a="${esc(JSON.stringify(a))}"><span class="row-txt"><span class="t">${esc(n)}</span><span class="d">${esc(s)}</span></span></button>`).join('')}</div>` : '<p class="t-body muted sheet-p">No scenes yet.</p>' };
 }
 
 const SHEETS = { when: (c, sc) => whenSheet(c, sc, 'at'), off: (c, sc) => whenSheet(c, sc, 'off'), days: daysSheet, what: whatSheet, lights: lightsSheet, onlyif: onlyIfSheet, more: moreSheet };
@@ -404,7 +397,7 @@ export const actions = {
   try(c, el, r) { const sc = sc0(c, r); if (sc) tryIt(c, sc); },
   delete(c, el, r) {
     const sc = sc0(c, r); if (!sc) return;
-    c.openPicker('delete', () => confirmSheet(c, { over: sc.name, title: 'Delete this routine?', act: 'delete-go', yes: 'Delete', text: 'It stops running. Your lights keep whatever they are doing now.' }));
+    c.openPicker('delete', () => confirmSheet(c, { over: sc.name, title: 'Delete this routine?', act: 'delete-go', yes: 'Delete', text: 'It stops running. Your lights stay as they are.' }));
   },
   async 'delete-go'(c, el, r) {
     const sc = sc0(c, r); if (!sc) return;

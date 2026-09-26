@@ -17,6 +17,17 @@ import { stepCards } from '/ui/screens/steps.js';
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const G = ['single', 'double', 'hold'];
 const STAGE_H = 300, STAGE_TOP = 16, STAGE_LEFT = 24;
+// What a press does, said without the remote's own room: on the Kitchen Pico, "Turn on", not "Turn on · Kitchen".
+// The room is the remote's caption and the strip's heading already.
+function said0(c, pid, acts) {
+  const t = c.REM.shortDescribe(acts);
+  const d = c.data.dev(pid); if (!d) return t;
+  const room = c.data.devAreaName(d);
+  if (!room || room === 'Elsewhere') return t;
+  if (t.endsWith(` · ${room}`)) return t.slice(0, -room.length - 3);
+  if (t.startsWith(`${room} · `)) return t.slice(room.length + 3);
+  return t;
+}
 const usualHidden = pid => { try { return !!localStorage.getItem(`usualHidden:${pid}`); } catch (_) { return false; } };
 
 // The key picked on a remote's page: the one last pressed or tapped, else the first.
@@ -57,10 +68,10 @@ function pressLabel(c, pid, fx) {
   if (R.buttonBroken(pid, fx.n)) return null;
   const acts = R.gestureActions(pid, fx.n, fx.g);
   const inh = fx.g === 'hold' && !acts.length ? R.inheritedHold(pid, fx.n) : null;
-  if (!acts.length && !inh) return { cls: 'none', t: 'Nothing set yet · Set it', go: `remote/${pid}/k${fx.n}-${fx.g}` };
+  if (!acts.length && !inh) return { cls: 'none', t: 'Nothing set', go: `remote/${pid}/k${fx.n}-${fx.g}` };
   const nacts = R.gestureActions(pid, fx.n, fx.g, true);
-  if (nacts.length && nightNow(c)) return { cls: 'night', t: `After ${clock(c.S.config.settings.night_start)}: ${R.shortDescribe(nacts)}`, s: R.GESTURE_WORD[fx.g] };
-  return { cls: '', t: acts.length ? R.shortDescribe(acts) : `${inh.dir === 'up' ? 'Brightens' : 'Dims'} while held`, s: fx.g === 'single' ? '' : R.GESTURE_WORD[fx.g] };
+  if (nacts.length && nightNow(c)) return { cls: 'night', t: `After ${clock(c.S.config.settings.night_start)}: ${said0(c, pid, nacts)}`, s: R.GESTURE_WORD[fx.g] };
+  return { cls: '', t: acts.length ? said0(c, pid, acts) : `${inh.dir === 'up' ? 'Brightens' : 'Dims'} while held`, s: fx.g === 'single' ? '' : R.GESTURE_WORD[fx.g] };
 }
 // How the key, the leader and the bead look for this press: 'none' grey (nothing set), 'err' red (a removed light),
 // 'night' the evening's warmer tone.
@@ -114,21 +125,18 @@ function lightsStrip(c, d) {
 // "10:30 pm"
 const clock = hm => { if (!hm) return ''; const [h, m] = hm.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'pm' : 'am'}`; };
 
-// What a key's leader says: the first thing it does, and a word about the rest.
+// What a key's leader says: the first thing it does. The rest is in the rows under the remote.
 function leader(c, pid, n) {
   const R = c.REM;
-  if (R.buttonBroken(pid, n)) return { err: true, t: 'Light removed', s: 'Points at a removed light' };
+  if (R.buttonBroken(pid, n)) return { err: true, t: 'Light removed', s: '' };
   const set = G.filter(g => R.gestureActions(pid, n, g).length);
   if (!set.length) {
     const inh = R.inheritedHold(pid, n);
-    return inh ? { t: 'Nothing yet', s: `Hold ${inh.dir === 'up' ? 'brightens' : 'dims'}` } : { none: true, t: 'Nothing yet', s: '' };
+    return inh ? { t: `Hold ${inh.dir === 'up' ? 'brightens' : 'dims'}`, s: '' } : { none: true, t: 'Nothing yet', s: '' };
   }
   const first = set[0];
   const acts = R.gestureActions(pid, n, first);
-  const rest = set.slice(1);
-  const t = first === 'single' ? R.shortDescribe(acts) : `${R.GESTURE_WORD[first]}: ${R.shortDescribe(acts)}`;
-  const s = rest.length === 1 ? `${R.GESTURE_WORD[rest[0]]}: ${R.shortDescribe(R.gestureActions(pid, n, rest[0]))}` : rest.length ? `Also ${rest.map(g => R.GESTURE_WORD[g].toLowerCase()).join(', ')}` : '';
-  return { t, s };
+  return { t: first === 'single' ? said0(c, pid, acts) : `${R.GESTURE_WORD[first]}: ${said0(c, pid, acts)}`, s: '' };
 }
 
 function stage(c, d, sel) {
@@ -172,7 +180,7 @@ function stage(c, d, sel) {
     if (here && pl) L = { t: pl.t, s: pl.s || L.s };
     const act = here && pl && pl.go ? `data-go="${esc(pl.go)}"` : `data-act="key" data-n="${k.n}"`;
     return `<i class="sd ${state}" style="top:${ys[i] - 3}px"></i>
-      <button class="ld ${state} ${on ? 'on' : ''} ${pressed === k.n ? 'pressed' : ''} ${here ? `fx-lab ${fxs}` : ''}" style="top:${ly[i] - 20}px;${here ? fxStyle(fx.t) : ''}" ${act} aria-label="${esc(REM.buttonName(pid, k.n))}">
+      <button class="ld ${state} ${L.s ? 'two' : ''} ${on ? 'on' : ''} ${pressed === k.n ? 'pressed' : ''} ${here ? `fx-lab ${fxs}` : ''}" style="top:${ly[i] - 20}px;${here ? fxStyle(fx.t) : ''}" ${act} aria-label="${esc(REM.buttonName(pid, k.n))}">
       <span class="lt nm-cut">${esc(L.t)}</span>${L.s ? `<span class="ls nm-cut">${esc(L.s)}</span>` : ''}</button>`;
   }).join('');
   const lit = fx ? { n: fx.n, cls: fxs, style: fxStyle(fx.t) } : null;
@@ -192,10 +200,10 @@ function pressRows(c, d, n) {
     const b = REM.mainBinding(pid, n, g);
     const broken = b && REM.bindingBroken(b);
     const inh = g === 'hold' && !acts.length ? REM.inheritedHold(pid, n) : null;
-    const value = broken ? 'Points at a removed light' : acts.length ? REM.shortDescribe(acts) : inh ? `${inh.dir === 'up' ? 'Brightens' : 'Dims'} while held · follows the press` : 'Nothing yet';
+    const value = broken ? 'Points at a removed light' : acts.length ? said0(c, pid, acts) : inh ? `${inh.dir === 'up' ? 'Brightens' : 'Dims'} while held` : 'Nothing yet';
     return `<button class="row prow ${nacts.length ? 'tall' : ''}" data-go="remote/${esc(pid)}/k${n}-${g}" data-grow="${n}/${g}">
       <span class="row-txt"><span class="pl">${REM.GESTURE_WORD[g]}</span><span class="pv ${broken ? 'err' : acts.length || inh ? '' : 'q'}">${esc(value)}</span>
-      ${nacts.length ? `<span class="pn">${icon('moon', 14, 1.5)}<span>After ${esc(clock(night))}: ${esc(REM.shortDescribe(nacts))}</span></span>` : ''}</span>
+      ${nacts.length ? `<span class="pn">${icon('moon', 14, 1.5)}<span>After ${esc(clock(night))}: ${esc(said0(c, pid, nacts))}</span></span>` : ''}</span>
       <span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`;
   }).join('');
 }
@@ -210,25 +218,22 @@ export function view(c, r) {
   const quiet = !data.buttonsOf(pid).length;
   const u = REM.usualLayoutTargets(d);
   const offer = !has && u && !usualHidden(pid)
-    ? `<div class="offer"><p class="t-row">Want the usual way?</p><p class="t-cap muted">Top turns ${esc(data.devAreaName(d))} on, bottom turns it off, holding either brightens or dims${u.round != null ? ', the middle is a scene' : ''}.</p>
-        <div class="btns"><button class="pill blue" data-act="usual">Set up the usual way</button><button class="pill ghost" data-act="usual-hide">I'll pick myself</button></div></div>` : '';
-  const waiting = quiet ? `<div class="note warn">${icon('info', 20, 1.4)}<p>Your bridge has not listed this remote's keys yet. It can take a few minutes after a remote is added. Press a key on it once and it is learned; until then what you set is kept but does not run. <button class="link blue" data-act="refresh">Look again</button></p></div>` : '';
-  const twice = REM.gestureActions(pid, sel, 'double').length
-    ? `<div class="note">${icon('info', 20, 1.4)}<p>This button has a double press now, so its single press waits a moment to tell them apart.</p></div>` : '';
+    ? `<div class="offer"><p class="t-row">Set up the usual way?</p><p class="t-cap muted">Top on, bottom off, hold to dim${u.round != null ? ', middle a scene' : ''}</p>
+        <div class="btns"><button class="pill blue" data-act="usual">Set it up</button><button class="pill ghost" data-act="usual-hide">I'll pick myself</button></div></div>` : '';
+  const waiting = quiet ? `<div class="note warn">${icon('info', 20, 1.4)}<p>The bridge hasn't listed this remote's keys yet. Press each key once to teach it. <button class="link blue" data-act="refresh">Look again</button></p></div>` : '';
   return `<div class="remote-page">
     <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       <button class="hdr-btn a1" data-go="remote/${esc(pid)}/more" aria-label="More">${icon('dots', 22, 1.7)}</button>
     </header>
     <h1 class="t-h1 page-h1 nm-cut bar-t bar-pin">${esc(d.name)}</h1>
-    <p class="t-cap muted rm-sub">${esc(REM.modelLine(d))}</p>
-    ${listenLine(c, true)}
+    <p class="t-cap muted rm-sub">${esc(data.devAreaName(d))}</p>
+    ${c.conn() === 'off' ? listenLine(c, true) : ''}
     ${waiting}${offer}
     ${stage(c, d, sel)}
     ${lightsStrip(c, d)}
     <div class="t-over sec rm-key">${esc(REM.buttonName(pid, sel))}</div>
     <div class="group">${pressRows(c, d, sel)}</div>
-    ${twice}
   </div>`;
 }
 
@@ -266,9 +271,8 @@ function pressSheet(c, r) {
   const s = c.S.config.settings;
   const inh = g === 'hold' && !acts.length ? REM.inheritedHold(pid, n) : null;
   const notes = [
-    g === 'double' && !acts.length ? 'Once it has a press twice, a single press waits a moment so the two can be told apart.' : null,
-    inh ? `With nothing set here, holding this button ${inh.dir === 'up' ? 'brightens' : 'dims'} ${c.data.targetName(inh.target)} until you let go, because a press nudges it. Pick something below to do that instead.` : null,
-    acts.length && REM.mainBinding(pid, n, g) && REM.bindingBroken(REM.mainBinding(pid, n, g)) ? 'This points at something that has been removed. Pick again.' : null,
+    inh ? `Holding it ${inh.dir === 'up' ? 'brightens' : 'dims'} ${c.data.targetName(inh.target)} until you pick something here.` : null,
+    acts.length && REM.mainBinding(pid, n, g) && REM.bindingBroken(REM.mainBinding(pid, n, g)) ? 'This points at something removed. Pick again.' : null,
   ].filter(Boolean).map(x => `<div class="note">${icon('info', 20, 1.4)}<p>${esc(x)}</p></div>`).join('');
   const custom = cur === 'custom' ? `<button class="row way sel two" data-act="steps" aria-pressed="true">${radio(true, icon)}<span class="row-txt"><span class="t">Your own steps</span><span class="d">${esc(c.data.describe(acts))}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : '';
   const body = `<div class="press">
@@ -276,14 +280,14 @@ function pressSheet(c, r) {
     ${notes}
     <div class="t-over sec-s">Suggested</div>
     <div class="group">${custom}${REM.suggested(pid, n, g, t).map(x => wayRow(c, pid, x, x.id === cur, false)).join('')}</div>
-    <button class="card-row press-more" data-act="ways"><span class="row-ic">${icon('dots', 18, 1.6)}</span><span class="row-txt"><span class="t">More choices</span><span class="d">Brightness steps, hold to dim, timers, leaving, fans…</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+    <button class="card-row press-more" data-act="ways"><span class="row-ic">${icon('dots', 18, 1.6)}</span><span class="row-txt"><span class="t">More choices</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     <div class="group night-g">
       <div class="row nrow"><span class="row-ic">${icon('moon', 18, 1.6)}</span><span class="row-txt"><span class="t">Different at night</span><span class="d">${esc(clock(s.night_start))} to ${esc(clock(s.night_end))}</span></span>
         <button class="toggle" role="switch" aria-checked="${!!nacts.length}" data-act="night-toggle" aria-label="Different at night"></button></div>
-      ${nacts.length ? `<button class="row nsent" data-act="night-ways"><i class="cn"></i>${icon('moon', 16, 1.6)}<span class="row-txt"><span class="nw">At night:</span> <span class="nv">${esc(REM.shortDescribe(nacts))}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
+      ${nacts.length ? `<button class="row nsent" data-act="night-ways"><i class="cn"></i>${icon('moon', 16, 1.6)}<span class="row-txt"><span class="nw">At night:</span> <span class="nv">${esc(said0(c, pid, nacts))}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
     </div>
-    <button class="card-row press-steps" data-act="steps"><span class="row-ic">${icon('tune', 18, 1.6)}</span><span class="row-txt"><span class="t">Build it step by step</span><span class="d">Several steps, waits, colours</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-    ${acts.length ? `<div class="sheet-btns"><button class="pill ghost" data-act="try">Try it now</button><button class="pill ghost" data-act="clear">Clear this press</button></div>` : ''}
+    <button class="card-row press-steps" data-act="steps"><span class="row-ic">${icon('tune', 18, 1.6)}</span><span class="row-txt"><span class="t">Step by step</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+    ${acts.length ? `<div class="sheet-btns"><button class="pill ghost" data-act="try">Try it</button><button class="pill ghost" data-act="clear">Clear</button></div>` : ''}
   </div>`;
   return { over: d.name, title: `${REM.buttonName(pid, n)} · ${REM.GESTURE_WORD[g]}`, body };
 }
@@ -341,9 +345,9 @@ function controlsSheet(c, pid, n, g, over) {
   } else if (mode === 'sets') {
     body = `<div class="t-over sec-s">Saved sets</div><div class="chip-wrap sets">${data.groups().map(gr => `<button class="chip lead" aria-pressed="${list.length === 1 && list[0] === `g:${gr.id}`}" data-act="ctl-set" data-t="g:${esc(gr.id)}">${icon('lamp', 16, 1.2)}${esc(gr.name)}<span class="muted">· ${plural(gr.device_ids.length, 'light')}</span></button>`).join('')}
       <button class="chip lead" data-act="ctl-newset">${icon('plus', 16, 1.2)}New set</button></div>
-      <p class="t-cap muted sheet-p ctl-note">A new set is made from the lights picked now. Rename or change sets in Settings.</p>`;
+`;
   }
-  const summary = `<div class="ctl-sum"><span class="row-ic">${icon('lamp', 20, 1.3)}</span><div><p><span class="muted">Controls </span><b>${esc(data.targetDevices(t).length ? REM.targetSummary(t) : targetWord(c, t))}</b></p><p class="t-cap muted">Applied as you pick${c.toasts ? ' · Undo from the toast' : ''}</p></div></div>`;
+  const summary = `<div class="ctl-sum"><span class="row-ic">${icon('lamp', 20, 1.3)}</span><div><p><span class="muted">Controls </span><b>${esc(data.targetDevices(t).length ? REM.targetSummary(t) : targetWord(c, t))}</b></p></div></div>`;
   return { over, title: 'Controls', body: `<div class="ctl"><div class="chip-wrap modes">${chips}</div>${body}${summary}</div>` };
 }
 
@@ -353,9 +357,9 @@ function waysSheet(c, pid, n, g, night) {
   const t = T(c, pid, n, g);
   const cur = REM.recipeOf(REM.gestureActions(pid, n, g, night));
   const body = REM.allWays(pid, n, g, t).map(([name, rs]) => `<div class="t-over sec-s">${esc(name)}</div><div class="group">${rs.map(x => wayRow(c, pid, x, x.id === cur, night)).join('')}</div>`).join('');
-  const nightNote = night ? `<p class="t-cap muted sheet-p">Between ${clock(c.S.config.settings.night_start)} and ${clock(c.S.config.settings.night_end)} this press does this instead. The hours are the house's, in Settings.</p>` : '';
-  const nightSteps = night ? `<button class="card-row press-steps" data-act="night-steps"><span class="row-ic">${c.icon('tune', 18, 1.6)}</span><span class="row-txt"><span class="t">Build the night version step by step</span><span class="d">Several steps, waits, colours</span></span><span class="row-chev">${c.icon('chev', 16, 1.8)}</span></button>` : '';
-  return { over: `${REM.buttonName(pid, n)} · ${REM.GESTURE_WORD[g]}`, title: night ? 'At night' : 'More choices', body: `<div class="ways">${nightNote}${night ? `<div class="group">${wayRow(c, pid, { id: 'nothing', t: 'Nothing different', d: 'The same as the rest of the day' }, false, true)}</div>` : ''}${body}${nightSteps}</div>` };
+  const nightNote = night ? `<p class="t-cap muted sheet-p">${clock(c.S.config.settings.night_start)} to ${clock(c.S.config.settings.night_end)}</p>` : '';
+  const nightSteps = night ? `<button class="card-row press-steps" data-act="night-steps"><span class="row-ic">${c.icon('tune', 18, 1.6)}</span><span class="row-txt"><span class="t">Step by step</span></span><span class="row-chev">${c.icon('chev', 16, 1.8)}</span></button>` : '';
+  return { over: `${REM.buttonName(pid, n)} · ${REM.GESTURE_WORD[g]}`, title: night ? 'At night' : 'More choices', body: `<div class="ways">${nightNote}${night ? `<div class="group">${wayRow(c, pid, { id: 'nothing', t: 'Nothing different' }, false, true)}</div>` : ''}${body}${nightSteps}</div>` };
 }
 function sceneSheet(c, pid, n, g, night) {
   const { esc, data, H, REM } = c;
@@ -363,31 +367,31 @@ function sceneSheet(c, pid, n, g, night) {
   const cur = REM.gestureActions(pid, n, g, night)[0] || {};
   const row = (a, name, sub) => {
     const on = (a.type === 'preset' && cur.type === 'preset' && cur.preset_id === a.preset_id) || (a.type === 'scene' && cur.type === 'scene' && cur.scene_id === a.scene_id);
-    return `<button class="row way ${on ? 'sel' : ''} two" data-act="scene-pick" data-a="${esc(JSON.stringify(a))}" ${night ? 'data-night="1"' : ''}>${radio(on, c.icon)}<span class="row-txt"><span class="t">${esc(name)}</span><span class="d">${esc(sub)}</span></span></button>`;
+    return `<button class="row way ${on ? 'sel' : ''} ${sub ? 'two' : ''}" data-act="scene-pick" data-a="${esc(JSON.stringify(a))}" ${night ? 'data-night="1"' : ''}>${radio(on, c.icon)}<span class="row-txt"><span class="t">${esc(name)}</span>${sub ? `<span class="d">${esc(sub)}</span>` : ''}</span></button>`;
   };
   const rooms = data.areas().filter(a => H.roomScenes(a.id).length).sort((a, b) => (b.id === x.aid) - (a.id === x.aid));
-  let body = rooms.map(a => `<div class="t-over sec-s">${esc(a.name)}${a.id === x.aid ? " · this remote's room" : ''}</div><div class="group">${H.roomScenes(a.id).map(p => row({ type: 'preset', preset_id: p.id }, H.sceneShortName(p), p.mood ? (p.edited ? 'Changed by you' : 'Suggested') : 'Yours')).join('')}</div>`).join('');
+  let body = rooms.map(a => `<div class="t-over sec-s">${esc(a.name)}</div><div class="group">${H.roomScenes(a.id).map(p => row({ type: 'preset', preset_id: p.id }, H.sceneShortName(p), '')).join('')}</div>`).join('');
   const loose = data.presets().filter(p => !p.area || !data.areas().some(a => a.id === p.area));
-  if (loose.length) body += `<div class="t-over sec-s">Any room</div><div class="group">${loose.map(p => row({ type: 'preset', preset_id: p.id }, p.name, 'Yours')).join('')}</div>`;
+  if (loose.length) body += `<div class="t-over sec-s">Any room</div><div class="group">${loose.map(p => row({ type: 'preset', preset_id: p.id }, p.name, '')).join('')}</div>`;
   const theirs = data.lutronScenes();
-  if (theirs.length) body += `<div class="t-over sec-s">From the Lutron app</div><div class="group">${theirs.map(s => row({ type: 'scene', scene_id: s.scene_id }, s.name, 'From the Lutron app')).join('')}</div>`;
-  return { over: `${REM.buttonName(pid, n)} · ${REM.GESTURE_WORD[g]}`, title: 'Which scene?', body: body || `<p class="t-body muted sheet-p">No scenes yet. Make one from a room's page or All scenes, then pick it here.</p>` };
+  if (theirs.length) body += `<div class="t-over sec-s">From the Lutron app</div><div class="group">${theirs.map(s => row({ type: 'scene', scene_id: s.scene_id }, s.name, '')).join('')}</div>`;
+  return { over: `${REM.buttonName(pid, n)} · ${REM.GESTURE_WORD[g]}`, title: 'Which scene?', body: body || `<p class="t-body muted sheet-p">No scenes yet.</p>` };
 }
 function cycleSheet(c, pid, n, g, night) {
   const { esc, data, H, REM, icon } = c;
   const k = pressKey(pid, n, g);
   const pickedIds = (c.ui.cycle || {})[k] || REM.cycleIdsOf(pid, n, g, night);
   const x = REM.recipeCtx(pid);
-  const row = p => { const at = pickedIds.indexOf(p.id); return `<button class="row way ${at >= 0 ? 'sel' : ''} two" data-act="cycle-scene" data-p="${esc(p.id)}"><span class="order ${at >= 0 ? 'on' : ''}">${at >= 0 ? at + 1 : ''}</span><span class="row-txt"><span class="t">${esc(H.sceneShortName(p))}</span><span class="d">${at >= 0 ? `Number ${at + 1} in the loop` : 'Not in the loop'}</span></span></button>`; };
+  const row = p => { const at = pickedIds.indexOf(p.id); return `<button class="row way ${at >= 0 ? 'sel' : ''}" data-act="cycle-scene" data-p="${esc(p.id)}"><span class="order ${at >= 0 ? 'on' : ''}">${at >= 0 ? at + 1 : ''}</span><span class="row-txt"><span class="t">${esc(H.sceneShortName(p))}</span></span></button>`; };
   const rooms = data.areas().filter(a => H.roomScenes(a.id).length).map(a => {
     const mp = H.roomScenes(a.id); const all = mp.every(p => pickedIds.includes(p.id));
-    return `<div class="t-over sec-s">${esc(a.name)}</div><div class="group"><button class="row two" data-act="cycle-room" data-a="${esc(a.id)}"><span class="row-ic">${icon('grid', 18, 1.6)}</span><span class="row-txt"><span class="t">All of ${esc(a.name)}'s scenes</span><span class="d">${all ? 'Already in the loop. Tap to take them out.' : `Adds ${mp.length} in order`}</span></span></button>${mp.map(row).join('')}</div>`;
+    return `<div class="t-over sec-s">${esc(a.name)}</div><div class="group"><button class="row" data-act="cycle-room" data-a="${esc(a.id)}"><span class="row-ic">${icon('grid', 18, 1.6)}</span><span class="row-txt"><span class="t">All of ${esc(a.name)}'s scenes</span></span></button>${mp.map(row).join('')}</div>`;
   }).join('');
   const loose = data.presets().filter(p => !p.area);
   const pair = x.arrows && (n === x.arrows.up || n === x.arrows.down);
   return {
     over: `${REM.buttonName(pid, n)} · ${REM.GESTURE_WORD[g]}`, title: 'Which scenes, in order?',
-    body: `<p class="t-cap muted sheet-p">${pair ? 'Up arrow goes forwards, down arrow goes back.' : 'One step per press.'} Tap them in the order the presses should walk them.</p>${rooms}${loose.length ? `<div class="t-over sec-s">Any room</div><div class="group">${loose.map(row).join('')}</div>` : ''}
+    body: `${pair ? '<p class="t-cap muted sheet-p">Up goes forwards, down goes back</p>' : ''}${rooms}${loose.length ? `<div class="t-over sec-s">Any room</div><div class="group">${loose.map(row).join('')}</div>` : ''}
       <div class="sheet-btns"><button class="pill solid" data-act="cycle-save" ${pickedIds.length < 2 ? 'disabled' : ''}>${pickedIds.length < 2 ? 'Pick at least two' : pair ? 'Set both arrows' : 'Use these'}</button><button class="pill ghost" data-act="cycle-clear">Start over</button></div>`,
   };
 }
@@ -396,7 +400,7 @@ function doorSheet(c, pid, n, g, night) {
   const cur = REM.doorOf(pid, n, g);
   const lights = data.controllable().filter(d => d.domain === 'light' || d.domain === 'switch');
   const body = data.areas().map(a => { const ds = lights.filter(d => data.devArea(d) === a.id); return ds.length ? `<div class="t-over sec-s">${esc(a.name)}</div><div class="group">${ds.map(d => `<button class="row ck" data-act="door-pick" data-t="d:${esc(d.device_id)}" ${night ? 'data-night="1"' : ''}>${lampCircle(c, d)}<span class="row-txt"><span class="t">${esc(d.name)}</span></span>${radio(cur === `d:${d.device_id}`, c.icon)}</button>`).join('')}</div>` : ''; }).join('');
-  return { over: 'Leaving', title: 'Which light is by the door?', body: `<p class="t-cap muted sheet-p">It stays on for two minutes after everything else goes off.</p>${body}` };
+  return { over: 'Leaving', title: 'Which light is by the door?', body };
 }
 // Building a press step by step: each step a card of plain fields, saved as it changes.
 function stepsSheet(c, pid, n, g, night) {
@@ -406,8 +410,7 @@ function stepsSheet(c, pid, n, g, night) {
   const cards = stepCards(c, list);
   return {
     over: `${REM.buttonName(pid, n)} · ${REM.GESTURE_WORD[g]}${night ? ' · at night' : ''}`, title: 'Step by step',
-    body: `<div class="steps">${list.length ? '' : `<p class="t-cap muted sheet-p">${night && !b ? 'Set what this press does normally first; the night version sits on top of it.' : 'No steps yet. Steps run in order, top to bottom.'}</p>`}${cards}
-      ${b && b.gesture === 'hold_start' && !night ? '<p class="t-cap muted sheet-p">These run when the hold begins; letting go stops them.</p>' : ''}
+    body: `<div class="steps">${list.length ? '' : `<p class="t-cap muted sheet-p">${night && !b ? 'Set what it does by day first.' : 'No steps yet.'}</p>`}${cards}
       <div class="sheet-btns"><button class="pill solid" data-act="st-add" ${night && !b ? 'disabled' : ''}>Add a step</button>${list.length ? '<button class="pill ghost" data-act="try" data-night="' + (night ? 1 : 0) + '">Try it</button>' : ''}</div></div>`,
   };
 }
@@ -421,19 +424,19 @@ function moreSheet(c, r) {
   const u = REM.usualLayoutTargets(d);
   const listed = data.buttonsOf(pid).map(b => b.button_number).sort((a, b) => a - b);
   const heard = REM.seen(d);
-  const facts = `What your bridge says: ${d.type || 'no type'}${d.serial ? `, serial ${d.serial}` : ''}, ${listed.length ? `keys ${listed.join(', ')}` : heard.length ? `no keys listed, presses heard from ${heard.join(', ')}` : 'no keys listed yet'}.`;
+  const facts = `${d.type || 'Unknown type'}${d.serial ? `, serial ${d.serial}` : ''}, ${listed.length ? `keys ${listed.join(', ')}` : heard.length ? `keys heard ${heard.join(', ')}` : 'no keys listed yet'}`;
   const body = `<div class="rmore">
     <div class="group">
       <button class="row" data-act="rm-room"><span class="row-txt"><span class="t">Room</span></span><span class="row-val">${esc(data.devAreaName(d))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-      <button class="row" data-act="rm-look"><span class="row-txt"><span class="t">Not your remote? Change the picture</span></span><span class="row-val">${esc(REM.PICO_FINISHES[REM.finishFor(d)].name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
-      <button class="row" data-go="timing"><span class="row-txt"><span class="t">Press timing</span><span class="d">How long a double press and a hold are</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row" data-act="rm-look"><span class="row-txt"><span class="t">Picture</span></span><span class="row-val">${esc(REM.PICO_FINISHES[REM.finishFor(d)].name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row" data-go="timing"><span class="row-txt"><span class="t">Press timing</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
     <div class="group">
-      ${u ? `<button class="row" data-act="usual"><span class="row-txt"><span class="t">${has ? 'Start over with the usual layout' : 'Set up the usual way'}</span><span class="d">Top turns ${esc(data.devAreaName(d))} on, bottom turns it off, holding either brightens or dims.</span></span></button>` : ''}
-      ${has ? `<button class="row" data-act="rm-clear"><span class="row-txt"><span class="t">Clear every button</span><span class="d">It does nothing here until you pick again.</span></span></button>` : ''}
-      <button class="row" data-act="rm-lutron" aria-expanded="${!!c.ui.lutronOpen}"><span class="row-txt"><span class="t">It may still do what the Lutron app set up</span><span class="d">${c.ui.lutronOpen ? 'To make a remote fully yours, open the Lutron app, tap this remote, and remove the lights it controls (keep it paired). From then on only your settings run. Leave it as it is if you only want to add a double press or a hold on top of what it already does.' : 'Both things happen. Tap to read how to make it fully yours.'}</span></span></button>
+      ${u ? `<button class="row" data-act="usual"><span class="row-txt"><span class="t">${has ? 'Start over the usual way' : 'Set up the usual way'}</span><span class="d">Top on, bottom off, hold to dim</span></span></button>` : ''}
+      ${has ? `<button class="row" data-act="rm-clear"><span class="row-txt"><span class="t">Clear every button</span></span></button>` : ''}
+      <button class="row" data-act="rm-lutron" aria-expanded="${!!c.ui.lutronOpen}"><span class="row-txt"><span class="t">Also set up in the Lutron app?</span>${c.ui.lutronOpen ? '<span class="d">Both run. To use only yours, open the Lutron app, tap this remote and remove the lights it controls. Keep it paired.</span>' : ''}</span></button>
     </div>
-    <div class="group"><button class="row" data-act="rm-remove"><span class="row-txt"><span class="t">Remove this remote from my home</span><span class="d">It leaves the bridge and stops working until it is added again.</span></span></button></div>
+    <div class="group"><button class="row" data-act="rm-remove"><span class="row-txt"><span class="t">Remove remote</span></span></button></div>
     <p class="t-cap muted sheet-p">${esc(facts)}</p></div>`;
   return { over: 'Remote', title: d.name, body };
 }
@@ -441,9 +444,9 @@ function lookSheet(c, d) {
   const { esc, icon, REM } = c;
   const cur = REM.modelFor(d), fin = REM.finishFor(d);
   const rows = Object.entries(REM.PICO_MODELS).map(([k, m]) => `<button class="row look-row" data-act="look-model" data-m="${k}"><span class="look-th">${picoSVG({ model: k, finish: fin, height: 52 })}</span>
-    <span class="row-txt"><span class="t">${esc(m.name)}</span><span class="d">${esc(m.long)}${m.types.includes(d.type) ? ' · what the bridge reports' : ''}</span></span>${cur === k ? `<span class="row-tick">${icon('check', 20, 1.9)}</span>` : ''}</button>`).join('');
+    <span class="row-txt"><span class="t">${esc(m.name)}</span>${m.types.includes(d.type) ? '<span class="d">What the bridge reports</span>' : ''}</span>${cur === k ? `<span class="row-tick">${icon('check', 20, 1.9)}</span>` : ''}</button>`).join('');
   const fins = Object.entries(REM.PICO_FINISHES).map(([k, f]) => `<button class="chip sm lead" aria-pressed="${fin === k}" data-act="look-finish" data-f="${k}"><i class="cdot" style="background:${f.body};box-shadow:inset 0 0 0 1px ${f.edge}"></i>${esc(f.name)}</button>`).join('');
-  return { over: d.name, title: 'Which remote is this?', body: `<div class="t-over sec-s">Colour</div><div class="chip-wrap">${fins}</div><div class="t-over sec-s">Layout</div><div class="group">${rows}</div><p class="t-cap muted sheet-p">The bridge already knows the layout. Change it only if the picture does not match what is on your wall.</p>` };
+  return { over: d.name, title: 'Which remote is this?', body: `<div class="t-over sec-s">Colour</div><div class="chip-wrap">${fins}</div><div class="t-over sec-s">Layout</div><div class="group">${rows}</div>` };
 }
 
 export const noTabs = false;
@@ -641,13 +644,13 @@ export const actions = {
   'rm-lutron'(c) { c.ui.lutronOpen = !c.ui.lutronOpen; c.render(); },
   'rm-clear'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;
-    c.openPicker('clear', () => confirmSheet(c, { over: d.name, title: 'Clear every button?', act: 'rm-clear-go', yes: 'Clear them', text: 'Every press, press twice and hold on this remote stops doing anything here. What the Lutron app set up is not touched.' }));
+    c.openPicker('clear', () => confirmSheet(c, { over: d.name, title: 'Clear every button?', act: 'rm-clear-go', yes: 'Clear them', text: 'Every press, press twice and hold stops doing anything here. The Lutron app\'s own setup stays.' }));
   },
   'rm-clear-go'(c, el, r) { const d = c.data.dev(r.id); if (!d) return; c.REM.clearRemote(d.device_id); c.closePicker(); c.save(`${d.name} cleared`); },
   'rm-remove'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;
     c.openPicker('remove', () => confirmSheet(c, { over: d.name, title: 'Remove this remote?', act: 'rm-remove-go', yes: 'Remove',
-      text: 'It leaves your Lutron bridge and stops working until it is added again. What its buttons did here is forgotten. The Lutron app will not list it any more either.' }));
+      text: 'It leaves your Lutron bridge and the Lutron app, and stops working until it is added again.' }));
   },
   async 'rm-remove-go'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;

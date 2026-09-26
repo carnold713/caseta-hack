@@ -55,7 +55,7 @@
 /* the label brightens as the bead reaches it, and settles back */
 .ld.fx-lab .lt { animation: lg-lab 1440ms linear both; animation-delay: var(--fx, 0ms); }
 .ld.fx-lab.fx-held .lt { animation: lg-lab-in 600ms linear both; animation-delay: var(--fx, 0ms); text-shadow: 0 0 12px rgba(82, 174, 255, .55); }
-.ld.fx-lab.none .lt { color: var(--text-2); font-weight: 500; top: 2px; }
+.ld.fx-lab.none .lt { color: var(--text-2); font-weight: 500; }
 .ld.fx-lab.night .lt { color: var(--fx-night); }
 @keyframes lg-lab { 0%, 25% { text-shadow: 0 0 12px rgba(82, 174, 255, 0); animation-timing-function: var(--ease); } 41.7% { text-shadow: 0 0 12px rgba(82, 174, 255, .55); } 83.3% { text-shadow: 0 0 12px rgba(82, 174, 255, .55); animation-timing-function: var(--ease); } 100% { text-shadow: 0 0 12px rgba(82, 174, 255, 0); } }
 @keyframes lg-lab-in { 0%, 60% { text-shadow: 0 0 12px rgba(82, 174, 255, 0); animation-timing-function: var(--ease); } 100% { text-shadow: 0 0 12px rgba(82, 174, 255, .55); } }
@@ -97,12 +97,11 @@
 .ll { margin-top: 20px; }
 .til { position: relative; margin: 0 var(--gutter); padding: 22px 20px 14px; border-radius: var(--r-card); background: var(--surface-1); overflow: hidden; }
 .til > :not(.glow) { position: relative; z-index: 1; }
-.til-wait { height: 282px; visibility: hidden; }
+.til-wait { height: 263px; visibility: hidden; }
 .til-over { line-height: 14px; }
-.til-lit, .til-sub { margin: 8px 0 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
+.til-lit { margin: 8px 0 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
 .til-h { position: relative; margin: 1px 0 0; height: 44px; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.01em; white-space: nowrap; }
 .til-step { position: absolute; left: 0; top: 0; opacity: 0; }
-.til-sub { margin-top: 2px; }
 .til-curve { position: relative; margin-top: 13px; width: 332px; max-width: 100%; height: 64px; }
 .til-curve svg { display: block; overflow: visible; max-width: 100%; }
 .til-base { fill: rgba(255, 255, 255, .08); }
