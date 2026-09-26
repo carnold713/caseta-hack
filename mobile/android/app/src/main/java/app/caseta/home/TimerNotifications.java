@@ -93,9 +93,9 @@ final class TimerNotifications {
                 String title = t.optString("title", "Light"), target = t.optString("target", key), route = t.optString("route", routeOf(key));
                 Safe.run(c, "timer notification", () -> {
                     Notification n;
-                    try { n = build(c, key, title, target, ends, route, mode); } catch (Throwable t) {
+                    try { n = build(c, key, title, target, ends, route, mode); } catch (Throwable e) {
                         // a phone that will not take the Live Update still shows the ongoing countdown
-                        Safe.note(c, "live update", t);
+                        Safe.note(c, "live update", e);
                         n = build(c, key, title, target, ends, route, "ongoing");
                     }
                     nm.notify(key, 1, n);
