@@ -1,5 +1,7 @@
 package app.caseta.home;
 
+import android.appwidget.AppWidgetManager;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.ValueCallback;
@@ -12,12 +14,22 @@ import androidx.annotation.NonNull;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 
+import org.json.JSONObject;
+
 import java.util.Locale;
 
 /** The app: the hub's own web app in a WebView, with the Hub plugin for the pieces outside it. */
 public class MainActivity extends BridgeActivity {
+    /** The page to open on (#light/5/timer, #widgets/12): from a widget, a timer's notification, a widget's setup. */
+    static final String ROUTE = "route";
+    /** Opened by a widget's configure step: the page's Done goes back to the home screen. */
+    static final String FROM_WIDGET = "fromWidget";
+
     /** Android's back, handed to the page. */
     private OnBackPressedCallback back;
+    /** A page asked for before the web app had loaded, opened as soon as it has. */
+    private String pendingRoute;
+    private boolean fromWidget;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -29,8 +41,14 @@ public class MainActivity extends BridgeActivity {
             public void onPageStarted(WebView webView) {
                 setPageCanGoBack(true);
             }
+
+            @Override
+            public void onPageLoaded(WebView webView) {
+                if (pendingRoute != null) { String r = pendingRoute; pendingRoute = null; openRoute(r); }
+            }
         });
         super.onCreate(savedInstanceState);
+        pendingRoute = routeOf(getIntent());
 
         // Android's back (the edge swipe, or the button) steps back through the app, as it does in any app: a sheet
         // closes, a room goes back to Rooms, a tab goes back to Home. The page keeps that history itself (one entry
@@ -68,6 +86,42 @@ public class MainActivity extends BridgeActivity {
             }
         };
         getOnBackPressedDispatcher().addCallback(this, back);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String r = routeOf(intent);
+        if (r != null) openRoute(r);
+    }
+
+    /** The page an intent asks for: its route, or a widget just placed from the app (its setup page). */
+    private String routeOf(Intent intent) {
+        if (intent == null) return null;
+        fromWidget = intent.getBooleanExtra(FROM_WIDGET, false);
+        String r = intent.getStringExtra(ROUTE);
+        int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+        if (r == null && id != AppWidgetManager.INVALID_APPWIDGET_ID) r = "widgets/" + id;
+        return r == null || r.isEmpty() ? null : r;
+    }
+
+    /** Open a page in the web app, as a tap on a link would (its own history step, so Back returns). */
+    private void openRoute(String route) {
+        WebView web = webView();
+        if (web == null) { pendingRoute = route; return; }
+        web.evaluateJavascript("(function(){try{location.hash=" + JSONObject.quote("#" + route) + "}catch(e){}})()", null);
+    }
+
+    /**
+     * Done on a widget's page: back to the home screen when a widget's setup opened the app, where the widget is.
+     * False when the app was opened some other way, and the page steps back itself.
+     */
+    boolean widgetDone() {
+        if (!fromWidget) return false;
+        fromWidget = false;
+        moveTaskToBack(true);
+        return true;
     }
 
     /**

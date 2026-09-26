@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A headline in a widget: "3 on · 60%" -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_bigtext"
+    style="@style/WgText"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="6dp"
+    android:textColor="#FFFFFF"
+    android:textSize="28sp" />

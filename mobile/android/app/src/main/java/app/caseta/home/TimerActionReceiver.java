@@ -8,7 +8,8 @@ import org.json.JSONObject;
 
 /**
  * The two buttons on a sleep timer's notification. Off now stops the timer and turns its lights off; Add 15 min
- * starts it again a quarter of an hour longer than what was left. The same commands the timer sheet sends.
+ * starts it again a quarter of an hour longer than what was left. The same commands the timer sheet sends. The
+ * widgets are redrawn from the hub afterwards.
  */
 public class TimerActionReceiver extends BroadcastReceiver {
     static final String OFF_NOW = "app.caseta.home.TIMER_OFF_NOW";
@@ -33,6 +34,9 @@ public class TimerActionReceiver extends BroadcastReceiver {
                     // the countdown on the lock screen follows at once, even with the app closed
                     if (r.ok()) TimerNotifications.show(c, key, intent.getStringExtra("title") == null ? "Light" : intent.getStringExtra("title"), target, System.currentTimeMillis() + minutes * 60000L);
                 }
+                // the widgets follow, and the notifications settle on what the hub says
+                Thread.sleep(900);
+                WidgetActions.refreshNow(c);
             } catch (Exception ignored) {
                 // the app shows the timer as it really is next time it opens
             } finally { done.finish(); }

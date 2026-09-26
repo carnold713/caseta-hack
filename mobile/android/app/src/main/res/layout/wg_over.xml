@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The small capitals over a widget's headline: WHOLE HOUSE -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_overtext"
+    style="@style/WgText.Bold"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:letterSpacing="0.06"
+    android:textAllCaps="true"
+    android:textColor="#9E9E9E"
+    android:textSize="11sp" />

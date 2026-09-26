@@ -4,6 +4,26 @@
     <string name="title_activity_main">Caseta</string>
     <string name="package_name">app.caseta.home</string>
     <string name="custom_url_scheme">app.caseta.home</string>
-    <string name="widget_description">How many lights are on, and All off</string>
     <string name="tile_label">All off</string>
+    <!-- the ten widgets, as the widget picker lists them -->
+    <string name="wg_room">Room</string>
+    <string name="wg_room_d">A room: on and off, dimmer and brighter</string>
+    <string name="wg_light">Light</string>
+    <string name="wg_light_d">One light, in its own colour while it is on</string>
+    <string name="wg_scenes">Scenes</string>
+    <string name="wg_scenes_d">One to six scenes, a tap each</string>
+    <string name="wg_house">Whole house</string>
+    <string name="wg_house_d">How many lights are on, and All off</string>
+    <string name="wg_levels">Brightness</string>
+    <string name="wg_levels_d">A light or a room at 25, 50, 75 or 100</string>
+    <string name="wg_timer">Sleep timer</string>
+    <string name="wg_timer_d">Fade a light or a room out in 15, 30 or 60 minutes</string>
+    <string name="wg_nightstand">Nightstand</string>
+    <string name="wg_nightstand_d">The night light, dim, with its timer</string>
+    <string name="wg_routine">Next routine</string>
+    <string name="wg_routine_d">What runs next, with Skip tonight</string>
+    <string name="wg_pinned">Pinned</string>
+    <string name="wg_pinned_d">What is pinned on Home</string>
+    <string name="wg_colour">Colours</string>
+    <string name="wg_colour_d">Colours for a colour lamp, a tap each</string>
 </resources>

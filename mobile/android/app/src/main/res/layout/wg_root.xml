@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every widget's frame (Widgets.java): the card, tinted and faded to the look chosen, and the column the widget
+     is built into. The id is the system's own background id, so Android 12 and later round it as the launcher does. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/wg_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/wg_card"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:id="@+id/wg_body"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp" />
+</FrameLayout>

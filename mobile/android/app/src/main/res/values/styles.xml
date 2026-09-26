@@ -19,4 +19,19 @@
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
+    <!-- The widgets' words (Widgets.java). The system font here; Figtree on Android 12 and later (values-v31) -->
+    <style name="WgText">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+    <style name="WgText.Bold">
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- A widget's configure step: nothing of its own is shown, it hands over to the app's page -->
+    <style name="WidgetConfigTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>

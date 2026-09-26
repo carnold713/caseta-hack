@@ -1263,3 +1263,68 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 
 /* ---- sliders: a finger held on one is a finger on a control, not text to select or an image to save ---------- */
 .hbar, .dial, .ws, .window, .wheel { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+/* ---- Widgets (the Android app's home screen widgets, screens/widgets.js) ---------------------------------------
+   The page reuses the app's rows, chips and switches; the picture at the top is the widget as Widgets.java draws
+   it: the card in the chosen look, flat fills, copper (or the lamp's own colour) for what is on. */
+.wg-page { padding-bottom: 40px; }
+.wg-page .t-over.sec { margin: 28px var(--gutter) 12px; }
+.wg-lede { margin: 8px var(--gutter) 0; }
+.wg-kinds .row { padding-top: 10px; padding-bottom: 10px; }
+.wg-add { flex: none; height: 36px; padding: 0 16px; }
+.wg-done { margin-top: 32px; }
+.wg-stage { margin: 4px var(--gutter) 0; padding: 20px; border-radius: var(--r-card); background: var(--surface-1); display: grid; place-items: center; }
+.wg-swatches { gap: 10px; }
+.wg-sw { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; width: 56px; padding: 0; border: 0; background: none; color: var(--text-2); font: inherit; font-size: 12px; }
+.wg-sw i { width: 36px; height: 36px; border-radius: 18px; background: var(--sw); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px transparent; transition: box-shadow var(--standard) var(--ease); }
+.wg-sw[aria-pressed='true'] i { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 4px var(--text-1); }
+.wg-sw[aria-pressed='true'] { color: var(--text-1); }
+
+.wgp {
+  --wg-bg: #1E1E1E; --wg-ink: #FFFFFF; --wg-sub: #9E9E9E; --wg-btn: #2B2B2B; --wg-btn-ink: #FFFFFF; --wg-solid: #F8F8F8; --wg-solid-ink: #262626;
+  --wg-r: 28px; --wg-in: 18px; --wg-pad: 16px; --wg-row: 44px;
+  position: relative; width: 100%; max-width: 330px; min-height: 150px; padding: var(--wg-pad);
+  border-radius: var(--wg-r); background: var(--wg-bg); color: var(--wg-ink);
+  display: flex; flex-direction: column; gap: 8px; font-family: inherit; text-align: left;
+}
+.wgp.tall { min-height: 230px; }
+.wgp.sq { --wg-r: 6px; --wg-in: 4px; }
+.wgp.compact { --wg-pad: 12px; --wg-row: 36px; }
+.wgp-day { --wg-bg: #F5F2EE; --wg-ink: #1A1A1A; --wg-sub: #6E6E6E; --wg-btn: #E6E1DB; --wg-btn-ink: #1A1A1A; --wg-solid: #262626; --wg-solid-ink: #FFFFFF; }
+/* Clear: black at the shade chosen, over a flat stand-in for the wallpaper so the shade can be seen */
+.wgp-clear { --wg-bg: rgba(0, 0, 0, var(--wg-shade)); --wg-sub: #E0E0E0; --wg-btn: rgba(255, 255, 255, .18); }
+.wg-stage:has(.wgp-clear) { background: #6A7384; }
+.wgp.fill { --wg-bg: var(--wg-accent); --wg-ink: var(--wg-on-ink); --wg-sub: var(--wg-on-ink); }
+.wgp.fill .wgp-words span { opacity: .8; }
+.wgp-head { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.wgp-ic { color: var(--wg-sub); display: grid; }
+.wgp-ic.on { color: var(--wg-accent); }
+.wgp-words { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wgp-words b { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wgp-words span { font-size: 13px; color: var(--wg-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wgp.compact .wgp-words b { font-size: 14px; }
+.wgp-pwr { flex: none; width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center; background: var(--wg-btn); color: var(--wg-btn-ink); }
+.wgp-pwr.on { background: var(--wg-accent); color: var(--wg-on-ink); }
+.wgp-pwr.white { background: #fff; color: color-mix(in srgb, var(--wg-accent) 72%, #000); }
+.wgp-gap { flex: 1 1 auto; }
+.wgp-row { display: flex; gap: 8px; height: var(--wg-row); }
+.wgp-btn { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: var(--wg-row); background: var(--wg-btn); color: var(--wg-btn-ink); font-size: 14px; font-weight: 650; }
+.wgp.sq .wgp-btn { border-radius: 6px; }
+.wgp-btn em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wgp-btn.on { background: var(--wg-accent); color: var(--wg-on-ink); }
+.wgp-btn.solid { flex: none; padding: 0 20px 0 18px; background: var(--wg-solid); color: var(--wg-solid-ink); }
+.wgp.fill .wgp-btn { background: rgba(255, 255, 255, .22); color: var(--wg-on-ink); }
+.wgp-over { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--wg-sub); }
+.wgp-big { font-size: 28px; font-weight: 400; margin-top: 2px; }
+.wgp.compact .wgp-big { font-size: 22px; }
+.wgp-grid { flex: 1 1 auto; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px; }
+.wgp-tile { min-height: 64px; padding: 12px; border-radius: var(--wg-in); background: var(--wg-btn); color: var(--wg-btn-ink); display: flex; flex-direction: column; gap: 2px; }
+.wgp-tile svg { color: var(--wg-sub); margin-bottom: auto; }
+.wgp-tile i { margin-bottom: auto; }
+.wgp-tile b { font-size: 13px; font-weight: 650; margin-top: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wgp-tile em { font-style: normal; font-size: 12px; color: var(--wg-sub); }
+.wgp-tile.on { background: var(--wg-accent); color: var(--wg-on-ink); }
+.wgp-tile.on svg, .wgp-tile.on em { color: var(--wg-on-ink); opacity: .85; }
+.wgp-sws { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 4px; }
+.wgp-sws i { width: 34px; height: 34px; border-radius: 17px; background: var(--sw); }
+.wgp-sws i.here { box-shadow: 0 0 0 3px var(--wg-bg), 0 0 0 5px var(--wg-ink); }

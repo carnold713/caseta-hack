@@ -38,16 +38,69 @@
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false" />
         </service>
 
-        <!-- The house on the home screen (HouseWidget), with its own All off -->
-        <receiver
-            android:name=".HouseWidget"
-            android:exported="false"
-            android:label="@string/app_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
+        <!-- The ten widgets (Widgets.java draws them all; HouseWidget keeps its name so a placed one stays placed) -->
+        <receiver android:name=".RoomWidget" android:exported="false" android:label="@string/wg_room">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_room" />
+        </receiver>
+        <receiver android:name=".LightWidget" android:exported="false" android:label="@string/wg_light">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_light" />
+        </receiver>
+        <receiver android:name=".ScenesWidget" android:exported="false" android:label="@string/wg_scenes">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_scenes" />
+        </receiver>
+        <receiver android:name=".HouseWidget" android:exported="false" android:label="@string/wg_house">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/house_widget_info" />
         </receiver>
+        <receiver android:name=".LevelsWidget" android:exported="false" android:label="@string/wg_levels">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_levels" />
+        </receiver>
+        <receiver android:name=".TimerWidget" android:exported="false" android:label="@string/wg_timer">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_timer" />
+        </receiver>
+        <receiver android:name=".NightstandWidget" android:exported="false" android:label="@string/wg_nightstand">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_nightstand" />
+        </receiver>
+        <receiver android:name=".RoutineWidget" android:exported="false" android:label="@string/wg_routine">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_routine" />
+        </receiver>
+        <receiver android:name=".PinnedWidget" android:exported="false" android:label="@string/wg_pinned">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_pinned" />
+        </receiver>
+        <receiver android:name=".ColourWidget" android:exported="false" android:label="@string/wg_colour">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_colour" />
+        </receiver>
+
+        <!-- A tap on a widget, acted on off the main thread -->
+        <receiver android:name=".WidgetActions" android:exported="false" />
+        <!-- A running timer's minute, and its end -->
+        <receiver android:name=".TimerTick" android:exported="false" />
+        <!-- The widgets reading the hub every 15 minutes -->
+        <service
+            android:name=".WidgetRefreshJob"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- A widget's setup, placed or edited later: hands over to the app's page for it -->
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/WidgetConfigTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
 
         <!-- Off now and Add 15 min on a sleep timer's notification -->
         <receiver android:name=".TimerActionReceiver" android:exported="false" />
@@ -68,6 +121,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- a running sleep timer on the lock screen; Android 13 and later ask once, from the app, never on launch -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16 and later: a running sleep timer as a Live Update, its countdown in the status bar (Settings,
+         This phone, turns it off) -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <!-- a completed hold (All on, Goodnight) is felt as well as seen -->
     <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

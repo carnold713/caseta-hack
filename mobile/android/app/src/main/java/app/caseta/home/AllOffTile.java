@@ -27,10 +27,13 @@ public class AllOffTile extends TileService {
         show("Turning off", Tile.STATE_ACTIVE);
         new Thread(() -> {
             HubClient.Result r = HubClient.allOff(this);
+            if (r.ok()) HubStore.setHouse(this, 0, 0);
             main.post(() -> {
                 show(r.ok() ? "Everything off" : r.status == 0 ? "Can't reach the house" : "Didn't work, try again", Tile.STATE_INACTIVE);
                 if (r.ok()) HouseWidget.refreshSoon(this);
             });
+            // the widgets settle on what the hub says once the lights have gone out
+            if (r.ok()) { try { Thread.sleep(900); } catch (InterruptedException ignored) { /* now then */ } WidgetActions.refreshNow(this); }
         }).start();
     }
 
