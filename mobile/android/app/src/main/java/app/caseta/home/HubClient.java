@@ -68,29 +68,56 @@ final class HubClient {
         }
     }
 
+    /** How long to wait before each new try when the phone's network was not there yet: about 3 s in all. */
+    private static final long[] RETRY_MS = { 250, 600, 1000, 1200 };
+
+    /**
+     * One request to the hub. A widget, the tile or a notification button wakes this app from the background, and
+     * Android gives a woken app its network back a moment after it starts: the first request could fail before
+     * anything reached the hub, and the tap did nothing until the app was opened. So a request that could not
+     * connect is tried again, briefly. Only then: once connected, a command may have reached the hub, and sending it
+     * twice (a step up, say) would do it twice.
+     */
     static Result request(Context c, String method, String path, String body) {
         if (!HubStore.signedIn(c)) return new Result(401, "not signed in");
-        HttpURLConnection conn = null;
-        try {
-            conn = (HttpURLConnection) new URL(HubStore.url(c) + path).openConnection();
-            conn.setRequestMethod(method);
-            conn.setConnectTimeout(8000);
-            conn.setReadTimeout(12000);
-            conn.setRequestProperty("authorization", "Bearer " + HubStore.token(c));
-            conn.setRequestProperty("content-type", "application/json");
-            if (body != null) {
-                conn.setDoOutput(true);
-                try (OutputStream out = conn.getOutputStream()) { out.write(body.getBytes(StandardCharsets.UTF_8)); }
+        Exception last = null;
+        for (int attempt = 0; attempt <= RETRY_MS.length; attempt++) {
+            if (attempt > 0) {
+                try { Thread.sleep(RETRY_MS[attempt - 1]); } catch (InterruptedException e) { break; }
             }
-            int status = conn.getResponseCode();
-            if (status == 401) HubStore.clear(c);   // signed out elsewhere: the tile and widget say so until the app signs in again
-            InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
-            return new Result(status, in == null ? "" : read(in));
-        } catch (Exception e) {
-            return new Result(0, e.toString());
-        } finally {
-            if (conn != null) conn.disconnect();
+            HttpURLConnection conn = null;
+            try {
+                conn = (HttpURLConnection) new URL(HubStore.url(c) + path).openConnection();
+                conn.setRequestMethod(method);
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(12000);
+                conn.setRequestProperty("authorization", "Bearer " + HubStore.token(c));
+                conn.setRequestProperty("content-type", "application/json");
+                if (body != null) conn.setDoOutput(true);
+                try {
+                    conn.connect();
+                } catch (Exception e) {
+                    // nothing was sent: safe to try again
+                    last = e;
+                    continue;
+                }
+                if (body != null) {
+                    try (OutputStream out = conn.getOutputStream()) { out.write(body.getBytes(StandardCharsets.UTF_8)); }
+                }
+                int status = conn.getResponseCode();
+                if (status == 401) HubStore.clear(c);   // signed out elsewhere: the tile and widget say so until the app signs in again
+                InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                return new Result(status, in == null ? "" : read(in));
+            } catch (Exception e) {
+                last = e;
+                // a read (GET) is safe to repeat whatever went wrong; anything else may have reached the hub
+                if (!"GET".equals(method)) break;
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
         }
+        Safe.note(c, "hub " + method + " " + path, last != null ? last : new Exception("no answer"));
+        return new Result(0, String.valueOf(last));
     }
 
     private static String read(InputStream in) throws Exception {
