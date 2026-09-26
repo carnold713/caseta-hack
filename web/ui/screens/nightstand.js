@@ -50,20 +50,21 @@ export function view(c) {
   const hint = c.ui.nsHint && Date.now() - c.ui.nsHint < 2000;
   let area, title, sub;
   if (!d) {
-    area = 'data-act="ns-pick"'; title = 'Pick a light for night'; sub = 'Once, and it stays chosen';
+    area = 'data-act="ns-pick"'; title = 'Pick a light for night'; sub = '';
   } else if (off) {
     area = ''; title = 'Night light'; sub = "Can't reach the house. Your remotes still work.";
   } else if (on) {
     const at = offAt(c, d);
-    area = 'data-act="ns-off"'; title = 'Off'; sub = `${d.name} · ${lv}%${at ? ` · off by itself at ${at}` : ''}`;
+    area = 'data-act="ns-off"'; title = 'Off'; sub = `${d.name} · ${at ? `off at ${at}` : `${lv}%`}`;
   } else {
-    area = 'data-hold="ns-on" data-ms="250" data-act="ns-tap"'; title = 'Night light'; sub = hint ? 'Hold it' : 'Rest your thumb to turn on';
+    // the hold is hidden, and it is the only way on: a tap says "Hold" for a moment, and nothing is said until then
+    area = 'data-hold="ns-on" data-ms="250" data-act="ns-tap"'; title = 'Night light'; sub = hint ? 'Hold' : '';
   }
   // The one light on the page is the lamp's real light: drawn at the night light's level and candle white while the
   // lamp is on, and held at 0.85 and nothing while it is off, so on and off are the dimmer's scale and opacity pair.
   const glow = d ? glowHTML({ level: LEVEL, kelvin: 1900, ctx: 'hero', gain: 0.75, cls: `ns-glow${on ? '' : ' off'}`, name: 'night-light' }) : '';
   return `<div class="ns-page${on ? ' on' : ''}">
-    <header class="ns-top"><button class="ns-home" data-go="home">${icon('home', 24, 1.6)}<span>Home</span></button></header>
+    <header class="ns-top"><button class="ns-home" data-go="home" aria-label="Home">${icon('home', 24, 1.6)}</button></header>
     <div class="ns-time" aria-label="The time">${esc(clock(c.RT.nowHm()))}</div>
     <div class="ns-area${on ? ' on' : ''}${off ? ' offline' : ''}" ${area} role="button" tabindex="0" aria-label="${esc(on ? `Turn ${d.name} off` : title)}">
       <span class="ns-ring" aria-hidden="true">${glow}
@@ -88,7 +89,7 @@ function pickSheet(c) {
   const cur = nightLamp(c);
   const lights = data.controllable().filter(d => d.domain === 'light');
   const rows = lights.map(d => { const sel = cur && cur.device_id === d.device_id; return `<button class="row way two ${sel ? 'sel' : ''}" data-act="ns-set" data-v="${esc(d.device_id)}"><span class="radio ${sel ? 'on' : ''}">${sel ? icon('check', 14, 2.2) : ''}</span><span class="row-txt"><span class="t">${esc(d.name)}</span><span class="d">${esc(data.devAreaName(d))}</span></span></button>`; }).join('');
-  return { over: 'Nightstand', title: 'Pick a light for night', key: 'ns-pick', body: `<p class="t-cap muted sheet-p">It comes on at 10%, as warm as it goes, and goes out by itself after 15 minutes.</p><div class="group">${rows}</div>` };
+  return { over: 'Nightstand', title: 'Pick a light for night', key: 'ns-pick', body: `<p class="t-cap muted sheet-p">It comes on at 10% and goes out after 15 minutes.</p><div class="group">${rows}</div>` };
 }
 
 export const actions = {

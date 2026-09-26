@@ -37,10 +37,11 @@ function followRow(c, d) {
   if (!c.DAY.canFollow(d)) return '';
   const id = d.device_id;
   const on = c.DAY.isFollowing(id);
-  const sub = on ? (c.DAY.followPaused(id) ? 'Paused: keeping a colour you picked' : c.DAY.followNowText(id)) : 'Cool and bright at midday, warm in the evening';
-  return `<div class="group ws-follow"><div class="row sub has-ic">
+  // the switch says on or off and the sheet shows the white; the one thing it cannot show is a pause
+  const paused = on && c.DAY.followPaused(id);
+  return `<div class="group ws-follow"><div class="row has-ic">
     <span class="row-ic sunrise">${c.icon('sunrise', 20, 1.7)}</span>
-    <button class="row-txt linkish" data-go="light/${c.esc(id)}/follow"><span class="t">Follow the day</span><span class="d">${c.esc(sub)}</span></button>
+    <button class="row-txt linkish" data-go="light/${c.esc(id)}/follow"><span class="t">Follow the day</span>${paused ? '<span class="d">Paused</span>' : ''}</button>
     <button class="toggle" role="switch" aria-checked="${on}" data-act="follow-toggle" aria-label="Follow the day"></button>
   </div></div>`;
 }
@@ -68,7 +69,6 @@ const skyX = t => `calc(24px + ${t.toFixed(4)} * (100% - 48px))`;
 // noon brightens as the sun climbs: nothing at t 0.3, all of it at daylight
 const noonAt = t => Math.max(0, Math.min(1, (t - 0.3) / 0.7)).toFixed(3);
 function sunStyle(k) { const t = posOfKelvin(k); return `left:${skyX(t)};top:${skyY(t).toFixed(1)}px;--sun:${whiteStops(k).body}`; }
-function whiteSub(d, k) { return `${d.name} · ${k}K · ${CasetaDaylight.warmthName(k)}`; }
 function white(c, r) {
   const d = c.data.dev(r.id); if (!d || !d.ct) return null;
   const id = d.device_id;
@@ -86,16 +86,15 @@ function white(c, r) {
     const cur = showing && Math.abs(k - Math.max(kmin, Math.min(kmax, wk))) <= 60;
     return `<button class="chip ${cur ? 'current' : ''} ${out ? 'out' : ''}" data-act="white-pick" data-k="${wk}" data-n="${n}">${n}</button>`;
   }).join('');
-  const clamp = WHITES.some(([, wk]) => wk > kmax) ? `<p class="ws-note">Asking for cooler than ${kmax}K sets it to ${kmax}K.</p>` : '';
   // the five named whites as moments on the path
-  const moments = WHITES.map(([n, wk]) => { const t = posOfKelvin(wk); return `<i class="ws-moment" style="left:${skyX(t)};top:${skyY(t).toFixed(1)}px" title="${n}"></i>`; }).join('');
+  const moments = WHITES.map(([, wk]) => { const t = posOfKelvin(wk); return `<i class="ws-moment" style="left:${skyX(t)};top:${skyY(t).toFixed(1)}px"></i>`; }).join('');
   const path = Array.from({ length: 41 }, (_, i) => { const t = i / 40; return `${(24 + 324 * t).toFixed(1)},${skyY(t).toFixed(1)}`; }).join(' ');
   // where the day is now: the Follow the day white for this minute, clamped to the lamp
   const dayK = c.DAY.followKelvinFor(id);
-  const now = dayK != null ? (() => { const t = posOfKelvin(dayK); return `<button class="ws-now" data-act="white-now" data-hold="white-follow" data-ms="600" data-k="${dayK}" style="left:${skyX(t)};top:${skyY(t).toFixed(1)}px" aria-label="Now outside, ${dayK}K. Tap to set it, hold to follow the day"><span class="l">Now outside</span>${c.icon('sun', 22, 1.7)}</button>`; })()
-    : `<button class="ws-loc linkish" data-go="light/${c.esc(id)}/follow">Add where home is to see today’s light here</button>`;
+  const now = dayK != null ? (() => { const t = posOfKelvin(dayK); return `<button class="ws-now" data-act="white-now" data-hold="white-follow" data-ms="600" data-k="${dayK}" style="left:${skyX(t)};top:${skyY(t).toFixed(1)}px" aria-label="Now outside, ${dayK}K"><span class="l">Now outside</span>${c.icon('sun', 22, 1.7)}</button>`; })()
+    : `<button class="ws-loc linkish" data-go="light/${c.esc(id)}/follow">Where is home?</button>`;
   return {
-    over: whiteSub(d, k), title: 'White',
+    over: d.name, title: 'White',
     body: `<div class="sheet-abs ws lk-sheet">
       ${washHTML(rgba(whiteStops(k).body, lit ? 0.16 : 0.06))}
       ${segmented(c, d, 'white')}
@@ -103,16 +102,14 @@ function white(c, r) {
       <div class="ws-sky" style="--noon:${noonAt(posOfKelvin(k))}">
         <i class="sky-dusk"></i><i class="sky-noon"></i><i class="sky-night"></i><i class="sky-ground"></i><i class="sky-horizon"></i>
         ${low != null ? `<i class="beyond lo" style="width:${skyX(low)}"></i><i class="sky-tick" style="left:${skyX(low)}"></i>` : ''}
-        ${lim != null ? `<i class="beyond" style="left:${skyX(lim)}"></i><i class="sky-tick" style="left:${skyX(lim)}"></i><span class="ws-limit">Beyond this lamp · max ${kmax}K</span>` : ''}
+        ${lim != null ? `<i class="beyond" style="left:${skyX(lim)}"></i><i class="sky-tick" style="left:${skyX(lim)}"></i><span class="ws-limit">Max ${kmax}K</span>` : ''}
         <svg class="sky-path" viewBox="0 0 372 200" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}"/></svg>
         ${moments}
         <div class="ws-track" data-drag="kelvin" role="slider" aria-label="Warmth" aria-valuemin="${kmin}" aria-valuemax="${kmax}" aria-valuenow="${k}"></div>
         ${now}
         <span class="ws-thumb ${lit ? '' : 'unlit'}" style="${sunStyle(k)}"><i class="disc"></i><i class="touch"></i></span>
       </div>
-      <div class="ws-ends"><span>Candle · dusk</span><span>Daylight · noon</span></div>
       <div class="ws-chips">${chips}</div>
-      ${clamp}
       ${followRow(c, d)}
     </div>`,
     after: (c2, r2, root) => wireKelvin(c2, d, root),
@@ -144,7 +141,6 @@ function paintKelvin(root, d, k) {
   root.querySelector('.ws-val .dot').style.background = whiteStops(k).body;
   root.querySelector('.ws-track').setAttribute('aria-valuenow', k);
   const w = root.querySelector('.lk-wash'); if (w) w.style.setProperty('--wash', rgba(whiteStops(k).body, 0.16));
-  const o = root.querySelector('.sheet-head .t-over'); if (o) o.textContent = whiteSub(d, k);
 }
 function wireKelvin(c, d, root) {
   const tr = root.querySelector('[data-drag="kelvin"]'); if (!tr) return;
@@ -184,8 +180,6 @@ const whiteName = k => { const n = CasetaDaylight.warmthName(k); return /white/i
 
 // ---------- 05 Colour · painting with light ----------
 const WHEEL = 236;   // the disc; the wheel's box is 260 with 12 round it for the handle to sit over the edge
-// The sheet's sub names the colour: one of the twelve by its name, anything picked on the wheel "Custom".
-const pickName = hex => { const f = LAMP_COLOURS.find(([, x]) => sameHex(x, hex)); return f ? f[0] : 'Custom'; };
 // A bead of lit glass: the tint's glow, the colour, the tint's deep stop, lit from the upper left.
 // A swatch: a flat disc of the colour (no light, no specular, no shadow); the chosen one wears the ring.
 function bead(n, x, sel) {
@@ -243,7 +237,7 @@ function colour(c, r) {
   const follows = c.DAY.canFollow(d) && c.DAY.isFollowing(id);
   const paused = follows && c.DAY.followPaused(id);
   return {
-    over: `${d.name} · ${pickName(hex)}`, title: 'Colour',
+    over: d.name, title: 'Colour',
     body: `<div class="sheet-abs cs lk-sheet ${paused ? 'paused' : ''}">
       ${washHTML(rgba(hex, showing ? 0.2 : 0.06))}
       ${segmented(c, d, 'colour')}
@@ -256,8 +250,7 @@ function colour(c, r) {
         <button class="link" data-act="colour-exact">Enter exact</button>
       </div>
       <div class="cs-sw" data-keep="swatches">${LAMP_COLOURS.map(([n, x]) => bead(n, x, showing && sameHex(x, hex))).join('')}${ring(showing ? hex : null)}</div>
-      ${follows && !paused ? `<p class="cs-note">${c.icon('sunrise', 20, 1.7)}<span>Picking a colour pauses Follow the day. The lamp keeps your colour, off and on, until you resume it.</span></p>` : ''}
-      ${paused ? `<p class="cs-note cs-paused">${c.icon('sunrise', 20, 1.7)}<span>Keeping your colour · <button class="link" data-act="follow-resume">Follow the day again</button></span></p>` : ''}
+      ${paused ? `<p class="cs-note cs-paused">${c.icon('sunrise', 20, 1.7)}<button class="link" data-act="follow-resume">Follow the day again</button></p>` : ''}
     </div>`,
     after: (c2, r2, root) => wireWheel(c2, d, root),
   };
@@ -295,7 +288,6 @@ function paintColour(root, d, hex) {
   const rg = root.querySelector('.cs-sw .sw-ring'), i = ringAt(hex);
   if (rg) { rg.hidden = i < 0; if (i >= 0) rg.style.transform = `translateX(${i * 42}px)`; }
   const w = root.querySelector('.lk-wash'); if (w) w.style.setProperty('--wash', rgba(hex, 0.2));
-  const o = root.querySelector('.sheet-head .t-over'); if (o) o.textContent = `${d.name} · ${pickName(hex)}`;
 }
 function wireWheel(c, d, root) {
   const w = root.querySelector('[data-drag="wheel"]'); if (!w) return;
@@ -388,7 +380,6 @@ function timerSheet(c, { over, name, opts, covers }) {
   const ui = c.ui.timer = c.ui.timer || { reach: 'lamp', more: false };
   c.ui.timerReaches = opts;
   if (!opts.some(o => o[0] === ui.reach)) ui.reach = opts[0][0];
-  const cur = opts.find(o => o[0] === ui.reach);
   const coverKey = covers.join('|');
   if (t) {
     const total = fullMinutes(c, t);
@@ -397,7 +388,7 @@ function timerSheet(c, { over, name, opts, covers }) {
     const tone = flameTone(c, covers);
     // what the candle was, so the moment the timer ends it can gutter rather than vanish
     c.ui.candle = { cover: coverKey, ends: t.ends, level: t.level, tone };
-    const says = t.level > 0 ? `${name} goes down to ${t.level}% at ${clockAt(t.ends)}` : `${name} fades out at ${clockAt(t.ends)}`;
+    const says = t.level > 0 ? `Down to ${t.level}% at ${clockAt(t.ends)}` : `Fades out at ${clockAt(t.ends)}`;
     return {
       over, title: 'Sleep timer',
       body: `<div class="sheet-abs tc ts-run">
@@ -406,10 +397,10 @@ function timerSheet(c, { over, name, opts, covers }) {
         <p class="tc-says">${c.esc(says)}</p>
         <div class="tc-btns">
           <button class="pill ghost" data-act="timer-add" data-t="${c.esc(t.key)}">Add 15 min</button>
-          <button class="pill ghost" data-act="timer-cancel" data-t="${c.esc(t.key)}">Stop the timer</button>
+          <button class="pill ghost" data-act="timer-cancel" data-t="${c.esc(t.key)}">Stop timer</button>
           <button class="pill solid" data-act="timer-offnow" data-t="${c.esc(t.key)}">Off now</button>
         </div>
-        ${c.conn() === 'off' ? '<p class="tc-off">The house keeps the timer. It will still go out.</p>' : ''}
+        ${c.conn() === 'off' ? '<p class="tc-off">It still goes out on time.</p>' : ''}
       </div>`,
       after: (c2, r2, root) => burn(c2, root),
     };
@@ -424,7 +415,6 @@ function timerSheet(c, { over, name, opts, covers }) {
       body: `<div class="sheet-abs tc ts-run ended">
         ${candleHTML(k.tone, 0, { out: !(k.level > 0), stays: k.level > 0 })}
         <div class="tc-left">${k.level > 0 ? `Down to ${k.level}%` : 'Out'}</div>
-        <p class="tc-says">${c.esc(k.level > 0 ? `${name} is at ${k.level}%` : `${name} has faded out`)}</p>
       </div>`,
       after: (c2, r2, root) => gutter(root, k.shown),
     };
@@ -435,9 +425,8 @@ function timerSheet(c, { over, name, opts, covers }) {
     body: `<div class="sheet-abs ts">
       <div class="durs">${DURATIONS.map(chip).join('')}<button class="dur more ${ui.more ? 'open' : ''}" data-act="timer-more">${c.icon('plus', 18, 1.8)}<span>Custom</span></button></div>
       ${ui.more ? `<div class="chip-row durs-more">${MORE.map(m => `<button class="chip" data-act="timer-set" data-m="${m}">${m} min</button>`).join('')}</div>` : ''}
-      <p class="ts-idle">Pick how long. The light fades out at the end, it won’t snap off.</p>
-      <div class="ts-applies"><span class="t">Applies to</span><span class="v">${c.esc(cur[1])}</span></div>
-      <div class="chip-row ts-reach">${opts.map(([key, n]) => `<button class="chip" aria-pressed="${ui.reach === key}" data-act="timer-reach" data-k="${key}">${c.esc(n)}</button>`).join('')}</div>
+      ${opts.length > 1 ? `<div class="ts-applies"><span class="t">Applies to</span></div>
+      <div class="chip-row ts-reach">${opts.map(([key, n]) => `<button class="chip" aria-pressed="${ui.reach === key}" data-act="timer-reach" data-k="${key}">${c.esc(n)}</button>`).join('')}</div>` : ''}
     </div>`,
   };
 }

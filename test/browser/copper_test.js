@@ -50,8 +50,6 @@ const LIGHT = [
   ['arc', '.dial > svg', 36, 640 - LIFT + SINK, 340, 190],
   ['minus', '.dial .minus', 32, 836 - LIFT + SINK, 48, 48],
   ['plus', '.dial .plus', 332, 836 - LIFT + SINK, 48, 48],
-  ['moon', '.dial .lo', 102, 849 - LIFT + SINK, 22, 22],
-  ['sun', '.dial .hi', 288, 849 - LIFT + SINK, 22, 22],
   ['Brightness', '.dial .lbl', null, 718 - LIFT + SINK, null, 17],
 ];
 const ROOMS = [
@@ -161,7 +159,8 @@ const FAN = [
       ['overline', '.sheet-head .t-over', 20, 28, null, 14], ['title', '.sheet-head h2', 20, 48, null, 34], ['close', '.sheet-close', 352, 28, 40, 40],
       // v7 (12816:94): the bar is a sky card, the white a sun on a path over it (its drag band is the path, x 24 to 348)
       ['White / Colour', '.seg2', 20, 100, 372, 44], ['value', '.ws-val b', 20, 154, null, 56], ['sky', '.ws-sky', 20, 214, 372, 200], ['warmth path', '.ws-track', 44, 214, 324, 200],
-      ['sun', '.ws-thumb .disc', null, null, 28, 28], ['end labels', '.ws-ends', 20, 424, 372, null], ['named whites', '.ws-chips', 20, 448, null, 40],
+      // the sky's two end labels are gone (the named whites under it say the ends): the whites sit 10 under the sky
+      ['sun', '.ws-thumb .disc', null, null, 28, 28], ['named whites', '.ws-chips', 20, 424, null, 40], ['Follow the day', '.ws-follow', 20, 480, null, null],
     ]);
     const tr = await page.locator('.ws-track').boundingBox();
     const at = k => tr.x + tr.width * (1e6 / 1900 - 1e6 / k) / (1e6 / 1900 - 1e6 / 6500);
@@ -200,7 +199,7 @@ const FAN = [
     const f1 = await burnt(); await wait(2100);
     check('the countdown ticks: the candle burns down', (await burnt()) < f1, { before: f1, after: await burnt() });
     await page.click('[data-act="timer-cancel"]'); await wait(1400);
-    check('Stop the timer stops it', !(await page.$('.ts-run')));
+    check('Stop timer stops it', !(await page.$('.ts-run')));
     await page.click('#sheet-root .scrim', { position: { x: 200, y: 40 } }); await wait(700);
     check('the scrim closes it', !/\/timer$/.test(page.url()));
   }

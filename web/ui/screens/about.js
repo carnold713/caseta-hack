@@ -38,7 +38,6 @@ export function about(c, r) {
         <button class="kind ${kind === f.id ? 'sel' : ''}" data-act="about-kind" data-kind="${f.id}" aria-pressed="${kind === f.id}">
           <img src="${c.artSrc(c.kindArt(f.id))}" alt=""><span>${esc(f.name)}</span>${kind === f.id ? `<span class="tick">${icon('check', 16, 2)}</span>` : ''}</button>`).join('')}</div>`;
     }
-    body += `<p class="t-cap muted about-note">${kind ? 'Tap it again to clear it. ' : ''}Suggested scenes use this to know what to dim.</p>`;
   }
   const hiddenNow = c.EDIT.hidden().includes(id);
   body += `<div class="group about-rows">
@@ -94,7 +93,7 @@ export const actions = {
   'about-remove'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;
     c.openPicker('remove', () => confirmSheet(c, { over: d.name, title: 'Remove from home?', act: 'about-remove-go', yes: 'Remove',
-      text: 'It leaves your Lutron bridge and stops working until it is added again. Buttons and automations that used it forget it. The Lutron app will not list it any more either.' }));
+      text: 'It leaves your Lutron bridge and stops working until it is added again. Remotes and routines that used it forget it.' }));
   },
   async 'about-remove-go'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;

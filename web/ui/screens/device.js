@@ -4,6 +4,7 @@
 import { track } from '/ui/gesture.js';
 import { CasetaDaylight } from '/data/index.js';
 import { lightHTML, setLight } from '/ui/glow.js';
+import { colourName } from '/ui/colour.js';
 import { artInline, loadArt } from '/ui/art.js';
 import { endsMs, pinButton } from '/ui/screens/parts.js';
 import { sheets as lookSheets, actions as lookActions } from '/ui/screens/looks.js';
@@ -23,8 +24,6 @@ export function sheetFor(c, r) {
 
 const FAN = [['Off', 'Off'], ['Low', 'Low'], ['Medium', 'Medium'], ['MediumHigh', 'Med-high'], ['High', 'High']];
 const FAN_WORD = { Off: 'Off', Low: 'Low', Medium: 'Medium', MediumHigh: 'Medium high', High: 'High' };
-// The five swatches on the Colour tile, from the file's twelve lamp colours.
-const TILE_SWATCHES = ['#FF5A4E', '#FFC24A', '#4FD39A', '#4C8DFF', '#A66BFF'];
 
 // ---------- the arc ----------
 // A half circle round (170, 170) of radius 150 inside a 340 x 190 box: 0% at the left end, 100% at the right.
@@ -116,7 +115,6 @@ function dialHTML(c, lv, tone) {
     <div class="lbl">Brightness</div>
     <div class="num"><b>${lv}</b><span>%</span></div>
     <button class="nudge minus" data-act="nudge" data-by="-5" aria-label="Dimmer">${icon('minus', 20, 1.7)}</button>
-    <span class="lo">${icon('moon', 22, 1.7)}</span><span class="hi">${icon('sun', 22, 1.7)}</span>
     <button class="nudge plus" data-act="nudge" data-by="5" aria-label="Brighter">${icon('plus', 20, 1.7)}</button>
   </div>`;
 }
@@ -136,9 +134,10 @@ function header(c, d) {
   </header>`;
 }
 
+// The pill's circle says whether it is on; a second line is there only for a live value (the time left, Paused).
 function feature(c, { act, go, glyph, title, sub, on, disabled }) {
   return `<button class="feat ${on ? 'on' : ''}" ${act ? `data-act="${act}"` : ''} ${go ? `data-go="${c.esc(go)}"` : ''} ${disabled ? 'disabled' : ''}>
-    <span class="c">${c.icon(glyph, 20, 1.7)}</span><span class="t">${c.esc(title)}</span><span class="d">${c.esc(sub)}</span></button>`;
+    <span class="c">${c.icon(glyph, 20, 1.7)}</span><span class="t">${c.esc(title)}</span>${sub ? `<span class="d">${c.esc(sub)}</span>` : ''}</button>`;
 }
 
 function timerLine(c, id) {
@@ -155,8 +154,8 @@ function timerLine(c, id) {
 // ---------- the page ----------
 export function view(c, r) {
   const d = c.data.dev(r.id);
-  if (!d) return `<div class="dev"><header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${c.icon('back', 22, 1.7)}</button></header>
-    <h1 class="t-h1 page-h1">That light is gone</h1><p class="t-body muted soon">It is no longer in your home.</p></div>`;
+  if (!d) return `<div class="dev gone"><header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${c.icon('back', 22, 1.7)}</button></header>
+    <h1 class="t-h1 page-h1">That light is gone</h1></div>`;
   if (r.sub === 'follow' || r.sub === 'follow/also') return followView(c, r, d);
   if (d.domain === 'fan') return fanView(c, d);
   if (d.domain === 'cover') return shadeView(c, d);
@@ -182,17 +181,17 @@ function lightView(c, d) {
   if (d.ct) {
     const k = showingWhite ? Math.round(col.kelvin / 100) * 100 : null;
     looks.push(`<button class="look ${showingWhite ? 'showing' : ''}" data-go="light/${esc(id)}/white">
-      <span class="c">${icon('sun', 20, 1.7)}</span>${showingWhite ? '<span class="tag">Showing</span>' : ''}
-      <span class="t">White</span><span class="d ${k ? '' : 'q'}">${k ? `${k}K · ${esc(CasetaDaylight.warmthName(col.kelvin))}` : 'Warm to daylight'}</span></button>`);
+      <span class="c">${icon('sun', 20, 1.7)}</span>
+      <span class="t">White</span>${k ? `<span class="d">${k}K · ${esc(CasetaDaylight.warmthName(col.kelvin))}</span>` : ''}</button>`);
   }
   if (d.color) {
     looks.push(`<button class="look ${showingColour ? 'showing' : ''}" data-go="light/${esc(id)}/colour">
-      <span class="c" ${showingColour ? `style="background:${esc(col.hex)}"` : ''}>${icon('palette', 20, 1.7)}</span>${showingColour ? '<span class="tag">Showing</span>' : `<span class="sw">${TILE_SWATCHES.map(h => `<i style="background:${h}"></i>`).join('')}</span>`}
-      <span class="t">Colour</span><span class="d ${showingColour ? '' : 'q'}">${showingColour ? 'Your colour' : 'Any colour'}</span></button>`);
+      <span class="c" ${showingColour ? `style="background:${esc(col.hex)}"` : ''}>${icon('palette', 20, 1.7)}</span>
+      <span class="t">Colour</span>${showingColour ? `<span class="d">${esc(colourName(col.hex))}</span>` : ''}</button>`);
   }
   const feats = [];
-  if (follow) feats.push(feature(c, { go: `light/${id}/follow`, glyph: 'sunrise', title: 'Follow the day', sub: following ? (c.DAY.followPaused(id) ? 'Paused' : 'On') : 'Off', on: following }));
-  feats.push(feature(c, { go: `light/${id}/timer`, glyph: 'timer', title: 'Sleep timer', sub: tl || 'Off', on: !!tl, disabled: !on && !tl }));
+  if (follow) feats.push(feature(c, { go: `light/${id}/follow`, glyph: 'sunrise', title: 'Follow the day', sub: following && c.DAY.followPaused(id) ? 'Paused' : '', on: following }));
+  feats.push(feature(c, { go: `light/${id}/timer`, glyph: 'timer', title: 'Sleep timer', sub: tl, on: !!tl, disabled: !on && !tl }));
   // the page closes up where a lamp has no white or colour: the pills and the dial sit under the switch instead
   const shift = looks.length ? 0 : -144;
   // an on-or-off switch has no level: its light is either whole or none
@@ -205,7 +204,7 @@ function lightView(c, d) {
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
     <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>
     <div class="onoff">
-      <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}<span>${on && dim ? `On · <span data-lv>${lv}</span>%` : 'On'}</span></button>
+      <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}<span>On</span></button>
       <button data-act="dev-off" aria-pressed="${!on}">${icon('power', 22, 2)}Off</button>
       <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>
     </div>
@@ -230,12 +229,12 @@ function fanView(c, d) {
     <div class="where">${esc(data.devAreaName(d) || '')}</div>
     <h1 class="t-hero ${heroFit(d.name)}">${esc(d.name)}</h1>
     <div class="onoff blue">
-      <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}${on ? `On · ${FAN_WORD[sp]}` : 'On'}</button>
+      <button data-act="dev-on" aria-pressed="${on}">${icon('power', 22, 2)}On</button>
       <button data-act="dev-off" aria-pressed="${!on}">${icon('power', 22, 2)}Off</button>
       <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>
     </div>
     <div class="feats fan-feats">
-      ${feature(c, { go: `light/${id}/timer`, glyph: 'timer', title: 'Sleep timer', sub: tl || 'Off', on: !!tl, disabled: !on && !tl })}
+      ${feature(c, { go: `light/${id}/timer`, glyph: 'timer', title: 'Sleep timer', sub: tl, on: !!tl, disabled: !on && !tl })}
       ${feature(c, { glyph: 'moon', title: 'Goodnight', sub: 'Stops with it', on: false })}
     </div>
     <div class="speeds">
@@ -243,7 +242,6 @@ function fanView(c, d) {
       <div class="big">${FAN_WORD[sp]}</div>
       ${bars}
       <button class="nudge minus" data-act="fan-step" data-by="-1" aria-label="Slower">${icon('minus', 22, 1.7)}</button>
-      <span class="fa lo">${icon('fan', 24, 1.7)}</span><span class="fa hi">${icon('fan', 24, 1.7)}</span>
       <button class="nudge plus" data-act="fan-step" data-by="1" aria-label="Faster">${icon('plus', 22, 1.7)}</button>
     </div>
   </div>`;
@@ -270,7 +268,7 @@ function shadeView(c, d) {
       <button class="sbtn stop ${moving ? 'moving' : ''}" data-act="shade" data-cmd="stop" aria-label="Stop"><span class="c"><i></i></span><span class="l">Stop</span></button>
       <button class="sbtn" data-act="shade" data-cmd="lower" aria-label="Close"><span class="c">${icon('chevD', 24, 1.8)}</span><span class="l">Close</span></button>
     </div>
-    <div class="group shade-gn"><div class="row has-ic"><span class="row-ic">${icon('moon', 20, 1.7)}</span><span class="row-txt"><span class="t">Closes with Goodnight</span></span><span class="row-val">Always</span></div></div>
+    <div class="group shade-gn"><div class="row has-ic"><span class="row-ic">${icon('moon', 20, 1.7)}</span><span class="row-txt"><span class="t">Closes with Goodnight</span></span></div></div>
   </div>`;
 }
 
@@ -325,7 +323,6 @@ function paintDial(el, v, light = true) {
   // the number steps with the finger (M6: no easing, it is the finger's)
   el.querySelector('.num b').textContent = v;
   el.setAttribute('aria-valuenow', v);
-  const lvl = document.querySelector('.dev [data-lv]'); if (lvl) lvl.textContent = v;
   if (light) paintLight(el.closest('.dev'), v);
 }
 

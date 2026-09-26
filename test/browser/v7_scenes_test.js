@@ -198,13 +198,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const dial = await C(() => ({ svg: !!document.querySelector('.fd-dial .dc-chart'), ring: document.querySelectorAll('.fd-ring path').length, lived: document.querySelectorAll('.fd-curve path').length, sun: !!document.querySelector('.fd-sun .glow'), centre: null, range: (document.querySelector('.dc-range') || {}).textContent }));
     check('8: a 24 hour sky dial, the sun at its place, today\'s curve drawn', dial.svg && dial.ring === 96 && dial.sun, dial);
     dial.centre = await words('.fd-centre');
-    check('8: the middle says the white now', /\d{4}K/.test(dial.centre) && / to \d{4}K$/.test(dial.range || ''), dial);
+    // the card carries no header and no range: the dial, its curve and its sunrise and sunset say the day
+    check('8: the middle says the white now, and the card says nothing over the dial', /^Now \d{4}K/.test(dial.centre) && dial.range == null, dial);
     // a colour picked by hand pauses it: the paused state as built
     await C(id => window.__copper.run({ type: 'color', target: `d:${id}`, hex: '#4c8dff' }), lamp); await wait(1400);
     const paused = await C(() => ({ cls: document.querySelector('.fd-dial').className, resume: (document.querySelector('[data-act="follow-resume"] .t') || {}).textContent }));
     paused.row = await words('.fd-rows .row .row-txt'); paused.centre = await words('.fd-centre');
-    check('8: paused, with the exact built copy', /paused/.test(paused.cls) && paused.row === 'Paused for now You picked a colour, so it keeps that colour, off and on, until you resume.' && paused.resume === 'Follow the day again', paused);
-    check('8: the bead sits in the middle in the picked colour', /Paused for now/.test(paused.centre), paused.centre);
+    check('8: paused: the switch keeps its name, and one row offers to follow again (no explanation)', /paused/.test(paused.cls) && paused.row === 'Follow the day' && paused.resume === 'Follow the day again', paused);
+    check('8: the bead sits in the middle in the picked colour, over one word', paused.centre === 'Paused', paused.centre);
     await page.screenshot({ path: 'v7-follow-paused.png' });
     await clearCmds();
     await page.tap('[data-act="follow-resume"]'); await wait(80);

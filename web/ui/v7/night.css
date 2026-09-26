@@ -47,9 +47,10 @@ html:has(.ns-page) #app .screen { padding-bottom: 0; }
   display: flex; flex-direction: column; color: #BFA38A;
 }
 .ns-top { display: flex; }
+/* Home is its house alone, a 56 circle: the icon says it */
 .ns-home {
-  height: 56px; padding: 0 22px 0 18px; border-radius: 28px; display: inline-flex; align-items: center; gap: 10px;
-  background: #1A1411; border: 1px solid #2A2019; color: #7D6A5A; font: inherit; font-size: 16px; font-weight: 500;
+  width: 56px; height: 56px; padding: 0; border-radius: 28px; display: inline-grid; place-items: center;
+  background: #1A1411; border: 1px solid #2A2019; color: #7D6A5A; font: inherit;
   transition: transform var(--tap) var(--spring-quick);
 }
 .ns-home:active { transform: scale(.96); }
@@ -93,6 +94,9 @@ html:has(.ns-page) .toast { background: #1A1411; color: #BFA38A; box-shadow: ins
 html:has(.ns-page) .toast .act { color: #E0B48A; }
 html:has(.ns-page) .sheet { background: #14100D; color: #BFA38A; --text-1: #BFA38A; --text-2: #7D6A5A; --icon-1: #BFA38A; --icon-2: #7D6A5A; --surface-2: #1A1411; --hairline: #2A2019; }
 html:has(.ns-page) .sheet .radio.on { background: #B86C35; border-color: #B86C35; }
+/* the chosen light is its tick, in the night's ink: no blue under it */
+html:has(.ns-page) .sheet .row.way.sel { background: none; }
+html:has(.ns-page) .sheet .row.way.sel .row-txt .t { color: #E0B48A; }
 
 /* ---- 11 · Wake-up light, the sunrise preview ----------------------------------------------------------------------
    One number drives it all: --f, how far through the rise the sun has been pulled (0 at the start, 1 at the alarm).

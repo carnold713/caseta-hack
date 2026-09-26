@@ -11,7 +11,7 @@
 //       toast and no Undo (2ca8d0a: the lamp changing is the answer).
 //   5   White: the bar is a sky, the lamp's white a sun on a path in mireds; dragging the sun moves the white live.
 //   15  the sleep timer's candle: its height is the time left over the time set (the hub records the minutes, so a
-//       timer this phone did not set is whole too); Add 15 min grows it back; Stop the timer and Off now each act with
+//       timer this phone did not set is whole too); Add 15 min grows it back; Stop timer and Off now each act with
 //       no toast and no Undo; at the end the flame gutters and the choices come back.
 //
 // Runs after hue_test and hue_color_test, which pair the fake Hue bridge: that is where the colour lamp comes from.
@@ -171,7 +171,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await goto(`light/${lamp}/colour`, 1200);
     await page.click('.cs-sw .sw[data-hex="#4C8DFF"]'); await wait(1400);
     const head = await C(() => ({ over: document.querySelector('.sheet-head .t-over').textContent, title: document.querySelector('.sheet-head h2').textContent }));
-    check('4: the sheet says "Colour", under "{light} · {colour}"', head.title === 'Colour' && head.over === `${name} · Blue`, head);
+    // the colour's name is in the value row under the wheel; the line over the title is only the light's name
+    check('4: the sheet says "Colour", under the light\'s name', head.title === 'Colour' && head.over === name, head);
     const bead = await C(() => { const b = document.querySelector('.cs-sw .sw[data-hex="#FFC24A"]'); const cs = getComputedStyle(b), sp = getComputedStyle(b, '::after'); const ring = getComputedStyle(document.querySelector('.cs-sw .sw-ring')); return { bg: cs.backgroundImage, col: cs.backgroundColor, spec: sp.content, sh: cs.boxShadow, ring: ring.boxShadow, ringGlow: !!document.querySelector('.cs-sw .sw-ring .glow') }; });
     check('4: the colours are flat swatches (no light, no specular spot, no shadow)', bead.bg === 'none' && /255, 194, 74/.test(bead.col) && (bead.spec === 'none' || bead.spec === 'normal') && bead.sh === 'none', bead);
     check('4: the chosen one wears a plain 2 px white ring with a small gap, and casts no light', /rgb\(255, 255, 255\) 0px 0px 0px 4px/.test(bead.ring) && /0px 0px 0px 2px/.test(bead.ring) && !bead.ringGlow, bead);
@@ -189,7 +190,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await wait(1300);
     const amber = await C(id => ({ hex: String((window.__copper.S.states[id].color || {}).hex).toUpperCase(), toast: document.querySelector('#toast-root').textContent }), lamp);
     check('4: a pick shows no toast and no Undo; the lamp is amber', amber.hex === '#FFC24A' && amber.toast === '', amber);
-    check('4: the sub names the new colour', (await C(() => document.querySelector('.sheet-head .t-over').textContent)) === `${name} · Amber`);
+    check('4: the value row names the new colour', (await C(() => document.querySelector('[data-cval] b').textContent)) === 'Amber');
     await page.screenshot({ path: 'v7-colour-amber.png' });
     // put it back to blue directly (there is no Undo now)
     await C(id => window.__copper.run({ type: 'color', target: `d:${id}`, hex: '#4C8DFF' }), lamp); await wait(1400);
@@ -212,8 +213,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const t27 = (1e6 / 1900 - 1e6 / 2700) / (1e6 / 1900 - 1e6 / 6500);
     check('5: the sky card sits where the file has it (20, 214, 372 x 200 from the sheet\'s top)', sky.x === 20 && Math.abs(sky.y - 214) <= 1 && sky.w === 372 && sky.h === 200, sky);
     check('5: the lamp\'s white is a sun on the path, 2700K at t 0.419', Math.abs(sky.sunX - (24 + t27 * (sky.w - 48))) <= 1.5 && Math.abs(sky.sunY - (168 - 128 * Math.sin(t27 * Math.PI / 2))) <= 1.5, { sky, want: [24 + t27 * (sky.w - 48), 168 - 128 * Math.sin(t27 * Math.PI / 2)] });
-    const wh = await C(() => ({ over: document.querySelector('.sheet-head .t-over').textContent, title: document.querySelector('.sheet-head h2').textContent, ends: document.querySelector('.ws-ends').innerText }));
-    check('5: "White", under "{light} · 2700K · Warm", from candle at dusk to daylight at noon', wh.title === 'White' && wh.over === `${name} · 2700K · Warm` && /CANDLE · DUSK/.test(wh.ends) && /DAYLIGHT · NOON/.test(wh.ends), wh);
+    const wh = await C(() => ({ over: document.querySelector('.sheet-head .t-over').textContent, title: document.querySelector('.sheet-head h2').textContent, val: document.querySelector('[data-k]').textContent + ' ' + document.querySelector('[data-kname]').textContent, ends: !!document.querySelector('.ws-ends') }));
+    check('5: "White", under the light\'s name, reading 2700K Warm; the named whites say the ends, so the sky has no end labels', wh.title === 'White' && wh.over === name && wh.val === '2700K Warm' && !wh.ends, wh);
     await page.screenshot({ path: 'v7-white-2700.png' });
     const sunLook = await C(() => { const t = document.querySelector('.ws-thumb'); return { glow: t.querySelectorAll('.glow').length, sh: getComputedStyle(t.querySelector('.disc')).boxShadow, bg: getComputedStyle(t.querySelector('.disc')).backgroundImage }; });
     check('5: the sun is flat: a disc of the white in a plain 2 px white ring, no light round it, no shadow', !sunLook.glow && sunLook.bg === 'none' && sunLook.sh === 'rgb(255, 255, 255) 0px 0px 0px 2px', sunLook);
@@ -235,8 +236,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     check('5: the sun is a grip; dragging it sets the white live (the readout steps as it goes)', drag.grabbed && new Set(drag.seen).size >= 4 && k4 >= 3900 && k4 <= 4100, { drag, k4 });
     check('5: noon brightens as the sun climbs', drag.noon[drag.noon.length - 1] > drag.noon[0], drag.noon);
     // the sheet names the white where it was set; no toast and no Undo (2ca8d0a)
-    const named = await C(() => ({ over: document.querySelector('.sheet-head .t-over').textContent, toast: document.querySelector('#toast-root').textContent }));
-    check('5: the drag ends with no toast; the sheet names the white it set', named.toast === '' && named.over === `${name} · ${k4}K · ${await C(k => CasetaDaylight.warmthName(k), k4)}` && /· (Soft|Neutral)( white)?$/.test(named.over), named);
+    const named = await C(() => ({ val: document.querySelector('[data-k]').textContent + ' ' + document.querySelector('[data-kname]').textContent, toast: document.querySelector('#toast-root').textContent }));
+    check('5: the drag ends with no toast; the readout names the white it set', named.toast === '' && named.val === `${k4}K ${await C(k => CasetaDaylight.warmthName(k), k4)}` && / (Soft|Neutral)( white)?$/.test(named.val), named);
     const now = await C(() => !!document.querySelector('.ws-now') || !!document.querySelector('.ws-loc'));
     check('5: the day\'s white now is on the sky, or the sky asks where home is', now);
     await page.screenshot({ path: 'v7-white-4000.png' });
@@ -253,7 +254,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const key = `d:${lamp}`;
     const cd = await C(k => { const c = window.__copper; const st = document.querySelector('.tc-stage'); const cn = document.querySelector('.tc-candle'); return st && { f: Number(st.style.getPropertyValue('--f')), h: cn.getBoundingClientRect().height, left: document.querySelector('[data-left]').textContent, says: document.querySelector('.tc-says').textContent, btns: [...document.querySelectorAll('.tc-btns .pill')].map(b => b.textContent), hub: (c.S.timers[k] || {}).minutes }; }, key);
     check('15: a running timer is a candle, whole when it has just been set', cd && cd.f > 0.98 && Math.abs(cd.h - 95) <= 1.5, cd);
-    check('15: "15 min left", "{light} fades out at {time}", and the three buttons', cd && cd.left === '15 min left' && cd.says.startsWith(`${name} fades out at `) && cd.btns.join('|') === 'Add 15 min|Stop the timer|Off now', cd);
+    check('15: "15 min left", "Fades out at {time}", and the three buttons', cd && cd.left === '15 min left' && /^Fades out at \d{1,2}:\d\d (am|pm)$/.test(cd.says) && cd.btns.join('|') === 'Add 15 min|Stop timer|Off now', cd);
     check('15: the hub records how long it was set for', cd && cd.hub === 15, cd && cd.hub);
     await page.screenshot({ path: 'v7-candle-whole.png' });
     // a timer this phone did not set (a remote's): the hub's minutes still give the candle its full height
@@ -267,12 +268,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await page.click('[data-act="timer-add"]'); await wait(1600);
     const grown = await C(() => ({ total: Number(document.querySelector('[data-left]').dataset.total), left: document.querySelector('[data-left]').textContent, f: Number(document.querySelector('.tc-stage').style.getPropertyValue('--f')) }));
     check('15: Add 15 min grows the candle back', grown.total === 45 && grown.left === '30 min left' && grown.f > half.f, grown);
-    // Stop the timer: the light stays as it is, the candle goes and nothing else is said (no toast, no Undo)
+    // Stop timer: the light stays as it is, the candle goes and nothing else is said (no toast, no Undo)
     const lvBefore = await level(lamp);
     await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
     await page.click('[data-act="timer-cancel"]'); await wait(1400);
     const stopped = await C(k => ({ candle: !!document.querySelector('.tc-stage'), hub: !!(window.__copper.S.timers || {})[k], durs: document.querySelectorAll('.durs .dur').length, toast: document.querySelector('#toast-root').textContent }), key);
-    check('15: Stop the timer ends it on the hub and leaves the light as it is, with no toast', !stopped.candle && !stopped.hub && (await level(lamp)) === lvBefore && stopped.toast === '', { lv: await level(lamp), lvBefore, ...stopped });
+    check('15: Stop timer ends it on the hub and leaves the light as it is, with no toast', !stopped.candle && !stopped.hub && (await level(lamp)) === lvBefore && stopped.toast === '', { lv: await level(lamp), lvBefore, ...stopped });
     check('15: and the sheet offers the choices again', stopped.durs >= 1, stopped);
     // a timer again, for Off now
     await page.click('.dur[data-m="30"]'); await wait(1600);

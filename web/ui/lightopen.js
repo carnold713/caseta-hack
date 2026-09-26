@@ -166,8 +166,6 @@ function arrivals(page, flown) {
     add(dial.querySelector('.lbl'), 640, { dy: 12, dur: 320 });
     if (![...dial.querySelectorAll('.num > *')].some(n => flown.has(n))) add(dial.querySelector('.num'), 640, { dy: 12, dur: 320 });
     add(dial.querySelector('.nudge.minus'), 680, { dy: 12, dur: 320 });
-    add(dial.querySelector('.lo'), 720, { dy: 12, dur: 320 });
-    add(dial.querySelector('.hi'), 760, { dy: 12, dur: 320 });
     add(dial.querySelector('.nudge.plus'), 800, { dy: 12, dur: 320 });
   }
   // a fan's speeds: the label and the speed, then each step, slowest first
@@ -176,7 +174,7 @@ function arrivals(page, flown) {
     add(sp.querySelector('.lbl'), 560, { dy: 12, dur: 320 });
     add(sp.querySelector('.big'), 580, { dy: 12, dur: 320 });
     all('.speeds .step').forEach((s, i) => { add(s, 600 + i * 40, { dy: 24, scale: 0.96 }); add(all('.speeds .steplbl')[i], 600 + i * 40, { dy: 12, dur: 320 }); });
-    for (const n of all('.speeds .nudge, .speeds .fa')) add(n, 800, { dy: 12, dur: 320 });
+    for (const n of all('.speeds .nudge')) add(n, 800, { dy: 12, dur: 320 });
   }
   // a shade's window and its readout, then its buttons
   add(q('.window'), 400, { scale: 0.96 });
