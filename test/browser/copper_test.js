@@ -167,6 +167,9 @@ const FAN = [
       // the sky's two end labels are gone (the named whites under it say the ends): the whites sit 10 under the sky
       ['sun', '.ws-thumb .disc', null, null, 28, 28], ['named whites', '.ws-chips', 20, 424, null, 40], ['Follow the day', '.ws-follow', 20, 480, null, null],
     ]);
+    // the sheet at rest first: a finger landing on a sheet still rising holds it where it is (sheetdrag.js), and the
+    // track measured before that would not be where the finger lands
+    await page.waitForFunction(() => { const r = document.querySelector('#sheet-root'); return r && r.getAnimations({ subtree: true }).every(a => a.playState !== 'running'); }, null, { timeout: 5000 }).catch(() => {});
     const tr = await page.locator('.ws-track').boundingBox();
     const at = k => tr.x + tr.width * (1e6 / 1900 - 1e6 / k) / (1e6 / 1900 - 1e6 / 6500);
     check('the bar is in mireds: 2700K sits at 41.9%', Math.abs((at(2700) - tr.x) / tr.width - 0.419) < 0.002);
