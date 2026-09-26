@@ -70,7 +70,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await C(() => { window.__tapAt = performance.now(); });
   await page.tap(chip); await wait(60);
   const early = await C(async () => {
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // wait until the ring has started (a busy machine can take a few frames), up to ten frames
+    for (let i = 0; i < 10; i++) { const w = document.querySelector('.wv-wave'); const a0 = w && w.getAnimations()[0]; if (a0 && a0.startTime != null) break; await new Promise(r => requestAnimationFrame(r)); }
     const ch = document.querySelector('.room-chips .chip[data-act="scene"]');
     const wave = document.querySelector('.wv-wave');
     const wa = wave ? wave.getAnimations().map(a => ({ n: a.animationName, d: Math.round(a.effect.getTiming().duration), delay: Math.round(a.effect.getTiming().delay), at: a.startTime == null ? null : Math.round(a.startTime + a.effect.getTiming().delay - window.__tapAt) })) : [];
