@@ -113,6 +113,20 @@ public class WidgetActions extends BroadcastReceiver {
         Safe.run(c, "timer notifications", () -> TimerNotifications.fromState(c));
     }
 
+    /**
+     * A level set from the quick panel ("on", "off" or 0 to 100), shown ahead of the hub as a tap on a widget is: into
+     * the state, and every widget drawn from it, so the home screen already matches when the panel closes.
+     */
+    static void expectLevel(Context c, String target, Object level) {
+        try {
+            JSONObject state = WidgetStore.state(c);
+            expectLevels(c, state, target, level);
+            show(c, state);
+        } catch (Throwable failed) {
+            Safe.note(c, "quick panel show", failed);
+        }
+    }
+
     private static void show(Context c, JSONObject state) {
         WidgetStore.setState(c, state);
         Widgets.updateAll(c);

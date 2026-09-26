@@ -1,4 +1,4 @@
-// Widgets (the Android app only). #widgets lists the ones on this phone's home screen and the ten there are, each
+// Widgets (the Android app only). #widgets lists the ones on this phone's home screen and the eleven there are, each
 // with Add, which asks Android to place it. #widgets/<id> is one widget's page: what it shows and how it looks, with a
 // live picture of it at the top. Every choice is saved as it is made and the widget on the home screen redraws at
 // once (native.js setWidget); Done goes back, to the home screen when the widget's own setup opened the app.
@@ -11,7 +11,7 @@ import { LAMP_COLOURS, WHITES, kelvinHex } from '/ui/colour.js';
 
 export let noTabs = false;
 
-// The ten, in the order the widget picker shows them: [kind, name, what it is, glyph]
+// The eleven, in the order the widget picker shows them: [kind, name, what it is, glyph]
 export const KINDS = [
   ['room', 'Room', 'On and off, dimmer and brighter', 'grid'],
   ['light', 'Light', 'One light, in its own colour while on', 'bulb'],
@@ -23,6 +23,7 @@ export const KINDS = [
   ['routine', 'Next routine', 'What runs next, with Skip tonight', 'clock'],
   ['pinned', 'Pinned', 'What is pinned on Home', 'pin'],
   ['colour', 'Colours', 'Colours for a colour lamp', 'palette'],
+  ['dimmers', 'Dimmers', 'What is pinned, each with its brightness', 'tune'],
 ];
 const KIND = Object.fromEntries(KINDS.map(k => [k[0], k]));
 const MAX_SCENES = 6, MAX_STEPS = 5, MAX_MINUTES = 4, MAX_COLOURS = 8;
@@ -94,7 +95,7 @@ function shows(c, m, x) {
   switch (x.kind) {
     case 'scenes': { const n = (cfg.scenes || []).length; return n ? `${n} scene${n === 1 ? '' : 's'}` : 'No scenes chosen'; }
     case 'house': return 'Every light';
-    case 'pinned': return 'What is pinned on Home';
+    case 'pinned': case 'dimmers': return 'What is pinned on Home';
     case 'routine': return cfg.routine ? ((m.routines.find(r => r.id === cfg.routine) || {}).name || 'A routine that is gone') : 'Whichever is next';
     default: return name || (t ? 'Gone. Choose again' : 'Not chosen');
   }
@@ -168,6 +169,8 @@ function what(c, kind, cfg, m) {
       return `${sec('Routine')}<div class="group">${radio(c, !cfg.routine, 'wg-routine', '', 'Whichever is next')}${m.routines.map(r => radio(c, cfg.routine === r.id, 'wg-routine', r.id, r.name, r.enabled ? '' : 'Paused')).join('')}</div>`;
     case 'pinned':
       return `<p class="t-cap muted wg-lede">What is pinned on Home, as many as fit. Pin a light or a room from its page.</p>`;
+    case 'dimmers':
+      return `<p class="t-cap muted wg-lede">What is pinned on Home, as many as fit.</p>`;
     case 'colour': {
       const cols = (cfg.colours || []).map(v => String(v).toLowerCase());
       return `${sec('Lamp')}<div class="group">${lights(m.lights.filter(l => l.color)) || none('No colour lamps yet')}</div>
@@ -267,6 +270,19 @@ function preview(c, kind, cfg, m, st) {
         const o = k.startsWith('d:') ? { on: lv(x.id) > 0 ? 1 : 0, level: lv(x.id) } : lit(x.lights);
         return [g, x.name, o.on ? (L.levels && o.level ? `${o.level}%` : 'On') : 'Off', o.on > 0];
       }), list.length > 4 ? 3 : 2);
+      break;
+    }
+    case 'dimmers': {
+      // a row each: the name and level over a segmented bar lit up to the level, and the power button
+      const list = m.pins.map(k => (k.startsWith('d:') ? ['bulb', m.lights.find(l => l.id === k.slice(2)), k] : ['grid', m.rooms.find(r => r.id === k.slice(2)), k])).filter(x => x[1]).slice(0, 4);
+      tall = list.length > 2;
+      if (!list.length) { body = head('pin', false, 'Pinned', 'Pin lights and rooms on Home'); break; }
+      body = `<div class="wgp-dims">${list.map(([g, x, k]) => {
+        const o = k.startsWith('d:') ? { on: lv(x.id) > 0 ? 1 : 0, level: lv(x.id) } : lit(x.lights);
+        const on = o.on > 0, n = 10, lit10 = on ? Math.max(1, Math.round((o.level || 100) * n / 100)) : 0;
+        const segs = Array.from({ length: n }, (_, i) => `<i class="${i < lit10 ? 'on' : ''}"></i>`).join('');
+        return `<div class="wgp-dim"><div class="wgp-dim-main"><div class="wgp-dim-words">${ic(g, on)}<b>${esc(x.name)}</b><em>${on ? (L.levels && o.level ? `${o.level}%` : 'On') : 'Off'}</em></div><div class="wgp-segs">${segs}</div></div><i class="wgp-pwr ${on ? 'on' : 'off'}">${icon('power', 20, 1.9)}</i></div>`;
+      }).join('')}</div>`;
       break;
     }
     case 'colour': {

@@ -2,7 +2,7 @@
 //
 // Without the Android bridge (a browser) nothing calls it: Settings has no This phone group, and #widgets says where
 // widgets live. With a stand-in bridge (window.Capacitor, recording every call): This phone's timer switch saves on
-// the phone (setPhone, never the house's config), the Widgets row lists the placed widgets and the ten with Add, a
+// the phone (setPhone, never the house's config), the Widgets row lists the placed widgets and the eleven with Add, a
 // widget's page shows a picture of it that follows each choice, every choice is saved at once (setWidget), Done
 // hands back (widgetDone), and the home is handed to the widgets (widgetData). None of it has a dash in its words,
 // or says "target", "binding" or "schedule".
@@ -17,7 +17,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const BRIDGE = () => {
   const calls = window.__calls = [];
   const cfg = kind => ({ kind, theme: 'night', shade: 40, corners: 'system', accent: kind === 'light' || kind === 'colour' ? 'lamp' : 'copper', labels: true, levels: true, icons: true, density: 'roomy', steps: kind === 'room', levelsAt: [25, 50, 75, 100], minutes: [15, 30, 60], nightLevel: 10, routine: '', colours: ['k2700', '#FF5A4E', '#4C8DFF'] });
-  const placed = [{ id: 11, kind: 'room', cfg: cfg('room') }, { id: 12, kind: 'colour', cfg: cfg('colour') }];
+  const placed = [{ id: 11, kind: 'room', cfg: cfg('room') }, { id: 12, kind: 'colour', cfg: cfg('colour') }, { id: 13, kind: 'dimmers', cfg: cfg('dimmers') }];
   let phone = { timerMode: 'live', notifications: true, liveUpdates: true, android: 36, widgets: 2, canAdd: true };
   window.Capacitor = {
     isNativePlatform: () => true,
@@ -97,10 +97,11 @@ const BRIDGE = () => {
 
   // the Widgets list
   await page.locator('.phone-group [data-go="widgets"]').click();
-  await page.waitForFunction(() => location.hash === '#widgets' && document.querySelectorAll('.wg-placed .row').length === 2, null, { timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(() => location.hash === '#widgets' && document.querySelectorAll('.wg-placed .row').length === 3, null, { timeout: 5000 }).catch(() => {});
   t = await words(page);
-  check('Widgets lists the two placed', await page.locator('.wg-placed [data-go^="widgets/"]').count() === 2, t.slice(0, 200));
-  check('and the ten there are, each with Add', await page.locator('.wg-kinds .row').count() === 10 && await page.locator('[data-act="wg-add"]').count() === 10);
+  check('Widgets lists the three placed', await page.locator('.wg-placed [data-go^="widgets/"]').count() === 3, t.slice(0, 200));
+  check('and the eleven there are, each with Add', await page.locator('.wg-kinds .row').count() === 11 && await page.locator('[data-act="wg-add"]').count() === 11);
+  check('Dimmers among them', await page.locator('[data-act="wg-add"][data-kind="dimmers"]').count() === 1);
   clean('the widgets list', t);
   await page.locator('[data-act="wg-add"][data-kind="scenes"]').click(); await wait(300);
   check('Add asks Android to place that one', (await calls('addWidget')).at(-1).kind === 'scenes');
@@ -142,6 +143,19 @@ const BRIDGE = () => {
   await page.locator('[data-act="wg-colour"][data-v="#9EE06A"]').click(); await wait(200);
   check('a colour added is saved', (await calls('setWidget')).at(-1).cfg.colours.includes('#9EE06A'));
   clean('a colour widget\'s page', await words(page));
+
+  // the Dimmers widget's page: the pins, a row each with a bar lit up to its level, and the look options
+  await page.goto(ROOT + '#widgets/13'); await page.locator('#screen .wgp').first().waitFor({ timeout: 5000 });
+  const dims = await page.evaluate(() => {
+    const p = document.querySelector('.wg-stage .wgp[data-kind="dimmers"]');
+    const rows = [...(p ? p.querySelectorAll('.wgp-dim') : [])];
+    return { picture: !!p, rows: rows.length, segs: rows.every(r => r.querySelectorAll('.wgp-segs i').length === 10), pwr: rows.every(r => !!r.querySelector('.wgp-pwr')), note: p ? p.innerText : '' };
+  });
+  check('a Dimmers widget\'s page shows its picture: a row per pin with ten segments and a power button, or the note', dims.picture && (dims.rows > 0 ? dims.segs && dims.pwr : /Pin lights and rooms/.test(dims.note)), dims);
+  check('and offers the look, with no choice of lamp colour', await page.locator('[data-act="wg-theme"]').count() === 3 && await page.locator('[data-act="wg-accent"]').count() === 0);
+  await page.locator('[data-act="wg-theme"][data-v="day"]').click(); await wait(200);
+  check('Day saves for it too', (await calls('setWidget')).at(-1).cfg.theme === 'day' && await page.locator('#screen .wgp.wgp-day[data-kind="dimmers"]').count() === 1);
+  clean('a Dimmers widget\'s page', await words(page));
 
   // Done
   await page.goto(ROOT + '#widgets'); await wait(500);

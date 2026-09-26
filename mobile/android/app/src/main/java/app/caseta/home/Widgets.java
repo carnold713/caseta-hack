@@ -28,7 +28,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The ten widgets, drawn. Each placed widget is drawn from three things (WidgetStore): its config (what it controls
+ * The eleven widgets, drawn. Each placed widget is drawn from three things (WidgetStore): its config (what it controls
  * and how it looks), the model (the home as the app sees it) and the state (levels, colours, timers).
  *
  *   room        a room: its name and level, a power button, and dimmer and brighter
@@ -41,6 +41,8 @@ import java.util.Map;
  *   routine     the next routine (or one chosen), with Skip tonight
  *   pinned      what is pinned on Home, as many as fit
  *   colour      colours for a colour lamp, one tap each
+ *   dimmers     what is pinned on Home, a row each: a segmented brightness bar, its level and a power button; a tap on
+ *               a name opens the quick panel (QuickPanelActivity), where the bars follow a finger
  *
  * Every one has the same look options: Night (Copper Night), Day, or Clear with a shade; the launcher's corners or
  * square ones; copper or the lamp's own colour for "on"; names, levels and icons each on or off; roomy or compact.
@@ -49,7 +51,7 @@ import java.util.Map;
 final class Widgets {
     private Widgets() {}
 
-    static final String[] KINDS = { "room", "light", "scenes", "house", "levels", "timer", "nightstand", "routine", "pinned", "colour" };
+    static final String[] KINDS = { "room", "light", "scenes", "house", "levels", "timer", "nightstand", "routine", "pinned", "colour", "dimmers" };
     static final int COPPER = 0xFFD98A4E;
 
     static Class<?> providerOf(String kind) {
@@ -64,6 +66,7 @@ final class Widgets {
             case "routine": return RoutineWidget.class;
             case "pinned": return PinnedWidget.class;
             case "colour": return ColourWidget.class;
+            case "dimmers": return DimmersWidget.class;
             default: return null;
         }
     }
@@ -220,6 +223,7 @@ final class Widgets {
                 case "routine": return routine(b);
                 case "pinned": return pinned(b);
                 case "colour": return colour(b);
+                case "dimmers": return dimmers(b);
                 default: return b.note(R.drawable.wi_home, "Caseta", "Tap to open", "home");
             }
         } catch (Exception e) {
@@ -277,6 +281,20 @@ final class Widgets {
 
         /** A tap that opens the app on a page (#room/<id>, #widgets/<id>, ...). */
         PendingIntent open(String route) { return Widgets.open(c, route, id * 64 + 63); }
+
+        /**
+         * A tap that opens the quick panel over the home screen (QuickPanelActivity), on one item ("a:3", "d:5") or
+         * on them all (""). An activity straight from the widget, since Android refuses one started from a broadcast.
+         * The item is in the intent's data, so each is its own PendingIntent.
+         */
+        PendingIntent panel(String focus) {
+            Intent i = new Intent(c, QuickPanelActivity.class)
+                .setData(Uri.parse("caseta-panel://open/" + id + "/" + Uri.encode(focus)))
+                .putExtra(QuickPanelActivity.FOCUS, focus)
+                .putExtra(QuickPanelActivity.THEME, cfg.optString("theme", "night"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+            return PendingIntent.getActivity(c, id * 64 + 62, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        }
 
         RemoteViews head(int icon, int iconColor, String title, String sub) {
             RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.wg_head);
@@ -392,7 +410,7 @@ final class Widgets {
         RemoteViews gone(String what) { return note(R.drawable.wi_x, what, "Tap to choose again", "widgets/" + id); }
     }
 
-    // ---------- the ten ----------
+    // ---------- the eleven ----------
     private static RemoteViews room(B b) throws Exception {
         String target = b.cfg.optString("target");
         JSONObject room = find(b.model.optJSONArray("rooms"), "id", target.startsWith("a:") ? target.substring(2) : "");
@@ -680,14 +698,20 @@ final class Widgets {
         return b.root;
     }
 
-    private static RemoteViews pinned(B b) throws Exception {
-        JSONArray pins = b.model.optJSONArray("pins");
+    /** What is pinned on Home that the model still has, in its order: {key, x}, x the room or the light. */
+    static List<JSONObject> pinnedItems(JSONObject model) throws Exception {
+        JSONArray pins = model.optJSONArray("pins");
         List<JSONObject> items = new ArrayList<>();
         for (int i = 0; pins != null && i < pins.length(); i++) {
             String k = pins.optString(i);
-            JSONObject x = k.startsWith("d:") ? find(b.model.optJSONArray("lights"), "id", k.substring(2)) : k.startsWith("a:") ? find(b.model.optJSONArray("rooms"), "id", k.substring(2)) : null;
+            JSONObject x = k.startsWith("d:") ? find(model.optJSONArray("lights"), "id", k.substring(2)) : k.startsWith("a:") ? find(model.optJSONArray("rooms"), "id", k.substring(2)) : null;
             if (x != null) items.add(new JSONObject().put("key", k).put("x", x));
         }
+        return items;
+    }
+
+    private static RemoteViews pinned(B b) throws Exception {
+        List<JSONObject> items = pinnedItems(b.model);
         if (items.isEmpty()) return b.note(R.drawable.wi_pin, "Pinned", "Pin lights and rooms on Home", "home");
         int ih = b.innerH(), iw = b.innerW();
         boolean title = b.L.labels && ih >= 150;
@@ -783,6 +807,115 @@ final class Widgets {
         return b.root;
     }
 
+    /**
+     * What is pinned on Home, a row each: its glyph, name and level over a segmented bar, and a power button. A widget
+     * cannot be dragged, so the bar is segments to tap (segment k of n sets round(100k/n)), and a tap on a name opens
+     * the quick panel on that item, where the bar follows a finger. Rows share the height; as many as fit, the last
+     * one saying how many more there are when not all do.
+     */
+    private static RemoteViews dimmers(B b) throws Exception {
+        List<JSONObject> items = pinnedItems(b.model);
+        if (items.isEmpty()) return b.note(R.drawable.wi_pin, "Pinned", "Pin lights and rooms on Home", "home");
+        int ih = b.innerH(), iw = b.innerW();
+        int least = b.L.compact ? 46 : 50;
+        int fitAll = Math.max(1, (ih + 8) / (least + 8));
+        // the heading only when it costs no row
+        boolean title = b.L.labels && ih >= 150 && Math.max(1, (ih - 38 + 8) / (least + 8)) >= Math.min(items.size(), fitAll);
+        if (title) { b.add(b.head(R.drawable.wi_pin, b.L.sub, "Pinned", null)); b.space(); }
+        int avail = ih - (title ? 38 : 0);
+        int rows = Math.min(8, Math.min(items.size(), Math.max(1, (avail + 8) / (least + 8))));
+        boolean large = !b.L.compact && iw >= 260 && (avail - (rows - 1) * 8) / rows >= 76;
+        int segs = iw < 220 ? 5 : 10;
+        for (int i = 0; i < rows; i++) {
+            if (i > 0) b.space();
+            if (i == rows - 1 && rows > 1 && items.size() > rows) {
+                b.add(dimMore(b, items.size() - i, large));
+                break;
+            }
+            JSONObject it = items.get(i);
+            b.add(dimRow(b, it.getString("key"), it.getJSONObject("x"), segs, large));
+        }
+        b.onTap(b.panel(""));
+        return b.root;
+    }
+
+    /** One pinned room or light in the Dimmers widget. */
+    private static RemoteViews dimRow(B b, String key, JSONObject x, int segs, boolean large) throws Exception {
+        boolean room = key.startsWith("a:");
+        int lv;
+        boolean dim;
+        if (room) {
+            JSONArray ids = x.optJSONArray("lights");
+            int[] o = litOf(b, ids);
+            lv = o[0] == 0 ? 0 : o[1] > 0 ? o[1] : -1;
+            // a room of switches only has nothing to dim
+            dim = false;
+            for (int i = 0; ids != null && i < ids.length() && !dim; i++) {
+                JSONObject d = find(b.model.optJSONArray("lights"), "id", ids.optString(i));
+                dim = d == null || d.optBoolean("dim", true);
+            }
+        } else {
+            lv = levelOf(b, x.optString("id"));
+            dim = x.optBoolean("dim", true);
+        }
+        boolean on = lv != 0;
+        String name = x.optString("name");
+        RemoteViews r = new RemoteViews(b.c.getPackageName(), large ? R.layout.wg_dim_row_lg : R.layout.wg_dim_row);
+        r.removeAllViews(R.id.wg_dim_bar);
+        r.setImageViewResource(R.id.wg_dim_ic, room ? R.drawable.wi_grid : R.drawable.wi_bulb);
+        tint(r, R.id.wg_dim_ic, on ? b.L.accent : b.L.sub, 255);
+        r.setViewVisibility(R.id.wg_dim_ic, b.L.icons ? View.VISIBLE : View.GONE);
+        r.setTextViewText(R.id.wg_dim_name, name);
+        r.setTextColor(R.id.wg_dim_name, b.L.ink);
+        r.setTextViewText(R.id.wg_dim_lv, !on ? "Off" : b.L.levels && lv > 0 ? lv + "%" : "On");
+        r.setTextColor(R.id.wg_dim_lv, b.L.sub);
+        if (b.L.compact) {
+            r.setTextViewTextSize(R.id.wg_dim_name, TypedValue.COMPLEX_UNIT_SP, 13);
+            r.setTextViewTextSize(R.id.wg_dim_lv, TypedValue.COMPLEX_UNIT_SP, 12);
+        }
+        if (dim) {
+            // lit up to the level, as the app's slider fills; an unknown level (just switched on) reads as full
+            int lit = !on ? 0 : lv < 0 ? segs : Math.max(1, Math.min(segs, Math.round(lv * segs / 100f)));
+            int pad = b.px(large ? 10 : 8), half = Math.max(1, b.px(3) / 2);
+            for (int k = 1; k <= segs; k++) {
+                int at = Math.round(100f * k / segs);
+                boolean here = k <= lit;
+                RemoteViews s = new RemoteViews(b.c.getPackageName(), R.layout.wg_seg);
+                s.setImageViewResource(R.id.wg_seg_bg, b.L.square ? R.drawable.wg_seg : k == 1 ? R.drawable.wg_seg_s : k == segs ? R.drawable.wg_seg_e : R.drawable.wg_seg);
+                tint(s, R.id.wg_seg_bg, here ? b.L.accent : b.L.btn, here ? 255 : b.L.btnAlpha);
+                // the whole height of the strip takes the tap; only its middle is drawn
+                s.setViewPadding(R.id.wg_seg, k == 1 ? 0 : half, pad, k == segs ? 0 : half, pad);
+                s.setContentDescription(R.id.wg_seg, name + " at " + at + "%");
+                s.setOnClickPendingIntent(R.id.wg_seg, b.act(level(key, at)));
+                r.addView(R.id.wg_dim_bar, s);
+            }
+        } else {
+            r.setViewVisibility(R.id.wg_dim_bar, View.GONE);
+        }
+        r.setViewVisibility(R.id.wg_dim_pwr, View.VISIBLE);
+        tint(r, R.id.wg_dim_pwr_bg, on ? b.L.accent : b.L.btn, on ? 255 : b.L.btnAlpha);
+        tint(r, R.id.wg_dim_pwr_ic, on ? b.L.onInk : b.L.btnInk, 255);
+        r.setContentDescription(R.id.wg_dim_pwr, "Turn " + name + (on ? " off" : " on"));
+        r.setOnClickPendingIntent(R.id.wg_dim_pwr, b.act(level(key, on ? "off" : "on")));
+        r.setOnClickPendingIntent(R.id.wg_dim, b.panel(key));
+        return r;
+    }
+
+    /** The Dimmers widget's last row when not all fit: how many more, and a tap opens the panel with them all. */
+    private static RemoteViews dimMore(B b, int more, boolean large) {
+        RemoteViews r = new RemoteViews(b.c.getPackageName(), large ? R.layout.wg_dim_row_lg : R.layout.wg_dim_row);
+        r.removeAllViews(R.id.wg_dim_bar);
+        r.setViewVisibility(R.id.wg_dim_bar, View.GONE);
+        r.setImageViewResource(R.id.wg_dim_ic, R.drawable.wi_plus);
+        tint(r, R.id.wg_dim_ic, b.L.sub, 255);
+        r.setViewVisibility(R.id.wg_dim_ic, b.L.icons ? View.VISIBLE : View.GONE);
+        r.setTextViewText(R.id.wg_dim_name, more + " more");
+        r.setTextColor(R.id.wg_dim_name, b.L.sub);
+        r.setTextViewText(R.id.wg_dim_lv, "");
+        r.setOnClickPendingIntent(R.id.wg_dim, b.panel(""));
+        return r;
+    }
+
     // ---------- reading the model and the state ----------
     static JSONObject find(JSONArray list, String key, String value) {
         if (list == null || value == null || value.isEmpty()) return null;
@@ -794,8 +927,11 @@ final class Widgets {
     }
 
     /** A light's level: 0 off, -1 on at a level not heard yet (just switched on from a widget). */
-    static int levelOf(B b, String id) {
-        JSONObject lv = b.state.optJSONObject("levels");
+    static int levelOf(B b, String id) { return levelIn(b.state, id); }
+
+    /** The same, from a state read by itself (the quick panel). */
+    static int levelIn(JSONObject state, String id) {
+        JSONObject lv = state.optJSONObject("levels");
         return lv == null ? 0 : lv.optInt(id, 0);
     }
 
@@ -807,10 +943,12 @@ final class Widgets {
     }
 
     /** How many of these lights are on, and how bright those are on average. */
-    static int[] litOf(B b, JSONArray ids) {
+    static int[] litOf(B b, JSONArray ids) { return litIn(b.state, ids); }
+
+    static int[] litIn(JSONObject state, JSONArray ids) {
         int on = 0, sum = 0, known = 0;
         for (int i = 0; ids != null && i < ids.length(); i++) {
-            int lv = levelOf(b, ids.optString(i));
+            int lv = levelIn(state, ids.optString(i));
             if (lv != 0) on++;
             if (lv > 0) { sum += lv; known++; }
         }
@@ -977,7 +1115,7 @@ final class Widgets {
             try {
                 JSONObject cfg = new JSONObject().put("kind", k);
                 fillDefaults(c, cfg);
-                RemoteViews v = build(c, 0, cfg, k.equals("pinned") || k.equals("scenes") ? 250 : 250, k.equals("pinned") ? 180 : 110);
+                RemoteViews v = build(c, 0, cfg, k.equals("pinned") || k.equals("scenes") ? 250 : 250, k.equals("pinned") || k.equals("dimmers") ? 180 : 110);
                 if (!m.setWidgetPreview(new ComponentName(c, providerOf(k)), AppWidgetProviderInfoCategories.HOME, v)) all = false;
             } catch (Exception e) {
                 all = false;

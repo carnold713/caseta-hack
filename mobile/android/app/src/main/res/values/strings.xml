@@ -5,7 +5,7 @@
     <string name="package_name">app.caseta.home</string>
     <string name="custom_url_scheme">app.caseta.home</string>
     <string name="tile_label">All off</string>
-    <!-- the ten widgets, as the widget picker lists them -->
+    <!-- the eleven widgets, as the widget picker lists them -->
     <string name="wg_room">Room</string>
     <string name="wg_room_d">A room: on and off, dimmer and brighter</string>
     <string name="wg_light">Light</string>
@@ -26,4 +26,6 @@
     <string name="wg_pinned_d">What is pinned on Home</string>
     <string name="wg_colour">Colours</string>
     <string name="wg_colour_d">Colours for a colour lamp, a tap each</string>
+    <string name="wg_dimmers">Dimmers</string>
+    <string name="wg_dimmers_d">What is pinned on Home, each with its brightness</string>
 </resources>

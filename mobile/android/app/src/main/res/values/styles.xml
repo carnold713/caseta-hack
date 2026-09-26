@@ -30,6 +30,18 @@
         <item name="android:textStyle">bold</item>
     </style>
 
+    <!-- The Dimmers widget's quick panel (QuickPanelActivity): a see-through window over the home screen, which draws
+         its own dim and card and moves them itself, so the window has no background or animation of its own -->
+    <style name="QuickPanelTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
     <!-- A widget's configure step: nothing of its own is shown, it hands over to the app's page -->
     <style name="WidgetConfigTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
         <item name="android:windowAnimationStyle">@null</item>

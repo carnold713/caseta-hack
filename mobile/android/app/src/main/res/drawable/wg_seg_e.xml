@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The last segment of a Dimmers row's bar, round at its outer end (wg_seg_s) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFFFFFFF" />
+    <corners
+        android:topLeftRadius="3dp"
+        android:bottomLeftRadius="3dp"
+        android:topRightRadius="8dp"
+        android:bottomRightRadius="8dp" />
+</shape>
