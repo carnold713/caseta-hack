@@ -113,6 +113,8 @@ function instrument() {
   await C(async p => { const c = window.__copper; c.REM.applyUsualLayout(p); await c.save('', { quiet: true }); }, pid);
   await wait(600);
   const card = `#screen .rgrid > .rcard[data-go="remote/${pid}"]`;
+  // two remotes fit on one screen now that the list says nothing under them: room under the list, so it scrolls
+  await page.addStyleTag({ content: '#screen .remotes-page { padding-bottom: 120px; }' });
   await C(() => window.scrollTo(0, document.documentElement.scrollHeight)); await wait(400);
   await still();
   const y0 = await C(() => window.scrollY);

@@ -200,7 +200,7 @@ export function greetingSheet(c) {
   if (x.outside.length) rows.push(`<button class="row has-ic" data-go="setup/welcome"><span class="row-ic">${icon('door', 20, 1.4)}</span><span class="row-txt"><span class="t">Lights on before you get home</span></span></button>`);
   rows.push(`<button class="row has-ic" data-act="sheet-close"><span class="row-ic">${icon('home', 20, 1.4)}</span><span class="row-txt"><span class="t">Just look around</span></span></button>`);
   const nd = data.controllable().length, np = data.remotes().length, nr = c.RT.lightRooms().length;
-  return { over: 'Welcome', title: 'Your home is connected', body: `<p class="t-body muted sheet-p">${nd} ${nd === 1 ? 'light' : 'lights'} in ${nr} ${nr === 1 ? 'room' : 'rooms'}${np ? `, ${np} ${np === 1 ? 'remote' : 'remotes'}` : ''}.</p><div class="group">${rows.join('')}</div>` };
+  return { over: 'Welcome', title: 'Your home is connected', body: `<p class="t-body muted sheet-p">${nd} ${nd === 1 ? 'light' : 'lights'}, ${nr} ${nr === 1 ? 'room' : 'rooms'}${np ? `, ${np} ${np === 1 ? 'remote' : 'remotes'}` : ''}</p><div class="group">${rows.join('')}</div>` };
 }
 export const shouldGreet = c => !!(c.S.config && !c.S.config.settings.greeted && c.S.agent.online && c.data.controllable().length);
 
@@ -210,15 +210,15 @@ export function ideasSheet(c) {
   const rows = table(c).filter(s => s.can).map(s => {
     const done = !s.when;
     const tag = done ? '' : s.go ? `data-go="${esc(s.go)}"` : `data-act="${s.act}" data-id="${esc(s.id2 || '')}"`;
-    return `<button class="row two ${done ? 'done' : ''}" ${tag} ${done ? 'disabled' : ''}><span class="row-txt"><span class="t">${esc(s.title)}</span><span class="d">${esc(s.reason)}</span></span>${done ? `<span class="row-tick">${icon('check', 20, 1.9)}</span>` : `<span class="row-chev">${icon('chev', 16, 1.8)}</span>`}</button>`;
+    return `<button class="row ${done ? 'done' : ''}" ${tag} ${done ? 'disabled' : ''}><span class="row-txt"><span class="t">${esc(s.title)}</span></span>${done ? `<span class="row-tick">${icon('check', 20, 1.9)}</span>` : `<span class="row-chev">${icon('chev', 16, 1.8)}</span>`}</button>`;
   });
-  return { over: 'This app', title: 'Ideas for your home', body: `<p class="t-cap muted sheet-p">What the suggestion card on Home can offer. Done ones stay here too.</p><div class="group">${rows.join('')}</div>` };
+  return { over: 'This app', title: 'Ideas for your home', body: `<div class="group">${rows.join('')}</div>` };
 }
 export function installSheet() {
   return { over: 'This app', title: 'Add to your home screen', body: `<div class="group">
     <div class="row sub"><span class="row-txt"><span class="t">iPhone (Safari)</span><span class="d">Tap the share button, then Add to Home Screen.</span></span></div>
     <div class="row sub"><span class="row-txt"><span class="t">Android (Chrome)</span><span class="d">Tap the menu, then Add to Home screen. Tap Install if it offers.</span></span></div></div>
-    <p class="t-cap muted sheet-p">It then opens full-screen with its own icon, and works from anywhere, not just at home.</p>` };
+` };
 }
 
 export const nextActions = {

@@ -31,21 +31,21 @@ export function connSheet(c) {
   const h = health(c);
   const firstBad = L.find(x => x[1] === false);
   const title = st === 'ok'
-    ? (c.S.troubleSince === 0 && c.ui.hadBlip ? 'Nothing needs you. That blip was the app reconnecting' : 'Nothing needs you. Everything is connected')
-    : st === 'reconnecting' ? 'Reconnecting. Nothing needs you yet'
+    ? 'All connected'
+    : st === 'reconnecting' ? 'Reconnecting'
       : firstBad && firstBad[0] === 'Phone' ? 'This phone is offline'
-        : firstBad && firstBad[0] === 'Server' ? "Can't reach this app's server"
-          : 'Your home is not answering';
+        : firstBad && firstBad[0] === 'Server' ? "Can't reach the server"
+          : "Your home isn't answering";
   const rows = L.map(([n, ok, word]) => `<div class="row cn-row"><span class="cn-ic ${ok === false ? 'bad' : ok ? 'ok' : ''}">${icon(ok === false ? 'x' : ok ? 'check' : 'dots', 20, 1.7)}</span><span class="row-txt"><span class="t">${n}</span></span><span class="row-val">${esc(word)}</span></div>`).join('');
-  const deaf = h && h.buttons_ok === false ? `<div class="note warn">${icon('info', 20, 1.4)}<p>Your Lutron bridge has stopped reporting button presses, so your remotes will not do anything here. The app can still control your lights. Unplugging the bridge for ten seconds and plugging it back in usually clears this.</p></div>` : '';
-  const help = st === 'ok' ? '' : `<p class="t-body muted sheet-p">${firstBad && firstBad[0] === 'Phone' ? 'Check this phone’s Wi-Fi or mobile data.' : 'Your remotes and wall controls keep working: they talk to the bridge directly. Check that the computer running the connector is on and awake, on the same Wi-Fi as your Lutron bridge, and that the internet works there. It reconnects on its own within a minute.'}</p>`;
+  const deaf = h && h.buttons_ok === false ? `<div class="note warn">${icon('info', 20, 1.4)}<p>The bridge has stopped reporting presses, so remotes do nothing here. Unplug it for ten seconds to fix this.</p></div>` : '';
+  const help = st === 'ok' ? '' : `<p class="t-body muted sheet-p">${firstBad && firstBad[0] === 'Phone' ? 'Check its Wi-Fi or mobile data.' : 'Your remotes still work. Check that the computer running the connector is on and online.'}</p>`;
   // buttons, not button settings: a button with a tap, a double press and a hold is still one button set up
   const set = c.data.remotes().flatMap(d => c.REM.buttonNumbers(d).filter(n => c.REM.buttonSet(d.device_id, n))).length;
-  const remotesLine = h ? `Bridge offers ${h.buttons || 0} buttons · ${set} set up${h.last_press_at ? ` · last press ${ago(h.last_press_at * 1000)}` : ''}` : `${set} ${set === 1 ? 'button' : 'buttons'} set up`;
+  const remotesLine = h ? `${set} of ${h.buttons || 0} buttons set up` : `${set} ${set === 1 ? 'button' : 'buttons'} set up`;
   return {
     over: 'Connection', title,
     body: `<div class="conn">${help}<div class="group">${rows}</div>${deaf}
-      <div class="group"><button class="row has-ic tall" data-act="conn-remotes"><span class="row-ic">${icon('remote', 20, 1.4)}</span><span class="row-txt"><span class="t">Check the remotes</span><span class="d">${esc(remotesLine)}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div></div>`,
+      <div class="group"><button class="row has-ic tall" data-act="conn-remotes"><span class="row-ic">${icon('remote', 20, 1.4)}</span><span class="row-txt"><span class="t">Remotes</span><span class="d">${esc(remotesLine)}</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div></div>`,
   };
 }
 // From "Check the remotes": the bridge's count, the app's, what is not set up yet, and the last press.
@@ -68,8 +68,8 @@ export function remotesSheet(c) {
       <button class="row" data-go="remotes"><span class="row-txt"><span class="t">Not set up yet</span></span><span class="row-val">${unset.length} ${unset.length === 1 ? 'button' : 'buttons'}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <div class="row"><span class="row-txt"><span class="t">Last press</span></span><span class="row-val">${h.last_press_at ? esc(`${c.RT.fmtTime(c.RT.zparts(new Date(h.last_press_at * 1000)).hm)}${lastDev ? ` · ${lastDev.name}` : ''}`) : 'None yet'}</span></div>
     </div>
-    ${quiet.length ? `<p class="t-cap muted sheet-p">Not heard from lately: ${esc(quiet.map(d => d.name).join(', '))}. A remote with a flat battery goes quiet like this.</p>` : ''}
-    ${notes.length || h.lib ? `<div class="t-over sec-s">What your bridge last said</div><p class="t-cap muted sheet-p">${esc(!notes.length ? 'Nothing to report.' : bad.length ? `${bad.length} ${bad.length === 1 ? 'thing' : 'things'} to look at.` : 'Nothing here needs you. These are answers to things the app asked for.')}${h.lib ? ` Lutron library ${esc(h.lib)}.` : ''}</p>
+    ${quiet.length ? `<p class="t-cap muted sheet-p">Not heard from lately: ${esc(quiet.map(d => d.name).join(', '))}. Maybe a flat battery.</p>` : ''}
+    ${notes.length || h.lib ? `<div class="t-over sec-s">What your bridge last said</div><p class="t-cap muted sheet-p">${esc(!notes.length ? 'Nothing to report.' : bad.length ? `${bad.length} ${bad.length === 1 ? 'thing' : 'things'} to look at.` : 'All fine.')}${h.lib ? ` Lutron library ${esc(h.lib)}.` : ''}</p>
       <div class="notes">${notes.slice(0, 20).map(n => `<p class="${n.ok ? '' : 'bad'}">${esc(ago(n.at * 1000))}: ${esc(n.text)}</p>`).join('')}</div>` : ''}
     </div>`,
   };

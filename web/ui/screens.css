@@ -572,6 +572,7 @@
 .field:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--blue-hi); }
 .login-err { color: var(--text-1); margin: 0; }
 .soon { padding: 0 var(--gutter); }
+.soon-page .soon { padding-top: 20px; }
 .soon p { margin: 12px 0 20px; }
 
 /* ---- shared bits for sheets and pages built in the second pass ---------------------------------- */
@@ -819,10 +820,11 @@
 .leaders .le.on { fill: var(--blue); }
 .leaders .le.err { fill: var(--err); }
 .ld { position: absolute; left: 200px; right: 0; height: 40px; border: 0; padding: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.ld .lt { position: absolute; left: 8px; right: 8px; top: 2px; font-size: 14px; font-weight: 500; line-height: 18px; }
+.ld .lt { position: absolute; left: 8px; right: 8px; top: 11px; font-size: 14px; font-weight: 500; line-height: 18px; }
 .ld.on .lt, .ld.pressed .lt { color: var(--blue-hi); }
 .ld.err .lt { color: var(--err); }
-.ld.none .lt { top: 11px; font-weight: 400; color: var(--text-4); }
+.ld.two .lt { top: 2px; }
+.ld.none .lt { font-weight: 400; color: var(--text-4); }
 .ld .ls { position: absolute; left: 8px; right: 8px; top: 21px; font-size: 12px; line-height: 16px; color: var(--text-2); }
 .t-over.sec.rm-key { margin-top: 18px; margin-bottom: 6px; }
 .prow { min-height: 60px; padding-top: 10px; padding-bottom: 10px; align-items: flex-start; }
@@ -919,7 +921,6 @@
 
 /* ---- 25 Press timing ------------------------------------------------------------------------------------------ */
 
-.tm-sub { margin: 8px var(--gutter) 0; line-height: 20px; }
 .tm-card { position: relative; margin: 24px var(--gutter) 0; height: 404px; border-radius: var(--r-card); background: var(--surface-1); overflow: hidden; }
 .tm-prompt { position: absolute; left: 0; right: 0; top: 24px; margin: 0; text-align: center; font-size: 16px; line-height: 22px; color: var(--text-2); }
 .tm-rings { position: absolute; left: calc(50% - 110px); top: 50px; width: 220px; height: 220px; }
@@ -949,7 +950,6 @@
 .tm-range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 32px; margin: 12px 0 0; border-radius: 16px; outline: none; background: linear-gradient(90deg, var(--blue) 0 var(--p), rgba(255, 255, 255, .08) var(--p) 100%); touch-action: none; }
 .tm-range::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 12px; background: #fff; box-shadow: 0 0 0 4px transparent; }
 .tm-range::-moz-range-thumb { width: 24px; height: 24px; border-radius: 12px; background: #fff; border: 0; }
-.tm-note { margin-top: 16px; }
 
 /* ---- 10 Routines ------------------------------------------------------------------------------------------------ */
 
@@ -1000,12 +1000,10 @@
 .ddots { display: flex; gap: 6px; }
 .ddots i { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; background: var(--blue); color: var(--bg); font-style: normal; font-size: 11px; font-weight: 500; }
 .ddots i:not(.on) { background: var(--surface-2); color: var(--text-4); }
-.rt-days .dt { margin-left: 8px; font-size: 14px; color: var(--text-2); white-space: nowrap; }
 /* on a small phone the days close up so "Every day" stays one line beside them */
 @media (max-width: 380px) { .ddots { gap: 4px; } .ddots i { width: 24px; height: 24px; border-radius: 12px; } }
 .rt-card .toggle { position: absolute; right: 20px; top: 18px; }
 /* Paused sits 12 left of the switch, and a paused routine's name stops short of it rather than running under it */
-.paused-chip { position: absolute; right: 84px; top: 21px; height: 24px; border-radius: 12px; padding: 0 16px; font-size: 12px; margin: 0; }
 .rt-card.paused .rt-t { max-width: calc(100% - 156px); }
 .rt-empty { margin: 8px var(--gutter) 0; }
 .gtiles { display: flex; gap: 12px; padding: 0 var(--gutter); overflow-x: auto; scrollbar-width: none; }
@@ -1017,13 +1015,11 @@
 .habits { margin-top: 28px; }
 .habits .row { min-height: 72px; padding-top: 14px; padding-bottom: 14px; }
 .habits .row:disabled { opacity: .5; }
-.routines-page .foot { margin: 16px var(--gutter) 0; line-height: 20px; }
 .wd { padding-bottom: 8px; }
 .wd-q { margin: 0 var(--gutter) 16px; }
 .wd-q p { margin: 0; }
 .wd-q .t-cap { margin-top: 2px; }
 .wd-q .chip-wrap { padding: 0; margin-top: 10px; }
-.wd-today { color: var(--text-1); }
 .pt-row { gap: 10px; }
 /* a time field as wide as its own "07:00 PM" and its clock, never cut to "07:00 P"; the level beside it gives way on
    a narrow phone so Remove stays on the row */
@@ -1047,8 +1043,9 @@
 /* on a small phone the week closes up a little, so "on" stays on the line with its days */
 @media (max-width: 380px) { .tok.days { gap: 2px; } }
 .dd-row { display: flex; justify-content: space-between; padding: 0 var(--gutter); margin: 4px 0 16px; }
-.routine-page .t-over.sec { margin: 36px var(--gutter) 12px; }
+.rt-short { margin-top: 28px; }
 .rt-paused { margin-top: 16px; }
+.routine-page > .sunrise { margin-top: 20px; }
 .rt-btns { display: flex; gap: 12px; margin: 20px var(--gutter) 0; }
 .rt-btns .pill { height: 48px; font-size: 16px; padding: 0 24px; }
 .when { padding-bottom: 8px; }
@@ -1069,7 +1066,7 @@
 .stepper i { width: 8px; height: 8px; border-radius: 4px; background: var(--text-4); }
 .stepper i.done { background: var(--blue); }
 .stepper i.cur { width: 20px; background: var(--blue); }
-.stepper span { margin-left: 6px; font-size: 14px; font-weight: 500; line-height: 20px; }
+.g-preview { margin-top: 24px; }
 .g-art { position: relative; height: 160px; }
 .g-art .glow { position: absolute; left: 86px; top: -24px; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 184, 112, .28) 0%, rgba(255, 184, 112, 0.276) 6.2%, rgba(255, 184, 112, 0.265) 12.5%, rgba(255, 184, 112, 0.248) 18.8%, rgba(255, 184, 112, 0.224) 25%, rgba(255, 184, 112, 0.197) 31.2%, rgba(255, 184, 112, 0.167) 37.5%, rgba(255, 184, 112, 0.136) 43.8%, rgba(255, 184, 112, 0.106) 50%, rgba(255, 184, 112, 0.078) 56.2%, rgba(255, 184, 112, 0.054) 62.5%, rgba(255, 184, 112, 0.034) 68.8%, rgba(255, 184, 112, 0.019) 75%, rgba(255, 184, 112, 0.009) 81.2%, rgba(255, 184, 112, 0.003) 87.5%, rgba(255, 184, 112, 0.000) 93.8%, transparent 100%); }
 .g-art img { position: absolute; left: 146px; top: 16px; width: 120px; height: 120px; }

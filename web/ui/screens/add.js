@@ -42,8 +42,8 @@ export function view(c) {
   const status = a.busy ? (a.picked ? 'Adding…' : 'Getting the bridge ready…') : active(c) ? 'Listening…' : a.error ? 'The bridge said no' : a.created ? 'Added' : 'Not listening';
   const waited = a.startedAt && Date.now() - a.startedAt > 45000;
   const say = a.error ? esc(a.error)
-    : active(c) ? `Press and hold the small button on your new device for 10 seconds.${waited && !list.length ? ' Nothing yet? Let go, wait a moment, and hold again. A device from another home needs a factory reset first.' : ''}`
-      : 'Tap Listen, then hold the small button on your new device for 10 seconds.';
+    : active(c) ? `Hold the small button on the new device for 10 seconds.${waited && !list.length ? ' Nothing yet? Hold it again. A device from another home needs a factory reset first.' : ''}`
+      : 'Tap Listen, then hold the small button on the new device for 10 seconds.';
   const log = ((c.S.add && c.S.add.log) || []).slice(-40).map(e => JSON.stringify(e)).join('\n');
   // the card that slides up: one device heard, or a choice of several, or the one just made
   let card = '';
@@ -55,8 +55,7 @@ export function view(c) {
     const go = k.remote ? `<button class="pill blue ad-go" data-go="${k.device_id ? `remote/${esc(k.device_id)}` : 'remotes'}">Set it up now</button>`
       : `<button class="pill blue ad-go" data-go="${k.room_id ? `room/${esc(k.room_id)}` : 'home'}">Go to ${esc(k.room)}</button>`;
     done = `<div class="ad-card done v7" data-enter data-enter-at="80"><p class="t">Added ${esc(k.name)}</p>
-      <p class="ad-said">It is in ${esc(k.room)} and shows up there in a moment.</p>
-      ${k.where ? `<p class="t-cap muted ad-where">Your Lutron bridge keeps it under ${esc(k.where)}; this app has it in ${esc(k.room)}, which is the one that counts here.</p>` : ''}
+      ${k.where ? `<p class="t-cap muted ad-where">The Lutron bridge files it under ${esc(k.where)}.</p>` : ''}
       ${go}<p class="ad-links"><button class="link" data-act="ad-again">Add another</button></p></div>`;
   }
   if (a.created) {
@@ -69,16 +68,16 @@ export function view(c) {
     const home = room ? EDIT.lutronHomeFor(room) : null;
     card = `<div class="ad-card" data-enter="sheet"><span class="grab"></span>
       <span class="illo"><img src="${c.artSrc(art(pick.device_type))}" alt=""></span>
-      <p class="t hd">Heard: ${esc(EDIT.addTypeName(pick.device_type))}</p><p class="t-cap muted sub">Caséta · ${pick.model ? esc(pick.model) : 'just now'}</p>
+      <p class="t hd">${esc(EDIT.addTypeName(pick.device_type))}</p>${pick.model ? `<p class="t-cap muted sub">${esc(pick.model)}</p>` : ''}
       <label class="ad-field" data-enter data-enter-at="200"><span>Name</span><input data-input="ad-name" value="${esc(a.name)}" placeholder="${esc(EDIT.addDefaultName(pick.device_type))}" maxlength="60" autocomplete="off"></label>
       <div class="chip-row ad-rooms" data-keep="adrooms">${rooms.map((r, i) => `<button class="chip" aria-pressed="${room === r.id}" data-act="ad-room" data-id="${esc(r.id)}" data-enter data-enter-at="280" data-enter-i="${i}">${esc(r.name)}</button>`).join('')}<button class="chip lead" data-act="ad-newroom" data-enter data-enter-at="280" data-enter-i="${rooms.length}">${icon('plus', 16, 1.4)}New room</button></div>
-      ${home && !home.own ? `<p class="t-cap muted ad-note">Your Lutron bridge has no ${esc(c.data.areaName(room))} of its own, so it keeps the device under ${esc(home.name)}. This app files it in ${esc(c.data.areaName(room))}, where every button, scene and routine will find it.</p>` : ''}
+      ${home && !home.own ? `<p class="t-cap muted ad-note">The Lutron bridge files it under ${esc(home.name)}.</p>` : ''}
       <button class="next-btn" data-act="ad-create" ${room && !a.busy ? '' : 'disabled'}>${a.busy ? 'Adding…' : room ? 'Add to my home' : 'Pick a room'}</button></div>`;
   }
   return `<div class="add-page ${card ? 'has-card' : ''}">
     <header class="hdr bar"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
     <h1 class="t-h1 page-h1 bar-t bar-pin">Add a device</h1>
-    <p class="t-cap muted ad-sub">Caséta · experimental</p>
+    <p class="t-cap muted ad-sub">Experimental</p>
     <div class="ad-steps">${steps}</div>
     <div class="radar ${active(c) && !pick ? 'on' : ''} ${a.created ? 'landed' : ''}"><i class="g"></i><i class="r1"></i><i class="r2"></i><i class="p p1"></i><i class="p p2"></i><i class="p p3"></i><i class="r3"></i>${pick && !a.created ? '<i class="ping" data-enter="ping"></i>' : ''}${a.created ? `<span class="ad-check" data-enter data-enter-at="0">${icon('check', 40, 2.4)}</span>` : `<img data-xf="standard" src="${c.artSrc(pick ? art(pick.device_type) : 'lutron-wireless')}" alt=""${a.flying ? ' style="opacity:0"' : ''}>`}</div>
     ${done || `<p class="ad-status">${esc(status)}${active(c) ? ` <span class="left">${clock(left)}</span>` : ''}</p>
@@ -119,7 +118,7 @@ export const actions = {
   'ad-which'(c) {
     c.openSheet({ over: 'Add a device', title: 'Which button?', key: 'ad-which', onClose: () => c.render(),
       body: `<div class="group">${KINDS.map(([t, d]) => `<div class="row sub"><span class="row-txt"><span class="t">${t}</span><span class="d">${d}</span></span></div>`).join('')}</div>
-        <p class="t-cap muted sheet-p">The bridge only hears a device that is not already part of a home.</p>` });
+        <p class="t-cap muted sheet-p">A device from another home needs a factory reset first.</p>` });
   },
   'ad-pick'(c, el) { const a = st(c); a.pick = el.dataset.serial; a.name = ''; c.render(); },
   'ad-name'(c, el, r, v) { st(c).name = v; },
@@ -139,7 +138,7 @@ export const actions = {
     if (!pick || !room || a.busy) return;
     const name = (a.name || '').trim() || c.EDIT.addDefaultName(pick.device_type);
     const home = c.EDIT.lutronHomeFor(room);
-    if (!home) { a.error = 'Your Lutron bridge is not listing any rooms yet, so it has nowhere to put a new device. Look for new lights in Settings and try again.'; c.render(); return; }
+    if (!home) { a.error = 'The Lutron bridge has no rooms yet. Look for new lights in Settings, then try again.'; c.render(); return; }
     a.busy = true; a.error = null; a.picked = pick; c.render();
     try {
       const r = await c.data.api('/api/adddevice', { method: 'POST', body: JSON.stringify({ op: 'create', serial: pick.serial, name, area: home.id }) });

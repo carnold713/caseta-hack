@@ -31,8 +31,8 @@ export function notePress(c, m) {
 }
 // The phone hears presses only through the house; offline, the remotes still work and nothing here can light.
 export const listenLine = (c, pin) => c.conn() === 'off'
-  ? `<div class="listen ${pin ? 'pin' : ''} deaf"><span>Your remotes still work. This page lights up again when the house is back in touch.</span></div>`
-  : `<div class="listen ${pin ? 'pin' : ''}"><span class="breath"><i></i></span><span>Press any button on a real remote to jump to it</span></div>`;
+  ? `<div class="listen ${pin ? 'pin' : ''} deaf"><span>Offline. Your remotes still work.</span></div>`
+  : `<div class="listen ${pin ? 'pin' : ''}"><span class="breath"><i></i></span><span>Press a remote to find it</span></div>`;
 
 // A remote on its stage: the drawing, or the owner's photograph under the same keys.
 export function remoteArt(c, d, opts = {}) {
@@ -57,16 +57,15 @@ function card(c, d) {
 }
 
 export function view(c) {
-  const { esc, icon, data } = c;
+  const { data } = c;
   const list = data.remotes();
   const body = list.length
     ? `<div class="rgrid">${list.map(d => card(c, d)).join('')}</div>`
-    : `<div class="rempty"><p class="t-body muted">No remotes yet. Pair a Pico in the Lutron app, or add one from Settings, and it shows up here.</p><button class="pill ghost" data-act="refresh">Look again</button></div>`;
+    : `<div class="rempty"><p class="t-body muted">No remotes yet.</p><button class="pill ghost" data-act="refresh">Look again</button></div>`;
   return `<div class="remotes-page">
     <header class="bar"><h1 class="t-h1 top-h1 bar-t">Remotes</h1></header>
     ${listenLine(c, false)}
     ${body}
-    <div class="info-row"><span class="ic-c">${icon('remote', 20, 1.4)}</span><p>Remotes keep working even when this phone is offline.</p></div>
   </div>`;
 }
 
@@ -91,5 +90,5 @@ export function live(c, m) {
   c.ui.remoteKey = { ...(c.ui.remoteKey || {}), [d.device_id]: m.button_number };
   notePress(c, m);
   c.go(`remote/${d.device_id}`);
-  c.toast(`That's ${d.name}. Tap a row to change what it does.`);
+  c.toast(`That's ${d.name}`);
 }

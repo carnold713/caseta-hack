@@ -79,7 +79,7 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
   // the kitchen's two dimmers, and whatever else earlier tests filed in the kitchen (a Nanoleaf panel, say)
   const kitchen = chipsOf => ['Island Pendants', 'Kitchen Cans'].every(n => chipsOf.some(x => x[0] === n && !x[1]));
   check('the remote\'s page has the strip of the lights it moves, under the room\'s name', strip && /kitchen/i.test(strip.over) && kitchen(strip.chips), strip);
-  await at('13 Remote, pressed', [['stage', '.rstage', 20, 256, 372, 332], ['lights strip', '.lm-strip', 20, 600, 372, null]]);
+  await at('13 Remote, pressed', [['stage', '.rstage', 20, 205, 372, 332], ['lights strip', '.lm-strip', 20, 549, 372, null]]);
   const under = await C(() => Math.round(document.querySelector('.rm-key').getBoundingClientRect().top - document.querySelector('.lm-strip').getBoundingClientRect().bottom));
   check('the key\'s rows follow the strip 20 below (708 with one row of lights, as the file has it)', under === 20, under);
 
@@ -102,7 +102,7 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
   check('its leader draws on over the same clock', lit.lead.some(a => a.name === 'lg-lead' && a.d === 2200), lit.lead);
   check('and a bead runs the leader from the key to its label', lit.bead.some(a => a.name === 'lg-bead-go' && a.d === 360) && /path/.test(lit.path || ''), [lit.bead, lit.path]);
   check('the animation is where the press is: its delay is minus the time since it', lit.glow.every(a => a.delay <= 0 && a.delay > -1500), lit.glow);
-  check('the label says what the press does', /turn on · kitchen/i.test(lit.label), lit.label);
+  check('the label says what the press does, without the remote\'s own room', /^turn on$/i.test(lit.label.trim()), lit.label);
   await page.screenshot({ path: 'v7-13-pressed.png' });
   // the lights come on in copper as the house says so, 0.04 s apart
   const K = '.lm-chip[data-id="5"], .lm-chip[data-id="6"]';
@@ -148,7 +148,7 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
   press({ device_id: '9', button_number: 0, gesture: 'single' });
   await page.waitForFunction(() => document.querySelector('.pk.lit[data-key="0"]'), null, { timeout: 4000 });
   const none = await C(() => { const l = document.querySelector('.ld.fx-lab'); return { key: document.querySelector('.pk.lit').getAttribute('class'), label: l.querySelector('.lt').textContent, go: l.dataset.go, bead: document.querySelector('.bead').className }; });
-  check('nothing set: the key lights grey and the bead stops at "Nothing set yet · Set it"', /none/.test(none.key) && /none/.test(none.bead) && none.label === 'Nothing set yet · Set it', none);
+  check('nothing set: the key lights grey and the bead stops at "Nothing set"', /none/.test(none.key) && /none/.test(none.bead) && none.label === 'Nothing set', none);
   check('and the label leads to setting it', none.go === 'remote/9/k0-single', none.go);
   await page.screenshot({ path: 'v7-13-nothing.png' });
   await wait(2400);
@@ -164,7 +164,7 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
   // offline: the phone cannot hear presses, the page says so calmly
   await C(() => { const c = window.__copper; window.__was = { a: c.S.agent.online, t: c.S.troubleSince }; c.S.agent.online = false; c.S.troubleSince = Date.now() - 20000; c.render(); });
   const deaf = await C(() => (document.querySelector('.listen.deaf') || {}).textContent || '');
-  check('offline: "Your remotes still work. This page lights up again when the house is back in touch."', deaf.trim() === 'Your remotes still work. This page lights up again when the house is back in touch.', deaf);
+  check('offline: "Offline. Your remotes still work."', deaf.trim() === 'Offline. Your remotes still work.', deaf);
   await C(() => { const c = window.__copper; c.S.agent.online = window.__was.a; c.S.troubleSince = window.__was.t; c.render(); });
 
   // reduced motion: the bead and the tap go, the light still comes and goes as a crossfade
@@ -251,7 +251,7 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
   const sc = await C(() => ({ lab: document.querySelector('.rb-lab').textContent, on: document.querySelector('.rb-scrub').classList.contains('on'), dim: document.querySelector('.rbw').classList.contains('scrubbing'), at: document.querySelectorAll('.rb-seg.at').length, v: [...document.querySelectorAll('.rb-v')].map(e => e.textContent), row: (document.querySelector('.ev.lit') || {}).textContent || '' }));
   check(`a tap reads the moment: "8:30 pm · ${R.kitchen.name} 95% · Warm · from the app"`, new RegExp(`^8:[23]\\d pm · ${R.kitchen.name} 95% · Warm · from the app$`).test(sc.lab) && sc.on, sc.lab);
   check('every room\'s level beside its name, the periods lit then standing out', sc.dim && sc.at >= 2 && sc.v.includes('95%') && sc.v.includes('100%'), sc);
-  check('and the matching log row lit', /From the app/.test(sc.row), sc.row);
+  check('and the matching log row lit', /to 95%/.test(sc.row), sc.row);
   await page.screenshot({ path: 'v7-14-scrubbed.png' });
   // a drag sideways follows the finger; an up-or-down swipe that starts on the ribbons is a scroll, not a scrub
   // from 9 am, 60 px to the right: about four hours on, on the hall's ribbon
@@ -276,7 +276,7 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
 
   // no history yet: the card and the ribbons wait with one line
   await C(() => { const c = window.__copper; c.data.lightHistory = async (from, to) => ({ from, to, since: null, lights: {} }); c.ui.logBack = 2; c.render(); }); await wait(700);
-  check('no history yet: "Light history starts today. Come back this evening."', (await C(() => (document.querySelector('.ll-note') || {}).textContent)) === 'Light history starts today. Come back this evening.');
+  check('no history yet: "Light history starts today."', (await C(() => (document.querySelector('.ll-note') || {}).textContent)) === 'Light history starts today.');
   check('nothing on the page controls a light: no toggle, no slider in the light log', (await page.$$('.ll [data-act="toggle"], .ll input, .ll [role="slider"]')).length === 0);
 
   check('no errors on the page', !errors.length, errors);

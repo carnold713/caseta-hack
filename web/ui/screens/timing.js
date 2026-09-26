@@ -29,22 +29,20 @@ export function view(c) {
       <i class="win" style="left:30px;width:${x(dbl) - 30}px"></i><i class="axis"></i>
       <i class="tap" style="left:${x(0) - 8}px"></i><i class="tap" style="left:${x(h.gap) - 8}px"></i>
       <i class="br" style="left:${x(0)}px;width:${x(h.gap) - x(0)}px"></i><span class="gap" style="left:${Math.round((x(0) + x(h.gap)) / 2)}px">${secs(h.gap)}</span>
-      <span class="tl" style="left:${x(0)}px">tap</span><span class="tl" style="left:${x(h.gap)}px">tap</span><span class="wl">${secs(dbl)} window</span></div>`;
+      <span class="tl" style="left:${x(0)}px">tap</span><span class="tl" style="left:${x(h.gap)}px">tap</span><span class="wl">${secs(dbl)}</span></div>`;
   } else if (h && h.held != null) {
-    chart = `<p class="tm-held">Held for ${secs(h.held)}. A hold starts after ${secs(hold)}.</p>`;
+    chart = `<p class="tm-held">Held ${secs(h.held)}</p>`;
   }
   return `<div class="timing-page">
     <header class="hdr bar"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
     <h1 class="t-h1 page-h1 bar-t bar-pin">Press timing</h1>
-    <p class="t-cap muted tm-sub">How the app tells a press, a double press and a hold apart</p>
     <div class="tm-card ${h && Date.now() - h.at < 1600 ? 'live' : ''}">
-      <p class="tm-prompt">${h ? esc(h.who) : 'Press your remote now…'}</p>
+      <p class="tm-prompt">${h ? esc(h.who) : 'Press a remote'}</p>
       <div class="tm-rings"><i class="r0"></i><i class="r1"></i><i class="r2"></i><i class="r3"></i><span class="tm-pico">${remoteNow(c, h)}</span></div>
-      <p class="tm-heard">${h && h.gesture ? `Heard: ${esc(WORD[h.gesture] || h.gesture)}` : 'Listening'}</p>
+      <p class="tm-heard">${h && h.gesture ? esc(WORD[h.gesture] || h.gesture) : 'Listening'}</p>
       ${chart}
     </div>
-    <div class="group tm-group">${slider('Double-press window', 'double_ms', dbl, DOUBLE)}${slider('Hold after', 'hold_ms', hold, HOLD)}</div>
-    <div class="info-row tm-note"><span class="ic-c">${icon('timer', 20, 1.4)}</span><p>Giving a button a double press makes its single press wait a moment, so the two can be told apart.</p></div>
+    <div class="group tm-group">${slider('Press twice within', 'double_ms', dbl, DOUBLE)}${slider('Hold after', 'hold_ms', hold, HOLD)}</div>
   </div>`;
 }
 

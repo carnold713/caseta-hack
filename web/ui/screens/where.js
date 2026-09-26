@@ -8,24 +8,22 @@ export function whereBlock(c, { compact = false } = {}) {
   const { esc, icon } = c;
   const loc = c.S.config.settings.location;
   if (loc) {
-    const hm = c.RT.sunAt('sunset', 0);
-    return `<p class="t-cap muted where-line">${icon('sun', 18, 1.6)}<span>Sunset uses ${esc(c.S.config.settings.home_name || 'your home')}'s location (${esc(loc.name || 'saved')})${hm ? `, ${c.RT.fmtTime(hm)} today` : ''}. <button class="link blue" data-act="loc-city">Change</button></span></p>`;
+    return `<p class="t-cap muted where-line">${icon('sun', 18, 1.6)}<span>${loc.name ? `Near ${esc(loc.name)}` : 'Location saved'} <button class="link blue" data-act="loc-city">Change</button></span></p>`;
   }
-  const why = LOC.denied ? "Your phone didn't share its location. Pick the nearest city instead." : "Sunset moves through the year, so the app needs to know roughly where the home is. It's kept on your own hub.";
+  const why = LOC.denied ? "Your phone didn't share its location. Pick the nearest city instead." : 'For sunrise and sunset. It stays on your hub.';
   return `<div class="loc-ask ${compact ? 'compact' : ''}"><p class="t-row">Where is your home?</p><p class="t-cap muted">${why}</p>
     <div class="btns"><button class="pill blue" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button><button class="pill ghost" data-act="loc-city">Pick a city</button></div></div>`;
 }
 
 function cityRows(c, q) {
   const list = window.searchCities ? window.searchCities(q, 12) : [];
-  if (!list.length) return `<p class="t-cap muted sheet-p">No city by that name in the list. Try a bigger one nearby.</p>`;
+  if (!list.length) return `<p class="t-cap muted sheet-p">No city by that name. Try a bigger one nearby.</p>`;
   return `<div class="group">${list.map(x => `<button class="row" data-act="city-pick" data-i="${window.CITIES.indexOf(x)}"><span class="row-txt"><span class="t">${c.esc(x[0])}</span><span class="d">${c.esc(x[1])}</span></span></button>`).join('')}</div>`;
 }
 function citySheet(c) {
   return {
     over: 'Where the home is', title: 'Which city is nearest?',
-    body: `<div class="name-form"><input class="field" data-input="city-q" placeholder="Type a city" autocomplete="off" aria-label="City" value="${c.esc(c.ui.cityQ || '')}"></div><div class="city-list">${cityRows(c, c.ui.cityQ || '')}</div>
-      <p class="t-cap muted sheet-p">Sunset a hundred kilometres off is still within minutes.</p>`,
+    body: `<div class="name-form"><input class="field" data-input="city-q" placeholder="Type a city" autocomplete="off" aria-label="City" value="${c.esc(c.ui.cityQ || '')}"></div><div class="city-list">${cityRows(c, c.ui.cityQ || '')}</div>`,
     after: (c2, r, root) => { const i = root.querySelector('[data-input="city-q"]'); if (i && document.activeElement !== i && !c2.ui.cityTyped) { c2.ui.cityTyped = true; setTimeout(() => i.focus(), 300); } },
   };
 }
@@ -41,7 +39,7 @@ async function setLocation(c, lat, lng, name, tz) {
 export function whereSheet(c) {
   const loc = c.S.config.settings.location;
   return { over: 'For sunrise and sunset', title: 'Where the home is', body: loc
-    ? `<div class="group"><div class="row"><span class="row-txt"><span class="t">${c.esc(loc.name || 'Saved')}</span><span class="d">${c.RT.sunAt('sunset', 0) ? `Sunset today ${c.RT.fmtTime(c.RT.sunAt('sunset', 0))}` : 'Kept on your own hub'}</span></span></div></div>
+    ? `<div class="group"><div class="row"><span class="row-txt"><span class="t">${c.esc(loc.name || 'Saved')}</span>${c.RT.sunAt('sunset', 0) ? `<span class="d">Sunset ${c.RT.fmtTime(c.RT.sunAt('sunset', 0))}</span>` : ''}</span></div></div>
        <div class="sheet-btns"><button class="pill ghost" data-act="loc-city">Pick a different city</button><button class="pill ghost" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button></div>`
     : whereBlock(c) };
 }

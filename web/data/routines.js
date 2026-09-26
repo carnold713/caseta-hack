@@ -154,8 +154,8 @@
       { id: 'off', t: 'Turn off', mk: L => [{ type: 'level', target: packTarget(L), level: 'off' }] },
       { id: 'full', t: 'Full brightness', on: true, mk: L => [{ type: 'level', target: packTarget(L), level: 100 }] },
       { id: 'half', t: 'Half brightness', on: true, mk: L => [{ type: 'level', target: packTarget(L), level: 50 }] },
-      { id: 'night', t: 'Nightlight level', d: 'Very dim, 10%', on: true, mk: L => [{ type: 'level', target: packTarget(L), level: 10, fade: 1 }] },
-      { id: 'rise', t: 'Rise slowly', d: 'From dark to 50% over 25 minutes', on: true, mk: L => [{ type: 'level', target: packTarget(L), level: 50, fade: 1500 }] },
+      { id: 'night', t: 'Nightlight level', d: '10%', on: true, mk: L => [{ type: 'level', target: packTarget(L), level: 10, fade: 1 }] },
+      { id: 'rise', t: 'Rise slowly', d: 'To 50% over 25 min', on: true, mk: L => [{ type: 'level', target: packTarget(L), level: 50, fade: 1500 }] },
       { id: 'scene', t: 'Run a scene…', on: true, pick: true },
       { id: 'shades_close', t: 'Close the shades', shades: true, open: true, mk: (L, Sh) => [{ type: 'lower', target: packTarget(Sh) }] },
       { id: 'shades_open', t: 'Open the shades', shades: true, mk: (L, Sh) => [{ type: 'raise', target: packTarget(Sh) }] },
@@ -460,7 +460,7 @@
     }
     const windDownOn = () => !!wd().ad.enabled;
     // The row: "On · house goes quiet at 10:30 pm"
-    const windDownLine = () => (windDownOn() ? `On · house goes quiet at ${fmtTime(settings().night_start)}` : 'Off · lights come on as bright late as early');
+    const windDownLine = () => (windDownOn() ? `Quiet at ${fmtTime(settings().night_start)}` : 'Off');
     function windDownToday() {
       const s = settings(); const w = wd().wd;
       const ml = w.morning_level == null ? 100 : w.morning_level;

@@ -137,7 +137,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await goto('add');
     check('Add a device starts listening', /Listening/.test(await page.textContent('.ad-status')));
     await page.waitForSelector('.ad-card .ad-field input', { timeout: 8000 }).catch(() => null);
-    check('what the bridge heard slides up with a name and a room', /Heard: Pico/.test(await page.textContent('.ad-card')), await page.textContent('.add-page'));
+    check('what the bridge heard slides up with a name and a room', /Pico/.test(await page.textContent('.ad-card .hd')), await page.textContent('.add-page'));
     await page.fill('.ad-card .ad-field input', 'Hall Pico'); await wait(200);
     const roomId = await C(() => document.querySelector('.ad-rooms [data-act="ad-room"]').dataset.id);
     await tap(`.ad-rooms [data-act="ad-room"][data-id="${roomId}"]`);

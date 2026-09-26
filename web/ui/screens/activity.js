@@ -32,6 +32,8 @@ function result(c, actions) {
     case 'fan': return `${T} fan ${a.speed === 'Off' ? 'off' : 'on'}`;
     case 'raise': return c.data.isShadeTarget(a.target) ? `${T} open` : `${T} brighter`;
     case 'lower': return c.data.isShadeTarget(a.target) ? `${T} closed` : `${T} dimmer`;
+    // "Desk lamp to Amber", "Desk lamp to Warm", "Desk lamp follows the day"
+    case 'color': return a.follow ? `${T} follows the day` : a.hex ? `${T} to ${colourName(a.hex)}` : a.kelvin ? `${T} to ${CasetaDaylight.warmthName(a.kelvin)}` : `${T} colour`;
     default: return c.data.describe([a]);
   }
 }
@@ -47,12 +49,12 @@ function line(c, e) {
   if (e.kind === 'schedule') {
     const sc = RT.byId(e.id);
     const name = e.name || (sc && sc.name) || 'A routine';
-    return { icon: 'clock', text: e.ok === false ? `${name} didn't run: ${e.error || "couldn't reach the bridge"}` : `${name} ran${sc ? ` → ${result(c, sc.actions)}` : ''}` };
+    return { icon: 'clock', text: e.ok === false ? `${name} didn't run: ${e.error || "couldn't reach the bridge"}` : sc ? `${name} → ${result(c, sc.actions)}` : `${name} ran` };
   }
   if (e.kind === 'app') {
     const a = e.action || {};
-    if (a.type === 'timer') return { icon: 'timer', text: `Sleep timer from the app → ${result(c, [a])}` };
-    return { icon: 'user', text: `From the app → ${result(c, [a]) || data.describe([a])}` };
+    if (a.type === 'timer') return { icon: 'timer', text: `Sleep timer: ${result(c, [a])}` };
+    return { icon: 'user', text: result(c, [a]) || data.describe([a]) };
   }
   if (e.kind === 'agent') return { icon: 'wifi', text: e.online ? 'The house computer came back' : 'Lost touch with the house computer' };
   return { icon: 'pulse', text: e.kind || 'Something happened' };
@@ -281,7 +283,6 @@ function lightCard(c, m) {
     <div class="t-over til-over">${esc(over)}</div>
     <p class="til-lit">Lit for</p>
     <p class="til-h">${steps.map((s, i) => `<span class="til-step" style="--at:${[0, 550, 800][i]}ms;--len:${[550, 250, 250][i]}ms">${s}</span>`).join('')}<span class="til-total ${steps.length ? 'counted' : ''}">${esc(total)}</span></p>
-    <p class="til-sub">across the house</p>
     <div class="til-curve"><svg width="${W}" height="${HGT}" viewBox="0 0 ${W} ${HGT}" aria-hidden="true">
       <defs><linearGradient id="til-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC78A" stop-opacity=".45"/><stop offset="1" stop-color="#FFC78A" stop-opacity="0"/></linearGradient>
         <linearGradient id="til-line" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0"><stop offset="${nx.toFixed(3)}" stop-color="#FFD9A8"/><stop offset="${Math.min(1, nx + 0.02).toFixed(3)}" stop-color="#FFB46B"/></linearGradient>
@@ -342,11 +343,11 @@ function lightLog(c) {
   const back = Math.max(0, Math.min(BACK_MAX, Number(c.ui.logBack) || 0));
   const m = dayModel(c, back);
   M = m.day ? m : null;
-  const off = c.conn() === 'off' ? `<p class="ll-off">The house is out of touch. This is the light up to when it went quiet.</p>` : '';
+  const off = c.conn() === 'off' ? `<p class="ll-off">Offline. Shown up to when the house went quiet.</p>` : '';
   // before the history has come, the page keeps its room so the log does not jump when it lands
   if (m.loading) return `<section class="ll waiting"><div class="til til-wait"></div></section>`;
-  if (m.failed && !m.day) return `<section class="ll">${off || '<p class="ll-note">The light history is not here right now. The log below still is.</p>'}</section>`;
-  if (m.empty && m.fresh) return `<section class="ll">${off}<p class="ll-note">Light history starts today. Come back this evening.</p></section>`;
+  if (m.failed && !m.day) return `<section class="ll">${off || '<p class="ll-note">Light history isn\'t available right now.</p>'}</section>`;
+  if (m.empty && m.fresh) return `<section class="ll">${off}<p class="ll-note">Light history starts today.</p></section>`;
   // the day draws in once, the first time it is shown: every piece is a CSS animation told how far in it is (--fx)
   if (LOG.drawnAt[m.date] == null) LOG.drawnAt[m.date] = Date.now();
   const t = Date.now() - LOG.drawnAt[m.date];
@@ -449,7 +450,7 @@ export function view(c) {
     <h1 class="t-h1 page-h1 bar-t bar-pin">Activity</h1>
     <div class="chip-wrap act-f">${FILTERS.map(([k, l]) => `<button class="chip" aria-pressed="${f === k}" data-act="filter" data-f="${k}">${l}</button>`).join('')}</div>
     ${lightLog(c)}
-    ${html || `<p class="t-body muted soon">${f === 'all' ? 'Nothing yet. Press a remote button and it shows up here.' : 'Nothing of that kind yet.'}</p>`}
+    ${html || `<p class="t-body muted soon">Nothing yet.</p>`}
   </div>`;
 }
 function picoMini(c, d) { return picoSVG({ model: c.REM.modelFor(d), finish: c.REM.finishFor(d), keys: c.REM.slots(d), height: 32 }); }

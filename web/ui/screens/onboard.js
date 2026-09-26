@@ -10,9 +10,9 @@ import { icon } from '/ui/icons.js';
 import { reduced } from '/ui/motion.js';
 
 const PAGES = [
-  { a: 'Control', b: 'every light', pill: 'room', say: 'Caséta, Hue and Nanoleaf together. Nothing to save: everything is undoable.' },
-  { a: 'Every', b: 'button, your way', pill: 'pico', say: 'Press, press twice, hold: each can do something different, and something else at night.' },
-  { a: 'The house', b: 'on its own', pill: 'moon', say: 'Lights on before you get home, a slow light to wake to, a calmer evening. A minute each to set up.' },
+  { a: 'Control', b: 'every light', pill: 'room', say: 'Caséta, Hue and Nanoleaf, together.' },
+  { a: 'Every', b: 'button, your way', pill: 'pico', say: 'Press, press twice or hold. Each does its own thing, even at night.' },
+  { a: 'The house', b: 'on its own', pill: 'moon', say: 'Lights on before you get home, a slow light to wake to, a calmer evening.' },
 ];
 // Which windows each page has lit, and when each one that is new comes on after the page arrives (the frame's
 // times, read with get_motion_context). The house lights slower than a list staggers: it is the house doing it.
@@ -124,7 +124,6 @@ function pagesHTML() {
 function loginHTML() {
   return `<div class="login v7">
     <h1 class="t-h1">Welcome</h1>
-    <p class="t-body muted">Enter your home's password to get started.</p>
     <form data-form="login" class="login-form">
       <input class="field" type="password" id="pw" autocomplete="current-password" placeholder="Password" aria-label="Password">
       <button class="pill solid" type="submit">Continue</button>
@@ -135,7 +134,7 @@ function loginHTML() {
 }
 // While the first snapshot is on its way: the house, dark, waiting to be this home.
 export function loadingHTML() {
-  return `<div class="login v7"><h1 class="t-h1">Getting your home ready</h1><p class="t-body muted">One moment.</p>
+  return `<div class="login v7"><h1 class="t-h1">Getting your home ready</h1>
     <div class="ob-house login-house" data-lit="dark">${houseSVG()}</div></div>`;
 }
 

@@ -52,8 +52,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('nothing set: the usual way is offered', !!(await page.$('.offer')));
   await tap('[data-act="usual-hide"]');
   check("I'll pick myself hides it", !(await page.$('.offer')));
-  await at('07 Remote', [['H1 (its padding box: the text is at 20, 128)', '.page-h1', 0, 108, null, 64], ['caption', '.rm-sub', 20, 176, null, 17], ['banner', '.listen.pin', 20, 208, 327, 36], ['stage', '.rstage', 20, 256, 372, 332], ['key overline', '.rm-key', 20, 606, null, 14], ['press group', '.remote-page .group', 20, 626, 372, null]]);
-  check('the caption names room, finish and model', (await page.textContent('.rm-sub')) === 'Kitchen · White · 3-button with arrows', await page.textContent('.rm-sub'));
+  await at('07 Remote', [['H1 (its padding box: the text is at 20, 128)', '.page-h1', 0, 108, null, 64], ['caption', '.rm-sub', 20, 176, null, 17], ['stage', '.rstage', 20, 205, 372, 332], ['key overline', '.rm-key', 20, 555, null, 14], ['press group', '.remote-page .group', 20, 575, 372, null]]);
+  check('the caption names the room only (the drawing shows the model and finish)', (await page.textContent('.rm-sub')) === 'Kitchen', await page.textContent('.rm-sub'));
+  check('online, no listening banner sits over the remote', !(await page.$('.listen.pin')));
   check('a leader for each of the five keys, each saying Nothing yet', (await page.$$('.ld')).length === 5 && (await page.$$('.ld.none')).length === 5);
   await tap('.ld[data-n="3"]');
   check('tapping a leader picks that key', /up arrow/i.test(await page.textContent('.rm-key')));
@@ -141,13 +142,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // ---- 25 Press timing
   await go('timing');
   // the caption is one line in the file's face and may wrap in a stand-in one, so the card is measured from it
-  await at('25 Press timing', [['H1 (its padding box: the text is at 20, 128)', '.page-h1', 0, 108, null, 64], ['caption', '.tm-sub', 20, 180, null, null], ['tester', '.tm-card', 20, null, 372, 404], ['sliders', '.tm-group', 20, null, 372, 192]]);
-  const gaps = await C(() => { const b = s => document.querySelector(s).getBoundingClientRect(); return [b('.tm-card').top - b('.tm-sub').bottom, b('.tm-group').top - b('.tm-card').bottom]; });
-  check('25 Press timing: the tester 24 under the caption and the sliders 20 under it', Math.abs(gaps[0] - 24) <= 1 && Math.abs(gaps[1] - 20) <= 1, gaps);
+  await at('25 Press timing', [['H1 (its padding box: the text is at 20, 128)', '.page-h1', 0, 108, null, 64], ['tester', '.tm-card', 20, null, 372, 404], ['sliders', '.tm-group', 20, null, 372, 192]]);
+  const gaps = await C(() => { const b = s => document.querySelector(s).getBoundingClientRect(); return [b('.tm-card').top - b('.page-h1').bottom, b('.tm-group').top - b('.tm-card').bottom, document.querySelector('.tm-sub') ? 1 : 0]; });
+  check('25 Press timing: no caption, the tester 24 under the title and the sliders 20 under it', Math.abs(gaps[0] - 24) <= 1 && Math.abs(gaps[1] - 20) <= 1 && !gaps[2], gaps);
   await C(() => { const i = document.querySelector('input[data-tm="double_ms"]'); i.value = '500'; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(1500);
   check('the double-press window saves as it moves', (await cfg()).settings.double_ms === 500, (await cfg()).settings.double_ms);
   await C(() => { const c = window.__copper; for (const ev of ['Press', 'Release', 'Press', 'Release']) c.live({ type: 'button', device_id: '9', button_number: 0, event: ev }); c.live({ type: 'gesture', device_id: '9', button_number: 0, gesture: 'double' }); }); await wait(600);
-  check('the tester says what it heard', /Heard: Press twice/.test(await page.textContent('.tm-heard')));
+  check('the tester says what it heard', (await page.textContent('.tm-heard')).trim() === 'Press twice', await page.textContent('.tm-heard'));
   check('and draws the two taps', (await page.$$('.tm-chart .tap')).length === 2);
 
   // ---- 10 Routines, 23 a routine
@@ -203,7 +204,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   for (let i = 0; i < 4; i++) await tap('.next-btn');
   check('Welcome lights: four questions, then it is set up', (await cfg()).schedules.filter(x => x.kind === 'welcome').length >= 2 && (await cfg()).schedules.length > nWel && /#routines$/.test(page.url()), page.url());
   await go('setup/goodnight');
-  const gnSteps = await C(() => document.querySelector('.stepper span').textContent);
+  const gnSteps = await C(() => document.querySelector('.stepper').getAttribute('aria-label'));
   for (let i = 0; i < 3; i++) await tap('.next-btn');
   const gn = (await cfg()).bindings.filter(x => x.gesture === 'hold' && x.actions[0].target === 'h:all');
   check('Goodnight button: set up as a hold that turns everything off', gn.length >= 1 && /#remote\//.test(page.url()), [gnSteps, page.url()]);

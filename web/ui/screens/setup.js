@@ -1,22 +1,9 @@
 // 16 · Room setup (12744:111648): a sheet over the room. Its name and photo, Follow the day for its lamps, a sleep
-// timer for the room, what is in it, its remotes, where the bridges keep it, and deleting it.
+// timer for the room, what is in it, its remotes, and deleting it.
 import { roomPicker, confirmSheet, nameSheet, undoMove } from '/ui/screens/pickers.js';
 import { roomTimer, actions as lookActions } from '/ui/screens/looks.js';
 import { photoBlob, sendPhoto, pickFile } from '/ui/photo.js';
 import { roomScene } from '/ui/roomscene.js';
-
-const seenKey = aid => `roomInfoSeen:${aid}`;
-const seen = aid => { try { return localStorage.getItem(seenKey(aid)) === '1'; } catch (_) { return false; } };
-
-// Where the bridges keep this room, said once and only when it would surprise someone: Lutron lights in a room the
-// bridge does not have show in their old rooms in other Lutron apps. Never a promise a bridge did not keep.
-function whereLine(c, aid) {
-  const r = c.data.appRoom(aid);
-  const mine = c.H.fileable().filter(d => c.data.devArea(d) === aid);
-  const hasLutron = mine.some(d => !/^(hue_|nanoleaf_)/.test(String(d.device_id)));
-  if (!r || r.bridge_area || !hasLutron) return null;
-  return 'Other Lutron apps still show these lights in their old rooms.';
-}
 
 export function setup(c, r) {
   const aid = r.id;
@@ -33,7 +20,6 @@ export function setup(c, r) {
     return null;
   })();
   const remotes = c.data.remotes().filter(d => c.data.devArea(d) === aid);
-  const where = whereLine(c, aid);
   const body = `<div class="setup">
     <div class="group">
       <button class="row" data-act="setup-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val nm-cut">${esc(a.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
@@ -50,7 +36,6 @@ export function setup(c, r) {
       <button class="row" data-act="setup-lights"><span class="row-txt"><span class="t">In this room</span></span><span class="row-val">${esc(c.EDIT.roomContents(aid))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row" data-go="remotes"><span class="row-txt"><span class="t">Remotes</span></span><span class="row-val nm-cut">${esc(remotes.length ? remotes.map(x => x.name).join(', ') : 'None')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
-    ${where && !seen(aid) ? `<div class="info-card"><span class="ic-c">${icon('home', 18, 1.7)}</span><p>${esc(where)}</p><button class="link blue" data-act="setup-seen">Got it</button></div>` : ''}
     <div class="group"><button class="row" data-act="setup-delete"><span class="row-txt"><span class="t">Delete room</span></span></button></div>
   </div>`;
   // a room just made opens with its name ready to type
@@ -63,9 +48,11 @@ function lightsSheet(c, aid) {
   const { esc, icon } = c;
   const mine = c.H.fileable().filter(d => c.data.devArea(d) === aid && d.domain !== 'pico');
   const kind = d => (d.domain === 'cover' ? 'Shade' : d.domain === 'fan' ? 'Fan' : d.domain === 'switch' ? 'Switch' : 'Light');
+  // the kind only where the name does not say it already ("Fan", "Fan")
+  const kindLine = d => { const k = kind(d); const tag = c.H.bridgeTag(d.device_id); return new RegExp(`\\b${k}\\b`, 'i').test(d.name) ? tag.replace(/^ · /, '') : k + tag; };
   return {
     over: c.data.areaName(aid), title: 'In this room',
-    body: `<div class="group">${mine.map(d => `<button class="row sub" data-act="setup-move" data-id="${esc(d.device_id)}"><span class="row-txt"><span class="t">${esc(d.name)}</span><span class="d">${kind(d)}${esc(c.H.bridgeTag(d.device_id))}</span></span><span class="row-val">Move</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`).join('') || '<div class="row"><span class="row-txt"><span class="d">Nothing in this room yet.</span></span></div>'}</div>
+    body: `<div class="group">${mine.map(d => `<button class="row sub" data-act="setup-move" data-id="${esc(d.device_id)}"><span class="row-txt"><span class="t">${esc(d.name)}</span>${kindLine(d) ? `<span class="d">${esc(kindLine(d))}</span>` : ''}</span><span class="row-val">Move</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`).join('') || '<div class="row"><span class="row-txt"><span class="d">Nothing here yet</span></span></div>'}</div>
       <div class="group"><button class="row has-ic" data-act="setup-bring"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Move something in here</span></span></button></div>`,
   };
 }
@@ -140,7 +127,6 @@ export const actions = {
   async 'setup-move-to'(c, el, r) { c.openPicker('lights', c2 => lightsSheet(c2, r.id)); await moveTo(c, el.dataset.id, el.dataset.room); },
   'setup-bring'(c, el, r) { c.openPicker('bring', c2 => bringSheet(c2, r.id)); },
   async 'setup-bring-go'(c, el, r) { c.openPicker('lights', c2 => lightsSheet(c2, r.id)); await moveTo(c, el.dataset.id, r.id); },
-  'setup-seen'(c, el, r) { try { localStorage.setItem(seenKey(r.id), '1'); } catch (_) { /* then it shows again next time */ } c.render(); },
   'setup-delete'(c, el, r) {
     const name = c.data.areaName(r.id);
     c.openPicker('delete', c2 => confirmSheet(c2, { over: 'Room setup', title: `Delete ${name}?`, act: 'setup-delete-go', yes: 'Delete room',
