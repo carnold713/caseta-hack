@@ -35,14 +35,14 @@
 }
 .ws:not(:has(.seg2)) .lk-wash { top: -246px; }
 .sheet:has(.lk-sheet) .sheet-head { z-index: 1; }
-/* the sub under the grabber names the light and what it is showing, in sentence case: "Floor lamp · 2700K · Warm" */
+/* the sub under the grabber names the light, in sentence case: "Floor lamp" (the readout under it says the rest) */
 .sheet:has(.lk-sheet) .sheet-head .t-over { text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 400; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 56px; }
 
 /* ---- 5 · White, the time of day ----
-   Readout at 154, the sky card (20, 214, 372 x 200) at 214, its two ends at 424, the named whites at 448, the note at
-   500 and Follow the day at 532, all from the sheet's top (12816:94). */
-.ws.lk-sheet { height: 520px; }
-.ws.lk-sheet:not(:has(.ws-note)) { height: 488px; }
+   Readout at 154, the sky card (20, 214, 372 x 200) at 214, the named whites at 424 and Follow the day at 480, all
+   from the sheet's top (12816:94, less the sky's two end labels and the note on a lamp's limit: the named whites say
+   the ends, and the haze and "Max" in the sky say the limit). */
+.ws.lk-sheet { height: 452px; }
 .ws.lk-sheet .ws-val { top: 54px; }
 .ws.lk-sheet .ws-val b { font-size: 48px; line-height: 56px; }
 .ws.lk-sheet .ws-val .dot { width: 12px; height: 12px; border-radius: 6px; margin: 4px 0 0 14px; }
@@ -98,11 +98,8 @@
 }
 .ws-now[data-holding='1']::before { transform: scale(1); opacity: 1; transition: transform var(--land) linear, opacity var(--land) linear; }
 .ws-loc { position: absolute; left: 20px; right: 20px; top: 16px; border: 0; padding: 0; background: none; text-align: left; font: inherit; font-size: 13px; line-height: 16px; color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; z-index: 1; }
-.ws.lk-sheet .ws-ends { top: 324px; font-size: 12px; font-weight: 500; line-height: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
-.ws.lk-sheet .ws-chips { top: 348px; }
-.ws.lk-sheet .ws-note { top: 400px; }
-.ws.lk-sheet .ws-follow { top: 432px; }
-.ws.lk-sheet:not(:has(.ws-note)) .ws-follow { top: 400px; }
+.ws.lk-sheet .ws-chips { top: 324px; }
+.ws.lk-sheet .ws-follow { top: 380px; }
 
 /* ---- 4 · Colour, painting with light ---- */
 /* the wheel sits on its own faint light; its handle is a flat disc of the colour under it in a white ring */
@@ -113,6 +110,7 @@
 .cs.lk-sheet .cs-val .dot { transition: none; }
 /* the twelve colours as flat swatches; the chosen one wears a 2 px white ring with a small gap (screens.css) */
 .cs.lk-sheet .cs-sw .sw { position: relative; background: var(--b); }
+.cs-paused { align-items: center; }
 .cs-paused .link { font-size: 14px; }
 
 /* ---- 15 · the sleep timer, a candle burning down ---------------------------------------------------------------

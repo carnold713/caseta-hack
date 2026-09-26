@@ -151,7 +151,7 @@
 .follow-page .fd-glow .g-pick { opacity: 0; }
 .follow-page .fd-glow.paused .g-pick { opacity: 1; }
 .follow-page .fd-glow.paused .g-white { opacity: 0; }
-.fd-card { height: auto; padding: 44px 0 16px; overflow: hidden; }
+.fd-card { height: auto; padding: 20px 0 16px; overflow: hidden; }
 .fd-dial { position: relative; width: min(340px, calc(100% - 24px)); aspect-ratio: 1; margin: 0 auto; touch-action: pan-y; }
 .fd-dial .dc-chart { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
 /* The sky and today's curve dim to a trace while a picked colour is kept (0.4 s, as the frame resumes it). */

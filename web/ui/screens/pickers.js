@@ -11,7 +11,7 @@ export function roomPicker(c, { over = '', title, current, act, data = '', none 
       ${(current || '') === id ? `<span class="row-tick">${icon('check', 20, 1.9)}</span>` : ''}</button>`;
   const body = `<div class="group">
       ${none ? row('', none.label, none.sub) : ''}
-      ${rooms.map(a => row(a.id, a.name, a.id === current ? 'Where it is now' : '')).join('')}
+      ${rooms.map(a => row(a.id, a.name, '')).join('')}
       ${newRoom ? `<button class="row has-ic" data-act="${act}" data-room="__new" ${data}><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">New room</span></span></button>` : ''}
     </div>`;
   return { over, title, body };

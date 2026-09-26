@@ -102,7 +102,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('what is in the room, as a picker', (await page.$$('#sheet-root [data-act="setup-move"]')).length >= 2);
   await page.click('#sheet-root [data-act="picker-back"]'); await wait(400);
   await page.click('[data-act="setup-timer"]'); await wait(700);
-  check('the room’s sleep timer is the timer sheet, for the room', /room\/20\/timer$/.test(page.url()) && (await page.textContent('.ts-applies .v')) === 'This room', page.url());
+  // the room is the only thing it can apply to, so it offers no choice of what it applies to
+  check('the room’s sleep timer is the timer sheet, for the room', /room\/20\/timer$/.test(page.url()) && (await page.textContent('#sheet-root .sheet-head .t-over')) === 'Kitchen' && !!(await page.$('#sheet-root .durs')) && !(await page.$('#sheet-root .ts-reach')), page.url());
   await page.click('.sheet-close'); await wait(500);
 
   // ---- a new room, named, then deleted (toasts are off, so there is no Undo; the test puts it back itself)

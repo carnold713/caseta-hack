@@ -313,6 +313,9 @@
 .dev .hero-art { position: absolute; left: calc(50% - var(--art-w, 72px) / 2); top: var(--art-top, 98px); width: var(--art-w, 72px); height: var(--art-h, 72px); opacity: .2; transition: opacity var(--dimmer) var(--ease-both); }
 .dev.on .hero-art { opacity: 1; }
 .dev .hdr { position: absolute; inset: 0 0 auto 0; }
+/* a light that has gone has no drawing: its title sits under the header, as a page's does */
+.dev.gone { min-height: 0; }
+.dev.gone .hdr { position: relative; }
 /* The pin (a light's page, a room's page, a scene's sheet): an outline while the thing is not on Home, filled in white
    while it is. Not copper: copper is light that is on. */
 .pin .ic .pin-body { fill: transparent; transition: fill var(--standard) var(--ease); }
@@ -340,14 +343,8 @@
 .look.showing { box-shadow: inset 0 0 0 1.5px var(--copper); }
 .look .c { position: absolute; left: 14px; top: 14px; width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center; background: var(--bg); color: var(--icon-2); }
 .look.showing .c { background: var(--copper); color: var(--icon-1); }
-.look .tag { position: absolute; right: 20px; top: 28px; font-size: 12px; font-weight: 500; letter-spacing: .02em; color: var(--copper-hi); }
 .look .t { position: absolute; left: 16px; top: 72px; font-size: 20px; font-weight: 500; line-height: 24px; }
 .look .d { position: absolute; left: 16px; top: 98px; font-size: 14px; line-height: 17px; color: var(--text-2); }
-.look .d.q { color: var(--text-4); }
-.look .sw { position: absolute; top: 26px; display: flex; }
-.look .sw i { width: 20px; height: 20px; border-radius: 10px; margin-left: -6px; box-shadow: 0 0 0 2px var(--surface-1); display: block; }
-.look .sw { left: 90px; }
-.look.showing .sw i { box-shadow: 0 0 0 2px var(--surface-1); }
 
 .dev .feats { position: absolute; left: var(--gutter); right: var(--gutter); top: 558px; display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
 .feat {
@@ -362,6 +359,8 @@
 .feat .t { position: absolute; left: 66px; right: 12px; top: 13px; font-size: 15px; font-weight: 500; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .feat .d { position: absolute; left: 66px; right: 12px; top: 34px; font-size: 13px; line-height: 15px; color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .feat.on .d { color: var(--copper-hi); }
+/* with no live value under it, the title sits in the middle of the pill */
+.feat:not(:has(.d)) .t { top: 23px; }
 /* A narrow phone gives the words a little more of the pill (a 44 circle, 14 type), so "Follow the day" still reads
    whole at 390; narrower than that it ends in an ellipsis. */
 @media (max-width: 400px) {
@@ -389,9 +388,6 @@
 }
 .dial .nudge.minus { left: calc(50% - 174px); }
 .dial .nudge.plus { left: calc(50% + 126px); }
-.dial .lo, .dial .hi { position: absolute; top: 209px; color: var(--icon-2); }
-.dial .lo { left: calc(50% - 104px); }
-.dial .hi { left: calc(50% + 82px); }
 
 /* A light with neither white nor colour closes up: the pills and the dial move up by the looks' 144. */
 .dev .shifted { transform: translateY(var(--shift, 0px)); }
@@ -415,10 +411,6 @@
 .speeds .nudge { position: absolute; top: 336px; width: 56px; height: 56px; border-radius: 28px; border: 0; display: grid; place-items: center; background: var(--surface-2); color: var(--icon-1); }
 .speeds .nudge.minus { left: 20px; }
 .speeds .nudge.plus { left: auto; right: var(--gutter); }
-.speeds .fa { position: absolute; top: 352px; color: var(--icon-2); }
-/* 12 inside the nudge beside it, which sits on the gutter (at 412 that is where the file puts them, 88 and 300) */
-.speeds .fa.lo { left: calc(var(--gutter) + 68px); }
-.speeds .fa.hi { right: calc(var(--gutter) + 70px); }
 
 /* ---- 18 Shade -------------------------------------------------------------------------------- */
 
@@ -484,7 +476,7 @@
 .seg2 button { position: relative; border: 0; background: none; color: var(--text-2); font: inherit; font-size: 15px; font-weight: 500; }
 .seg2 button[aria-selected='true'] { color: var(--text-1); }
 
-.ws { height: 452px; }
+.ws { height: 420px; }
 .ws:not(:has(.seg2)) { height: 408px; margin-top: -26px; }
 .ws-val { position: absolute; left: var(--gutter); top: 64px; display: flex; align-items: center; }
 .ws-val b { font-size: 56px; font-weight: 300; line-height: 64px; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
@@ -504,18 +496,13 @@
   background: #fff; box-shadow: inset 0 0 0 4px var(--ring), 0 4px 14px rgba(0, 0, 0, .5);
 }
 .ws { touch-action: pan-y; }
-.ws-ends { position: absolute; left: var(--gutter); right: var(--gutter); top: 232px; display: flex; justify-content: space-between; font-size: 13px; line-height: 15px; color: var(--text-2); }
-.ws-ends b { font-weight: 500; color: var(--text-1); margin-right: 3px; }
 .ws-chips { position: absolute; left: var(--gutter); top: 272px; display: flex; gap: 6px; }
 .ws-chips .chip { padding: 0 13px; }
 .ws-chips .chip.out { opacity: .55; }
-.ws-note { position: absolute; left: var(--gutter); right: var(--gutter); top: 326px; margin: 0; font-size: 14px; line-height: 20px; color: var(--text-2); }
-.ws-follow { position: absolute; left: 0; right: 0; top: 364px; }
-.ws-follow .row { min-height: 88px; }
+.ws-follow { position: absolute; left: 0; right: 0; top: 332px; }
+.ws-follow .row { min-height: 72px; }
 .row-ic.sunrise { background: #5A351B; color: var(--copper-hi); margin: 0; }   /* not the wake-up light's .sunrise (night.css), which is set in from the gutter */
 .row-txt.linkish { border: 0; background: none; color: inherit; text-align: left; padding: 0; font: inherit; }
-.ws:not(:has(.ws-note)) .ws-follow { top: 332px; }
-.ws:not(:has(.ws-note)) { height: 420px; }
 
 .cs { height: 520px; }
 .cs:not(:has(.cs-note)) { height: 452px; }
@@ -575,10 +562,8 @@
 .ts-txt p:first-of-type { margin-top: 4px; }
 .ts-txt p.q { color: var(--text-4); }
 .ts-txt .pill { margin-top: 8px; }
-.ts-idle { margin: 20px 0 0; font-size: 14px; line-height: 20px; color: var(--text-2); }
 .ts-applies { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
 .ts-applies .t { font-size: 16px; font-weight: 500; line-height: 22px; }
-.ts-applies .v { font-size: 14px; color: var(--text-2); }
 .ts-reach { margin: 6px calc(-1 * var(--gutter)) 0; gap: 10px; }
 .ts-reach .chip { height: 36px; border-radius: 18px; font-size: 13px; }
 .sheet-p { margin: 0 var(--gutter) 16px; }
@@ -652,7 +637,9 @@
 .kind span:not(.tick) { position: absolute; left: 4px; right: 4px; top: 64px; text-align: center; font-size: 14px; font-weight: 500; line-height: 17px; }
 .kind .tick { position: absolute; right: 10px; top: 10px; width: 20px; height: 20px; border-radius: 10px; display: grid; place-items: center; background: var(--blue); color: #fff; }
 .about-note { margin: 22px var(--gutter) 16px; line-height: 20px; }
-.about-rows { margin-top: 0; }
+.about-rows { margin-top: 24px; }
+/* a fan's or a shade's About is only the rows: they sit under the title as a light's first section does */
+.about > .about-rows:first-child { margin-top: 20px; }
 
 /* ---- 06 Follow the day ------------------------------------------------------------------------- */
 

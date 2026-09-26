@@ -96,7 +96,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
     time: document.querySelector('.ns-time').textContent, home: !!document.querySelector('.ns-home[data-go="home"]') }));
   check(ns.page && ns.tabs, 'Nightstand opens directly at #nightstand, no tab bar', ns);
   check(rgb(ns.bg).join() === '10,9,8', 'its background is #0A0908', ns.bg);
-  check(ns.title === 'Night light' && ns.sub === 'Rest your thumb to turn on', 'it says Night light, rest your thumb', ns);
+  check(ns.title === 'Night light' && ns.sub === '', 'it says Night light, and nothing under it until a wrong tap', ns);
   check(/^\d{1,2}:\d\d$/.test(ns.time) && ns.home, 'the time, small, and Home to leave', ns.time);
   // nothing white, nothing blue
   const inks = await C(() => [...document.querySelectorAll('.ns-page, .ns-page *')].filter(e => e.getClientRects().length).flatMap(e => { const cs = getComputedStyle(e); return [cs.color, cs.backgroundColor, cs.borderTopColor]; }));
@@ -104,11 +104,11 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   const blue = inks.filter(s => { const [r, gg, b] = rgb(s); return b > r + 30 && b > gg + 10; });
   check(!white.length && !blue.length, 'nothing on it is white or blue', { white: white.slice(0, 3), blue: blue.slice(0, 3) });
   const lamp = await C(() => { const c = window.__copper; const h = c.S.config.settings; return c.data.dev('10') && c.data.dev('10').name; });
-  // a tap turns nothing on; it says to hold it
+  // a tap turns nothing on; it says Hold, briefly
   await clearActs();
   await finger('.ns-area', [[180, 200]]);
   await wait(250);
-  check(!(await acts()).length && (await C(() => document.querySelector('.ns-sub').textContent)) === 'Hold it', 'a tap turns nothing on and says Hold it', await acts());
+  check(!(await acts()).length && (await C(() => document.querySelector('.ns-sub').textContent)) === 'Hold', 'a tap turns nothing on and says Hold', await acts());
   // a brush (the thumb moving) turns nothing on either
   await finger('.ns-area', [[100, 200], [100, 214], [100, 240]], 350);
   await wait(200);
@@ -134,7 +134,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
     lights: document.querySelectorAll('.ns-page .glow:not(.off), .ns-page .onelight:not(.off), .ns-inner, .ns-candle').length }));
   check(on.on && !on.glowOff && on.glowOp === '1' && on.level === 10, 'the lamp is on at 10% and its glow is lit', on);
   check(on.lights === 1, 'and it is the page\'s one soft light (no second glow in the area or the ring)', on.lights);
-  check(on.title === 'Off' && new RegExp(`^${lamp} · 10% · off by itself at \\d{1,2}:\\d\\d (am|pm)$`).test(on.sub), 'the area now says Off, and when it goes out', on.sub);
+  check(on.title === 'Off' && new RegExp(`^${lamp} · off at \\d{1,2}:\\d\\d (am|pm)$`).test(on.sub), 'the area now says Off, and when it goes out', on.sub);
   await page.screenshot({ path: 'v7-night-nightstand-on.png' });
   // the page never scrolls
   const sc = await C(() => ({ h: document.scrollingElement.scrollHeight, v: innerHeight, ta: getComputedStyle(document.querySelector('.ns-page')).touchAction }));

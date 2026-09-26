@@ -126,8 +126,8 @@ function dialCard(c, d) {
   const md = dayModel(c, d);
   const dial = dialSVG(c, md);
   if (!md.m || !dial.has) {
-    return `<section class="dc-card fd-card fd-nohome"><div class="t-over dc-over">Colour temperature today</div>
-      <div class="fd-dial nohome">${dial.svg}<div class="fd-centre"><p>Where is home? Follow the day needs it for the sun.</p></div></div>
+    return `<section class="dc-card fd-card fd-nohome">
+      <div class="fd-dial nohome">${dial.svg}<div class="fd-centre"><p>Where is home?</p></div></div>
       <button class="pill solid fd-locate" data-act="follow-locate">${icon('sunrise', 20, 1.7)}Use my location</button></section>`;
   }
   const following = c.DAY.isFollowing(id), paused = following && c.DAY.followPaused(id);
@@ -143,17 +143,17 @@ function dialCard(c, d) {
   const [mx, my] = at(0, 118);
   const offline = c.conn() === 'off';
   const state = [paused ? 'paused' : '', following ? 'following' : 'idle', lit ? 'lit' : 'dark', offline ? 'offline' : ''].filter(Boolean).join(' ');
-  // the middle says what the lamp is doing: its white now, keeping your colour, or what it will come on at
+  // the middle says what the lamp is doing: its white now, keeping your colour (the bead, in it), or what it will come
+  // on at; a lamp not following shows the day's white outside
   const centre = paused
-    ? `<span class="t-over fd-o">Now · your colour</span><span class="fd-sub fd-below">Paused for now</span>`
+    ? `<span class="fd-sub fd-below">Paused</span>`
     : !following
-      ? `<span class="t-over fd-o">The day now</span><span class="fd-k">${round100(kNow)}K</span><span class="fd-sub">${esc(warmth(kNow))}</span>`
+      ? `<span class="t-over fd-o">Now outside</span><span class="fd-k">${round100(kNow)}K</span><span class="fd-sub">${esc(warmth(kNow))}</span>`
       : !lit
         ? `<span class="t-over fd-o">Now</span><span class="fd-k">Off</span><span class="fd-sub">Comes on at ${round100(kNow)}K</span>`
         : `<span class="t-over fd-o">Now</span><span class="fd-k">${round100(kNow)}K</span><span class="fd-sub">${esc(warmth(kNow))}</span>`;
   const sunGlow = glowHTML({ level: 100, kelvin: kNow, ctx: 'tile' });
   return `<section class="dc-card fd-card">
-    <div class="t-over dc-over">Colour temperature today</div><span class="dc-range">${round100(dial.kmin)} to ${round100(dial.kmax)}K</span>
     <div class="fd-dial ${state}" data-drag>
       ${dial.svg}
       <span class="fd-moon" style="left:${pct(mx)};top:${pct(my)}" aria-hidden="true">${icon('moon', 16, 1.8)}</span>
@@ -181,6 +181,12 @@ function pageGlow(c, d) {
     <span class="g-pick">${glowHTML({ level: lv, ...pick, ctx: 'hero', y: 0 })}</span><span class="g-white">${glowHTML({ level: lv, kelvin: k, ctx: 'hero', y: 0 })}</span></span>`;
 }
 
+// How many of the room's other lamps follow too, in numbers: None, All, or 1 of 3.
+function alsoCount(c, others) {
+  const n = others.filter(x => c.DAY.isFollowing(x.device_id)).length;
+  return n === 0 ? 'None' : n === others.length ? 'All' : `${n} of ${others.length}`;
+}
+
 export function view(c, r, d) {
   const { esc, icon } = c;
   const id = d.device_id;
@@ -192,18 +198,16 @@ export function view(c, r, d) {
     ${pageGlow(c, d)}
     <header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header>
     <h1 class="t-h1 page-h1">Follow the day</h1>
-    <p class="t-cap muted fd-sub">${esc(d.name)} · ${esc(c.data.devAreaName(d) || '')}</p>
+    <p class="t-cap muted fd-sub">${esc(d.name)}</p>
     ${dialCard(c, d)}
     <div class="group fd-rows">
-      <div class="row has-ic"><span class="row-ic sunrise">${icon('sunrise', 20, 1.7)}</span><span class="row-txt" data-xf="standard"><span class="t">${on ? (paused ? 'Paused for now' : 'Following now') : 'Follow the day'}</span>${paused ? '<span class="d">You picked a colour, so it keeps that colour, off and on, until you resume.</span>' : ''}</span>
+      <div class="row has-ic"><span class="row-ic sunrise">${icon('sunrise', 20, 1.7)}</span><span class="row-txt"><span class="t">Follow the day</span></span>
         <button class="toggle" role="switch" aria-checked="${on}" data-act="follow-toggle" aria-label="Follow the day"></button></div>
-      ${paused ? `<button class="row has-ic fd-resume" data-act="follow-resume" data-enter="drop"><span class="row-ic">${icon('sunrise', 20, 1.7)}</span><span class="row-txt"><span class="t blue">Follow the day again</span><span class="d">Goes back to the day's white now</span></span></button>` : ''}
-      <div class="row sub tall has-ic"><span class="row-ic">${icon('moon', 20, 1.7)}</span><span class="row-txt"><span class="t">Dim in the evening too</span><span class="d q">Uses the same curve as the evening wind-down</span></span>
+      ${paused ? `<button class="row has-ic fd-resume" data-act="follow-resume" data-enter="drop"><span class="row-ic">${icon('sunrise', 20, 1.7)}</span><span class="row-txt"><span class="t blue">Follow the day again</span></span></button>` : ''}
+      <div class="row has-ic"><span class="row-ic">${icon('moon', 20, 1.7)}</span><span class="row-txt"><span class="t">Dim in the evening too</span></span>
         <button class="toggle" role="switch" aria-checked="${c.DAY.followBright()}" data-act="follow-bright" aria-label="Dim in the evening too"></button></div>
-      ${others.length ? `<button class="row has-ic" data-act="follow-also"><span class="row-ic">${icon('bulb', 20, 1.7)}</span><span class="row-txt"><span class="t">Also for</span></span><span class="row-val nm-cut">${others.filter(x => c.DAY.isFollowing(x.device_id)).length} of ${others.length} other lamp${others.length === 1 ? '' : 's'} in ${esc(c.data.devAreaName(d))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
+      ${others.length ? `<button class="row has-ic" data-act="follow-also"><span class="row-ic">${icon('bulb', 20, 1.7)}</span><span class="row-txt"><span class="t">Also for</span></span><span class="row-val nm-cut">${alsoCount(c, others)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
     </div>
-    <div class="fd-info">${icon('hand', 22, 1.6)}<p>Picking a colour by hand pauses this. The lamp keeps your colour when it is turned off and on again, until you resume.</p></div>
-    <p class="fd-drift">${icon('clock', 16, 1.7)}Drifts slowly, about 30 s. You won’t see it change.</p>
   </div>`;
 }
 
@@ -247,8 +251,8 @@ export function alsoSheet(c, d) {
   const lamps = c.DAY.roomFollowLamps(c.data.devArea(d)).filter(x => x.device_id !== d.device_id);
   return {
     over: c.data.devAreaName(d), title: 'Follow the day',
-    body: `<p class="t-body muted sheet-p">The lamps here that can change their warmth.</p><div class="group">${lamps.map(x => `
-      <div class="row sub"><span class="row-txt"><span class="t">${c.esc(x.name)}</span><span class="d">${c.DAY.isFollowing(x.device_id) ? (c.DAY.followPaused(x.device_id) ? 'Paused: keeping a colour you picked' : 'Following the day') : 'Not following'}</span></span>
+    body: `<div class="group">${lamps.map(x => `
+      <div class="row"><span class="row-txt"><span class="t">${c.esc(x.name)}</span>${c.DAY.isFollowing(x.device_id) && c.DAY.followPaused(x.device_id) ? '<span class="d">Paused</span>' : ''}</span>
         <button class="toggle" role="switch" aria-checked="${c.DAY.isFollowing(x.device_id)}" data-act="follow-one" data-id="${c.esc(x.device_id)}" aria-label="${c.esc(x.name)} follows the day"></button></div>`).join('')}</div>`,
   };
 }
