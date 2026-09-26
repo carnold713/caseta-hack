@@ -404,9 +404,9 @@ function render() {
   const tab = shownTab = (depthOf(r) > 0 && history.state && history.state.tab) || TAB_OF[r.name] || 'home';
   // The tabs are drawn once and then only told which is current, so the white circle crosses from one tab to the next
   // on its own transition (components.css): drawn again each time, it jumped there in one frame.
-  const drawn = [...tabs.children];
-  if (drawn.length === TABS.length && drawn.every((b, i) => b.dataset.go === TABS[i][0])) {
-    drawn.forEach(b => { if (b.dataset.go === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  const btns = [...tabs.children];
+  if (btns.length === TABS.length && btns.every((b, i) => b.dataset.go === TABS[i][0])) {
+    btns.forEach(b => { if (b.dataset.go === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   } else tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
   if (screen.after) screen.after(ctx, r, scr);
   // a page comes back where it was scrolled when something on it opened the page being left
