@@ -181,9 +181,11 @@ final class Widgets {
             boolean alt = !fp.getBoolean("f" + id, false);
             fp.edit().putBoolean("f" + id, alt).apply();
             RemoteViews rv = null;
+            StringBuilder note = new StringBuilder("draw id=" + id + " kind=" + cfg.optString("kind") + " alt=" + alt + " sdk=" + Build.VERSION.SDK_INT);
             if (Build.VERSION.SDK_INT >= 31) {
                 @SuppressWarnings("deprecation")
                 ArrayList<SizeF> sizes = o.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES);
+                note.append(" sizes=").append(sizes);
                 if (sizes != null && !sizes.isEmpty()) {
                     Map<SizeF, RemoteViews> map = new HashMap<>();
                     for (SizeF s : sizes) if (map.size() < 8 && !map.containsKey(s)) map.put(s, build(c, id, cfg, (int) s.getWidth(), (int) s.getHeight(), alt));
@@ -195,8 +197,14 @@ final class Widgets {
                 rv = build(c, id, cfg, w > 0 ? w : 250, h > 0 ? h : 110, alt);
             }
             m.updateAppWidget(id, rv);
-        } catch (Exception e) {
+            Diag.send(c, note.append(" ok").toString());
+        } catch (Throwable e) {
             // a widget that cannot be drawn keeps what it showed last
+            Safe.note(c, "widget draw " + id, e);
+            java.io.StringWriter w = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(w));
+            String t = w.toString();
+            Diag.send(c, "draw id=" + id + " FAILED " + (t.length() > 3000 ? t.substring(0, 3000) : t));
         }
     }
 
