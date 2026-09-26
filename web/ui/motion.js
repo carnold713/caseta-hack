@@ -42,23 +42,37 @@ export const holdFor = hold;
 // ---------- carry ----------
 // The path of an element is its chain of child indexes from the root, with its tag. Two redraws of the same state
 // give the same paths, so an element is paired with the one that stood in its place.
-const TRACKED = ['opacity', 'transform', 'left', 'top', 'width', 'height', 'background-color', 'color', 'border-color', 'box-shadow', 'stroke-dashoffset'];
+const TRACKED = ['opacity', 'transform', 'left', 'top', 'width', 'height', 'background-color', 'color', 'border-color', 'box-shadow', 'stroke-dashoffset', 'grid-template-columns', 'column-gap'];
 // tag + class + pressed state, and the parent's class -> whether it declares any transition at all. The parent is in
 // the key because a glow's light is the same `i` everywhere and only its glow's class says whether it fades (a strip's
 // does, the sunrise preview's never): keyed by itself, whichever was drawn first would decide for all of them.
 const hasTransition = new Map();
+// Something that comes and goes (data-enter: the offline card, the house's bar) is counted apart from its
+// neighbours, so its coming or going does not move every element after it to another place: counted with them, the
+// offline card arriving at the top of Home paired the house card with the Pinned heading, and each block with the one
+// before it, and played one element's transitions from another's values.
 function walk(root, fn) {
+  const kids = (el, path) => {
+    let i = 0, e = 0;
+    for (const k of el.children) go(k, `${path}${k.hasAttribute('data-enter') ? `+${e++}` : i++}${k.tagName}`);
+  };
   const go = (el, path) => {
     if (el.classList.contains('xf-old')) return;   // a fading copy is carried by its element, not paired itself
     fn(el, path);
-    let i = 0;
-    for (const k of el.children) go(k, `${path}/${i++}${k.tagName}`);
+    kids(el, `${path}/`);
   };
-  let i = 0;
-  for (const k of root.children) go(k, `${i++}${k.tagName}`);
+  kids(root, '');
 }
 function sig(el) { return `${el.tagName}.${el.getAttribute('class') || ''}.${el.getAttribute('aria-pressed') || ''}.${el.getAttribute('aria-selected') || ''}`; }
+// (the same four lines of transition come up again and again across a page's elements: each is read once)
+const timed = new Map();
 function timings(cs) {
+  const key = `${cs.transitionProperty}|${cs.transitionDuration}|${cs.transitionTimingFunction}|${cs.transitionDelay}`;
+  let out = timed.get(key);
+  if (!out) { out = timingsOf(cs); timed.set(key, out); }
+  return out;
+}
+function timingsOf(cs) {
   const props = cs.transitionProperty.split(',').map(s => s.trim());
   const durs = cs.transitionDuration.split(',').map(s => parseFloat(s) * (s.includes('ms') ? 1 : 1000));
   const eases = splitTop(cs.transitionTimingFunction);
@@ -82,17 +96,33 @@ function splitTop(s) {
   return out;
 }
 const camel = p => p.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+// A transform read back from the page is a matrix, and a matrix with a zero scale in it (a copper fill emptied to
+// scaleX(0)) cannot be taken apart to interpolate: the browser then jumps from one end to the other half way. It is
+// given the smallest scale that can be, which looks the same: a hold's fill let go early stood still for 0.15 s and
+// then vanished, where it empties now.
+function inv(p, v) {
+  if (p !== 'transform') return v;
+  const m = /^matrix\(([^)]+)\)$/.exec(v); if (!m) return v;
+  const n = m[1].split(',').map(Number);
+  if (n.length !== 6 || Math.abs(n[0] * n[3] - n[1] * n[2]) > 1e-9) return v;
+  if (Math.abs(n[0]) < 1e-9 && Math.abs(n[1]) < 1e-9) n[0] = 1e-4;
+  if (Math.abs(n[2]) < 1e-9 && Math.abs(n[3]) < 1e-9) n[3] = 1e-4;
+  return `matrix(${n.join(', ')})`;
+}
 
 // Before a redraw: what every transitioning element (and ::before / ::after, where a toggle's knob lives) looks
 // like now, and the element itself where it crossfades.
-const PSEUDO = ['', '::before', '::after'];
-// animations this module started (not the stylesheet's own loops) that are still playing, by element
+const PSEUDO = ['', '::before', '::after'], PLAIN = [''];
+// animations still playing, by element: the ones this module (or a screen) started, and the stylesheet's own
+// transitions, which a control painted in place starts (a swatch's ring sliding, the wheel's handle). Not the
+// stylesheet's keyframe loops: those start again on the new element by themselves, and settle() keeps their clock.
+const isTransition = a => typeof CSSTransition !== 'undefined' && a instanceof CSSTransition;
 function playing(root) {
   const m = new Map();
   if (typeof document.getAnimations !== 'function') return m;
-  const css = a => (typeof CSSAnimation !== 'undefined' && a instanceof CSSAnimation) || (typeof CSSTransition !== 'undefined' && a instanceof CSSTransition);
+  const loop = a => typeof CSSAnimation !== 'undefined' && a instanceof CSSAnimation;
   for (const a of document.getAnimations()) {
-    if (css(a) || a.playState === 'finished' || a.playState === 'idle') continue;
+    if (loop(a) || a.playState === 'finished' || a.playState === 'idle') continue;
     const t = a.effect && a.effect.target;
     if (!t || !root.contains(t) || t.closest('.xf-old')) continue;
     if (!m.has(t)) m.set(t, []);
@@ -100,30 +130,69 @@ function playing(root) {
   }
   return m;
 }
-export function snap(root) {
+// `next`, when the caller has the new drawing parsed before it goes in, lets the copies be taken only of what will
+// change: a copy is the whole element, drawings and all, and taking one of every tile and room card on every redraw
+// was most of what a redraw of Home cost before anything moved.
+export function snap(root, next = null) {
   if (!root || reduced()) return null;
   const s = new Map();
   const run = playing(root);
+  // the element standing at a path in the new drawing (counted as walk counts): undefined without one to look in,
+  // null for none there
+  const then = path => {
+    if (!next) return undefined;
+    let n = next;
+    for (const seg of path.split('/')) {
+      const plus = seg[0] === '+', want = parseInt(plus ? seg.slice(1) : seg, 10);
+      let i = 0, e = 0, at = null;
+      for (const k of n.children) {
+        if (k.hasAttribute('data-enter')) { if (plus && e === want) { at = k; break; } e++; } else { if (!plus && i === want) { at = k; break; } i++; }
+      }
+      if (!at) return null;
+      n = at;
+    }
+    return n;
+  };
   walk(root, (el, path) => {
     const key = sig(el) + '<' + ((el.parentElement && el.parentElement.getAttribute('class')) || '');
     const xf = el.hasAttribute('data-xf');
     const rec = { tag: el.tagName, act: el.getAttribute('data-act') || el.getAttribute('data-go') || '' };
     let any = false;
     if (run.has(el)) { rec.run = run.get(el); any = true; }
-    const copies = [...el.children].filter(k => k.classList.contains('xf-old'));
-    if (copies.length) { rec.copies = copies; any = true; }
-    for (const ps of PSEUDO) {
+    let copies = null;
+    for (let k = el.firstElementChild; k; k = k.nextElementSibling) if (k.classList.contains('xf-old')) (copies || (copies = [])).push(k);
+    if (copies) { rec.copies = copies; any = true; }
+    // a drawing's shapes have no ::before or ::after to look at; and an element that was not drawn at all (hidden)
+    // had no place or look to move from: a swatch's ring, shown for the first time, slid in from the first swatch
+    let drawn = null;
+    for (const ps of el instanceof SVGElement ? PLAIN : PSEUDO) {
       const k = key + ps;
       let known = hasTransition.get(k);
       if (known === false) continue;
       const cs = getComputedStyle(el, ps || null);
       if (known === undefined) { known = cs.transitionDuration.split(',').some(d => parseFloat(d) > 0); hasTransition.set(k, known); if (!known) continue; }
+      if (drawn === null) drawn = el instanceof SVGElement || el.getClientRects().length > 0;
+      if (!drawn) break;
       const t = timings(cs); const v = {};
       for (const p in t) v[p] = cs.getPropertyValue(p);
       (rec.v || (rec.v = {}))[ps] = v; any = true;
     }
-    if (xf) { rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.copy = frozen(el); rec.size = sizeOf(el); any = true; }
-    if (el.hasAttribute('data-enter')) { rec.enter = el.getAttribute('data-enter') || 'rise'; rec.node = el; rec.rect = el.getBoundingClientRect(); any = true; }
+    if (xf) {
+      rec.xf = el.getAttribute('data-xf') || ''; rec.look = look(el); rec.size = sizeOf(el); any = true;
+      const n = then(path);
+      if (n === undefined || (n && n.tagName === el.tagName && n.hasAttribute('data-xf') && look(n) !== rec.look)) rec.copy = frozen(el);
+    }
+    if (el.hasAttribute('data-enter')) {
+      rec.enter = el.getAttribute('data-enter') || 'rise'; rec.node = el; rec.rect = el.getBoundingClientRect(); any = true;
+      rec.idx = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+      // how strongly it showed, through the page it was on (a page dimmed while offline shows its card at 0.8): its
+      // copy, out on its own, leaves from that, not from full strength a frame brighter
+      let op = 1;
+      for (let a = el; a && a !== root.parentElement; a = a.parentElement) op *= Number(getComputedStyle(a).opacity) || 0;
+      rec.op = op;
+      const n = then(path);
+      if (rec.enter !== 'fade' && (n === undefined || !n || !n.hasAttribute('data-enter'))) rec.still = frozen(el);
+    }
     if (any) s.set(path, rec);
   });
   return s;
@@ -157,11 +226,26 @@ function frozen(el) {
   return c;
 }
 // the parts of an element that make it look different: its classes, inline style and words
-// (a copy still fading inside it is not part of its look)
+// (a copy still fading inside it is not part of its look, nor the place this module gave it to hold one). An element
+// can name its look itself (data-xf-look), for one that crossfades only when what it says changes kind: the house's
+// headline fades between "All off" and "3 on · 62%", and does not fade every time the number counts.
+const hosts = new WeakSet();
 function look(el) {
+  const own = el.getAttribute('data-xf-look');
+  if (own != null) return own;
   let t = el;
   if (el.querySelector('.xf-old')) { t = el.cloneNode(true); t.querySelectorAll('.xf-old').forEach(n => n.remove()); }
-  return `${el.getAttribute('class')}|${el.getAttribute('style') || ''}|${t.textContent.replace(/\s+/g, ' ')}`;
+  // the style as the browser reads it, so the old element (written to since) and the new (fresh from the markup)
+  // compare the same
+  let style = el.style ? el.style.cssText : el.getAttribute('style') || '';
+  if (hosts.has(el)) style = style.replace(/(^|;\s*)position:\s*relative;?/, '$1').trim();
+  return `${el.getAttribute('class')}|${style}|${t.textContent.replace(/\s+/g, ' ')}`;
+}
+// A crossfade's copy is placed in its element, which must hold it: made relative for it (and remembered as such, or
+// the next redraw saw a changed style and faded the same words over themselves).
+function host(el, still = getComputedStyle(el).position === 'static') {
+  if (!still) return;
+  el.style.position = 'relative'; hosts.add(el);
 }
 
 // After it: play each element's own transitions from where it was, and crossfade what changed look.
@@ -183,11 +267,22 @@ export function carry(s, root) {
         const e = a.effect; const opts = { ...e.getTiming(), composite: e.composite };
         if (e.pseudoElement) opts.pseudoElement = e.pseudoElement;
         const kf = e.getKeyframes();
-        try { const n = el.animate(kf, opts); n.currentTime = a.currentTime; } catch (_) { continue; }
+        // A transition (the stylesheet's own, or one this module carried) goes on only if the new element is still
+        // going where it was going; one whose end has changed is carried from where it is to the new end below, as any
+        // other. Carried that way when it had not changed, it began its curve again from the middle (a ring half way to
+        // its swatch set off a second time); replayed when it had, it ran on to the old end and then jumped to the new
+        // one (the house's light, going out room by room, stopped at the last room's level and went black in a frame).
+        const prop = isTransition(a) ? a.transitionProperty : /^carry\b/.test(a.id) ? Object.keys(kf[kf.length - 1] || {}).find(k => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)) : null;
+        if (prop) {
+          const end = kf.length && kf[kf.length - 1][camel(prop)];
+          const css = prop.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
+          if (end == null || getComputedStyle(el, e.pseudoElement || null).getPropertyValue(css) !== String(end)) continue;
+        }
+        try { const n = el.animate(kf, opts); n.id = a.id; keepClock(n, a); } catch (_) { continue; }
         for (const k of kf) for (const p in k) moving.add((e.pseudoElement || '') + p.replace(/[A-Z]/g, c => '-' + c.toLowerCase()));
       }
     }
-    if (rec.copies) { if (getComputedStyle(el).position === 'static') el.style.position = 'relative'; for (const k of rec.copies) el.appendChild(k); }
+    if (rec.copies) { host(el); for (const k of rec.copies) el.appendChild(k); }
     if (rec.v && canAnimate(el)) {
       for (const ps in rec.v) {
         const cs = getComputedStyle(el, ps || null);
@@ -201,15 +296,33 @@ export function carry(s, root) {
           // room's card lit up, went grey again and only then faded up)
           const opts = { duration: t[p].d, easing: t[p].e, delay: t[p].delay, fill: t[p].delay > 0 ? 'backwards' : 'auto' };
           if (ps) opts.pseudoElement = ps;
-          try { el.animate([{ [camel(p)]: was[p] }, { [camel(p)]: now }], opts); } catch (_) { /* a browser without pseudo-element animation */ }
+          try { el.animate([{ [camel(p)]: inv(p, was[p]) }, { [camel(p)]: inv(p, now) }], opts).id = 'carry'; } catch (_) { /* a browser without pseudo-element animation */ }
         }
       }
     }
-    if (rec.copy && rec.look !== look(el)) fades.push([rec, el]);
+    // only between two drawings that both crossfade: one that stops (a room's count handing over to a scene's own
+    // settling count) or starts is not faded as well, which laid the old words over the new ones twice
+    if (rec.copy && el.hasAttribute('data-xf') && rec.look !== look(el)) fades.push([rec, el]);
   });
-  for (const [rec, el] of fades) crossfade(rec.copy, el, rec.xf, rec.size);
-  // what came in with data-enter and is gone now leaves the way it came
-  for (const [path, rec] of s) if (rec.enter && !seen.has(path)) gone(rec, path, made);
+  // what came in with data-enter and is gone now leaves the way it came; every place is read before anything is
+  // written, so the page is laid out once
+  const leaving = [];
+  for (const [path, rec] of s) if (rec.enter && !seen.has(path)) leaving.push([rec, path, homeOf(rec, path, made)]);
+  const places = fades.map(([, el]) => placeOf(el));
+  fades.forEach(([rec, el], i) => crossfade(rec.copy, el, rec.xf, rec.size, places[i]));
+  for (const [rec, path, home] of leaving) gone(rec, path, made, home);
+}
+
+// A replay runs on the clock of the animation it replaces: the same start time on the document's timeline, so it is
+// exactly where the old one is on every frame. Setting its current time instead held it there until it was ready, a
+// frame or more, and every redraw meanwhile held it again: a pill or a light caught by two quick redraws stood still
+// for four frames and then went on from where it had stopped, late. One whose own start was still pending starts
+// from where it stood, now.
+function keepClock(n, a) {
+  if (a.startTime != null) { n.startTime = a.startTime; return; }
+  const now = document.timeline && document.timeline.currentTime;
+  if (now != null) n.startTime = now - (a.currentTime || 0) / (a.playbackRate || 1);
+  else n.currentTime = a.currentTime;
 }
 
 // ---------- coming and going ----------
@@ -219,6 +332,9 @@ export function carry(s, root) {
 //          down 12 px as it fades in, 0.32 s (M5)
 //   sheet  a card that slides up like a sheet: 360 px on the GENTLE spring, fading in 0.24 s (M7's result card)
 //   ping   one ring going out from what was just heard: scale 1 to 1.7 and gone, 0.4 s ease-out (M7)
+//   fade   in place, on the standard 0.24 s, for a part that comes and goes inside something whose own size carries
+//          it (the house's bar, in a place that opens and closes round it): leaving, it stays in that place and fades
+//          as the place closes over it, rather than hanging over what moves into it
 const GENTLE = 'linear(0, 0.0188, 0.0679, 0.1374, 0.2195, 0.308, 0.3978, 0.4856, 0.5686, 0.6452, 0.7142, 0.7753, 0.8283, 0.8735, 0.9113, 0.9423, 0.9671, 0.9866, 1.0014, 1.0123, 1.0198, 1.0247, 1.0274, 1.0283, 1.0281, 1.0268, 1.025, 1.0227, 1.0202, 1.0177, 1.0152, 1.0128, 1.0106, 1.0085, 1.0068, 1.0052, 1.0039, 1.0028, 1.0018, 1.0011, 1.0005, 1, 0.9997, 0.9995, 0.9993, 0.9992, 0.9992, 0.9992, 0.9992, 0.9993, 0.9993)';
 export function enter(el) {
   if (reduced() || !canAnimate(el)) return;
@@ -233,6 +349,10 @@ export function enter(el) {
     el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay, fill: 'backwards' });
     return;
   }
+  if (kind === 'fade') {
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: T.standard, easing: T.ease, delay, fill: 'backwards' });
+    return;
+  }
   if (kind === 'drop') {
     const cs = getComputedStyle(el);
     const mt = parseFloat(cs.marginTop) || 0, mb = parseFloat(cs.marginBottom) || 0;
@@ -243,26 +363,56 @@ export function enter(el) {
   el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: T.enter, easing: T.ease, delay, fill: 'backwards' });
   el.animate([{ transform: 'translateY(12px)' }, { transform: 'translateY(0)' }], { duration: T.enter, easing: T.ease, delay, fill: 'backwards', composite: 'add' });
 }
+// the new drawing of the element one that leaves in place was in, and where it is
+function homeOf(rec, path, made) {
+  const cut = path.lastIndexOf('/');
+  const el = rec.enter === 'fade' && cut >= 0 ? made.get(path.slice(0, cut)) : null;
+  if (!el) return null;
+  const cs = getComputedStyle(el);
+  return { el, box: el.getBoundingClientRect(), bl: parseFloat(cs.borderLeftWidth) || 0, bt: parseFloat(cs.borderTopWidth) || 0, still: cs.position === 'static' };
+}
 // Leaving, 0.2 s EASE_IN: a copy where it stood fades back the way it came. A dropped card also gives its room
-// back: what now stands where it stood rises into place.
-function gone(rec, path, made) {
+// back: what now stands where it stood rises into place. One that leaves in place (fade) stays in its parent.
+function gone(rec, path, made, home = homeOf(rec, path, made)) {
   const r = rec.rect; if (!r || !r.width) return;
-  const g = rec.node.cloneNode(true);
+  if (home) { leaveInPlace(rec, home); return; }
+  // its words and ink as they were (frozen while it was still on the page): taken out to the body, a rule that set
+  // them through an ancestor no longer would
+  const g = rec.still || rec.node.cloneNode(true);
   g.removeAttribute('data-enter'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
   g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
   Object.assign(g.style, { position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, margin: '0', pointerEvents: 'none', zIndex: '2' });
   document.body.appendChild(g);
   const dy = rec.enter === 'drop' ? -12 : 12;
-  g.animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: `translateY(${dy}px)` }], { duration: T.exit, easing: T.easeIn, fill: 'forwards' })
+  g.animate([{ opacity: rec.op ?? 1, transform: 'translateY(0)' }, { opacity: 0, transform: `translateY(${dy}px)` }], { duration: T.exit, easing: T.easeIn, fill: 'forwards' })
     .finished.catch(() => {}).then(() => g.remove());
   if (rec.enter !== 'drop') return;
   const cut = path.lastIndexOf('/');
   const parent = cut < 0 ? null : made.get(path.slice(0, cut));
-  const at = Number((cut < 0 ? path : path.slice(cut + 1)).match(/^\d+/)[0]);
+  const at = rec.idx || 0;
   const cs = getComputedStyle(rec.node.isConnected ? rec.node : g);
   const room = r.height + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
   const kids = parent ? [...parent.children].slice(at) : [];
   for (const k of kids) if (canAnimate(k)) k.animate([{ transform: `translateY(${room}px)` }, { transform: 'translateY(0)' }], { duration: T.exit, easing: T.easeIn, composite: 'add' });
+}
+
+// Leaving in place: a copy in the parent it left, where it stood, fading on the exit's 0.2 s EASE_IN. The parent is
+// the new drawing of the one it was in, so the copy scrolls, clips and closes with it. It is a crossfade's kind of
+// copy (xf-old), which a redraw carries along rather than pairing.
+function leaveInPlace(rec, home) {
+  const r = rec.rect;
+  const g = rec.node.cloneNode(true);
+  g.removeAttribute('data-enter'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
+  g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  g.classList.add('xf-old');
+  Object.assign(g.style, {
+    position: 'absolute', left: `${r.left - home.box.left - home.bl}px`, top: `${r.top - home.box.top - home.bt}px`,
+    width: `${r.width}px`, height: `${r.height}px`, margin: '0', pointerEvents: 'none',
+  });
+  host(home.el, home.still);
+  home.el.appendChild(g);
+  g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: T.exit, easing: T.easeIn, fill: 'forwards' })
+    .finished.catch(() => {}).then(() => g.remove());
 }
 
 // ---------- loops ----------
@@ -278,11 +428,19 @@ export function settle(root) {
 
 // The old element laid over the new one and faded out: an old tile dissolving into the new, the way the file's
 // "after" tiles fade in over the "before" ones. It sits inside the new element, so it scrolls and clips with it.
-function crossfade(old, el, kind, was) {
+// Where the new element is, read for every crossfade of a redraw before any copy goes in: a copy going in changes the
+// page, and reading the next element's box after it laid the whole page out again, once for every tile that faded.
+function placeOf(el) {
+  if (/^(IMG|INPUT|SVG)$/i.test(el.tagName)) return null;
+  const cs = getComputedStyle(el);
+  return { box: el.getBoundingClientRect(), bl: parseFloat(cs.borderLeftWidth) || 0, bt: parseFloat(cs.borderTopWidth) || 0, now: sizeOf(el), still: cs.position === 'static' };
+}
+function crossfade(old, el, kind, was, at = placeOf(el)) {
   if (!canAnimate(el)) return;
   const dur = kind === 'standard' ? T.standard : document.body.classList.contains('scene-arriving') ? T.scene : T.dimmer;
   const ease = kind === 'standard' ? T.ease : T.easeBoth;
-  const copy = old.cloneNode(true);
+  // the copy taken for this fade, and only for it (snap)
+  const copy = old;
   copy.querySelectorAll('.xf-old').forEach(n => n.remove());
   copy.removeAttribute('data-xf'); copy.removeAttribute('data-go'); copy.removeAttribute('data-act'); copy.removeAttribute('role');
   copy.querySelectorAll('[data-act],[data-go],[id]').forEach(n => { n.removeAttribute('data-act'); n.removeAttribute('data-go'); if (!n.closest('.rs-svg')) n.removeAttribute('id'); });
@@ -292,22 +450,26 @@ function crossfade(old, el, kind, was) {
     .catch(() => {}).then(() => copy.remove());
   // an image holds nothing inside it: its old self goes beside it, placed by the same rules
   if (/^(IMG|INPUT|SVG)$/i.test(el.tagName)) { copy.style.pointerEvents = 'none'; el.after(copy); fade(); return; }
-  const box = el.getBoundingClientRect(), cs = getComputedStyle(el);
-  const now = sizeOf(el);
+  const { box, now } = at;
   was = was || now;
   // The copy keeps its own look and its own size, so its words stay on the lines they were on: a longer status laid
   // into the new, shorter one's box would wrap onto a second line as it faded. It sits on the new element's box,
   // from the left, or from the right for words set against the right (a count that changes length there).
-  let left = -parseFloat(cs.borderLeftWidth) || 0;
+  let left = -at.bl;
   if (Math.abs(was.right - box.right) < 1 && Math.abs(was.left - box.left) >= 1) left += now.w - was.w;
   Object.assign(copy.style, {
-    position: 'absolute', left: `${left}px`, top: `${-parseFloat(cs.borderTopWidth) || 0}px`,
+    position: 'absolute', left: `${left}px`, top: `${-at.bt}px`,
     width: `${was.w}px`, height: `${was.h}px`, margin: '0', pointerEvents: 'none', zIndex: '3',
     transform: 'none', animation: 'none',
   });
   if (was.oneLine) copy.style.whiteSpace = 'nowrap';
-  if (cs.position === 'static') el.style.position = 'relative';
-  el.appendChild(copy);
+  host(el, at.still);
+  // Under any copy still fading in it: what shows now is the older copy over the newer look, and it goes on showing
+  // until that copy has gone. Laid on top, the newer look (a scene's light, say, still hidden under the tile as it was
+  // before the ring reached it) flashed up at once when the room was switched off meanwhile.
+  let under = null;
+  for (let k = el.firstElementChild; k; k = k.nextElementSibling) if (k.classList.contains('xf-old')) { under = k; break; }
+  el.insertBefore(copy, under);
   fade();
 }
 
@@ -511,6 +673,59 @@ export function leave(el, dy = 12) {
   g.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${dy}px)` }], { duration: T.exit, easing: T.easeIn, fill: 'forwards', composite: 'add' })
     .finished.catch(() => {}).then(() => g.remove());
 }
+
+// ---------- a sheet changing height ----------
+// A sheet drawn again with more or less in it stands on the bottom of the screen, so its top edge is where the change
+// shows: it moves from where it was on the dimmer's 0.4 s, standard, as M16's swap moves it. Measured after the new
+// drawing is laid out and before anything of it moves; `was` is the sheet's box before the redraw. Taller, the sheet
+// rises from where its top was (it reaches below the screen meanwhile); shorter, its height closes down to its new
+// one, so its foot stays on the bottom of the screen instead of lifting off it with the top.
+export function resized(sheet, was) {
+  if (reduced() || !canAnimate(sheet) || !was) return;
+  const now = sheet.getBoundingClientRect();
+  const dy = was.top - now.top;
+  if (Math.abs(dy) < 1) return;
+  const o = { duration: T.dimmer, easing: T.ease };
+  if (dy > 0) sheet.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { ...o, composite: 'add' });
+  else sheet.animate([{ height: `${was.height}px` }, { height: `${now.height}px` }], o);
+}
+
+// ---------- a number counting ----------
+// A level the house changes by itself (the house's on Home, a room's beside its bar) counts to where it is over the
+// dimmer's 0.4 s EASE_IN_AND_OUT, or the scene's 1.0 s while a scene arrives, and never fades from one number to the
+// next. Each redraw draws the number where it is going (data-count); this counts it there from what was last shown,
+// and a redraw on the way to the same number goes on with the same count rather than starting its curve again. A
+// finger that writes the number (a bar under it) tells this with shown(), so the next count starts from there.
+const counts = new Map();
+const easeInOut = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+export function count(el, key, format = v => String(v)) {
+  const c = counts.get(key) || { shown: null, raf: 0, to: null };
+  counts.set(key, c);
+  if (!el) { cancelAnimationFrame(c.raf); counts.delete(key); return; }
+  const to = Number(el.getAttribute('data-count'));
+  if (!Number.isFinite(to)) return;
+  const going = c.raf && c.to === to;
+  c.el = el;
+  if (going) { el.textContent = format(c.now); return; }
+  cancelAnimationFrame(c.raf); c.raf = 0;
+  const from = c.shown;
+  c.to = to;
+  if (from == null || from === to || reduced()) { c.shown = c.now = to; return; }
+  c.from = from; c.t0 = performance.now(); c.ms = document.body.classList.contains('scene-arriving') ? T.scene : T.dimmer;
+  c.now = from; el.textContent = format(from);
+  const step = t => {
+    const k = Math.min(1, (t - c.t0) / c.ms);
+    c.now = c.shown = Math.round(c.from + (c.to - c.from) * easeInOut(k));
+    if (c.el.isConnected) c.el.textContent = format(c.now);
+    c.raf = k < 1 && c.el.isConnected ? requestAnimationFrame(step) : 0;
+    if (!c.raf) c.shown = c.to;
+  };
+  c.raf = requestAnimationFrame(step);
+}
+// the number as a finger wrote it: it stops any count, and the next one starts from here
+count.shown = (key, v) => { const c = counts.get(key) || { raf: 0 }; cancelAnimationFrame(c.raf); c.raf = 0; c.shown = c.now = c.to = v; counts.set(key, c); };
+// forget a number (its page was left), so coming back does not count from an old one
+count.forget = key => { const c = counts.get(key); if (c) cancelAnimationFrame(c.raf); counts.delete(key); };
 
 // ---------- a scene arriving ----------
 // For as long as the bridge takes to report every light of a scene, a tile's crossfade is the scene's 1.0 s, not

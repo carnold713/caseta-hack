@@ -11,8 +11,17 @@
   transition: background-color var(--standard) var(--ease), border-color var(--standard) var(--ease), color var(--standard) var(--ease), transform var(--tap) var(--spring-quick);
 }
 .room-chips .chip:active { transform: scale(.96); }
+/* A scene chip's glyph sits in a place of its own (room.js glyphSlot), 12 in from the chip's edge as a leading glyph's
+   is: 4 wide and empty with no glyph, so the name sits 16 in as it does on a plain chip, and 24 with one (the glyph
+   and its 8 to the name). The place opens and closes on the standard curve and the chip's width goes with it. */
+.room-chips .chip.sc { padding-left: 12px; gap: 0; }
+.room-chips .chip .ch-g { display: inline-flex; flex: none; width: 4px; height: 16px; overflow: hidden; transition: width var(--standard) var(--ease); }
+.room-chips .chip .ch-g.on { width: 24px; }
+.room-chips .chip .ch-g .ic { flex: none; }
 /* A long fade: the chip says so, and a thin line under it runs for the fade's length. */
 .room-chips .chip .ch-sub { font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, .78); margin-left: -2px; }
+.room-chips .chip.sc .ch-sub { margin-left: 6px; }
+.room-chips .chip .ch-subw { display: inline-flex; overflow: hidden; white-space: nowrap; transition: width var(--standard) var(--ease); }
 .room-chips .chip .wv-prog {
   position: absolute; left: 14px; right: 14px; bottom: 5px; height: 2px; border-radius: 1px;
   background: rgba(255, 255, 255, .55); transform-origin: left center; transform: scaleX(1);

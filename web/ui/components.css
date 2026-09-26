@@ -438,7 +438,8 @@
 }
 /* When the house changes rather than a finger (a light switched on comes up to the evening's level, a scene, another
    phone), the bar moves there on the dimmer's 0.4 s instead of jumping. Under a finger (.held) it is the finger's. */
-.hbar:not(.held) .fill { transition: width var(--dimmer) var(--ease-both); }
+/* (a room's bar greys as its room goes off, on the same clock as it empties) */
+.hbar:not(.held) .fill { transition: width var(--dimmer) var(--ease-both), background-color var(--dimmer) var(--ease-both); }
 .hbar:not(.held) .knob { transition: left var(--dimmer) var(--ease-both); }
 .scene-arriving .hbar:not(.held) .fill { transition-duration: var(--scene); }
 .scene-arriving .hbar:not(.held) .knob { transition-duration: var(--scene); }

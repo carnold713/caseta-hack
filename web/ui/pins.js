@@ -11,7 +11,7 @@
 // nothing opens.
 import { tile, pinRoomCard } from '/ui/screens/parts.js';
 import { actions as roomsActions } from '/ui/screens/rooms.js';
-import { reduced } from '/ui/motion.js';
+import { reduced, T } from '/ui/motion.js';
 
 const HOLD = 300;       // ms a finger rests on an item before it lifts
 const SLOP = 8;         // px it may wander while it rests; more is a scroll
@@ -42,7 +42,9 @@ export function pinnedHTML(c) {
 export function wirePins(c, root) {
   const grid = root.querySelector('.pin-grid');
   const was = c.ui.pinFlip; c.ui.pinFlip = null;
+  const leaving = c.ui.pinLeaving; c.ui.pinLeaving = null;
   c.ui.pinEnter = false;
+  if (grid && leaving && !reduced()) leaveAll(grid, leaving);
   if (grid && was && !reduced()) {
     for (const it of grid.querySelectorAll(':scope > .pin-item')) {
       const r0 = was.get(it.dataset.key); if (!r0) continue;
@@ -59,6 +61,35 @@ function remember(c, root) {
   const m = new Map();
   for (const it of (root || document).querySelectorAll('.pin-grid > .pin-item')) m.set(it.dataset.key, it.getBoundingClientRect());
   c.ui.pinFlip = m;
+}
+// What goes when the grid is drawn again (an item unpinned, the x's as Done is tapped), taken while it is still there:
+// a copy of each, and where it stood, to fade out in its place in the new grid (leaveAll) on the exit's 0.2 s EASE_IN,
+// rather than vanishing in a frame. The copies are the house's fading kind (xf-old), which a redraw carries along.
+function leaves(c, els) {
+  const grid = document.querySelector('.pin-grid'); if (!grid || reduced()) return;
+  const g = grid.getBoundingClientRect();
+  c.ui.pinLeaving = els.map(el => {
+    const node = el.cloneNode(true), x = el.classList.contains('pin-x');
+    // A copy answers to no one's selector for what is on the grid (an item, an x): it wears its look inline instead.
+    if (x) { const cs = getComputedStyle(el); for (const k of ['display', 'place-items', 'border-radius', 'background-color', 'color', 'box-shadow', 'border']) node.style.setProperty(k, cs.getPropertyValue(k)); }
+    node.classList.remove('pin-item', 'pin-x', 'in');
+    node.classList.add('pin-gone');
+    return { node, r: el.getBoundingClientRect(), g, x };
+  });
+}
+function leaveAll(grid, leaving) {
+  const g = grid.getBoundingClientRect();
+  if (getComputedStyle(grid).position === 'static') grid.style.position = 'relative';
+  for (const { node, r, x } of leaving) {
+    node.classList.add('xf-old');
+    node.removeAttribute('data-act'); node.removeAttribute('data-key'); node.setAttribute('aria-hidden', 'true'); node.inert = true;
+    node.querySelectorAll('[data-act],[data-go],[id]').forEach(n => { n.removeAttribute('data-act'); n.removeAttribute('data-go'); n.removeAttribute('id'); });
+    Object.assign(node.style, { position: 'absolute', left: `${r.left - g.left}px`, top: `${r.top - g.top}px`, width: `${r.width}px`, height: `${r.height}px`, margin: '0', pointerEvents: 'none', zIndex: x ? '3' : '0' });
+    grid.appendChild(node);
+    // an x goes the way it came (pin-x-in, backwards and faster); an item fades and settles back a little
+    node.animate([{ opacity: 1, scale: 1 }, { opacity: 0, scale: x ? 0.6 : 0.96 }], { duration: T.exit, easing: T.easeIn, fill: 'forwards' })
+      .finished.catch(() => {}).then(() => node.remove());
+  }
 }
 
 // ---------- picking one up ----------
@@ -108,14 +139,22 @@ function dragging(c, grid) {
     was.it.classList.remove('lifted');
     was.it.classList.add('dropping');
     was.it.style.translate = `${s.left - f.left}px ${s.top - f.top}px`;
-    setTimeout(() => {
+    // The new order is drawn once everything has settled where it goes, on the settling's own clock: a timer of the
+    // same length ran out first on a busy phone and drew the grid over items still on their way.
+    let done = false;
+    const settled = () => {
+      if (done) return; done = true;
       const keys = o.map(n => n.dataset.key);
       const changed = keys.some((k, i) => k !== was.items[i].dataset.key);
       if (changed) c.H.setPinOrder(keys);
       c.ui.dragging = false;
       c.render();
       if (changed) c.save('', { quiet: true });
-    }, reduced() ? 0 : STD);
+    };
+    if (reduced()) { settled(); return; }
+    // (only what ends: a pinned room's fan turns for as long as it is on)
+    Promise.all(grid.getAnimations({ subtree: true }).filter(a => Number.isFinite(a.effect.getComputedTiming().endTime)).map(a => a.finished)).then(settled, settled);
+    setTimeout(settled, STD + 600);
   };
 
   grid.addEventListener('pointerdown', e => {
@@ -151,13 +190,20 @@ function dragging(c, grid) {
 // ---------- taps ----------
 export const pinActions = {
   // Edit and Done on the heading
-  'pins-edit'(c) { c.ui.pinEdit = !c.ui.pinEdit; c.ui.pinEnter = c.ui.pinEdit; c.render(); },
+  'pins-edit'(c) {
+    c.ui.pinEdit = !c.ui.pinEdit; c.ui.pinEnter = c.ui.pinEdit;
+    if (!c.ui.pinEdit) leaves(c, [...document.querySelectorAll('.pin-grid .pin-x')]);
+    c.render();
+  },
   // the x on an item in edit mode: unpinned at once, the others close up. Leaving the last one ends edit mode.
   unpin(c, el) {
     const key = el.dataset.key; if (!key) return;
     remember(c);
+    const item = el.closest('.pin-item');
     c.H.unpin(key);
     if (!c.H.pinned().length) c.ui.pinEdit = false;
+    // the item fades where it was as the others close up; the last one's x's go with it
+    leaves(c, [...(item ? [item] : []), ...(c.ui.pinEdit ? [] : [...document.querySelectorAll('.pin-grid .pin-x')].filter(x => !item || !item.contains(x)))]);
     c.render();
     c.save('', { quiet: true });
   },

@@ -238,7 +238,7 @@ function fanView(c, d) {
     </div>
     <div class="speeds">
       <div class="lbl">Speed</div>
-      <div class="big">${FAN_WORD[sp]}</div>
+      <div class="big" data-xf="standard">${FAN_WORD[sp]}</div>
       ${bars}
       <button class="nudge minus" data-act="fan-step" data-by="-1" aria-label="Slower">${icon('minus', 22, 1.7)}</button>
       <button class="nudge plus" data-act="fan-step" data-by="1" aria-label="Faster">${icon('plus', 22, 1.7)}</button>
@@ -283,33 +283,39 @@ export function after(c, r, root) {
 // answering with the evening's 30% after a light came on, a scene arriving. Things the app decides happen slowly:
 // the dimmer's 0.4 s EASE_IN_AND_OUT for one light, the scene's 1.0 s while a scene arrives. Under a finger it is
 // the finger's (set() writes `shown` as it paints).
+// A redraw on the way (the bridge confirming the level) finds the glide already going there and lets it go on, drawn on
+// the new dial, rather than starting its curve again from where it had got to (which slowed it to a stop and set it
+// off a second time).
 const shown = {};
-let tween = 0;
+let tween = 0, going = null;
 const easeInOut = t => (t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 function glide(c, id, el) {
-  cancelAnimationFrame(tween);
-  if (!el) return;
+  if (!el) { cancelAnimationFrame(tween); going = null; return; }
   const to = Number(el.getAttribute('aria-valuenow')) || 0;
+  if (going && going.id === id && going.to === to && tween) { going.el = el; paintDial(el, shown[id], false); return; }
+  cancelAnimationFrame(tween); tween = 0; going = null;
   const from = shown[id];
   shown[id] = to;
-  // a light turned off does not swing its dial: it greys where it stands and shows where it will come back to
-  if (from == null || from === to || c.ui.dragging || reduced() || !el.closest('.dev.on')) return;
+  // A light turned off shows where it will come back to, greyed. It moves there as it greys, on the same 0.4 s: put
+  // there at once, the knob leapt the width of the arc in one frame (40% to the 100% On gives back).
+  if (from == null || from === to || c.ui.dragging || reduced()) return;
   const ms = document.body.classList.contains('scene-arriving') ? 1000 : 400;
   const t0 = performance.now();
   // the light itself fades on the dimmer by its own transitions; only the dial is stepped here
+  const g = going = { id, to, el };
   paintDial(el, from, false); shown[id] = from;
   const step = now => {
-    if (!el.isConnected) return;
+    if (!g.el.isConnected) { tween = 0; going = null; return; }
     const t = Math.min(1, (now - t0) / ms);
     const v = Math.round(from + (to - from) * easeInOut(t));
-    paintDial(el, v, false); shown[id] = v;
-    if (t < 1) tween = requestAnimationFrame(step);
+    paintDial(g.el, v, false); shown[id] = v;
+    if (t < 1) tween = requestAnimationFrame(step); else { tween = 0; going = null; }
   };
   tween = requestAnimationFrame(step);
 }
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Leaving a light's page forgets what its dial showed, so coming back does not glide from an old level.
-export function leave() { cancelAnimationFrame(tween); for (const k of Object.keys(shown)) delete shown[k]; }
+export function leave() { cancelAnimationFrame(tween); tween = 0; going = null; for (const k of Object.keys(shown)) delete shown[k]; }
 
 function paintDial(el, v, light = true) {
   const [kx, ky] = arcPoint(v);
@@ -339,7 +345,7 @@ function wireDial(c, id, el) {
   // half, one deliberate tap (design-v7-ux.md, 3; the dial used to reach 0).
   const set = v => {
     v = Math.max(1, Math.min(100, v));
-    cancelAnimationFrame(tween);
+    cancelAnimationFrame(tween); tween = 0; going = null;
     const page = el.closest('.dev');
     page.classList.add('on');
     paintDial(el, v); shown[id] = v;

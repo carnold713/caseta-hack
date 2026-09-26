@@ -6,8 +6,8 @@
 // light, one soft light from the top of the screen in the colour of what is on, and holding Goodnight puts the page
 // to sleep room by room with the house.
 import { track } from '/ui/gesture.js';
-import { glowHTML, lightHTML, blendLight, whiteStops } from '/ui/glow.js';
-import { reduced } from '/ui/motion.js';
+import { glowHTML, lightHTML, setLight, blendLight, whiteStops } from '/ui/glow.js';
+import { reduced, count } from '/ui/motion.js';
 import { sceneChip, roomStatus, roomPicture, offlineCard } from '/ui/screens/parts.js';
 import { pinnedHTML, wirePins, pinActions, pinsLeave } from '/ui/pins.js';
 import { homeCards, greetingSheet, shouldGreet, nextActions } from '/ui/screens/next.js';
@@ -53,26 +53,33 @@ const lampOf = (c, d) => {
 // The colour each page's light last had, so a light going out fades from what it was rather than from nothing. The
 // element is drawn even while nothing is on (at no strength), so the first light on fades in on the dimmer too.
 const lastTop = new Map();
-export function topLight(c, key, lamps, level = null, cls = '') {
+function topSpec(c, key, lamps, level = null) {
   const mixed = blendLight(lamps);
   if (mixed) lastTop.set(key, mixed);
   const tone = mixed || lastTop.get(key) || { hex: whiteStops(COPPER_K).body };
-  return lightHTML({ kind: 'top', level: mixed ? (level ?? mixed.level) : 0, hex: tone.hex, night: nightNow(c), name: key, cls });
+  return { kind: 'top', level: mixed ? (level ?? mixed.level) : 0, hex: tone.hex, night: nightNow(c), name: key };
 }
+export function topLight(c, key, lamps, level = null, cls = '') { return lightHTML({ ...topSpec(c, key, lamps, level), cls }); }
 // The whole house's: every light that is on, at the house's level.
 export const houseTop = (c, cls = 'house-light') => topLight(c, 'house', c.H.litLights().map(d => lampOf(c, d)), c.H.houseLevel(), cls);
 // One room's: its lights that are on, at their mean.
 export const roomTop = (c, aid) => topLight(c, `room:${aid}`, c.H.roomLights(aid).filter(d => (c.data.level(d.device_id) || 0) > 0).map(d => lampOf(c, d)), null, 'room-light');
 // Home's: the house's, except while Goodnight is putting the page to sleep, when a room keeps the light it had until
 // its turn to go out, so the page goes dark room by room with the house.
-function houseLight(c) {
+// Its colour stays the house's as it was when Goodnight began: only its strength goes, room by room. Each room's turn
+// repaints that one light in place (goodnightDark), where it fades on the dimmer by its own transition; redrawing the
+// whole of Home for it, once a room, left a phone no frames for the veil and the card closing meanwhile.
+function houseSpec(c) {
   const gn = c.ui.gn && c.ui.gn.active ? c.ui.gn : null;
-  if (!gn) return houseTop(c);
+  if (!gn) return topSpec(c, 'house', c.H.litLights().map(d => lampOf(c, d)), c.H.houseLevel());
   const left = gn.rooms.filter(r => performance.now() < gn.t0 + r.at);
-  const lamps = left.flatMap(r => [r.L.kelvin ? { level: r.L.level, kelvin: r.L.kelvin } : null, r.L.colour].filter(Boolean));
+  const lampsOf = rs => rs.flatMap(r => [r.L.kelvin ? { level: r.L.level, kelvin: r.L.kelvin } : null, r.L.colour].filter(Boolean));
   const level = left.reduce((a, r) => a + r.L.level, 0) / Math.max(1, gn.rooms.length);
-  return topLight(c, 'house', lamps, level, 'house-light');
+  const spec = topSpec(c, 'house', lampsOf(left), level);
+  if (!gn.tone) gn.tone = topSpec(c, 'house', lampsOf(gn.rooms)).hex;
+  return { ...spec, hex: gn.tone };
 }
+const houseLight = c => lightHTML({ ...houseSpec(c), cls: 'house-light' });
 
 // What "All on" will do to brightness right now: the evening's level while the wind-down holds lights down.
 function allOnLevel(c) {
@@ -123,13 +130,13 @@ export function view(c) {
 
     <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
-      <div class="house-head"><span class="hh-w" data-xf="standard">${lit.length ? `${lit.length} on ·` : 'All off'}</span>${lit.length ? ` <span data-hlv>${lv}</span>%` : ''}</div>
-      ${lit.length ? `<div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="house" style="--pct:${lv}%" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
+      ${houseHead(c, lit, lv)}
+      <div class="house-bar">${lit.length ? `<div class="hbar ${lv >= 30 ? '' : 'low'}" data-enter="fade" data-drag="house" style="--pct:${lv}%" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
         <span class="fill"></span>
         <span class="lo">${icon('sun', 22, 1.8)}</span>
         <span class="hi">${icon('sun', 26, 1.6)}</span>
         <span class="knob"></span>
-      </div>` : ''}
+      </div>` : ''}</div>
       ${housePills(c, lit)}
       <div class="goodnight">
         <button class="hold" data-hold="goodnight" data-ms="1000" data-act="goodnight-hint" aria-label="Goodnight, press and hold">
@@ -162,7 +169,9 @@ export function after(c, r, root) {
   }
   wirePins(c, root);
   const bar = root.querySelector('[data-drag="house"]');
-  countTo(c, root.querySelector('[data-hlv]'));
+  // the house level counts to where it is (motion.js count): with the finger as it drags (set() writes it), and when
+  // the house changes by itself (a scene, the bridge settling a light) over the dimmer's 0.4 s, or the scene's 1.0 s
+  count(root.querySelector('[data-hlv]'), 'house');
   if (!bar) return;
   const set = x => {
     const b = bar.getBoundingClientRect();
@@ -174,9 +183,8 @@ export function after(c, r, root) {
     bar.classList.toggle('low', v / 100 * b.width < 100);
     bar.setAttribute('aria-valuenow', v);
     // the number above counts with the finger
-    cancelAnimationFrame(counting);
     const n = document.querySelector('[data-hlv]'); if (n) n.textContent = v;
-    shownHouse = v;
+    count.shown('house', v);
     const ids = c.H.houseLevelTargets(); if (!ids.length) return;
     c.assume(ids, v, { held: true });
     c.gate.sendLevel(ids.map(id => `d:${id}`), v);
@@ -185,33 +193,8 @@ export function after(c, r, root) {
   track(bar, { c, axis: 'x', start: () => bar.classList.add('held'), move: e => set(e.clientX) });
 }
 
-// The house level counts to where it is, never fades from one number to the next: with the finger as it drags
-// (set() writes it), and when the house changes by itself (a scene, the bridge settling a light) it counts there
-// over the dimmer's 0.4 s, or the scene's 1.0 s while a scene arrives.
-let shownHouse = null, counting = 0;
-const easeInOut = t => (t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-function countTo(c, el) {
-  cancelAnimationFrame(counting);
-  if (!el) { shownHouse = null; return; }
-  const to = Number(el.textContent) || 0;
-  const from = shownHouse;
-  shownHouse = to;
-  if (from == null || from === to || c.ui.dragging || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
-  const ms = document.body.classList.contains('scene-arriving') ? 1000 : 400;
-  const t0 = performance.now();
-  el.textContent = from; shownHouse = from;
-  const step = now => {
-    if (!el.isConnected) return;
-    const t = Math.min(1, (now - t0) / ms);
-    const v = Math.round(from + (to - from) * easeInOut(t));
-    el.textContent = v; shownHouse = v;
-    if (t < 1) counting = requestAnimationFrame(step);
-  };
-  counting = requestAnimationFrame(step);
-}
-
 // Leaving Home forgets the number shown, so coming back does not count from an old one, and ends editing the pins.
-export function leave(c) { cancelAnimationFrame(counting); shownHouse = null; pinsLeave(c); }
+export function leave(c) { count.forget('house'); pinsLeave(c); }
 
 // A tap on a held button (All on, Goodnight) turns nothing on or off: for a moment its own label says "Hold". Nothing
 // else on the page says how they work.
@@ -220,17 +203,27 @@ const hinting = (c, k) => !!(c.ui[k] && Date.now() - c.ui[k] < HINT_MS);
 // Turning lights off is a tap. Turning the whole house on is a hold (0.6 s, the pill filling with copper as it is
 // held), so a thumb brushing it at night does nothing. Neither pill is lit to show a state: the headline says what is
 // on.
+// The pills keep their places when the house goes dark: All off gives its half to the held pill, which widens into the
+// row on the standard curve, rather than the row being drawn anew with one pill in it (which jumped the held pill
+// from half the row to all of it in a frame, and let a redraw pair it with All off). All off is still there, folded
+// to nothing and out of reach.
 function housePills(c, lit) {
   const { icon, H } = c;
   const lvl = allOnLevel(c);
   const onLabel = `${H.houseOnLabel()}${lvl != null && lit.length ? ` · ${lvl}%` : ''}`;
   const hint = hinting(c, 'houseHint');
-  const on = `<button class="pill ghost hold-pill ${hint ? 'hint' : ''}" data-hold="house-on" data-ms="600" data-act="house-on-hint" aria-label="${c.esc(onLabel)}, press and hold">${icon('power', 20, 1.9)}<span>${hint ? 'Hold' : c.esc(onLabel)}</span></button>`;
-  if (!lit.length) return `<div class="house-pills one">${on}</div>`;
-  return `<div class="house-pills">
-    <button class="pill solid" data-act="house-off">${icon('power', 20, 1.9)}All off</button>
+  const on = `<button class="pill ghost hold-pill ${hint ? 'hint' : ''}" data-hold="house-on" data-ms="600" data-act="house-on-hint" aria-label="${c.esc(onLabel)}, press and hold">${icon('power', 20, 1.9)}<span data-xf="standard">${hint ? 'Hold' : c.esc(onLabel)}</span></button>`;
+  const off = lit.length ? '<button class="pill solid" data-act="house-off">' : '<button class="pill solid folded" data-act="house-off" tabindex="-1" aria-hidden="true" inert>';
+  return `<div class="house-pills ${lit.length ? '' : 'one'}">
+    ${off}${icon('power', 20, 1.9)}All off</button>
     ${on}
   </div>`;
+}
+// The headline says what is on. Between "All off" and "3 on · 62%" the whole of it crossfades (the file's STD
+// crossfade); while lights stay on, only its words do when the count changes, and the level counts by itself.
+function houseHead(c, lit, lv) {
+  if (!lit.length) return `<div class="house-head" data-xf="standard" data-xf-look="off"><span class="hh-w">All off</span></div>`;
+  return `<div class="house-head" data-xf="standard" data-xf-look="lit"><span class="hh-w" data-xf="standard">${lit.length} on ·</span> <span data-hlv data-count="${lv}">${lv}</span>%</div>`;
 }
 
 export const actions = {
@@ -315,10 +308,14 @@ function goodnightDark(c, rooms, acts) {
     <div class="gn-stay"></div>`;
   document.body.appendChild(el);
   gn = { el, c, timers: [], ended: false, toasted: false };
-  // a tap during it only skips to the end; a button inside it (Turn off) is its own
-  el.addEventListener('click', e => { if (!e.target.closest('[data-act]')) gnSkip(); });
-  // each room's turn: the Home view draws its light from what it had until then, and redraws as each goes out
-  rooms.forEach(r => later(() => c.render(), r.at + 10));
+  // A new touch during it only skips to the end; a button inside it (Turn off) is its own. A new touch, not a click:
+  // the finger that held Goodnight lifts over this veil, and the click that lift makes skipped the whole dark-out.
+  el.addEventListener('pointerdown', e => { if (!e.target.closest('[data-act]')) gnSkip(); });
+  // each room's turn: the house's light goes down to what the rooms still lit give, in place (houseSpec)
+  rooms.forEach(r => later(() => {
+    const top = document.querySelector('#screen .home > .house-light');
+    if (top) setLight(top, houseSpec(c)); else c.render();
+  }, r.at + 10));
   const out = rooms.length ? FIRST + (rooms.length - 1) * GAP + DIMMER : 0;
   const veilAt = out + (rooms.length ? 220 : 0);
   later(() => gnVeil(), veilAt);
