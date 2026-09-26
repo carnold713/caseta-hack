@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- wg_root under a second name: Widgets.java alternates the two on each redraw, so the launcher builds the widget
+     afresh every time and never lays a new drawing over the one it already shows. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/wg_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/wg_card"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:id="@+id/wg_body"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp" />
+</FrameLayout>

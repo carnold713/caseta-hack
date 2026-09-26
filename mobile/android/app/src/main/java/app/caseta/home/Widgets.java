@@ -175,19 +175,24 @@ final class Widgets {
         try {
             JSONObject cfg = WidgetStore.config(c, id);
             Bundle o = m.getAppWidgetOptions(id);
+            // the other of the two frames from last time: a changed layout is built afresh by the launcher, where the
+            // same one may be updated in place (and added to)
+            android.content.SharedPreferences fp = c.getSharedPreferences("wg-frame", Context.MODE_PRIVATE);
+            boolean alt = !fp.getBoolean("f" + id, false);
+            fp.edit().putBoolean("f" + id, alt).apply();
             RemoteViews rv = null;
             if (Build.VERSION.SDK_INT >= 31) {
                 @SuppressWarnings("deprecation")
                 ArrayList<SizeF> sizes = o.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES);
                 if (sizes != null && !sizes.isEmpty()) {
                     Map<SizeF, RemoteViews> map = new HashMap<>();
-                    for (SizeF s : sizes) if (map.size() < 8 && !map.containsKey(s)) map.put(s, build(c, id, cfg, (int) s.getWidth(), (int) s.getHeight()));
+                    for (SizeF s : sizes) if (map.size() < 8 && !map.containsKey(s)) map.put(s, build(c, id, cfg, (int) s.getWidth(), (int) s.getHeight(), alt));
                     rv = new RemoteViews(map);
                 }
             }
             if (rv == null) {
                 int w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH), h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT);
-                rv = build(c, id, cfg, w > 0 ? w : 250, h > 0 ? h : 110);
+                rv = build(c, id, cfg, w > 0 ? w : 250, h > 0 ? h : 110, alt);
             }
             m.updateAppWidget(id, rv);
         } catch (Exception e) {
@@ -196,8 +201,10 @@ final class Widgets {
     }
 
     /** One widget at one size. Also what the previews are drawn with. */
-    static RemoteViews build(Context c, int id, JSONObject cfg, int w, int h) {
-        B b = new B(c, id, cfg, w, h);
+    static RemoteViews build(Context c, int id, JSONObject cfg, int w, int h) { return build(c, id, cfg, w, h, false); }
+
+    static RemoteViews build(Context c, int id, JSONObject cfg, int w, int h, boolean alt) {
+        B b = new B(c, id, cfg, w, h, alt);
         if (!HubStore.signedIn(c)) return b.note(R.drawable.wi_home, "Caseta", "Open the app to sign in", "home");
         if (!WidgetStore.hasModel(c) && !cfg.optString("kind").equals("house")) return b.note(R.drawable.wi_home, "Caseta", "Open the app once", "home");
         try {
@@ -215,16 +222,16 @@ final class Widgets {
                 default: return b.note(R.drawable.wi_home, "Caseta", "Tap to open", "home");
             }
         } catch (Exception e) {
-            return new B(c, id, cfg, w, h).note(R.drawable.wi_home, "Caseta", "Tap to open", "home");
+            return new B(c, id, cfg, w, h, alt).note(R.drawable.wi_home, "Caseta", "Tap to open", "home");
         }
     }
 
     /** One widget being built: its config, its look, its size, and the taps it hands out. */
     static final class B {
-        final Context c; final int id; final JSONObject cfg, model, state; final int w, h; Look L; RemoteViews root;
+        final Context c; final int id; final JSONObject cfg, model, state; final int w, h; final boolean alt; Look L; RemoteViews root;
 
-        B(Context c, int id, JSONObject cfg, int w, int h) {
-            this.c = c; this.id = id; this.cfg = cfg; this.w = w; this.h = h;
+        B(Context c, int id, JSONObject cfg, int w, int h, boolean alt) {
+            this.c = c; this.id = id; this.cfg = cfg; this.w = w; this.h = h; this.alt = alt;
             this.model = WidgetStore.model(c); this.state = WidgetStore.state(c);
             look(null);
         }
@@ -232,7 +239,7 @@ final class Widgets {
         /** The frame, in the look (again, once the lamp's colour is known). */
         void look(String lampHex) {
             L = Widgets.look(cfg, lampHex);
-            root = new RemoteViews(c.getPackageName(), R.layout.wg_root);
+            root = new RemoteViews(c.getPackageName(), alt ? R.layout.wg_root_b : R.layout.wg_root);
             // Every container is emptied before it is filled. A launcher may apply a widget's new drawing to the views
             // it already shows (the same layout, reapplied), and addView then adds to what is there: without this,
             // each tap drew the widget again under itself.
