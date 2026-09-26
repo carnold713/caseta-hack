@@ -180,6 +180,7 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
   }
   // one sheet replacing another (White to Colour) swaps in place rather than rising again
   const still = !root.hidden && !!root.dataset.key;
+  const was = still ? motion.sheetBefore(root) : null;
   root.dataset.key = key;
   root._onClose = onClose;
   root.innerHTML = `<button class="scrim ${still ? 'still' : ''}" data-act="sheet-close" aria-label="Close"></button>
@@ -187,6 +188,7 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
       ${headHTML}
       <div class="sheet-body">${body}</div></div>`;
   root.hidden = false;
+  motion.sheetSwap(was, root);
   return root;
 }
 // It drops rather than vanishing (0.28 s EASE_IN, the scrim fading with it); what falls is a copy, and the sheet
@@ -339,7 +341,9 @@ let arriving = null, wasScreen = false, shownTab = null;
 const scrolledAt = {};
 let restoreY = null;
 function render() {
-  if (ctx.ui.dragging) { pending = true; return; }
+  // (a page that has changed is drawn all the same: the page it left has already been taken off the screen to move
+  // away, motion.capture, and the control under the finger went with it)
+  if (ctx.ui.dragging && !arriving) { pending = true; return; }
   if (stepping && performance.now() - stepping < 600) { skipped = true; return; }
   stepping = 0;
   // drawn now, a redraw already booked for the next frame would draw the same again (a tap that switches lights books
@@ -360,6 +364,9 @@ function render() {
   // a redraw while a page is still opening out of what was tapped (or closing back into it) waits for it to land,
   // so nothing is drawn out from under it
   if (!arriving && wasScreen && opening.flying()) { opening.whenLanded(render); return; }
+  // an open that Back reached part way is going back into what was tapped: the page it opened from is drawn once it
+  // has, with nothing moving (opening.js)
+  if (arriving === 'reverse') { if (opening.flying()) { opening.whenLanded(render); return; } arriving = 'still'; }
   const screen = screenFor(r);
   const keep = {};
   scr.querySelectorAll('[data-keep]').forEach(el => { keep[el.dataset.keep] = el.scrollLeft; });
@@ -367,6 +374,8 @@ function render() {
   const how = arriving || (wasScreen ? null : 'load');
   arriving = null; wasScreen = true;
   const snap = how ? null : motion.snap(scr);
+  // the app's first page takes over from what stood there (the home loading, the sign in), which fades as it comes
+  if (how === 'load' && scr.firstElementChild) motion.capture(scr);
   applyNight();
   scr.innerHTML = screen.view(ctx, r);
   scr.querySelectorAll('[data-keep]').forEach(el => { if (keep[el.dataset.keep] != null) el.scrollLeft = keep[el.dataset.keep]; });
@@ -378,7 +387,12 @@ function render() {
   // is still under Settings, a room opened from Home still under Home), as each tab is its own stack and Back
   // returns there; a page the app opened on, with nothing under it, falls back to the tab it belongs to.
   const tab = shownTab = (depthOf(r) > 0 && history.state && history.state.tab) || TAB_OF[r.name] || 'home';
-  tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
+  // The tabs are drawn once and then only told which is current, so the white circle crosses from one tab to the next
+  // on its own transition (components.css): drawn again each time, it jumped there in one frame.
+  const drawn = [...tabs.children];
+  if (drawn.length === TABS.length && drawn.every((b, i) => b.dataset.go === TABS[i][0])) {
+    drawn.forEach(b => { if (b.dataset.go === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  } else tabs.innerHTML = TABS.map(([t, ic, label]) => `<button data-go="${t}" aria-label="${label}" ${t === tab ? 'aria-current="page"' : ''}>${icon(ic, 24, 1.7)}</button>`).join('');
   if (screen.after) screen.after(ctx, r, scr);
   // a page comes back where it was scrolled when something on it opened the page being left
   const y = opening.takeScroll();

@@ -26,7 +26,7 @@ function measure() {
   const btn = s => r(scr.querySelector(`.bar .hdr-btn${s}`));
   const count = scr.querySelector('.room-title .count');
   return {
-    y: window.scrollY, p: Number(document.getElementById('app').style.getPropertyValue('--hdr-p') || 0),
+    y: window.scrollY, p: Number((bar && getComputedStyle(bar).getPropertyValue('--hdr-p')) || 0),
     bar: r(bar), t: r(t), words, tw: t && t.offsetWidth, th: t && t.offsetHeight, tsw: t && t.scrollWidth, tcw: t && t.clientWidth, tfs: t && parseFloat(getComputedStyle(t).fontSize),
     back: btn('.back'), a1: btn('.a1'), a2: btn('.a2'),
     scrim: cs && { o: Number(cs.opacity), h: parseFloat(cs.height), w: parseFloat(cs.width), mask: cs.maskImage || cs.webkitMaskImage, blur: cs.backdropFilter || cs.webkitBackdropFilter, bg: cs.backgroundColor },
@@ -237,7 +237,7 @@ async function scrollTo(page, y) {
         o.disconnect();
         // the header row itself is never faded as it comes back (that would cut its scrim's blur off while it plays)
         setTimeout(() => { window.__rowFaded = [...document.querySelectorAll('.bar')].some(b => b.getAnimations().some(a => !a.effect.pseudoElement && a.effect.getKeyframes().some(k => 'opacity' in k))); }, 0);
-        window.__first = { y: scrollY, p: Number(document.getElementById('app').style.getPropertyValue('--hdr-p')), scale: getComputedStyle(h).scale, anims: h.getAnimations().filter(a => a.effect.getKeyframes().some(k => 'scale' in k || 'translate' in k)).length };
+        window.__first = { y: scrollY, p: Number(getComputedStyle(document.querySelector('#screen .bar')).getPropertyValue('--hdr-p')), scale: getComputedStyle(h).scale, anims: h.getAnimations().filter(a => a.effect.getKeyframes().some(k => 'scale' in k || 'translate' in k)).length };
       }).observe(document.getElementById('screen'), { childList: true });
     });
     const card = `#screen .room-big[data-go="room/${aid}"]`;

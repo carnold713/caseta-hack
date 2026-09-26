@@ -35,11 +35,16 @@ export function wireSheetDrag(root, dismiss, { handoff = null } = {}) {
       // down, clearly more down than sideways, and from the header or a body already at its top
       if (dy <= 0 || Math.abs(dy) < Math.abs(dx) * 1.2 || (!d.head && d.sheet.scrollTop > 0)) { d = null; return false; }
       d.live = true; d.y0 = y;
-      d.sheet.getAnimations().forEach(a => a.cancel());
+      // a sheet still rising is taken where it is, and follows the finger from there (let go of its rise without
+      // that, it jumped up to where it rests under the finger), and a scrim still fading in thins from where it is
+      const at = d.sheet.getBoundingClientRect().top;
+      d.o = d.scrim ? Number(getComputedStyle(d.scrim).opacity) : 1;
+      for (const n of [d.sheet, d.scrim]) if (n) n.getAnimations().forEach(a => a.cancel());
+      d.base = Math.max(0, at - d.sheet.getBoundingClientRect().top);
     }
-    d.dy = Math.max(0, y - d.y0);
+    d.dy = Math.max(0, d.base + y - d.y0);
     d.sheet.style.transform = `translateY(${d.dy}px)`;
-    if (d.scrim) d.scrim.style.opacity = String(Math.max(0, 1 - d.dy / (d.sheet.offsetHeight || 1)));
+    if (d.scrim) d.scrim.style.opacity = String(Math.max(0, d.o * (1 - (d.dy - d.base) / (d.sheet.offsetHeight || 1))));
     return true;
   };
   const end = () => {
@@ -48,7 +53,9 @@ export function wireSheetDrag(root, dismiss, { handoff = null } = {}) {
     if (!g.live) return;
     const h = g.sheet.offsetHeight || 1;
     // past a quarter of the sheet (160 at most), or flicked: fast, and a real distance, not a twitch
-    const away = g.dy > Math.min(160, h * 0.25) || (g.v > 0.8 && g.dy > 40);
+    // (by how far the finger took it: a sheet caught low on its way up and barely pulled goes on up)
+    const pulled = g.dy - (g.base || 0);
+    const away = pulled > Math.min(160, h * 0.25) || (g.v > 0.8 && pulled > 40);
     const clear = () => { g.sheet.style.transform = ''; if (g.scrim) g.scrim.style.opacity = ''; };
     if (reduced()) { if (away) dismiss(); else clear(); return; }
     if (away && handoff && handoff(g.dy)) return;

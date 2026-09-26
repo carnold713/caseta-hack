@@ -83,6 +83,27 @@ export function finish() {
   for (const a of f.all) { try { a.cancel(); } catch (_) { /* already gone */ } }
   for (const u of f.undos.splice(0)) { try { u(); } catch (_) { /* already gone */ } }
 }
+// Send a run back the way it came, from wherever it has got to, and land it at its start: an open that Back reaches
+// part way plays itself backwards into what was tapped, rather than jumping to its end to close from there. Every
+// part turns round where it is, so it takes as long as the run had played. Its undos run when it lands, as ever.
+export function reverse(f) {
+  f.back = true; f.held = false;
+  let t = 0;
+  for (const a of f.all) {
+    try {
+      t = Math.max(t, Number(a.currentTime) || 0);
+      // each holds its first frame once it is back there, until the whole run is: a part that had played through
+      // (a title's short crossing) is back sooner than the window, and without a fill it showed its own look again
+      a.effect.updateTiming({ fill: 'both' });
+      a.reverse();
+    } catch (_) { /* gone */ }
+  }
+  f.until = performance.now() + t;
+  holdFor(t + 50);
+  // (every part, settled either way: one taken off the page on its way must not keep the run from landing)
+  Promise.allSettled(f.all.map(a => a.finished)).then(() => landed(f));
+  return t;
+}
 // The timing of something at the end of a run that closes: it runs over the last `dur` of it.
 export const last = (dur, extra = {}) => ({ duration: dur, delay: CLOSE.dur - dur, easing: 'linear', fill: 'both', ...extra });
 

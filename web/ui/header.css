@@ -2,8 +2,8 @@
    circles never scroll away: as the page scrolls, the header shrinks a little and stays stuck to the top, and a
    blurred scrim fades in behind it, so the page's name and its controls can always be read and reached.
 
-   Everything follows one number, --hdr-p on #app: the page's scroll over its first 64 px, 0 at rest and 1 from
-   64 on (header.js writes it on each frame the page scrolls, and after every redraw). Nothing here eases or
+   Everything follows one number, --hdr-p: the page's scroll over its first 64 px, 0 at rest and 1 from 64 on
+   (header.js writes it onto the header rows on each frame the page scrolls, and after every redraw). Nothing here eases or
    transitions: the header is locked to the finger. It moves by the `translate` and `scale` properties alone, never
    by `transform`, so it composes with every transition that flies or fades these elements by their transform (the
    openings in flight.js, a press) instead of fighting them.
