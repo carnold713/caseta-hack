@@ -7,9 +7,8 @@ import { roomStatus, roomPicture } from '/ui/screens/parts.js';
 import { roomLight, houseTop } from '/ui/screens/home.js';
 
 export function view(c) {
-  const { data, H, S, esc, icon } = c;
+  const { data, H, esc, icon } = c;
   const scenes = data.presets().length + data.lutronScenes().length;
-  const pinned = (S.config.favorites || []).filter(t => t.startsWith('p:') || t.startsWith('s:')).length;
   const rooms = data.areas();
   const card = a => {
     const lit = H.roomLights(a.id).some(d => (data.level(d.device_id) || 0) > 0);
@@ -38,7 +37,7 @@ export function view(c) {
       <button class="scenes-card" data-go="scenes">
         <span class="ib"><img src="${c.artSrc('lutron-color')}" alt=""></span>
         <span class="t">All scenes</span>
-        <span class="d">${scenes === 1 ? '1 scene' : `${scenes} scenes`}${pinned ? ` · ${pinned} pinned` : ''}</span>
+        <span class="d">${scenes === 1 ? '1 scene' : `${scenes} scenes`}</span>
         <span class="ch">${icon('chev', 20, 1.8)}</span>
       </button>
       ${rooms.map(card).join('')}

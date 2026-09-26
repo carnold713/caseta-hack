@@ -86,14 +86,15 @@ export function sceneChip(c, t, name, levels) {
   return `<button class="chip scene" data-act="scene" data-t="${c.esc(t)}">${sceneDots(levels)}${c.esc(name)}</button>`;
 }
 
-// A room's status line: "3 of 5 on · 62%" (the mean of what is on), "All off", or "No lights yet".
+// A room's status line, in numbers: "3 on · 62%" (the mean of what is on), "62%" for a room of one light, "Off", or
+// "No lights yet".
 export function roomStatus(c, aid) {
   const ls = c.H.roomLights(aid);
   if (!ls.length) return 'No lights yet';
   const lit = ls.filter(d => (c.data.level(d.device_id) || 0) > 0);
-  if (!lit.length) return 'All off';
+  if (!lit.length) return 'Off';
   const mean = Math.round(lit.reduce((a, d) => a + (c.data.level(d.device_id) || 0), 0) / lit.length);
-  return `${lit.length} of ${ls.length} on · ${mean}%`;
+  return ls.length === 1 ? `${mean}%` : `${lit.length} on · ${mean}%`;
 }
 
 // A room's picture: its photograph, or until it has one, its illustration (roomscene.js), a drawing of a room of its

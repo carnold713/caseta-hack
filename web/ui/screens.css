@@ -37,7 +37,8 @@
 .offline-card p { margin: 0; font-size: 14px; line-height: 20px; }
 .offline-card .pill { grid-column: 2; justify-self: start; height: 40px; font-size: 14px; }
 
-/* The house card, 372 x 324: overline 22, headline 42, bar 102, caption 166, pills 198, goodnight 262. */
+/* The house card: overline 22, headline 42, bar 102, pills 174, goodnight 238. Nothing under the bar: the bar and the
+   headline say what is on. */
 .card.house { padding: 22px 20px 18px; }
 .house .t-over { line-height: 14px; }
 .house-head { margin-top: 6px; font-size: 40px; font-weight: 300; line-height: 44px; letter-spacing: -.02em; }
@@ -46,10 +47,10 @@
    light's On pill, the pairing countdown and the Sunrise scrub; the timers already were). */
 .house-head [data-hlv], .dev [data-lv] { font-variant-numeric: tabular-nums; }
 .house .hbar { margin-top: 16px; touch-action: pan-y; cursor: pointer; }
-.house-cap { margin: 8px 0 0; font-size: 14px; line-height: 17px; color: var(--text-2); }
-.house-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
+.house-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .house-pills.one { grid-template-columns: 1fr; }
-.house-cap.hint { color: var(--copper-hi); }
+/* A tap on a held button: its own label says Hold for a moment, in copper. */
+.pill.hold-pill.hint, .goodnight .gn-label.hint { color: var(--copper-hi); }
 /* Held to turn the house on: copper fills the pill from the left over the hold, and empties if the finger lets go
    early. A finger that goes on to scroll scrolls (pan-y), which lets the hold go. */
 .pill.hold-pill { position: relative; overflow: hidden; isolation: isolate; touch-action: pan-y; }
@@ -59,7 +60,6 @@
 .house-pills .pill { width: 100%; padding: 0 12px; white-space: nowrap; }
 .goodnight { display: flex; gap: 12px; align-items: center; margin-top: 16px; height: 44px; }
 .goodnight .t-row { line-height: 19px; }
-.goodnight .t-cap { line-height: 17px; margin-top: 3px; }
 .hold { touch-action: none; user-select: none; -webkit-user-select: none; }
 
 /* Section overlines: 18 under a card, 30 under a one-row card, 10 above what they head. */
@@ -142,16 +142,14 @@
 .pin-grid .pin-item.lifted > .tile.on:first-child { box-shadow: 0 18px 40px rgba(0, 0, 0, .55), inset 0 0 0 1px var(--tile-on-line); }
 .pin-grid .pin-item.dropping { z-index: 5; transition: translate var(--standard) var(--ease), scale var(--standard) var(--ease); }
 
-/* With nothing pinned: one calm card that says how. */
+/* With nothing pinned: one calm line on a card, with the pin's glyph. No heading over it: it is not a section yet. */
 .pin-hint {
   position: relative; display: flex; align-items: center; gap: 14px;
-  margin: 0 var(--gutter); padding: 16px 18px 16px 16px; border-radius: var(--r-group);
+  margin: 16px var(--gutter) 0; padding: 12px 18px 12px 12px; border-radius: var(--r-group);
   background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line);
 }
 .pin-hint .ic-c { flex: none; width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--surface-2); color: var(--icon-2); }
-.pin-hint-t { min-width: 0; }
-.pin-hint .t-row { margin: 0; }
-.pin-hint .t-cap { margin: 3px 0 0; }
+.pin-hint .t-row { margin: 0; min-width: 0; }
 
 /* ---- page chrome for pushed pages ------------------------------------------------------------ */
 
@@ -233,16 +231,11 @@
 }
 .room-photo-card .room-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .room-photo-card .room-art { position: absolute; right: 24px; top: 40px; width: 180px; height: 180px; opacity: .18; }
-.room-photo-card .badge {
-  position: absolute; left: 16px; top: 16px; width: 56px; height: 56px; border-radius: 28px;
-  display: grid; place-items: center; background: var(--bg); color: #F5F4F2; font-size: 22px; font-weight: 500;
-}
+/* Add a photo on a drawn room: the camera alone, a quiet 44 circle in the corner (its words are its aria-label). */
 .room-photo-card .add-photo {
-  position: absolute; right: 16px; top: 16px; height: 32px; padding: 0 16px 0 12px; border-radius: 16px; border: 0;
-  display: inline-flex; align-items: center; gap: 8px;
-  background: rgba(0, 0, 0, .28); color: var(--text-1); font-size: 13px; font-weight: 500;
+  position: absolute; right: 16px; top: 16px; width: 44px; height: 44px; padding: 0; border-radius: 22px; border: 0;
+  display: grid; place-items: center; background: rgba(0, 0, 0, .28); color: var(--text-2);
 }
-.room-photo-card .add-photo .ic { color: var(--text-3); }
 /* The room's On and Off: the light page's switch (components.css .onoff) in the old pair of buttons' place and glass,
    so it reads over any picture: a 64 tall track 12 in from the photograph's edges at 224, 6 of padding, and two 52
    tall halves. The pill is the light page's flat copper. */
@@ -254,13 +247,10 @@
 }
 .room-onoff button { height: 52px; border-radius: 26px; min-width: 0; gap: 10px; color: var(--text-1); font-size: 18px; font-weight: 500; white-space: nowrap; }
 .room-onoff.onoff button[aria-pressed='true'] { box-shadow: none; }
-/* "On · 12 of 14" fits a 360 phone's half (139) with its icon; the gap closes a little on a narrow phone to be sure,
-   and the words would end in an ellipsis before they ever left the half */
 .room-onoff button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 400px) { .room-onoff.long button:first-child { gap: 6px; } }
 .room-onoff .onoff-pill { height: 52px; border-radius: 26px; background: var(--copper); }
 /* The room's brightness under its picture: Home's house bar, 16 below the picture, with the room's level beside it
-   (tabular, so it does not shuffle under a finger). Off, the bar rests empty and the words say Off. */
+   (tabular, so it does not shuffle under a finger). Off, the bar rests empty and says nothing: the Off pill has. */
 .room-bright { display: flex; align-items: center; gap: 12px; margin: 16px var(--gutter) 0; }
 .room-bright .hbar { flex: 1; touch-action: pan-y; cursor: pointer; }
 .room-bright .rb-lv { width: 48px; text-align: right; font-size: 18px; font-weight: 500; line-height: 22px; color: var(--text-1); font-variant-numeric: tabular-nums; }
@@ -700,9 +690,8 @@
 /* Words that are buttons here (Remove and Change on the photo, Got it, Enter exact on the colour, the greeting on
    Home) keep their look and their place but answer a finger over 44 px: padding round the words, given back by an equal
    negative margin. Remove and Change sit 12 apart, so theirs meet between them. Add a photo on a room's picture is a
-   32 tall pill, so an invisible band above and below it takes the tap. */
+   44 circle of its own. */
 .setup .photo-row .link, .info-card .link, [data-act="colour-exact"], .home-head button.greet { padding: 14px 6px; margin: -14px -6px; }
-.room-photo-card .add-photo::after { content: ''; position: absolute; inset: -6px 0; }
 
 /* ---- 14 All scenes ------------------------------------------------------------------------------ */
 
@@ -718,12 +707,10 @@
 .scene-tile:active { transform: scale(.97); }
 .scene-tile.current { background: var(--copper); }
 .scene-tile .sdots { position: absolute; left: 16px; top: 18px; }
-.scene-tile .st { position: absolute; left: 144px; top: 16px; color: var(--text-2); }
-.scene-tile.current .st { color: #fff; }
-.scene-tile .nm { position: absolute; left: 16px; top: 64px; right: 16px; font-size: 20px; font-weight: 500; line-height: 26px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scene-tile .vl { position: absolute; left: 16px; top: 92px; right: 12px; font-size: 14px; line-height: 20px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scene-tile .ar { position: absolute; left: 16px; top: 116px; font-size: 12px; line-height: 16px; color: var(--text-4); }
-.scene-tile.current .vl, .scene-tile.current .ar { color: #fff; }
+/* Its name and room sit where a device tile's name and value do. */
+.scene-tile .nm { position: absolute; left: 16px; top: 88px; right: 16px; font-size: 20px; font-weight: 500; line-height: 26px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-tile .vl { position: absolute; left: 16px; top: 116px; right: 12px; font-size: 14px; line-height: 20px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-tile.current .vl { color: #fff; }
 .sdots { display: flex; }
 .sdots i { display: block; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--ring, var(--surface-1)); flex: none; }
 .sdots.s16 i { width: 16px; height: 16px; margin-right: -4px; }
@@ -735,12 +722,12 @@
 .scene-row .sdots { width: 44px; flex: none; }
 .scene-row .row-txt { padding-left: 4px; }
 .scene-row + .scene-row::before { left: 76px; }
-.suggest-card { position: relative; margin: 0 var(--gutter); padding: 16px 16px 16px 68px; border-radius: 24px; background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line); }
-.suggest-card .ic-c { position: absolute; left: 16px; top: 16px; width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--surface-2); }
-.suggest-card .t { font-size: 16px; font-weight: 500; line-height: 22px; }
-.suggest-card p { margin: 2px 0 0; font-size: 14px; line-height: 20px; color: var(--text-2); }
-.suggest-card .btns { display: flex; gap: 12px; margin-top: 20px; }
-.scenes-page .foot { margin: 8px var(--gutter) 0; line-height: 20px; }
+/* A room with no scenes yet: one row that suggests them, and Not now. */
+.suggest-card .row { cursor: pointer; }
+.suggest-card .row-ic { color: var(--icon-2); }
+.suggest-card .link { flex: none; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 500; color: var(--text-2); padding: 12px 0 12px 12px; }
+.scenes-empty { margin: 32px var(--gutter) 0; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.scenes-empty p { margin: 0; }
 
 /* ---- 15 A scene ---------------------------------------------------------------------------------- */
 
@@ -773,11 +760,8 @@
 .arrive { padding: 16px 0; }
 .arrive .arr-head { display: flex; justify-content: space-between; align-items: center; padding: 0 16px; margin-bottom: 18px; }
 .arrive .arr-head .t { font-size: 16px; font-weight: 500; line-height: 22px; }
-.arrive .arr-head .v { font-size: 14px; color: var(--text-2); }
 .arrive .chip-wrap { padding: 0 16px; gap: 6px; }
 .arrive .chip { padding: 0 14px; }
-.scene-note { display: flex; gap: 10px; margin: 0 var(--gutter) 16px; font-size: 14px; line-height: 20px; color: var(--text-2); }
-.scene-note .ic { margin-top: 2px; flex: none; }
 
 /* ==== Phase 4 ======================================================================================== */
 
@@ -1156,7 +1140,7 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .connect-card { margin: 0 var(--gutter) 16px; padding: 20px; border-radius: var(--r-card); background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line); }
 .connect-card .ic-c { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 22px; background: var(--surface-2); color: var(--blue-hi); margin-bottom: 14px; }
 .connect-card p { margin: 0; }
-.connect-card .t-cap { margin: 4px 0 16px; line-height: 20px; }
+.connect-card .t-row { margin-bottom: 16px; }
 
 /* ---- 12 the connection sheet ------------------------------------------------------------------------- */
 .conn { padding-bottom: 8px; }

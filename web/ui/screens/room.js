@@ -4,7 +4,7 @@
 // v7 · 6, a scene arriving (12814:48798): a tapped chip lights first, then a ring of light leaves it and walks out
 // across the page at the wave token (60 ms per 100 px). Each tile, and the photograph's light, crossfades when the
 // ring reaches it or when its light's state arrives, whichever is later, so a slow bridge shows as a tile catching up
-// and never as a lie. The count and the badge settle last, and the toast offers Put back.
+// and never as a lie. The count settles last, and the toast offers Put back.
 import { tile, roomPicture, pinButton } from '/ui/screens/parts.js';
 import { roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
@@ -41,9 +41,9 @@ const MOOD_GLYPH = { bright: 'sun', night: 'moon' };
 // ---------- the wave ----------
 // Times from the tap, read off the frame's keyframes: the press lands (tap, 0.12 s) and only then does the ring
 // leave; it reaches a thing 0.6 ms per px away (the wave token); what it reaches crossfades over the scene's 1.0 s;
-// the count and the badge settle over the standard 0.24 s once the last thing reached has arrived.
+// the count settles over the standard 0.24 s once the last thing reached has arrived.
 const T = { tap: 120, perPx: 0.6, scene: 1000, standard: 240, ring: 360 };
-let wave = null;   // { kind: 'run'|'same', id, aid, t0, x, y, fade, countWas, litWas, tone, tSet }
+let wave = null;   // { kind: 'run'|'same', id, aid, t0, x, y, fade, countWas, tone, tSet }
 const since = w => performance.now() - w.t0;
 // How long a wave's markup stays drawn: the ring, the settle, and a long fade's progress line under the chip.
 const lifeOf = w => (w.kind === 'same' ? 700 : Math.max(w.tSet || 1700, 1700));
@@ -61,7 +61,8 @@ const levelOf = v => (typeof v === 'object' && v ? Number(v.level) || 0 : typeof
 // the pin) and fourteen to sixteen at 28: "Master bedroom" was cut at 40 and at 32, and is whole at 28. A small phone
 // has less line and still cuts sooner.
 const titleFit = name => (name.length > 13 ? 'fit2' : name.length > 12 ? 'fit1' : '');
-const countText = (n, onN) => `${n === 1 ? '1 device' : `${n} devices`}${onN ? ` · ${onN} on` : ''}`;
+// Beside the title, how much is on, and nothing once it is all off: the Off pill says that.
+const countText = (n, onN) => (onN ? `${onN} on` : '');
 
 // The warmest light a scene brings, which is the colour its ring of light carries: a scene with a colour lamp in it
 // uses that lamp's colour, softer.
@@ -93,7 +94,7 @@ function roomLight(c, aid, lights) {
 // The room's brightness: Home's house bar (components.css .hbar), for this room. It moves the room's dimmable lights
 // that are on, all to the one level, and with none on it brings them all up to where the finger is: a drag, never a
 // tap, turns a room on. Its level is the mean of the lit ones, shown beside it and counted with the finger; with the
-// room off the bar rests empty and says Off. A room with nothing to dim (only switches, a fan, a shade) has none.
+// room off the bar rests empty. A room with nothing to dim (only switches, a fan, a shade) has none.
 const dimmable = (c, aid) => c.H.roomLights(aid).filter(d => d.domain === 'light');
 function brightTargets(c, aid) {
   const ls = dimmable(c, aid).map(d => d.device_id);
@@ -108,13 +109,13 @@ function brightHTML(c, aid) {
   if (!dimmable(c, aid).length) return '';
   const lv = brightLevel(c, aid);
   return `<div class="room-bright ${lv ? '' : 'off'}">
-      <div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="room-bright" data-id="${c.esc(aid)}" style="--pct:${lv}%" role="slider" aria-label="Brightness of this room's lights" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv || 0}">
+      <div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="room-bright" data-id="${c.esc(aid)}" style="--pct:${lv}%" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv || 0}">
         <span class="fill"></span>
         <span class="lo">${c.icon('sun', 22, 1.8)}</span>
         <span class="hi">${c.icon('sun', 26, 1.6)}</span>
         <span class="knob"></span>
       </div>
-      <span class="rb-lv" data-rblv>${lv ? `${lv}%` : 'Off'}</span>
+      <span class="rb-lv" data-rblv>${lv ? `${lv}%` : ''}</span>
     </div>`;
 }
 function wireBright(c, root) {
@@ -143,15 +144,14 @@ function wireBright(c, root) {
 
 // The room's On and Off: the light page's switch, so the room's state is plain at a glance. The copper pill sits under
 // On while anything in the room is on and under Off once it is all off, and slides on the standard curve when that
-// changes. On says how much is on in the count line's own numbers ("8 devices · 3 on" is "On · 3 of 8"). It comes
-// before the badge and the photo pill on the card, which come and go, so a redraw pairs it with itself and the pill
-// slides rather than jumps (motion.js pairs elements by their place).
-function powerHTML(c, aid, n, onN) {
+// changes. How much is on is the count beside the title, once. It comes before the photo button on the card, which
+// comes and goes, so a redraw pairs it with itself and the pill slides rather than jumps (motion.js pairs elements by
+// their place).
+function powerHTML(c, aid, onN) {
   const { icon, esc } = c;
   const on = onN > 0;
-  const word = on ? `On · ${onN} of ${n}` : 'On';
-  return `<div class="onoff room-onoff ${word.length > 11 ? 'long' : ''}">
-        <button data-act="room-on" data-id="${esc(aid)}" aria-pressed="${on}">${icon('power', 22, 2)}<span>${esc(word)}</span></button>
+  return `<div class="onoff room-onoff">
+        <button data-act="room-on" data-id="${esc(aid)}" aria-pressed="${on}">${icon('power', 22, 2)}<span>On</span></button>
         <button data-act="room-off" data-id="${esc(aid)}" aria-pressed="${!on}">${icon('power', 22, 2)}<span>Off</span></button>
         <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>
       </div>`;
@@ -191,17 +191,14 @@ export function view(c, r) {
   const newScene = canToggle ? `<button class="chip lead" data-act="room-scene-new" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}New scene</button>` : '';
   const scenesHead = scenes.length ? `<div class="room-sec"><span class="t-over">Scenes</span><button class="link" data-act="room-scenes-edit" data-id="${esc(aid)}" aria-pressed="${editing}">${editing ? 'Done' : 'Edit'}</button></div>` : '';
   const saveLook = litN && !cur && !w && !editing ? `<button class="chip lead" data-act="save-look" data-id="${esc(aid)}">${icon('plus', 16, 1.8)}Save this look</button>` : '';
-  const suggest = !editing && !scenes.length && H.roomDimmers(aid).length ? `<button class="chip lead" data-act="suggest-five" data-id="${esc(aid)}">${icon('sparkle', 16, 1.8)}Suggest five scenes</button>` : '';
+  const suggest = !editing && !scenes.length && H.roomDimmers(aid).length ? `<button class="chip lead" data-act="suggest-five" data-id="${esc(aid)}">${icon('sparkle', 16, 1.8)}Suggest scenes</button>` : '';
 
-  // While a wave is out, the count and the badge hold what they said before the tap and settle to what is true now
-  // at their own time; the stylesheet's keyframes do it, timed from the tap in after().
+  // While a wave is out, the count holds what it said before the tap and settles to what is true now at its own
+  // time; the stylesheet's keyframes do it, timed from the tap in after().
   const count = countText(ds.length, onN);
   const countHTML = w && w.kind === 'run'
     ? `<span class="count wv-two" data-wvp="settle"><span class="wv-was">${esc(w.countWas)}</span><span class="wv-now">${esc(count)}</span></span>`
     : `<span class="count" data-xf>${esc(count)}</span>`;
-  const badgeHTML = w && w.kind === 'run' && (litN || w.litWas)
-    ? `<span class="badge wv-two" aria-label="${litN} on"><svg class="wv-ring" data-wvp="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="27" pathLength="1"/></svg><span class="wv-was" data-wvp="settle">${w.litWas || ''}</span><span class="wv-now" data-wvp="settle">${litN || ''}</span></span>`
-    : litN ? `<span class="badge" data-xf aria-label="${litN} on">${litN}</span>` : '';
   const layer = w ? waveLayer(w) : '';
 
   return `<div class="room">
@@ -218,16 +215,15 @@ export function view(c, r) {
     <div class="room-photo-card ${photo ? '' : 'scene'}">
       ${roomPicture(c, aid, a.name, 'page')}
       ${photo ? roomLight(c, aid, lights) : ''}
-      ${canToggle ? powerHTML(c, aid, ds.length, onN) : ''}
-      ${badgeHTML}
-      ${photo ? '' : `<button class="add-photo" data-go="room/${esc(aid)}/setup">${icon('camera', 16, 1.8)}Add a photo</button>`}
+      ${canToggle ? powerHTML(c, aid, onN) : ''}
+      ${photo ? '' : `<button class="add-photo" data-go="room/${esc(aid)}/setup" aria-label="Add a photo">${icon('camera', 20, 1.7)}</button>`}
     </div>
     ${brightHTML(c, aid)}
     ${scenesHead}
     ${scenes.length || saveLook || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${saveLook}${suggest}${newScene}</div>` : ''}
     ${ds.length
       ? `<div class="tile-grid room-grid">${ds.map(d => tile(c, d)).join('')}</div>`
-      : `<div class="group room-empty"><button class="row sub has-ic" data-go="room/${esc(aid)}/setup"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Nothing in this room yet</span><span class="d">Move a light or a remote in here.</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>`}
+      : `<div class="group room-empty"><button class="row sub has-ic" data-go="room/${esc(aid)}/setup"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Move something in here</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>`}
     ${layer}
   </div>`;
 }
@@ -256,12 +252,10 @@ export function after(c, r, scr) {
     return T.tap + Math.hypot(b.left + b.width / 2 - box.left - w.x, b.top + b.height / 2 - box.top - w.y) * T.perPx;
   };
   const targets = [...room.querySelectorAll('.room-grid .tile, .rp-light')];
-  const badge = room.querySelector('.room-photo-card .badge');
   // the count settles once the last thing on screen the ring reaches has had its second to arrive
   if (w.tSet == null) {
     const seen = targets.filter(el => el.getBoundingClientRect().top < innerHeight);
-    w.tSet = Math.max(badge ? arrival(badge) : 0, ...seen.map(arrival), T.tap) + T.scene;
-    w.ringAt = badge ? arrival(badge) : T.tap;
+    w.tSet = Math.max(...seen.map(arrival), T.tap) + T.scene;
   }
   const el0 = since(w);
   const delay = (el, t) => { el.style.animationDelay = `${Math.round(t - el0)}ms`; };
@@ -269,7 +263,6 @@ export function after(c, r, scr) {
     const k = el.dataset.wvp;
     if (k === 'spark' || k === 'soft' || k === 'prog') delay(el, 0);
     else if (k === 'wave') delay(el, T.tap);
-    else if (k === 'ring') delay(el, w.ringAt);
     else if (k === 'settle') for (const s of el.matches('.wv-was, .wv-now') ? [el] : el.children) delay(s, w.tSet);
   }
   // The crossfades motion.js has just started for tiles whose light changed: each one waits for the ring. They are
@@ -349,11 +342,10 @@ async function runWave(c, el, r, p) {
     c.turn({ type: 'preset', preset_id: p.id });
     return;
   }
-  const lights = c.H.roomLights(aid);
   const ds = c.data.controllable().filter(d => c.data.devArea(d) === aid);
   const onN = ds.filter(d => c.data.isOn(d.device_id) && d.domain !== 'cover').length;
   const fade = p.fade == null ? 1 : Number(p.fade) || 0;
-  const me = wave = { kind: 'run', id: p.id, aid, t0, x, y, fade, tone: sceneTone(c, p), countWas: countText(ds.length, onN), litWas: lights.filter(d => (c.data.level(d.device_id) || 0) > 0).length };
+  const me = wave = { kind: 'run', id: p.id, aid, t0, x, y, fade, tone: sceneTone(c, p), countWas: countText(ds.length, onN) };
   const before = snapshot(c, p);
   // the house is asked now, and each tile is shown where the scene puts it from the tap, crossfading over the scene's
   // 1.0 s rather than stepping through every level the bridge reports on the way (app.js turn)
@@ -381,7 +373,7 @@ async function runWave(c, el, r, p) {
 
 function gone(c) {
   return `<div class="room"><header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${c.icon('back', 22, 1.7)}</button></header>
-    <h1 class="t-h1 page-h1">That room is gone</h1><p class="t-body muted soon">It is no longer in your home.</p></div>`;
+    <h1 class="t-h1 page-h1">That room is gone</h1></div>`;
 }
 
 // Edit stays on while the room's scenes are changed over it (their editors are the room's own addresses) and is off

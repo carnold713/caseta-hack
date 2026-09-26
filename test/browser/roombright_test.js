@@ -57,12 +57,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   let lv = await levels();
   check('the drag moves the lights that are on, to where the finger is; the one that was off stays off', sent && sent[1] === 30 && sent[0].length === 1 && lv[0] === 30 && lv[1] === 0, { sent, lv });
 
-  // ---- off: the bar rests empty and says Off, and a drag brings the room up
+  // ---- off: the bar rests empty and says nothing (the Off pill has), and a drag brings the room up
   // (after the 1.5 s this phone holds its own level against the bridge's echoes, data.hold)
   await wait(800);
   await setAll([0, 0]); await wait(1400);
   const off = await C(() => { const b = document.querySelector('.room-bright'); return { off: b.classList.contains('off'), lv: b.querySelector('[data-rblv]').textContent, now: b.querySelector('.hbar').getAttribute('aria-valuenow') }; });
-  check('with the room off the bar rests empty and says Off', off.off && off.lv === 'Off' && off.now === '0', off);
+  check('with the room off the bar rests empty, with no words beside it', off.off && off.lv === '' && off.now === '0', off);
   await C(() => { window.__lv = []; });
   await drag(0.1, 0.5);
   lv = await levels();

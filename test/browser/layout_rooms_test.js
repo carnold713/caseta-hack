@@ -270,13 +270,12 @@ function badFrames(before, after, frames) {
   check('the room page has On and Off in place of All on and All off', !!t0 && !t0.old && t0.offWord === 'Off', t0);
   await C(() => document.querySelector('#screen [data-act="room-on"]').click()); await wait(1600);
   let t1 = await toggle();
-  const cm = /^(\d+) devices? · (\d+) on$/.exec(t1.count);
-  check('with anything on, the pill is under On, and On says how much in the count line\'s numbers', t1.under === 'on' && t1.onPressed === 'true' && !!cm && t1.word === `On · ${cm[2]} of ${cm[1]}`, t1);
+  check('with anything on, the pill is under On, On says just On, and the count beside the title says how many', t1.under === 'on' && t1.onPressed === 'true' && /^\d+ on$/.test(t1.count) && t1.word === 'On', t1);
   await C(() => document.querySelector('#screen [data-act="room-off"]').click());
   const moving = await C(() => new Promise(r => requestAnimationFrame(() => r(document.querySelector('#screen .room-onoff .onoff-pill').getAnimations().length))));
   await wait(1600);
   const t2 = await toggle();
-  check('Off turns it all off: the pill slides under Off and On says just On', moving > 0 && t2.under === 'off' && t2.onPressed === 'false' && t2.word === 'On' && /^\d+ devices?$/.test(t2.count), { moving, t2 });
+  check('Off turns it all off: the pill slides under Off and On says just On', moving > 0 && t2.under === 'off' && t2.onPressed === 'false' && t2.word === 'On' && t2.count === '', { moving, t2 });
   await C(() => document.querySelector('#screen [data-act="room-on"]').click()); await wait(1600);
   // back to the levels the rest of this test lays out
   await C(async p => { const c = window.__copper; if (p.long) await c.run({ type: 'level', target: `d:${p.long}`, level: 60 }); if (!p.ownColour) await c.run({ type: 'color', target: `d:${p.colour}`, hex: '#4C8DFF' }); }, plan); await wait(800);

@@ -32,52 +32,48 @@ const showing = (c, p) => Object.keys(p.levels || {}).length > 0 && c.H.levelsMa
 
 // ---------- 14 · the list ----------
 export function view(c, r) {
-  const { data, H, esc, icon, EDIT } = c;
+  const { data, H, esc, icon } = c;
   // with no scene open, the next one opens with "Show it on the room" off again
   if (!r || !r.id) { c.ui.stageFor = null; c.ui.sceneShow = false; }
   const all = data.presets(), theirs = data.lutronScenes();
   const favs = (c.S.config.favorites || []);
   const pinned = favs.map(t => (t.startsWith('p:') ? all.find(p => p.id === t.slice(2)) : null)).filter(Boolean);
+  // A pinned scene is a tile: its colours, its name and its room (the Pinned heading over them says the rest).
   const tile = p => {
     const cur = showing(c, p);
-    const n = Object.keys(p.levels).length;
     return `<div class="scene-tile ${cur ? 'current' : ''}" data-act="scene-run" data-hold="scene-edit" data-ms="500" data-id="${esc(p.id)}" role="button" tabindex="0" aria-label="Run ${esc(H.sceneShortName(p))}">
       ${dots(c, p, 16, cur ? '#D98A4E' : 'var(--surface-1)')}
-      <span class="st pin pinned">${icon('pin', 20, 1.8)}</span>
       <span class="nm">${esc(H.sceneShortName(p))}</span>
-      <span class="vl">${esc([p.area ? data.areaName(p.area) : null, EDIT.lightsText(n)].filter(Boolean).join(' · '))}</span>
-      <span class="ar">Arrives in ${EDIT.fadeText(p.fade)}</span></div>`;
+      <span class="vl">${esc(p.area ? data.areaName(p.area) : '')}</span></div>`;
   };
   const row = p => `<div class="row scene-row" data-act="scene-run" data-hold="scene-edit" data-ms="500" data-id="${esc(p.id)}" role="button" tabindex="0">
       ${dots(c, p, 14, 'var(--surface-2)')}<span class="row-txt"><span class="t">${esc(H.sceneShortName(p))}</span></span>
-      <span class="row-val">${EDIT.lightsText(Object.keys(p.levels).length)}</span>
       <button class="row-chev as-btn" data-go="scenes/${esc(p.id)}" aria-label="Change ${esc(H.sceneShortName(p))}">${icon('chev', 16, 1.8)}</button></div>`;
   const rooms = data.areas();
   const groups = rooms.map(a => {
     const ps = H.roomScenes(a.id);
     if (ps.length) return `<div class="t-over sec">${esc(a.name)}</div><div class="group">${ps.map(row).join('')}</div>`;
-    // a room with dimmers and no scenes yet is offered the five, once, until it says not now
+    // a room with dimmers and no scenes yet is offered the five, in one row, until it says not now
     if (H.roomDimmers(a.id).length && !notNow().includes(a.id)) return `<div class="t-over sec">${esc(a.name)}</div>
-      <div class="suggest-card"><span class="ic-c">${icon('sparkle', 20, 1.7)}</span><div class="t">No scenes yet</div>
-        <p>Add Bright, Relax, Dinner, Movie and Night, made from what each light is for.</p>
-        <div class="btns"><button class="pill blue" data-act="scenes-five" data-area="${esc(a.id)}">Add all five</button><button class="pill ghost" data-act="scenes-notnow" data-area="${esc(a.id)}">Not now</button></div></div>`;
+      <div class="group suggest-card"><div class="row has-ic" data-act="scenes-five" data-area="${esc(a.id)}" role="button" tabindex="0"><span class="row-ic">${icon('sparkle', 20, 1.7)}</span>
+        <span class="row-txt"><span class="t">Suggest scenes</span></span>
+        <button class="link" data-act="scenes-notnow" data-area="${esc(a.id)}">Not now</button></div></div>`;
     return '';
   }).join('');
   const loose = all.filter(p => !p.area || !rooms.some(a => a.id === p.area));
   const lutron = theirs.map(sc => `<div class="row scene-row" data-act="scene-run-lutron" data-hold="scene-lutron" data-ms="500" data-sid="${esc(sc.scene_id)}" role="button" tabindex="0">
-      ${lutronDots(14)}<span class="row-txt"><span class="t">${esc(sc.name)}<span class="chip tag">Lutron</span></span></span><span class="row-val">Run</span></div>`).join('');
+      ${lutronDots(14)}<span class="row-txt"><span class="t">${esc(sc.name)}</span></span></div>`).join('');
   return `<div class="scenes-page">
     <header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       <button class="hdr-btn a1" data-act="scene-new" aria-label="New scene">${icon('plus', 22, 1.7)}</button>
     </header>
     <h1 class="t-h1 page-h1 bar-t bar-pin">Scenes</h1>
-    <p class="t-cap muted fd-sub">Tap to run · press and hold to edit</p>
     ${pinned.length ? `<div class="t-over sec first">Pinned</div><div class="tile-grid scene-grid">${pinned.map(tile).join('')}</div>` : ''}
     ${groups}
     ${loose.length ? `<div class="t-over sec">Not in a room</div><div class="group">${loose.map(row).join('')}</div>` : ''}
-    ${lutron ? `<div class="t-over sec">From Lutron app</div><div class="group">${lutron}</div><p class="t-cap muted foot">Edit these in the Lutron app</p>` : ''}
-    ${!all.length && !theirs.length ? `<p class="t-body muted soon">Set your lights the way you like them, then tap + to save that look. A remote button can run it later.</p>` : ''}
+    ${lutron ? `<div class="t-over sec">Lutron app</div><div class="group">${lutron}</div>` : ''}
+    ${!all.length && !theirs.length ? `<div class="scenes-empty"><p class="t-body muted">No scenes yet</p><button class="pill ghost" data-act="scene-new">New scene</button></div>` : ''}
   </div>`;
 }
 
@@ -289,17 +285,13 @@ export function sceneSheet(c, p) {
   const od = atStage && open && open in p.levels ? c.data.dev(open) : null;
   const orbEdit = od ? `<div class="sc-edit"><div class="sc-edit-h"><span>${esc(od.name)}</span><button class="link" data-act="stage-close">Done</button></div>${lightEditor(c, p, od)}</div>` : '';
   const fade = p.fade == null ? 1 : p.fade;
-  const note = p.mood
-    ? (p.edited
-      ? `<p class="scene-note">${icon('sparkle', 18, 1.7)}<span>Changed by you, so refreshing the suggestions leaves it alone. <button class="link blue" data-act="scene-suggest">Back to the suggestion</button></span></p>`
-      : `<p class="scene-note">${icon('sparkle', 18, 1.7)}<span>Changing a suggested scene makes it yours: refreshes won’t touch it.</span></p>`)
-    : '';
+  // a suggested scene someone has changed can go back to the suggestion; nothing explains how suggestions work
+  const back = p.mood && p.edited ? `<button class="row" data-act="scene-suggest"><span class="row-txt"><span class="t">Back to the suggestion</span></span></button>` : '';
   return {
-    over: p.area ? `Scene · ${data.areaName(p.area)}` : 'Scene',
+    over: p.area ? data.areaName(p.area) : 'Scene',
     title: H.sceneShortName(p),
     head: `<button class="head-btn pin" data-act="scene-pin" aria-pressed="${pinned}" aria-label="${pinned ? 'Pinned to Home' : 'Pin to Home'}">${icon('pin', 18, 1.7)}</button>`,
     body: `<div class="scene-sheet">
-      <p class="sc-cap">${esc([EDIT.lightsText(ds.length), p.area ? data.areaName(p.area) : null].filter(Boolean).join(' · '))}</p>
       ${stageHTML(c, p, ds)}
       ${orbEdit}
       <div class="sc-play">
@@ -311,14 +303,14 @@ export function sceneSheet(c, p) {
         <button class="row" data-act="scene-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val">${esc(H.sceneShortName(p))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
         <button class="row" data-act="scene-room"><span class="row-txt"><span class="t">Room</span></span><span class="row-val">${esc(p.area ? data.areaName(p.area) : 'Any room')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       </div>
-      <div class="t-over sec">Lights · ${ds.length}</div>
+      <div class="t-over sec">Lights</div>
       <div class="group">${lights}
         <button class="row add-row" data-act="scene-add"><span class="add-ic">${icon('plus', 24, 1.8)}</span><span class="row-txt"><span class="t">Add a light</span></span></button></div>
-      <div class="group arrive"><div class="arr-head"><span class="t">Arrives in</span><span class="v">${EDIT.fadeText(p.fade)}</span></div>
+      <div class="group arrive"><div class="arr-head"><span class="t">Arrives in</span></div>
         <div class="chip-wrap">${EDIT.FADES.map(s => `<button class="chip" aria-pressed="${s === fade}" data-act="scene-fade" data-s="${s}">${EDIT.fadeText(s)}</button>`).join('')}</div></div>
-      ${note}
       <div class="group">
         <button class="row" data-act="scene-capture"><span class="row-txt"><span class="t">Use the lights as they are now</span></span></button>
+        ${back}
       </div>
       <div class="group"><button class="row" data-act="scene-delete"><span class="row-txt"><span class="t">Delete scene</span></span></button></div>
     </div>`,
@@ -346,7 +338,7 @@ function lutronSheet(c, sc) {
   return {
     over: 'From the Lutron app', title: sc.name,
     head: `<button class="head-btn pin" data-act="lutron-pin" aria-pressed="${pinned}" aria-label="${pinned ? 'Pinned to Home' : 'Pin to Home'}">${c.icon('pin', 18, 1.7)}</button>`,
-    body: `<p class="t-body muted sheet-p">This look was made in the Lutron app. Change it there and it changes here too.</p>
+    body: `<p class="t-body muted sheet-p">Change it in the Lutron app.</p>
       <div class="sheet-btns"><button class="pill solid" data-act="scene-run-lutron" data-sid="${c.esc(sc.scene_id)}">Try it</button></div>`,
   };
 }
@@ -397,7 +389,7 @@ export const actions = {
   'scene-name-set'(c, el, r, value) { const p = cur(c, r); if (!p) return; c.EDIT.renameScene(p, value); c.saveSoon(); },
   'scene-room'(c, el, r) {
     const p = cur(c, r); if (!p) return;
-    c.openPicker('room', c2 => roomPicker(c2, { over: c2.H.sceneShortName(p), title: 'Which room?', current: p.area || '', act: 'scene-room-to', none: { label: 'Any room', sub: 'Listed on its own, not on a room page' }, newRoom: false }));
+    c.openPicker('room', c2 => roomPicker(c2, { over: c2.H.sceneShortName(p), title: 'Which room?', current: p.area || '', act: 'scene-room-to', none: { label: 'Any room' }, newRoom: false }));
   },
   'scene-room-to'(c, el, r) { const p = cur(c, r); if (!p) return; c.EDIT.sceneSetRoom(p, el.dataset.room || null); c.closePicker(); c.save(p.area ? `${c.H.sceneShortName(p)} is a ${c.data.areaName(p.area)} scene` : `${c.H.sceneShortName(p)} is not in a room`); },
   'sl-open'(c, el) { const id = el.dataset.id; c.ui.sceneOpen = c.ui.sceneOpen === id && c.ui.sceneOpenAt !== 'stage' ? null : id; c.ui.sceneOpenAt = 'list'; c.render(); },
@@ -428,7 +420,7 @@ export const actions = {
     c.openPicker('add', c2 => {
       const out = c2.data.controllable().filter(d => d.domain !== 'cover' && !(d.device_id in p.levels));
       const groups = c2.data.areas().map(a => { const ds = out.filter(d => c2.data.devArea(d) === a.id); return ds.length ? `<div class="t-over sec">${c2.esc(a.name)}</div><div class="group">${ds.map(d => `<button class="row" data-act="scene-add-go" data-id="${c2.esc(d.device_id)}"><span class="row-txt"><span class="t">${c2.esc(d.name)}</span></span><span class="row-val">${levelWord(c2, d, d.domain === 'fan' ? ((c2.S.states[d.device_id] || {}).fan_speed || 'Off') : c2.data.level(d.device_id) || 0)}</span></button>`).join('')}</div>` : ''; }).join('');
-      return { over: c2.H.sceneShortName(p), title: 'Add a light', body: `<p class="t-body muted sheet-p">It joins at the level it is at now.</p>${groups || '<p class="t-body muted sheet-p">Every light is already in it.</p>'}` };
+      return { over: c2.H.sceneShortName(p), title: 'Add a light', body: `${groups || '<p class="t-body muted sheet-p">Every light is already in it.</p>'}` };
     });
   },
   'scene-add-go'(c, el, r) { const p = cur(c, r); if (!p) return; c.EDIT.sceneInclude(p, el.dataset.id, true); c.closePicker(); c.save('', { quiet: true }); },
@@ -439,7 +431,7 @@ export const actions = {
   'scene-delete'(c, el, r) {
     const p = cur(c, r); if (!p) return;
     c.openPicker('delete', c2 => confirmSheet(c2, { over: 'Scene', title: `Delete ${c2.H.sceneShortName(p)}?`, act: 'scene-delete-go', yes: 'Delete scene',
-      text: 'Any remote button that runs it stops running it. The lights stay as they are.' }));
+      text: 'Any remote button that runs it will stop.' }));
   },
   async 'scene-delete-go'(c, el, r) {
     const prev = JSON.stringify(c.S.config);

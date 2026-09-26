@@ -85,7 +85,7 @@ export function offlineCause(c) {
   if (which === 'Phone') return ['This phone is offline.', 'Your remotes still work.'];
   if (which === 'Server') return ["Can't reach the app's server.", 'Your remotes still work.'];
   if (which === 'Lutron bridge') return ["The Lutron bridge isn't answering.", 'Check it has power.'];
-  return ["The house computer isn't answering.", 'It may be restarting. Your remotes still work.'];
+  return ["The house computer isn't answering.", 'Your remotes still work.'];
 }
 export function offlineCard(c) {
   const [head, sub] = offlineCause(c);

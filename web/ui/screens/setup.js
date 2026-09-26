@@ -8,16 +8,14 @@ import { roomScene } from '/ui/roomscene.js';
 const seenKey = aid => `roomInfoSeen:${aid}`;
 const seen = aid => { try { return localStorage.getItem(seenKey(aid)) === '1'; } catch (_) { return false; } };
 
-// Where the bridges keep this room, in one plain sentence. Never a promise a bridge did not keep.
+// Where the bridges keep this room, said once and only when it would surprise someone: Lutron lights in a room the
+// bridge does not have show in their old rooms in other Lutron apps. Never a promise a bridge did not keep.
 function whereLine(c, aid) {
   const r = c.data.appRoom(aid);
   const mine = c.H.fileable().filter(d => c.data.devArea(d) === aid);
   const hasLutron = mine.some(d => !/^(hue_|nanoleaf_)/.test(String(d.device_id)));
-  const name = c.data.areaName(aid);
-  if (!r) return null;
-  if (r.bridge_area) return `Your Lutron bridge has a room of its own for ${name}, so a new Lutron device can go straight into it.`;
-  if (hasLutron) return `The Lutron bridge has no ‘${name}’ of its own, so other Lutron apps still show these lights where they were. This app is what decides where they live.`;
-  return `${name} is this app’s own room. Add a Lutron device to it and the bridge is asked for a room to match.`;
+  if (!r || r.bridge_area || !hasLutron) return null;
+  return 'Other Lutron apps still show these lights in their old rooms.';
 }
 
 export function setup(c, r) {
@@ -45,11 +43,11 @@ export function setup(c, r) {
           : `<button class="link blue" data-act="setup-photo">Add a photo</button><span class="ph-thumb ph-scene">${roomScene(c, aid, 'thumb')}</span>`}</div>
     </div>
     <div class="group">
-      ${lamps.length ? `<div class="row"><span class="row-txt"><span class="t">Follow the day for ${lamps.length === 1 ? esc(lamps[0].name) : `all ${lamps.length} lamps`}</span></span><button class="toggle" role="switch" aria-checked="${!!allFollow}" data-act="setup-follow" aria-label="Follow the day in this room"></button></div>` : ''}
-      <button class="row" data-act="setup-timer"><span class="row-txt"><span class="t">Sleep timer for this room</span></span><span class="row-val">${tLeft || 'Off'}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      ${lamps.length ? `<div class="row"><span class="row-txt"><span class="t">Follow the day</span></span><button class="toggle" role="switch" aria-checked="${!!allFollow}" data-act="setup-follow" aria-label="Follow the day"></button></div>` : ''}
+      <button class="row" data-act="setup-timer"><span class="row-txt"><span class="t">Sleep timer</span></span><span class="row-val">${tLeft || 'Off'}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
     <div class="group">
-      <button class="row" data-act="setup-lights"><span class="row-txt"><span class="t">Lights in this room</span></span><span class="row-val">${esc(c.EDIT.roomContents(aid))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+      <button class="row" data-act="setup-lights"><span class="row-txt"><span class="t">In this room</span></span><span class="row-val">${esc(c.EDIT.roomContents(aid))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row" data-go="remotes"><span class="row-txt"><span class="t">Remotes</span></span><span class="row-val nm-cut">${esc(remotes.length ? remotes.map(x => x.name).join(', ') : 'None')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     </div>
     ${where && !seen(aid) ? `<div class="info-card"><span class="ic-c">${icon('home', 18, 1.7)}</span><p>${esc(where)}</p><button class="link blue" data-act="setup-seen">Got it</button></div>` : ''}
@@ -146,7 +144,7 @@ export const actions = {
   'setup-delete'(c, el, r) {
     const name = c.data.areaName(r.id);
     c.openPicker('delete', c2 => confirmSheet(c2, { over: 'Room setup', title: `Delete ${name}?`, act: 'setup-delete-go', yes: 'Delete room',
-      text: 'Nothing is removed from your home: everything in it goes back to the room its bridge puts it in.' }));
+      text: 'Everything in it goes back to the room its bridge has it in.' }));
   },
   async 'setup-delete-go'(c, el, r) {
     const aid = r.id;

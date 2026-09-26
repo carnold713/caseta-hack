@@ -127,7 +127,7 @@ function arrivalCard(c, sc, { min = 0, time = '', date = '', state = 'soon' } = 
   else if (sc.only_if === 'all_off' && H.litLights().length) {
     // said plainly, so a skip is not a surprise
     const where = c.data.devAreaName(H.litLights()[0]) || H.litLights()[0].name;
-    cap = `Runs only if the house is dark. ${where} is on right now.`;
+    cap = `Only if the house is dark. ${where} is on.`;
   } else cap = `${name} on at ${time} · in ${min} min`;
   // the lantern's own light once it is on: the real light's level and white, tile scale
   let glow = '';
@@ -173,17 +173,18 @@ export function homeCards(c) {
     const off = due.sc !== sc;
     const sk = RT.skipping(sc);
     out += `<div class="card-row next-row" data-go="routine/${esc(sc.id)}" role="link"><span class="row-ic">${icon('clock', 20, 1.6)}</span>
-      <span class="row-txt"><span class="t">${esc(sc.name)}${off ? (due.sc.actions.some(a => a.type === 'raise') ? ' opens' : ' off') : ''} at ${esc(due.n.time)}</span><span class="d">Coming up</span></span>
+      <span class="row-txt"><span class="t">${esc(sc.name)}${off ? (due.sc.actions.some(a => a.type === 'raise') ? ' opens' : ' off') : ''} at ${esc(due.n.time)}</span></span>
       <button class="link blue" data-act="${sk ? 'next-unskip' : 'next-skip'}" data-id="${esc(sc.id)}" data-date="${esc(due.n.date)}">${sk ? "Don't skip" : 'Skip'}</button></div>`;
   }
   const lv = RT.curveLevelNow();
-  if (lv != null && lv < 100) out += `<button class="wd-home" data-go="routines/winddown">${icon('moon', 16, 1.6)}Evening wind-down is on · lights come on at ${lv}% now</button>`;
+  if (lv != null && lv < 100) out += `<button class="wd-home" data-go="routines/winddown">${icon('moon', 16, 1.6)}Wind-down · lights on at ${lv}%</button>`;
   const p = problem(c);
   const s = p || pick(c);
+  // A suggestion is its question alone; the why is in Settings' Ideas. A problem keeps its second line: what went wrong.
   if (s) {
     const tag = s.go ? `data-go="${esc(s.go)}"` : `data-act="${s.act}" data-id="${esc(s.id2 || '')}"`;
     out += `<div class="card-row next-row ${p ? 'warn' : ''}" ${tag} role="link"><span class="row-ic">${icon(p ? 'info' : 'sparkle', 20, 1.6)}</span>
-      <span class="row-txt"><span class="t">${esc(s.title)}</span>${s.reason ? `<span class="d">${esc(s.reason)}</span>` : ''}</span>
+      <span class="row-txt"><span class="t">${esc(s.title)}</span>${p && s.reason ? `<span class="d">${esc(s.reason)}</span>` : ''}</span>
       ${p ? (p.now ? `<button class="link blue" data-act="next-now" data-id="${esc(p.now)}">Turn it on</button>` : '') : `<button class="link" data-act="next-later" data-id="${esc(s.id)}">Not now</button>`}</div>`;
   }
   return out ? `<div class="next-cards">${out}</div>` : '';
@@ -194,12 +195,12 @@ export function greetingSheet(c) {
   const { esc, icon, data } = c;
   const x = home(c);
   const rows = [];
-  if (x.fresh) rows.push(`<button class="row has-ic" data-act="next-remote" data-id="${esc(x.fresh.device_id)}"><span class="row-ic">${icon('remote', 20, 1.4)}</span><span class="row-txt"><span class="t">Set up the ${esc(data.devAreaName(x.fresh))} remote</span><span class="d">Top on, bottom off, hold to dim</span></span></button>`);
-  if (x.noScenes.length) rows.push(`<button class="row has-ic" data-act="next-moods" data-id="${esc(x.noScenes[0])}"><span class="row-ic">${icon('sparkle', 20, 1.4)}</span><span class="row-txt"><span class="t">Suggest scenes for a room</span><span class="d">Bright, Relax, Dinner, Movie and Night</span></span></button>`);
-  if (x.outside.length) rows.push(`<button class="row has-ic" data-go="setup/welcome"><span class="row-ic">${icon('door', 20, 1.4)}</span><span class="row-txt"><span class="t">Lights on before you get home</span><span class="d">On as you arrive, off at bedtime</span></span></button>`);
+  if (x.fresh) rows.push(`<button class="row has-ic" data-act="next-remote" data-id="${esc(x.fresh.device_id)}"><span class="row-ic">${icon('remote', 20, 1.4)}</span><span class="row-txt"><span class="t">Set up the ${esc(data.devAreaName(x.fresh))} remote</span></span></button>`);
+  if (x.noScenes.length) rows.push(`<button class="row has-ic" data-act="next-moods" data-id="${esc(x.noScenes[0])}"><span class="row-ic">${icon('sparkle', 20, 1.4)}</span><span class="row-txt"><span class="t">Suggest scenes for a room</span></span></button>`);
+  if (x.outside.length) rows.push(`<button class="row has-ic" data-go="setup/welcome"><span class="row-ic">${icon('door', 20, 1.4)}</span><span class="row-txt"><span class="t">Lights on before you get home</span></span></button>`);
   rows.push(`<button class="row has-ic" data-act="sheet-close"><span class="row-ic">${icon('home', 20, 1.4)}</span><span class="row-txt"><span class="t">Just look around</span></span></button>`);
   const nd = data.controllable().length, np = data.remotes().length, nr = c.RT.lightRooms().length;
-  return { over: 'Welcome', title: 'Your home is connected', body: `<p class="t-body muted sheet-p">${nd} ${nd === 1 ? 'light' : 'lights'} in ${nr} ${nr === 1 ? 'room' : 'rooms'}${np ? `, and ${np} ${np === 1 ? 'remote' : 'remotes'}` : ''}. Where would you like to start?</p><div class="group">${rows.join('')}</div>` };
+  return { over: 'Welcome', title: 'Your home is connected', body: `<p class="t-body muted sheet-p">${nd} ${nd === 1 ? 'light' : 'lights'} in ${nr} ${nr === 1 ? 'room' : 'rooms'}${np ? `, ${np} ${np === 1 ? 'remote' : 'remotes'}` : ''}.</p><div class="group">${rows.join('')}</div>` };
 }
 export const shouldGreet = c => !!(c.S.config && !c.S.config.settings.greeted && c.S.agent.online && c.data.controllable().length);
 

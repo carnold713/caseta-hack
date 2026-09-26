@@ -59,7 +59,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await setFavs([]);
     await go('home');
     const hint = await C(() => { const h = document.querySelector('#screen .pin-hint'); return h && h.textContent.replace(/\s+/g, ' ').trim(); });
-    check('with nothing pinned, Home shows the card that says how', !!hint && /Pin lights and rooms here/.test(hint) && /pin/.test(hint.slice(26)), hint);
+    check('with nothing pinned, Home shows one line with the pin\'s glyph, and no heading over it', hint === 'Pin lights and rooms here' && (await C(() => !!document.querySelector('#screen .pin-hint .ic-c svg'))) && !(await C(() => [...document.querySelectorAll('#screen .t-over')].some(e => e.textContent.trim() === 'Pinned'))), hint);
     check('and no Edit and no grid', !(await page.$('#screen [data-act="pins-edit"]')) && !(await page.$('#screen .pin-grid')));
     await scroll(0); await shot('home-0');
 
@@ -125,7 +125,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await page.click(`#screen .pin-room[data-go="room/${plan.r1}"] .pwr`); await wait(1500);
     check('and back again', (await roomLit()) !== lit1);
     const status = await C(a => document.querySelector(`#screen .pin-room[data-go="room/${a}"] .vl`).textContent, plan.r1);
-    check("the card says how much is on, as Rooms does", /^(All off|\d+ of \d+ on · \d+%)$/.test(status), status);
+    check("the card says how much is on, as Rooms does", /^(Off|\d+%|\d+ on · \d+%)$/.test(status), status);
     await page.click(`#screen .pin-room[data-go="room/${plan.r1}"] .nm`);
     const opened = await C(() => new Promise(r => { const t0 = performance.now(); const f = () => (document.querySelector('.m10-top') ? r(true) : performance.now() - t0 > 600 ? r(false) : requestAnimationFrame(f)); f(); }));
     await wait(1200);

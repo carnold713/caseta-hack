@@ -2,7 +2,7 @@
 // the whole-house card, in a two column grid in the order they were pinned. A pinned light is its ordinary tile (the
 // power circle switches it, the rest opens it); a pinned room is a card the same size with its picture, its name, how
 // much is on and a power circle for the room (parts.js pinRoomCard). Pinned scenes stay a row of chips under it
-// (home.js). With nothing pinned, a small card says how to pin something instead.
+// (home.js). With nothing pinned, one small card with the pin's glyph stands in its place.
 //
 // Edit, on the heading, puts the grid in edit mode until Done: each item gets a small x that unpins it, and a finger
 // held on an item for 0.3 s picks it up to drag it somewhere else in the grid. The others make room on the standard
@@ -23,8 +23,8 @@ export function pinnedHTML(c) {
   const { esc, icon } = c;
   const items = c.H.pinned();
   if (!items.length) {
-    return `<div class="t-over sec pin-over">Pinned</div>
-      <div class="pin-hint"><span class="ic-c">${icon('pin', 20, 1.7)}</span><div class="pin-hint-t"><p class="t-row">Pin lights and rooms here</p><p class="t-cap muted">Tap the pin on a light's or a room's page.</p></div></div>`;
+    // one line: the glyph is the pin a light's or a room's page carries, which is all the how it needs
+    return `<div class="pin-hint"><span class="ic-c">${icon('pin', 20, 1.7)}</span><p class="t-row">Pin lights and rooms here</p></div>`;
   }
   const editing = !!c.ui.pinEdit;
   const item = p => {

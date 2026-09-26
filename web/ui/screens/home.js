@@ -74,12 +74,6 @@ function houseLight(c) {
   return topLight(c, 'house', lamps, level, 'house-light');
 }
 
-// Where the lights that are on are: "Office", "Office and Kitchen", "3 rooms".
-function litWhere(c, lit) {
-  const names = [...new Set(lit.map(d => c.data.devAreaName(d)).filter(Boolean))];
-  if (!names.length) return '';
-  return names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} rooms`;
-}
 // What "All on" will do to brightness right now: the evening's level while the wind-down holds lights down.
 function allOnLevel(c) {
   const base = Number(c.S.config.settings.group_on_level) || 100;
@@ -104,14 +98,15 @@ export function view(c) {
   // was cut to its first nine. The steps take the fewest, so no name is cut at a size it was stepped down to.
   const fit = name.length > 14 ? 'fit2' : name.length > 11 ? 'fit1' : '';
   // connected: nothing. The first ten seconds of a drop: a grey breathing dot after the greeting. After that: a red
-  // dot and "Offline · showing last known state" in its place, and a card that says what to do.
+  // dot and "Offline" in its place, and the card under it says what to do.
   const greet = st === 'off'
-    ? `<span class="conn-dot lost"></span>Offline · showing last known state`
+    ? `<span class="conn-dot lost"></span>Offline`
     : `${esc(greeting(c))}${st === 'reconnecting' ? '<span class="conn-dot" aria-label="Reconnecting"></span>' : ''}`;
   const empty = !data.devices().length;
 
   const favScenes = (S.config.favorites || []).filter(t => t.startsWith('p:') || t.startsWith('s:')).map(t => {
-    if (t.startsWith('p:')) { const p = data.presets().find(x => x.id === t.slice(2)); return p ? sceneChip(c, t, H.sceneShortName(p) === p.name ? p.name : p.name, p.levels) : ''; }
+    // a room's scene is named with its room, as one name: "Kitchen Bright"
+    if (t.startsWith('p:')) { const p = data.presets().find(x => x.id === t.slice(2)); if (!p) return ''; const short = H.sceneShortName(p); return sceneChip(c, t, short === p.name ? p.name : `${data.areaName(p.area)} ${short}`, p.levels); }
     const s = (S.inv.scenes || {})[t.slice(2)]; return s ? sceneChip(c, t, s.name, null) : '';
   }).filter(Boolean);
   const rooms = data.areas().filter(a => H.roomLights(a.id).length || data.controllable().some(d => data.devArea(d) === a.id));
@@ -124,25 +119,24 @@ export function view(c) {
       <button class="hdr-btn a1" data-go="activity" aria-label="Recent activity">${icon('clock', 20, 1.7)}</button>
     </header>
     ${st === 'off' ? offlineCard(c) : ''}
-    ${empty ? `<div class="connect-card"><span class="ic-c">${icon('wifi', 22, 1.6)}</span><p class="t-row">Let's connect your home</p><p class="t-cap muted">A small helper program on a computer in your house links this app to your Lutron bridge. About ten minutes, once.</p><button class="pill blue" data-go="settings/how">Show me how</button></div>` : ''}
+    ${empty ? `<div class="connect-card"><span class="ic-c">${icon('wifi', 22, 1.6)}</span><p class="t-row">Let's connect your home</p><button class="pill blue" data-go="settings/how">Show me how</button></div>` : ''}
 
     <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
       <div class="house-head"><span class="hh-w" data-xf="standard">${lit.length ? `${lit.length} on ·` : 'All off'}</span>${lit.length ? ` <span data-hlv>${lv}</span>%` : ''}</div>
-      ${lit.length ? `<div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="house" style="--pct:${lv}%" role="slider" aria-label="Brightness of the lights that are on" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
+      ${lit.length ? `<div class="hbar ${lv >= 30 ? '' : 'low'}" data-drag="house" style="--pct:${lv}%" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">
         <span class="fill"></span>
         <span class="lo">${icon('sun', 22, 1.8)}</span>
         <span class="hi">${icon('sun', 26, 1.6)}</span>
         <span class="knob"></span>
       </div>` : ''}
-      ${houseCaption(c, lit)}
       ${housePills(c, lit)}
       <div class="goodnight">
-        <button class="hold" data-hold="goodnight" data-ms="1000" aria-label="Goodnight house, hold to turn everything off">
+        <button class="hold" data-hold="goodnight" data-ms="1000" data-act="goodnight-hint" aria-label="Goodnight, press and hold">
           <svg class="ring" width="44" height="44" viewBox="0 0 44 44"><circle class="trk" cx="22" cy="22" r="20.5"/><circle class="arc" cx="22" cy="22" r="20.5"/></svg>
           ${icon('moon', 20, 1.7)}
         </button>
-        <div><div class="t-row">Goodnight house</div><div class="t-cap muted">Hold to turn everything off</div></div>
+        <div class="t-row gn-label ${hinting(c, 'gnHint') ? 'hint' : ''}">${hinting(c, 'gnHint') ? 'Hold' : 'Goodnight'}</div>
       </div>
     </section>
 
@@ -219,22 +213,19 @@ function countTo(c, el) {
 // Leaving Home forgets the number shown, so coming back does not count from an old one, and ends editing the pins.
 export function leave(c) { cancelAnimationFrame(counting); shownHouse = null; pinsLeave(c); }
 
-// Under the bar: which lights it moves, by name. A tap on the held button borrows this line to say to hold it.
-function houseCaption(c, lit) {
-  const hint = c.ui.houseHint && Date.now() - c.ui.houseHint < 2500;
-  if (hint) return `<p class="house-cap hint">${lit.length ? 'Hold All on to light the whole house' : 'Hold to bring the lights back on'}</p>`;
-  if (!lit.length) return '<p class="house-cap">Nothing is on right now</p>';
-  const where = litWhere(c, lit);
-  return `<p class="house-cap">Adjusts the ${lit.length === 1 ? 'light' : `${lit.length} lights`} on${where ? ` in ${c.esc(where)}` : ''}</p>`;
-}
+// A tap on a held button (All on, Goodnight) turns nothing on or off: for a moment its own label says "Hold". Nothing
+// else on the page says how they work.
+const HINT_MS = 2500;
+const hinting = (c, k) => !!(c.ui[k] && Date.now() - c.ui[k] < HINT_MS);
 // Turning lights off is a tap. Turning the whole house on is a hold (0.6 s, the pill filling with copper as it is
-// held), so a thumb brushing it at night does nothing; a tap only says to hold it. Neither pill is lit to show a
-// state: the headline says what is on.
+// held), so a thumb brushing it at night does nothing. Neither pill is lit to show a state: the headline says what is
+// on.
 function housePills(c, lit) {
   const { icon, H } = c;
   const lvl = allOnLevel(c);
   const onLabel = `${H.houseOnLabel()}${lvl != null && lit.length ? ` · ${lvl}%` : ''}`;
-  const on = `<button class="pill ghost hold-pill" data-hold="house-on" data-ms="600" data-act="house-on-hint" aria-label="${c.esc(onLabel)}, hold to turn on">${icon('power', 20, 1.9)}<span>${c.esc(onLabel)}</span></button>`;
+  const hint = hinting(c, 'houseHint');
+  const on = `<button class="pill ghost hold-pill ${hint ? 'hint' : ''}" data-hold="house-on" data-ms="600" data-act="house-on-hint" aria-label="${c.esc(onLabel)}, press and hold">${icon('power', 20, 1.9)}<span>${hint ? 'Hold' : c.esc(onLabel)}</span></button>`;
   if (!lit.length) return `<div class="house-pills one">${on}</div>`;
   return `<div class="house-pills">
     <button class="pill solid" data-act="house-off">${icon('power', 20, 1.9)}All off</button>
@@ -249,8 +240,9 @@ export const actions = {
   // The house on, held: every light when something is already on; from dark, what was on before (the connector
   // remembers) or every light, as Settings says.
   'house-on'(c) { c.ui.houseHint = 0; c.turn(c.H.houseOnAction()); },
-  // a tap on the held button: nothing turns on, the line under the bar says to hold it
-  'house-on-hint'(c) { c.ui.houseHint = Date.now(); c.render(); setTimeout(() => c.render(), 2600); },
+  // a tap on a held button: nothing happens but its label saying "Hold" for a moment
+  'house-on-hint'(c) { c.ui.houseHint = Date.now(); c.render(); setTimeout(() => c.render(), HINT_MS + 100); },
+  'goodnight-hint'(c) { c.ui.gnHint = Date.now(); c.render(); setTimeout(() => c.render(), HINT_MS + 100); },
   // The house off. If an automation is holding some of what is on, ask first rather than fight it every time.
   // All off turns everything off, at once, every time. It is always sent, whatever this phone believes is lit (a
   // light the app last heard as off may be on), and it no longer stops to ask about lights a routine turned on: the
@@ -261,6 +253,7 @@ export const actions = {
   // Goodnight house, held for a second: every light off, the shades closed, the fans stopped. Then the page goes to
   // sleep with the house (goodnightDark). Offline, nothing went dark, so nothing on the page does either.
   async goodnight(c) {
+    c.ui.gnHint = 0;
     if (c.conn() === 'off') { c.toast("The house didn't hear that. Your remotes still work.", { err: true }); return; }
     const acts = c.H.goodnightActions();
     const rooms = c.data.areas().map(a => ({ aid: a.id, L: roomLight(c, a.id) })).filter(r => r.L);
