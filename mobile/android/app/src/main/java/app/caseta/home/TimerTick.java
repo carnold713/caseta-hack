@@ -25,9 +25,11 @@ public class TimerTick extends BroadcastReceiver {
         PendingResult done = goAsync();
         new Thread(() -> {
             try {
-                boolean ended = TimerNotifications.dropEnded(c);
-                if (ended && HubStore.signedIn(c)) WidgetActions.refreshNow(c);
-                else { TimerNotifications.redraw(c); Widgets.updateAll(c); }
+                Safe.run(c, "timer tick", () -> {
+                    boolean ended = TimerNotifications.dropEnded(c);
+                    if (ended && HubStore.signedIn(c)) WidgetActions.refreshNow(c);
+                    else { TimerNotifications.redraw(c); Widgets.updateAll(c); }
+                });
             } finally {
                 schedule(c);
                 done.finish();
@@ -37,6 +39,10 @@ public class TimerTick extends BroadcastReceiver {
 
     /** The next tick: in a minute while a Live Update shows, else just after the soonest timer ends; none without one. */
     static void schedule(Context c) {
+        Safe.run(c, "timer tick schedule", () -> plan(c));
+    }
+
+    private static void plan(Context c) {
         AlarmManager am = c.getSystemService(AlarmManager.class);
         if (am == null) return;
         PendingIntent pi = PendingIntent.getBroadcast(c, 7, new Intent(c, TimerTick.class).setAction(TICK), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);

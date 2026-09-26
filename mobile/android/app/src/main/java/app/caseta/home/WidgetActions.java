@@ -27,8 +27,9 @@ public class WidgetActions extends BroadcastReceiver {
                 // what the hub did, read back a moment later (a fade has started by then, and the timer is running)
                 if (ok) Thread.sleep(900);
                 refreshNow(c);
-            } catch (Exception ignored) {
-                Widgets.updateAll(c);
+            } catch (Throwable t) {
+                Safe.note(c, "widget tap", t);
+                Safe.run(c, "widget redraw", () -> Widgets.updateAll(c));
             } finally {
                 done.finish();
             }
@@ -101,13 +102,15 @@ public class WidgetActions extends BroadcastReceiver {
 
     /** Read the hub's snapshot and draw every widget (and the timer notifications) from it. Blocking. */
     static void refreshNow(Context c) {
-        HubClient.Result r = HubClient.request(c, "GET", "/api/snapshot", null);
-        if (r.ok()) {
-            JSONObject s = WidgetStore.fromSnapshot(c, r.body);
-            if (s != null) WidgetStore.setState(c, s);
-        }
-        Widgets.updateAll(c);
-        TimerNotifications.fromState(c);
+        Safe.run(c, "widget read", () -> {
+            HubClient.Result r = HubClient.request(c, "GET", "/api/snapshot", null);
+            if (r.ok()) {
+                JSONObject s = WidgetStore.fromSnapshot(c, r.body);
+                if (s != null) WidgetStore.setState(c, s);
+            }
+        });
+        Safe.run(c, "widget redraw", () -> Widgets.updateAll(c));
+        Safe.run(c, "timer notifications", () -> TimerNotifications.fromState(c));
     }
 
     private static void show(Context c, JSONObject state) {

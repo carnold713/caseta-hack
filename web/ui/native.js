@@ -16,8 +16,13 @@ let lastToken = null;
 export function credentials(token) {
   if (!isNative || token === lastToken) return;
   lastToken = token;
-  if (token) call('setCredentials', { url: location.origin, token });
-  else call('clearCredentials');
+  if (token) {
+    call('setCredentials', { url: location.origin, token });
+    // the last thing that went wrong on the Android side, into the hub's log, where it can be looked into
+    call('lastCrash').then(r => {
+      if (r && r.text) fetch('/api/app-crash', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ text: r.text }) }).catch(() => {});
+    });
+  } else call('clearCredentials');
 }
 
 // The house as Home says it ("3 on · 60%"), for the widget. Only when it changes.

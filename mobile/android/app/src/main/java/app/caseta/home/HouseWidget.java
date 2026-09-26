@@ -8,5 +8,5 @@ import android.content.Context;
  */
 public class HouseWidget extends BaseWidget {
     /** Redraw every widget from what is stored (after the app pushes the house, or the tile acts). */
-    static void refreshSoon(Context c) { Widgets.updateAll(c); }
+    static void refreshSoon(Context c) { Safe.run(c, "widget redraw", () -> Widgets.updateAll(c)); }
 }

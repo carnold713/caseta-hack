@@ -37,8 +37,9 @@ public class TimerActionReceiver extends BroadcastReceiver {
                 // the widgets follow, and the notifications settle on what the hub says
                 Thread.sleep(900);
                 WidgetActions.refreshNow(c);
-            } catch (Exception ignored) {
+            } catch (Throwable t) {
                 // the app shows the timer as it really is next time it opens
+                Safe.note(c, "timer button", t);
             } finally { done.finish(); }
         }).start();
     }

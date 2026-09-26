@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
+        android:name=".CasetaApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -119,6 +120,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- the widgets' 15 minute read waits for a network; Android 14 and later refuse that job without this -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- a running sleep timer on the lock screen; Android 13 and later ask once, from the app, never on launch -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 16 and later: a running sleep timer as a Live Update, its countdown in the status bar (Settings,

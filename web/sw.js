@@ -8,7 +8,7 @@
    It also keeps the lock screen's one notification per running sleep timer (20 · Beyond the app, web/ui/beyond.js):
    the app hands it the timers and its sign-in; "Off now" and "Add 15 min" act through the API with that sign-in, and
    nothing here ever turns a light on. */
-const VERSION = 'v52';
+const VERSION = 'v53';
 const APP = [
   '/', '/index.html', '/ui/', '/ui/index.html', '/ui/app.js', '/ui/art.js', '/ui/art/light-arc-lamp.svg',
   '/ui/art/light-bedside-lamp.svg', '/ui/art/light-ceiling-fan.svg', '/ui/art/light-chandelier.svg',

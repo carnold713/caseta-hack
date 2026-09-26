@@ -90,12 +90,21 @@ final class TimerNotifications {
                 long ends = t.optLong("endsAt");
                 if (key.isEmpty() || ends <= System.currentTimeMillis()) continue;
                 now.add(key);
-                nm.notify(key, 1, build(c, key, t.optString("title", "Light"), t.optString("target", key), ends, t.optString("route", routeOf(key)), mode));
+                String title = t.optString("title", "Light"), target = t.optString("target", key), route = t.optString("route", routeOf(key));
+                Safe.run(c, "timer notification", () -> {
+                    Notification n;
+                    try { n = build(c, key, title, target, ends, route, mode); } catch (Throwable t) {
+                        // a phone that will not take the Live Update still shows the ongoing countdown
+                        Safe.note(c, "live update", t);
+                        n = build(c, key, title, target, ends, route, "ongoing");
+                    }
+                    nm.notify(key, 1, n);
+                });
             }
         }
         // anything shown before that is not running any more (or not to be shown now)
         Set<String> was = prefs(c).getStringSet("keys", new HashSet<>());
-        for (String k : was) if (!now.contains(k)) nm.cancel(k, 1);
+        for (String k : was) if (!now.contains(k)) Safe.run(c, "timer notification", () -> nm.cancel(k, 1));
         prefs(c).edit().putStringSet("keys", now).apply();
         TimerTick.schedule(c);
     }
@@ -158,7 +167,7 @@ final class TimerNotifications {
     }
 
     private static Notification build(Context c, String key, String title, String target, long ends, String route, String mode) {
-        boolean live = mode.equals("live");
+        boolean live = mode.equals("live") || mode.equals("ongoing");
         Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? new Notification.Builder(c, CHANNEL) : new Notification.Builder(c);
         b.setSmallIcon(R.drawable.ic_timer)
             .setContentTitle(title)
@@ -175,25 +184,27 @@ final class TimerNotifications {
             .addAction(new Notification.Action.Builder(null, "Add 15 min", action(c, key, title, target, ends, TimerActionReceiver.ADD_15, 4)).build());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) b.setChronometerCountDown(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) b.setTimeoutAfter(Math.max(1000, ends - System.currentTimeMillis() + 5000));
-        if (live && Build.VERSION.SDK_INT >= 36) {
-            // A Live Update: ongoing, titled, no custom views, not colorized, not a group summary, a promotable style,
-            // and asked for (Notification.EXTRA_REQUEST_PROMOTED_ONGOING, set as the extra so it builds against any
-            // Android 16 SDK). The status bar chip then shows the countdown from `when`.
-            Bundle extras = new Bundle();
-            extras.putBoolean("android.requestPromotedOngoing", true);
-            b.addExtras(extras);
-            b.setCategory(Notification.CATEGORY_PROGRESS);
-            int total = total(c, key, ends);
-            int left = (int) Math.max(0, (ends - System.currentTimeMillis()) / 1000);
-            List<Notification.ProgressStyle.Segment> seg = new ArrayList<>();
-            seg.add(new Notification.ProgressStyle.Segment(Math.max(1, total)).setColor(COPPER));
-            b.setStyle(new Notification.ProgressStyle()
-                .setStyledByProgress(true)
-                .setProgressSegments(seg)
-                .setProgressTrackerIcon(Icon.createWithResource(c, R.drawable.ic_timer))
-                .setProgress(Math.max(0, Math.min(total, total - left))));
-        }
+        if (mode.equals("live") && Build.VERSION.SDK_INT >= 36) liveUpdate(c, b, key, ends);
         return b.build();
+    }
+
+    private static void liveUpdate(Context c, Notification.Builder b, String key, long ends) {
+        // A Live Update: ongoing, titled, no custom views, not colorized, not a group summary, a promotable style,
+        // and asked for (Notification.EXTRA_REQUEST_PROMOTED_ONGOING, set as the extra so it builds against any
+        // Android 16 SDK). The status bar chip then shows the countdown from `when`.
+        Bundle extras = new Bundle();
+        extras.putBoolean("android.requestPromotedOngoing", true);
+        b.addExtras(extras);
+        b.setCategory(Notification.CATEGORY_PROGRESS);
+        int total = total(c, key, ends);
+        int left = (int) Math.max(0, (ends - System.currentTimeMillis()) / 1000);
+        List<Notification.ProgressStyle.Segment> seg = new ArrayList<>();
+        seg.add(new Notification.ProgressStyle.Segment(Math.max(1, total)).setColor(COPPER));
+        b.setStyle(new Notification.ProgressStyle()
+            .setStyledByProgress(true)
+            .setProgressSegments(seg)
+            .setProgressTrackerIcon(Icon.createWithResource(c, R.drawable.ic_timer))
+            .setProgress(Math.max(0, Math.min(total, total - left))));
     }
 
     /**

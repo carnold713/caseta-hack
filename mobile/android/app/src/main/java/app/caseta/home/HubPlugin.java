@@ -33,6 +33,7 @@ import org.json.JSONObject;
  *   widgets / widget / setWidget        the placed widgets and each one's choices, for the app's Widgets page
  *   addWidget / widgetDone              put a widget on the home screen from the app; Done on a widget's page
  *   phone / setPhone                    this phone's own choices: how a running timer shows (status bar, quiet, none)
+ *   lastCrash                           the last thing that went wrong on the Android side, once, for the hub's log
  */
 @CapacitorPlugin(
     name = "Hub",
@@ -156,7 +157,7 @@ public class HubPlugin extends Plugin {
         JSObject r = new JSObject();
         boolean[] left = { false };
         getActivity().runOnUiThread(() -> {
-            if (getActivity() instanceof MainActivity) left[0] = ((MainActivity) getActivity()).widgetDone();
+            Safe.run(getContext(), "widget done", () -> { if (getActivity() instanceof MainActivity) left[0] = ((MainActivity) getActivity()).widgetDone(); });
             r.put("left", left[0]);
             call.resolve(r);
         });
@@ -168,6 +169,14 @@ public class HubPlugin extends Plugin {
         o.put("kind", WidgetStore.kindOf(c, id));
         o.put("cfg", WidgetStore.config(c, id));
         return o;
+    }
+
+    @PluginMethod
+    public void lastCrash(PluginCall call) {
+        JSObject r = new JSObject();
+        String text = Safe.take(getContext());
+        if (text != null) r.put("text", text);
+        call.resolve(r);
     }
 
     // ---------- this phone ----------

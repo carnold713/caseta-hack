@@ -95,6 +95,18 @@ app.post('/api/login', (req, res) => {
 });
 
 app.get('/api/snapshot', requireAuth, (req, res) => res.json(snapshot()));
+// What went wrong on the Android side, handed over by the app when it next opens: logged, and the last few kept.
+const appCrashes = [];
+app.post('/api/app-crash', requireAuth, (req, res) => {
+  const text = String((req.body && req.body.text) || '').slice(0, 8000);
+  if (text) {
+    console.error(`[app-crash] ${text}`);
+    appCrashes.unshift({ at: Date.now(), text });
+    appCrashes.length = Math.min(appCrashes.length, 5);
+  }
+  res.json({ ok: true });
+});
+app.get('/api/app-crash', requireAuth, (req, res) => res.json({ crashes: appCrashes }));
 app.get('/api/activity', requireAuth, (req, res) => res.json({ activity }));
 // The light history between two instants (epoch ms), a day at a time: the last 24 hours when none are given.
 app.get('/api/history', requireAuth, (req, res) => {

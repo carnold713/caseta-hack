@@ -16,43 +16,49 @@ import org.json.JSONObject;
 public abstract class BaseWidget extends AppWidgetProvider {
     @Override
     public void onUpdate(Context c, AppWidgetManager m, int[] ids) {
-        for (int id : ids) Widgets.draw(c, m, id);
-        WidgetRefreshJob.schedule(c);
-        if (!HubStore.signedIn(c) || System.currentTimeMillis() - WidgetStore.state(c).optLong("at") < 60000) return;
+        boolean[] read = { false };
+        Safe.run(c, "widget update", () -> {
+            for (int id : ids) Widgets.draw(c, m, id);
+            WidgetRefreshJob.schedule(c);
+            read[0] = HubStore.signedIn(c) && System.currentTimeMillis() - WidgetStore.state(c).optLong("at") >= 60000;
+        });
+        if (!read[0]) return;
         PendingResult done = goAsync();
         new Thread(() -> {
-            try { WidgetActions.refreshNow(c); } finally { done.finish(); }
+            try { Safe.run(c, "widget read", () -> WidgetActions.refreshNow(c)); } finally { done.finish(); }
         }).start();
     }
 
     @Override
     public void onAppWidgetOptionsChanged(Context c, AppWidgetManager m, int id, Bundle options) {
-        Widgets.draw(c, m, id);
+        Safe.run(c, "widget resize", () -> Widgets.draw(c, m, id));
     }
 
     @Override
     public void onDeleted(Context c, int[] ids) {
-        for (int id : ids) WidgetStore.remove(c, id);
+        Safe.run(c, "widget removed", () -> { for (int id : ids) WidgetStore.remove(c, id); });
     }
 
     @Override
     public void onEnabled(Context c) {
-        WidgetRefreshJob.schedule(c);
+        Safe.run(c, "widget placed", () -> WidgetRefreshJob.schedule(c));
     }
 
     @Override
     public void onDisabled(Context c) {
-        if (Widgets.count(c) == 0) WidgetRefreshJob.cancel(c);
+        Safe.run(c, "last widget removed", () -> { if (Widgets.count(c) == 0) WidgetRefreshJob.cancel(c); });
     }
 
     /** A home screen restored from a backup brings its widgets back under new ids: their configs follow them. */
     @Override
     public void onRestored(Context c, int[] oldIds, int[] newIds) {
-        for (int i = 0; i < oldIds.length && i < newIds.length; i++) {
-            if (!WidgetStore.configured(c, oldIds[i])) continue;
-            JSONObject cfg = WidgetStore.config(c, oldIds[i]);
-            WidgetStore.setConfig(c, newIds[i], cfg);
-            WidgetStore.remove(c, oldIds[i]);
-        }
+        Safe.run(c, "widgets restored", () -> {
+            for (int i = 0; i < oldIds.length && i < newIds.length; i++) {
+                if (!WidgetStore.configured(c, oldIds[i])) continue;
+                JSONObject cfg = WidgetStore.config(c, oldIds[i]);
+                WidgetStore.setConfig(c, newIds[i], cfg);
+                WidgetStore.remove(c, oldIds[i]);
+            }
+        });
     }
 }
