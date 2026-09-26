@@ -39,7 +39,7 @@
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false" />
         </service>
 
-        <!-- The ten widgets (Widgets.java draws them all; HouseWidget keeps its name so a placed one stays placed) -->
+        <!-- The eleven widgets (Widgets.java draws them all; HouseWidget keeps its name so a placed one stays placed) -->
         <receiver android:name=".RoomWidget" android:exported="false" android:label="@string/wg_room">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_room" />
@@ -80,6 +80,19 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_colour" />
         </receiver>
+        <receiver android:name=".DimmersWidget" android:exported="false" android:label="@string/wg_dimmers">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/wgi_dimmers" />
+        </receiver>
+        <!-- The Dimmers widget's quick panel: brightness bars to drag, over the home screen. Its own task, so it
+             never brings up the app, and gone from Recents and from Back once it closes. -->
+        <activity
+            android:name=".QuickPanelActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="app.caseta.home.panel"
+            android:theme="@style/QuickPanelTheme" />
 
         <!-- A tap on a widget, acted on off the main thread -->
         <receiver android:name=".WidgetActions" android:exported="false" />

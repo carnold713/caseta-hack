@@ -149,7 +149,7 @@ final class WidgetStore {
 
     static void remove(Context c, int id) { prefs(c).edit().remove("w" + id).apply(); }
 
-    /** Which of the ten a placed widget is, from the provider Android placed it with. */
+    /** Which of the eleven a placed widget is, from the provider Android placed it with. */
     static String kindOf(Context c, int id) {
         AppWidgetProviderInfo info = AppWidgetManager.getInstance(c).getAppWidgetInfo(id);
         return info == null ? "" : Widgets.kindOfProvider(info.provider.getClassName());

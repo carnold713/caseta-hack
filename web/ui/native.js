@@ -1,5 +1,5 @@
 // The Android app (mobile/): the same web app, loaded from the hub inside a Capacitor shell, with a few things a web
-// app cannot have living on the Android side: All off in the quick settings shade, ten widgets on the home screen,
+// app cannot have living on the Android side: All off in the quick settings shade, eleven widgets on the home screen,
 // and a running sleep timer in the status bar and on the lock screen with real buttons. They run without the app
 // open, so this hands them what they need as it changes: the hub and the sign-in, the house as Home draws it, the
 // running timers, and the home as the widgets draw it (widgetData). The Widgets page (screens/widgets.js) and

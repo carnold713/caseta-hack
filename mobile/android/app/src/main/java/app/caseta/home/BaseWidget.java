@@ -8,7 +8,7 @@ import android.os.Bundle;
 import org.json.JSONObject;
 
 /**
- * What the ten widgets share (Widgets.java draws them). Android asks for a redraw when a widget is placed, resized or
+ * What the eleven widgets share (Widgets.java draws them). Android asks for a redraw when a widget is placed, resized or
  * its half-hourly update comes round; each time it is drawn at once from what is stored, and the hub is read for
  * what is true now if that was not done in the last minute. A periodic job reads it every 15 minutes besides
  * (WidgetRefreshJob), and every tap reads it again after acting (WidgetActions).

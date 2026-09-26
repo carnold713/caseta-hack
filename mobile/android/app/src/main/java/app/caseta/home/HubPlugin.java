@@ -132,7 +132,7 @@ public class HubPlugin extends Plugin {
         call.resolve(one(c, id));
     }
 
-    /** Put one of the ten on the home screen: Android asks where, then the app opens on its page (MainActivity). */
+    /** Put one of the eleven on the home screen: Android asks where, then the app opens on its page (MainActivity). */
     @PluginMethod
     public void addWidget(PluginCall call) {
         Context c = getContext();
