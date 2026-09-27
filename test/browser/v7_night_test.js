@@ -134,7 +134,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
     lights: document.querySelectorAll('.ns-page .glow:not(.off), .ns-page .onelight:not(.off), .ns-inner, .ns-candle').length }));
   check(on.on && !on.glowOff && on.glowOp === '1' && on.level === 10, 'the lamp is on at 10% and its glow is lit', on);
   check(on.lights === 1, 'and it is the page\'s one soft light (no second glow in the area or the ring)', on.lights);
-  check(on.title === 'Off' && new RegExp(`^${lamp} · off at \\d{1,2}:\\d\\d (am|pm)$`).test(on.sub), 'the area now says Off, and when it goes out', on.sub);
+  check(on.title === 'Night light' && /^On until \d{1,2}:\d\d (am|pm)$/.test(on.sub), 'the area says the night light is on, and until when', on);
   await page.screenshot({ path: 'v7-night-nightstand-on.png' });
   // the page never scrolls
   const sc = await C(() => ({ h: document.scrollingElement.scrollHeight, v: innerHeight, ta: getComputedStyle(document.querySelector('.ns-page')).touchAction }));
@@ -146,7 +146,7 @@ const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
   const offAnim = await C(() => (document.querySelector('.ns-glow > i') || document.body).getAnimations().map(x => Math.round(x.effect.getTiming().duration)));
   await wait(600);
   a = await acts();
-  check(a.some(x => x.type === 'level' && x.target === 'd:10' && x.level === 'off'), 'a tap on Off turns it off', a);
+  check(a.some(x => x.type === 'level' && x.target === 'd:10' && x.level === 'off'), 'a tap on the lit area turns it off', a);
   check(offAnim.includes(400), 'and the glow goes on the dimmer, 0.4 s', offAnim);
   check(await C(() => !document.querySelector('.ns-area').classList.contains('on') && document.querySelector('.ns-glow').classList.contains('off')), 'the area is back to Night light');
   // offline: calm, one line, nothing to hold

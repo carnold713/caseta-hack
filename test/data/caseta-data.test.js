@@ -421,3 +421,27 @@ test('a slider hold ends quietly: the finger\'s level stays until the bridge say
   assert.equal(d.level('1'), 55, 'not pulled back to an echo of a value it passed');
   assert.equal(told, 0);
 });
+
+// ---------- a device's own name ----------
+
+test('a light or a remote named in the app is called that everywhere, and clearing it gives the bridge\'s back', () => {
+  const d = CD.create();
+  d.apply(snapshot());
+  const was = d.dev('3');
+  assert.strictEqual(d.dev('3'), was, 'unnamed, a device is the bridge\'s own object, the same each time');
+  d.setDeviceName('3', '  Over the   island ');
+  assert.equal(d.dev('3').name, 'Over the island');
+  assert.equal(d.dev('3').bridge_name, 'Island');
+  assert.strictEqual(d.dev('3'), d.dev('3'), 'a renamed device is the same copy from one call to the next');
+  assert.equal(d.devices().find(x => x.device_id === '3').name, 'Over the island');
+  assert.equal(d.controllable().find(x => x.device_id === '3').name, 'Over the island');
+  assert.equal(d.targetName('d:3'), 'Over the island');
+  assert.equal(d.bridgeName('3'), 'Island');
+  d.setDeviceName('9', 'By the door');
+  assert.equal(d.remotes()[0].name, 'By the door');
+  d.setDeviceName('3', 'Island');
+  assert.equal(d.S.config.settings.device_names['3'], undefined, 'the bridge\'s own name is no name of the app\'s');
+  d.setDeviceName('9', '');
+  assert.equal(d.dev('9').name, 'Kitchen Pico');
+  assert.deepEqual(d.S.config.settings.device_names, {});
+});

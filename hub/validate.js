@@ -140,6 +140,12 @@ function validateConfig(cfg) {
   out.settings.auto_update = s.auto_update !== false;
   // Devices removed from the app. Some bridges keep a deleted remote in their own list, so the app hides it.
   out.settings.hidden_devices = Array.isArray(s.hidden_devices) ? s.hidden_devices.filter(isId).slice(0, 200) : [];
+  // Names the app gives lights and remotes, over the bridge's own (a device with none keeps the bridge's).
+  out.settings.device_names = {};
+  for (const [k, v] of Object.entries(s.device_names && typeof s.device_names === 'object' && !Array.isArray(s.device_names) ? s.device_names : {}).slice(0, 400)) {
+    const n = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+    if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && n) out.settings.device_names[k] = n;
+  }
   // The app greeted this home once (the "Your home is connected" sheet); a second phone does not see it again.
   out.settings.greeted = s.greeted === true;
   // Where and when: timezone comes from the phone (IANA name), location from the phone's GPS, both optional.

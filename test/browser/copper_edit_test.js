@@ -130,6 +130,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('All scenes, with the five offered to a room that has none', !!(await page.$('.suggest-card [data-act="scenes-five"]')));
   check('the scenes there are come before the offers', await C(() => { const offer = document.querySelector('.scenes-page .suggest-card'); return [...document.querySelectorAll('.scenes-page .scene-row')].every(r => !!(r.compareDocumentPosition(offer) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
   await at('14 All scenes', [['title (its padding box: the text is at 20, 128)', '.scenes-page .page-h1', 0, 108, null, 64], ['add', '.scenes-page .hdr .a1', 336, 52, 56, 56]]);
+  // a look at + is not a scene: made and closed untouched, it is gone again
+  const nScenes = await C(() => window.__copper.data.presets().length);
+  await page.click('[data-act="scene-new"]'); await wait(1500);
+  await page.click('#sheet-root .sheet-close'); await wait(1200);
+  check('+ and closed untouched leaves no scene behind', (await C(() => window.__copper.data.presets().length)) === nScenes && /#scenes$/.test(page.url()), { was: nScenes, now: await C(() => window.__copper.data.presets().length), url: page.url() });
   await page.click('[data-act="scene-new"]'); await wait(1500);
   const pid = await C(() => location.hash.split('/')[1]);
   check('+ makes a scene from what is on and opens it', !!pid && !!(await page.$('#sheet-root .scene-sheet')), pid);
@@ -189,6 +194,30 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await C(() => { const c = window.__copper; if (c.__run0) { c.run = c.__run0; delete c.__run0; } });
     check('a Lutron scene runs, with no toast', lr.sent === 1 && lr.toast === '', lr);
   }
+
+  // ---- a light and a remote named in the app: About's Name, typed, is its name everywhere; cleared, the bridge's again
+  await go('light/5/about'); await wait(900);
+  check('About this light has a Name row with the light\'s name', /Kitchen Cans/.test(await C(() => (document.querySelector('[data-act="about-name"]') || {}).textContent || '')));
+  await page.click('[data-act="about-name"]'); await wait(500);
+  await page.fill('.name-form input', 'Over the sink'); await wait(1600);
+  const named = await C(() => ({ cfg: window.__copper.S.config.settings.device_names, title: document.querySelector('.dev h1').textContent, dev: window.__copper.data.dev('5').name, target: window.__copper.data.targetName('d:5') }));
+  check('the name saves as it is typed, and the light is called it (its page, its target)', named.cfg && named.cfg['5'] === 'Over the sink' && named.title === 'Over the sink' && named.dev === 'Over the sink' && named.target === 'Over the sink', named);
+  const hub = await C(async () => (await (await fetch('/api/snapshot', { headers: { authorization: `Bearer ${localStorage.token}` } })).json()).config.settings.device_names).catch(e => String(e));
+  check('the hub keeps it', !!hub && hub['5'] === 'Over the sink', hub);
+  await go('room/20');
+  check('the room\'s tile says it', (await C(() => [...document.querySelectorAll('.room-grid .tile .nm')].map(e => e.textContent))).includes('Over the sink'));
+  await go('light/5/about'); await wait(900);
+  await page.click('[data-act="about-name"]'); await wait(500);
+  await page.fill('.name-form input', ''); await wait(1600);
+  const cleared = await C(() => ({ cfg: window.__copper.S.config.settings.device_names, dev: window.__copper.data.dev('5').name, ph: document.querySelector('.name-form input').placeholder }));
+  check('cleared, it has the bridge\'s name again, shown in the empty field', !('5' in (cleared.cfg || {})) && cleared.dev === 'Kitchen Cans' && cleared.ph === 'Kitchen Cans', cleared);
+  await C(() => window.__copper.dismiss()); await wait(700);
+  await go('remote/9/more'); await wait(900);
+  await page.click('[data-act="rm-name"]'); await wait(500);
+  await page.fill('.name-form input', 'By the door'); await wait(1600);
+  check('a remote is named from its More sheet', (await C(() => window.__copper.data.dev('9').name)) === 'By the door' && (await C(() => document.querySelector('.remote-page h1').textContent)) === 'By the door');
+  await page.fill('.name-form input', ''); await wait(1600);
+  await C(() => window.__copper.dismiss()); await wait(700);
 
   // put the config back as it was
   await C(async b => { const c = window.__copper; c.data.restoreConfig(b); await c.data.saveConfig(); }, before);

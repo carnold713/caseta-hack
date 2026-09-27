@@ -55,7 +55,7 @@ export const actions = {
   // Offline it says so instead of pretending.
   'room-toggle'(c, el) {
     const aid = el.dataset.id;
-    if (c.conn() === 'off') { c.toast("Can't reach the house right now. Your remotes still work.", { err: true }); return; }
+    if (c.conn() === 'off') { c.toast("Can't reach the house right now. Your remotes still work.", { err: true }); c.sayOffline(); return; }
     const on = !c.H.roomLights(aid).some(d => (c.data.level(d.device_id) || 0) > 0);
     roomPower(c, aid, on);
     const name = c.data.areaName(aid);

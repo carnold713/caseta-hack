@@ -8,7 +8,7 @@
 import { tile, roomPicture, pinButton } from '/ui/screens/parts.js';
 import { roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
-import { sceneSheet, actions as sceneActions, LIST_ACTS } from '/ui/screens/scenes.js';
+import { sceneSheet, actions as sceneActions, LIST_ACTS, markFresh, dropFresh } from '/ui/screens/scenes.js';
 import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
 import { roomTop } from '/ui/screens/home.js';
 import { reduced, count } from '/ui/motion.js';
@@ -200,8 +200,10 @@ export function view(c, r) {
   const ds = data.controllable().filter(d => data.devArea(d) === aid)
     .sort((x, y) => (DOMAIN_LAST[x.domain] || 0) - (DOMAIN_LAST[y.domain] || 0) || x.name.localeCompare(y.name));
   const lights = H.roomLights(aid);
-  // with no scene open, the next one opens with "Show it on the room" off again (as All scenes does)
+  // with no scene open, the next one opens with "Show it on the room" off again (as All scenes does), and a new one
+  // closed untouched is not kept (scenes.js dropFresh)
   if (!/^scene\//.test(r.sub || '')) { c.ui.stageFor = null; c.ui.sceneShow = false; }
+  dropFresh(c, (/^scene\/(.+)$/.exec(r.sub || '') || [])[1] || null);
   const onN = ds.filter(d => data.isOn(d.device_id) && d.domain !== 'cover').length;
   const photo = !!H.roomPhotoURL(aid);
   const canToggle = ds.some(d => d.domain !== 'cover');
@@ -387,7 +389,7 @@ function missed(c, p) {
 
 async function runWave(c, el, r, p) {
   const aid = r.id, name = c.H.sceneShortName(p);
-  if (c.conn() === 'off') { c.toast(`Can't reach your house just now, so ${name} didn't run`, { err: true }); return; }
+  if (c.conn() === 'off') { c.toast(`Can't reach your house just now, so ${name} didn't run`, { err: true }); c.sayOffline(); return; }
   const room = el.closest('.room');
   const rb = room ? room.getBoundingClientRect() : { left: 0, top: 0 }, cb = el.getBoundingClientRect();
   const x = cb.left + cb.width / 2 - rb.left, y = cb.top + cb.height / 2 - rb.top;
@@ -470,6 +472,7 @@ export const actions = {
       if (d.domain === 'cover' || c.data.devArea(d) !== aid || d.device_id in p.levels) continue;
       p.levels[d.device_id] = c.H.sceneEntryNow(d, 0);
     }
+    markFresh(c, p);
     c.ui.roomScenesEdit = null;
     c.save('', { quiet: true });
     c.go(`room/${aid}/scene/${p.id}`);

@@ -13,6 +13,7 @@ import { roomPicker, confirmSheet } from '/ui/screens/pickers.js';
 import { picoSVG } from '/ui/pico.js';
 import { colourName } from '/ui/colour.js';
 import { stepCards } from '/ui/screens/steps.js';
+import { renameSheet, renameActions } from '/ui/screens/about.js';
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const G = ['single', 'double', 'hold'];
@@ -430,6 +431,7 @@ function moreSheet(c, r) {
   const facts = `${d.type || 'Unknown type'}${d.serial ? `, serial ${d.serial}` : ''}, ${listed.length ? `keys ${listed.join(', ')}` : heard.length ? `keys heard ${heard.join(', ')}` : 'no keys listed yet'}`;
   const body = `<div class="rmore">
     <div class="group">
+      <button class="row" data-act="rm-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val nm-cut">${esc(d.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row" data-act="rm-room"><span class="row-txt"><span class="t">Room</span></span><span class="row-val">${esc(data.devAreaName(d))}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row" data-act="rm-look"><span class="row-txt"><span class="t">Picture</span></span><span class="row-val">${esc(REM.PICO_FINISHES[REM.finishFor(d)].name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
       <button class="row" data-go="timing"><span class="row-txt"><span class="t">Press timing</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
@@ -628,6 +630,8 @@ export const actions = {
   },
 
   // More
+  ...renameActions,
+  'rm-name'(c, el, r) { if (c.data.dev(r.id)) c.openPicker('name', c2 => renameSheet(c2, r.id, 'Remote')); },
   'rm-room'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;
     c.openPicker('room', c2 => roomPicker(c2, { over: d.name, title: 'Which room is it in?', current: c2.data.devArea(d), act: 'rm-room-to' }));

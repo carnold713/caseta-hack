@@ -30,9 +30,27 @@ const lutronDots = size => `<span class="sdots s${size}" style="--ring:var(--sur
 // Is the house showing this scene right now: every light in it at the scene's level.
 const showing = (c, p) => Object.keys(p.levels || {}).length > 0 && c.H.levelsMatch(p.levels);
 
+// ---------- a new scene nobody kept ----------
+// A scene made with + (here, or a room's New scene) and closed exactly as it was made is not kept: a look at + is not
+// a scene worth a row in every list. Anything changed on it, a Try it, or a pin keeps it. Whichever page is drawn
+// next without it open takes it away again, as a routine made with + and left untouched is (routine.js).
+// (what makes it the scene it is: the hub hands back its own tidied copy of a saved scene, so not the object as a whole)
+const sceneAs = p => JSON.stringify([p.name, p.levels || {}, p.fade == null ? null : Number(p.fade), p.area || null]);
+export function markFresh(c, p) { c.ui.freshScene = { id: p.id, as: sceneAs(p) }; }
+export function dropFresh(c, openId) {
+  const f = c.ui.freshScene;
+  if (!f || f.id === openId) return;
+  c.ui.freshScene = null;
+  const p = c.data.presets().find(x => x.id === f.id);
+  if (!p || sceneAs(p) !== f.as || c.H.isPinned(`p:${p.id}`)) return;
+  c.S.config.presets = c.S.config.presets.filter(x => x.id !== p.id);
+  c.save('', { quiet: true });
+}
+
 // ---------- 14 · the list ----------
 export function view(c, r) {
   const { data, H, esc, icon } = c;
+  dropFresh(c, r && r.id);
   // with no scene open, the next one opens with "Show it on the room" off again
   if (!r || !r.id) { c.ui.stageFor = null; c.ui.sceneShow = false; }
   const all = data.presets(), theirs = data.lutronScenes();
@@ -381,6 +399,7 @@ export const actions = {
   'scene-lutron'(c, el) { c.go(`scenes/lutron-${el.dataset.sid}`); },
   'scene-new'(c) {
     const p = c.EDIT.newScene();
+    markFresh(c, p);
     c.save('', { quiet: true });
     c.go(`scenes/${p.id}`);
   },
@@ -431,8 +450,8 @@ export const actions = {
   'scene-add-go'(c, el, r) { const p = cur(c, r); if (!p) return; c.EDIT.sceneInclude(p, el.dataset.id, true); c.closePicker(); c.save('', { quiet: true }); },
   'scene-fade'(c, el, r) { const p = cur(c, r); if (!p) return; c.EDIT.sceneSetFade(p, Number(el.dataset.s)); c.save('', { quiet: true }); },
   'scene-suggest'(c, el, r) { const p = cur(c, r); if (p && c.EDIT.sceneSuggest(p)) c.save('Back to the suggestion'); },
-  'scene-try'(c, el, r) { const p = cur(c, r); if (p) runScene(c, p); },
-  'scene-capture'(c, el, r) { const p = cur(c, r); if (!p) return; c.EDIT.sceneCapture(p); c.save('The scene is the lights as they are now'); },
+  'scene-try'(c, el, r) { const p = cur(c, r); if (p) { c.ui.freshScene = null; runScene(c, p); } },
+  'scene-capture'(c, el, r) { const p = cur(c, r); if (!p) return; c.ui.freshScene = null; c.EDIT.sceneCapture(p); c.save('The scene is the lights as they are now'); },
   'scene-delete'(c, el, r) {
     const p = cur(c, r); if (!p) return;
     c.openPicker('delete', c2 => confirmSheet(c2, { over: 'Scene', title: `Delete ${c2.H.sceneShortName(p)}?`, act: 'scene-delete-go', yes: 'Delete scene',

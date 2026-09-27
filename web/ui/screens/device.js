@@ -442,6 +442,8 @@ export const actions = {
 };
 
 function fanTo(c, id, speed) {
+  // offline, nothing is sent, so nothing is shown as changed either: the tapped control says Offline (app.js)
+  if (c.conn() === 'off') { c.sayOffline(); return; }
   c.S.states[id] = { ...(c.S.states[id] || {}), fan_speed: speed, level: speed === 'Off' ? 0 : 100 };
   c.soon();
   c.run({ type: 'fan', target: `d:${id}`, speed });

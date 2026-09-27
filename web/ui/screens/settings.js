@@ -213,7 +213,7 @@ const SHEETS = {
   },
   hidden(c) {
     const ids = c.EDIT.hidden();
-    return { over: 'Devices', title: 'Hidden devices', body: `<div class="group">${ids.map(id => { const d = (c.S.inv.devices || {})[id]; return `<button class="row" data-act="unhide" data-id="${c.esc(id)}"><span class="row-txt"><span class="t">${c.esc(d ? d.name : 'A device the bridge still lists')}</span><span class="d">${c.esc(d ? (d.domain === 'pico' ? 'Remote' : 'Light') : `id ${id}`)}</span></span><span class="row-val">Bring back</span></button>`; }).join('') || '<div class="row"><span class="row-txt"><span class="d">None hidden</span></span></div>'}</div>` };
+    return { over: 'Devices', title: 'Hidden devices', body: `<div class="group">${ids.map(id => { const d = c.data.dev(id); return `<button class="row" data-act="unhide" data-id="${c.esc(id)}"><span class="row-txt"><span class="t">${c.esc(d ? d.name : 'A device the bridge still lists')}</span><span class="d">${c.esc(d ? (d.domain === 'pico' ? 'Remote' : 'Light') : `id ${id}`)}</span></span><span class="row-val">Bring back</span></button>`; }).join('') || '<div class="row"><span class="row-txt"><span class="d">None hidden</span></span></div>'}</div>` };
   },
   sets(c) {
     const { esc, icon, data } = c;
@@ -308,7 +308,7 @@ export const actions = {
   'restore-go'(c) { restore(c, c.ui.restoreText || ''); },
   'restore-file'(c, el) { const f = el.files && el.files[0]; if (!f) return; f.text().then(t => restore(c, t)); },
   unhide(c, el) {
-    const id = el.dataset.id; const d = (c.S.inv.devices || {})[id];
+    const id = el.dataset.id; const d = c.data.dev(id);
     c.EDIT.unhideDevice(id);
     c.save(`${d ? d.name : 'The device'} is back`);
   },

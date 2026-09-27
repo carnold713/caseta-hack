@@ -758,7 +758,7 @@ waking anyone, then to put it out.
 - **The night light is a held touch, not a tap.** Rest a thumb and, after a quarter of a second, a candle glow
   rises under it, and the lamp rises with it to 10% at its warmest white. Let go and it stays. After 15 min it goes
   out by itself (Light the way).
-- **Lamp on:** the area becomes "Off", which is a tap.
+- **Lamp on:** the area still says "Night light", with "On until {2:21 am}" under it; a tap turns it off.
 - **Which light:** the one Goodnight keeps, else one chosen once here.
 - **No night light chosen:** "Pick a light for night".
 - **Morning (night hours end):** goes back to Home.
@@ -767,7 +767,7 @@ waking anyone, then to put it out.
 **Copy**
 
 - "Night light", sub "Rest your thumb to turn on".
-- On: "{Bedside lamp} · 10% · off by itself at {2:21 am}". Area: "Off".
+- On: "Night light", sub "On until {2:21 am}".
 - Choose: "Pick a light for night". Leave: "Home".
 
 **Touch**

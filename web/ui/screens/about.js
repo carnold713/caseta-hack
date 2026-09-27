@@ -1,6 +1,6 @@
 // 19 · About this light (12744:111930): a sheet over the light's page. What it is for, what it is, which room it is
 // in, hiding it, removing it. For a fan or a shade only the last three.
-import { roomPicker, confirmSheet, undoMove } from '/ui/screens/pickers.js';
+import { roomPicker, confirmSheet, undoMove, nameSheet } from '/ui/screens/pickers.js';
 
 // What each role does in the five suggested scenes, as the file says it.
 const ROLES = [
@@ -41,6 +41,7 @@ export function about(c, r) {
   }
   const hiddenNow = c.EDIT.hidden().includes(id);
   body += `<div class="group about-rows">
+    <button class="row" data-act="about-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val nm-cut">${esc(d.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     <button class="row" data-act="about-move"><span class="row-txt"><span class="t">Move to room</span></span><span class="row-val nm-cut">${esc(c.data.devAreaName(d) || 'No room')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     <div class="row"><span class="row-txt"><span class="t">Hide from the app</span></span><button class="toggle" role="switch" aria-checked="${hiddenNow}" data-act="about-hide" aria-label="Hide from the app"></button></div>
     ${c.EDIT.canRemove(id) ? `<button class="row" data-act="about-remove"><span class="row-txt"><span class="t">Remove from home</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
@@ -49,7 +50,23 @@ export function about(c, r) {
   return { over: d.name, title: `About this ${noun(d)}`, body: `<div class="about">${body}</div>` };
 }
 
+// A name of the app's own, saved as it is typed; cleared, the device has the bridge's name again (shown in the empty
+// field). The one sheet for a light, a fan, a shade and a remote.
+export function renameSheet(c, id, over) {
+  const d = c.data.dev(id);
+  return nameSheet(c, { over, title: 'Name', value: d ? d.name : '', act: 'device-name-set', data: `data-id="${c.esc(id)}"`, placeholder: c.data.bridgeName(id) });
+}
+export const renameActions = {
+  'device-name-set'(c, el, r, value) {
+    const id = el.dataset.id; if (!id || !c.data.dev(id)) return;
+    c.data.setDeviceName(id, value);
+    c.saveSoon();
+  },
+};
+
 export const actions = {
+  ...renameActions,
+  'about-name'(c, el, r) { const d = c.data.dev(r.id); if (d) c.openPicker('name', c2 => renameSheet(c2, r.id, `About this ${noun(d)}`)); },
   'about-role'(c, el, r) {
     const d = c.data.dev(r.id); if (!d) return;
     const k = el.dataset.role;

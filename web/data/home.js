@@ -25,6 +25,9 @@
   // nothing matches, this does nothing, which is what makes it safe to leave in place.
   const OLD_SUGGESTED_FADE = { bright: 1, relax: 3, dinner: 3, movie: 8, night: 2 };
   const MOOD_ORDER = ['bright', 'relax', 'dinner', 'movie', 'night'];
+  // The white each evening mood asks of a lamp that can change its own: warm for Relax, warmer at dinner, candle-warm
+  // for a film and the night. Bright asks none, so a lamp in it stays in whatever white it has.
+  const MOOD_KELVIN = { relax: 2700, dinner: 2400, movie: 2200, night: 2000 };
   const moodById = id => MOODS.find(m => m.id === id);
 
   // ---------- roles ----------
@@ -141,7 +144,7 @@
           if (acc) out[acc.device_id] = 10;
           else { const amb = dim.find(d => (lightRole(d.device_id) || 'ambient') === 'ambient'); if (amb) out[amb.device_id] = 5; }
         }
-        return out;
+        return warm(ds, out, mood);
       }
       for (const d of ds) {
         if (d.domain === 'switch') out[d.device_id] = mood.sw ? 100 : 0;
@@ -150,6 +153,22 @@
       }
       // one that would leave the room dark is not a look: the main light keeps a floor
       if (!Object.values(out).some(v => levelOf(v) > 0)) { const dim = roomDimmers(aid)[0]; if (dim) out[dim.device_id] = 15; }
+      return warm(ds, out, mood);
+    }
+    // The evening moods in a warm white, on the lamps whose white can change: a lamp left on daylight made Movie a
+    // blue-white room. Each lamp is asked for no warmer than it goes (its own range), and one that follows the day
+    // keeps following it, which is warm by the evening anyway. Bright, and every light that cannot change its white
+    // (a Caseta dimmer, a switch), keep a level alone.
+    function warm(ds, out, mood) {
+      const k = MOOD_KELVIN[mood.id]; if (!k) return out;
+      const follow = ((S.config && S.config.settings && S.config.settings.follow_day) || {}).device_ids || [];
+      for (const d of ds) {
+        const lv = out[d.device_id];
+        if (!d.ct || d.domain !== 'light' || typeof lv !== 'number' || lv <= 0) continue;
+        if (follow.includes(d.device_id)) { out[d.device_id] = { level: lv, follow: true }; continue; }
+        const lo = Array.isArray(d.ct_range) && Number(d.ct_range[0]) > 0 ? Number(d.ct_range[0]) : 0;
+        out[d.device_id] = { level: lv, kelvin: Math.max(k, Math.round(lo)) };
+      }
       return out;
     }
     // Are the lights showing these levels right now (within a couple of percent)?

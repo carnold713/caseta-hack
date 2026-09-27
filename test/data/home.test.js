@@ -258,3 +258,25 @@ test('scaleLevels keeps the lights in proportion', () => {
   // a dark room comes up together
   assert.deepStrictEqual(scaleLevels({ a: 0, b: 0 }, 0, 40), { a: 40, b: 40 });
 });
+
+test('the evening moods ask a lamp that can change its white for a warm one, within its range, and nothing else', () => {
+  const d = CD.create();
+  const inv = inventory();
+  inv.devices.hue_l1 = { ...inv.devices.hue_l1, ct: true, ct_range: [2200, 6500] };
+  inv.devices.hue_l2 = { device_id: 'hue_l2', name: 'Hue ceiling', domain: 'light', area: 'hue_r1', ct: true, color: true, ct_range: [2000, 6500] };
+  inv.devices.hue_l3 = { device_id: 'hue_l3', name: 'Hue plug', domain: 'switch', area: 'hue_r1' };
+  d.apply({ type: 'snapshot', inventory: inv, states: {}, agent: { online: true }, activity: [],
+    config: { version: 3, bindings: [], presets: [], groups: [], schedules: [], favorites: [], settings: {} } });
+  const h = CH.create(d, { kinds: KIND_DEF, uid: () => 'x' });
+  const at = m => h.moodLevels('hue_r1', CH.moodById(m));
+  assert.deepEqual(at('relax').hue_l2, { level: 40, kelvin: 2700 });
+  assert.deepEqual(at('movie').hue_l2, { level: 20, kelvin: 2200 });
+  assert.deepEqual(at('night').hue_l1, { level: 5, kelvin: 2200 }, 'no warmer than the lamp goes: 2000 asked, 2200 is its end');
+  assert.equal(at('bright').hue_l2, 100, 'Bright leaves the white as it is');
+  assert.equal(at('relax').hue_l3, 0, 'a switch keeps a plain level');
+  // a Caseta dimmer has no white to change
+  assert.equal(typeof h.moodLevels('a1', CH.moodById('movie'))[1], 'number');
+  // a lamp that follows the day keeps following it
+  d.S.config.settings.follow_day = { device_ids: ['hue_l2'], brightness: false };
+  assert.deepEqual(at('dinner').hue_l2, { level: 60, follow: true });
+});

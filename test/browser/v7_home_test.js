@@ -202,7 +202,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await C(async id => { const c = window.__copper; c.S.config.schedules = c.S.config.schedules.filter(s => s.id !== id); c.S.activity = (c.S.activity || []).filter(e => e.id !== id); await c.data.saveConfig(); }, sid);
   await C(() => window.scrollTo(0, 0));
 
-  // ---- 10 · Goodnight: the page goes dark room by room, then "Sleep well" on a moon; no toast, no Put back
+  // ---- 10 · Goodnight: the page goes dark room by room, then "Sleep well" on a moon, a quiet Put back at its foot; no toast
   await cmd({ type: 'level', target: 'a:20', level: 60 }); await cmd({ type: 'level', target: 'a:23', level: 40 }); await wait(1400);
   await go('home');
   const litBefore = await C(() => window.__copper.H.litLights().map(d => [d.device_id, window.__copper.data.level(d.device_id)]));
@@ -223,16 +223,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('"Sleep well" on a faint moon', moon && moon.sleep === 'Sleep well' && moon.sleepOp > 0.9 && moon.moon > 0.5, moon);
   check('the fans and shades said as they finish', moon && /Fans stopped|Shades closed|^$/.test(moon.extras), moon && moon.extras);
   const toastTxt = await page.textContent('#toast-root');
-  check('no toast and no Put back: the dark page is the answer', toastTxt === '', toastTxt);
+  check('no toast: the dark page is the answer', toastTxt === '', toastTxt);
+  const pb = await C(() => { const b = document.querySelector(".gn-night .gn-back"); return b && { text: b.textContent.trim(), op: Number(getComputedStyle(b).opacity), bottom: Math.round(innerHeight - b.getBoundingClientRect().bottom), h: Math.round(b.getBoundingClientRect().height) }; });
+  check('Put back, quietly, at the foot of the dark page', pb && pb.text === 'Put back' && pb.op > 0.9 && pb.bottom < 120 && pb.h >= 44, pb);
   await page.screenshot({ path: 'v7-goodnight.png' });
-  await wait(3300);
+  await wait(5300);
   const after = await C(() => ({ gone: !document.querySelector('.gn-night'), hash: location.hash }));
-  check('3 s on, the page settles: into Nightstand at night, else back to Home', after.gone && /^#(home|nightstand)$/.test(after.hash), after);
-  check('and still no Put back', !(await page.$('#toast-root [data-act="toast-undo"]')));
+  check('5 s on (Put back had its time), the page settles: into Nightstand at night, else back to Home', after.gone && /^#(home|nightstand)$/.test(after.hash), after);
+  check('and no toast offering Put back', !(await page.$('#toast-root [data-act="toast-undo"]')));
   // put back what was on, directly
   await C(async l => { for (const [id, lv] of l) await window.__copper.run({ type: 'level', target: `d:${id}`, level: lv }); }, litBefore); await wait(1500);
   const litAgain = await C(() => window.__copper.H.litLights().map(d => d.device_id).sort());
   check('set back directly, what was on is on again', litBefore.length > 0 && JSON.stringify(litAgain) === JSON.stringify(litBefore.map(x => x[0]).sort()), { litAgain, litBefore });
+  await go('home');
+
+  // ---- 10 · Put back on the dark page: what was on comes back as it was
+  await hold('[data-hold="goodnight"]', 1150); await wait(200);
+  await page.mouse.click(206, 700); await wait(900);
+  check('after Goodnight the house is dark', (await C(() => window.__copper.H.litLights().length)) === 0);
+  await C(() => document.querySelector('.gn-night .gn-back').click()); await wait(1800);
+  const putBack = await C(() => ({ gone: !document.querySelector('.gn-night'), lit: window.__copper.H.litLights().map(d => d.device_id).sort() }));
+  check('Put back wakes the page and brings back what was on', putBack.gone && JSON.stringify(putBack.lit) === JSON.stringify(litBefore.map(x => x[0]).sort()), { putBack, litBefore });
   await go('home');
 
   // ---- 10 · a tap during the dark-out skips to the end; it never cancels Goodnight
@@ -242,17 +253,33 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const skipped = await C(() => { const el = document.querySelector('.gn-night'); return el && { sleep: Number(getComputedStyle(el.querySelector('.gn-sleep')).opacity), veil: Number(getComputedStyle(el.querySelector('.gn-veil')).opacity) }; });
   check('a tap skips straight to "Sleep well"', skipped && skipped.sleep > 0.9 && skipped.veil > 0.9, skipped);
   check('and Goodnight still happened', (await C(() => window.__copper.H.litLights().length)) === 0);
-  await wait(3600);
+  await wait(5600);
   await go('home');
 
-  // ---- 10 · offline: the hold still fills and nothing darkens; it used to say the house did not hear, in a toast,
-  // and toasts are off (the owner's call), so for now it says nothing
-  await C(() => { const c = window.__copper; c.__conn = c.conn; c.conn = () => 'off'; });
+  // ---- 10 · offline: the hold still fills and nothing darkens; with toasts off, its own word says "Offline" a moment
   await cmd({ type: 'level', target: 'a:20', level: 60 }); await wait(1200);
+  await C(() => { const c = window.__copper; c.__conn = c.conn; c.conn = () => 'off'; c.data.__cs = c.data.connState; c.data.connState = () => 'off'; });
   await hold('[data-hold="goodnight"]', 1150); await wait(300);
-  const off = await C(() => ({ night: !!document.querySelector('.gn-night'), lit: window.__copper.H.litLights().length, toast: document.querySelector('#toast-root').innerHTML }));
-  check('offline: no darkening, the lights left as they were, and no toast', !off.night && off.lit > 0 && off.toast === '', off);
-  await C(() => { const c = window.__copper; c.conn = c.__conn; delete c.__conn; c.render(); });
+  const off = await C(() => ({ night: !!document.querySelector('.gn-night'), lit: window.__copper.H.litLights().length, toast: document.querySelector('#toast-root').innerHTML, label: document.querySelector('.gn-label').textContent }));
+  check('offline: no darkening, the lights left as they were, no toast, and Goodnight says Offline', !off.night && off.lit > 0 && off.toast === '' && off.label === 'Offline', off);
+  await wait(2700);
+  check('then says Goodnight again', (await C(() => document.querySelector('.gn-label').textContent)) === 'Goodnight');
+  // on a room's page and a light's: the control tapped says Offline, and nothing is sent
+  await C(() => { window.__sent = []; const c = window.__copper; c.__run0 = c.data.run; c.data.run = a => { window.__sent.push(a); return c.__run0(a); }; });
+  await go('room/20');
+  await C(() => document.querySelector('[data-act="room-off"]').click()); await wait(300);
+  const ro = await C(() => ({ words: document.querySelector('[data-act="room-off"]').textContent.trim(), sent: window.__sent.length }));
+  check('offline, a room\'s Off says Offline, and nothing is sent', ro.words === 'Offline' && ro.sent === 0, ro);
+  await C(() => document.querySelector('.room-grid .tile .pwr').click()); await wait(300);
+  check('and a tile\'s power circle says it under the tile\'s name', (await C(() => document.querySelector('.room-grid .tile .vl').textContent)) === 'Offline');
+  const lid = await C(() => window.__copper.H.roomLights('20')[0].device_id);
+  await go(`light/${lid}`);
+  await C(() => document.querySelector('[data-act="dev-off"]').click()); await wait(300);
+  check('a light\'s Off says Offline too', (await C(() => document.querySelector('[data-act="dev-off"]').textContent.trim())) === 'Offline' && (await C(() => window.__sent.length)) === 0);
+  await wait(2700);
+  check('and then Off again', (await C(() => document.querySelector('[data-act="dev-off"]').textContent.trim())) === 'Off');
+  await C(() => { const c = window.__copper; c.conn = c.__conn; delete c.__conn; c.data.connState = c.data.__cs; delete c.data.__cs; c.data.run = c.__run0; delete c.__run0; c.render(); });
+  await go('home');
   await cmd({ type: 'level', target: 'h:all', level: 'off' }); await wait(1000);
 
   // ---- reduced motion: the light is still drawn and still shows; nothing drifts

@@ -51,7 +51,7 @@ const $ = s => document.querySelector(s);
 // Run one action now. A failure is said in a toast and never thrown at the screen.
 async function run(action) {
   // 18 · Offline, calmly: past the quiet ten seconds a tap is answered at once and nothing is queued to replay later
-  if (data.connState() === 'off') { toast(OFFLINE_TAP, { icon: 'wifi' }); return false; }
+  if (data.connState() === 'off') { toast(OFFLINE_TAP, { icon: 'wifi' }); sayOffline(); return false; }
   // a scene arriving crossfades every light it touches over the scene's 1.0 s, not one light's 0.4 s
   if (action && (action.type === 'preset' || action.type === 'scene')) motion.sceneArriving();
   // the scene run last in a room is the one it is showing, when more than one would fit (home.js sceneMatch)
@@ -156,6 +156,31 @@ function toast(msg, opts = {}) {
   root._undo = opts.undo || null;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { root._undo = null; const t = root.firstElementChild; if (t) motion.leave(t); }, opts.ms || 5000);
+}
+
+// ---------- a tap the house cannot hear ----------
+// Past the quiet ten seconds nothing a tap asks for is sent or queued (run). With the toasts off, the control that was
+// tapped says so itself for a moment, the way a held button says "Hold": its own word becomes "Offline" ("On", a
+// scene's name), or, for a round power button with no word of its own, the value under its card's name. Nothing else
+// on the page moves, and the word comes back as it was.
+let tapped = null, tappedAt = 0;
+const SAY_MS = 2500;
+const SAY_IN = [['.tile, .room-card, .room-big, .pin-room', '.vl'], ['.goodnight', '.gn-label'], ['.dial, .speeds', '.lbl']];
+function sayOffline(el = Date.now() - tappedAt < 1500 ? tapped : null) {
+  if (!el || !el.isConnected) return;
+  // the last words in the control itself, leaving out a drawing's own text
+  const words = n => {
+    const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT, { acceptNode: t => (t.nodeValue.trim() && !t.parentElement.closest('svg') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
+    let last = null; while (w.nextNode()) last = w.currentNode;
+    return last;
+  };
+  let t = words(el);
+  if (!t) for (const [box, lab] of SAY_IN) { const b = el.closest(box); const l = b && b.querySelector(lab); if (l) { t = words(l); break; } }
+  if (!t || t.nodeValue.trim() === 'Offline') return;
+  const was = t.nodeValue;
+  t.nodeValue = 'Offline';
+  const holder = t.parentElement; if (holder) holder.classList.add('said-off');
+  setTimeout(() => { if (t.isConnected && t.nodeValue === 'Offline') { t.nodeValue = was; if (holder) holder.classList.remove('said-off'); } }, SAY_MS);
 }
 
 // ---------- the sheet ----------
@@ -317,6 +342,8 @@ const ctx = {
   data, H, DAY, EDIT, REM, RT, S, esc, icon, deviceArt, roomArt, artSrc, kindArt, lampTint,
   openPicker: (n, spec) => openPicker(n, spec), closePicker: () => closePicker(),
   run, turn, gate, save, saveSoon, assume, onLevel, toast, go, openSheet, closeSheet, render: () => render(),
+  // the control just tapped says "Offline" for a moment (a screen's own check of the connection calls it too)
+  sayOffline: () => sayOffline(),
   // the history's own steps, for a page that finishes something: dismiss closes a sheet as its X does (a step back
   // when it was opened as one), back is the back circle, goTab is a tab's button, replace and leave are above,
   dismiss: () => dismissSheet(), back: () => stepBack(), goTab: t => goTab(t), replace: h => replacePage(h), leave: f => leavePage(f),
@@ -585,6 +612,7 @@ document.addEventListener('click', e => {
   if (opening.busy() || chipOpen.busy()) { e.preventDefault(); return; }
   // the innermost target wins: a tile navigates, the power circle inside it toggles
   const el = e.target.closest('[data-act], [data-go]'); if (!el) return;
+  if (el.dataset.act) { tapped = el; tappedAt = Date.now(); }
   chipOpen.tap(el);
   // a link to a tab's own page (Settings' Rooms row, the Nightstand's Home) is that tab's button: tabs never stack
   if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs') || TABS.some(t => t[0] === el.dataset.go)) goTab(el.dataset.go); else { opening.tap(el); go(el.dataset.go); } return; }
@@ -751,6 +779,7 @@ function endHold(fire) {
   ctx.endDrag();
   if (fire) {
     heldAt = Date.now();
+    tapped = h.el; tappedAt = heldAt;
     if (navigator.vibrate) navigator.vibrate(30);
     const r = route(); const screen = screenFor(r);
     const fn = screen.actions && screen.actions[h.el.dataset.hold];

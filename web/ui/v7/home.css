@@ -39,6 +39,12 @@
 .gn-extras { top: calc(42.4% + 74px); font-size: 14px; line-height: 18px; color: #7D6A5A; }
 .gn-stay { top: calc(42.4% + 102px); display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 14px; color: #C2B8AD; }
 .gn-stay:empty { display: none; }
+/* Put back: a quiet word at the foot of the screen, where the thumb that held Goodnight still is */
+.gn-back {
+  position: absolute; left: 50%; bottom: calc(48px + env(safe-area-inset-bottom)); transform: translateX(-50%); opacity: 0;
+  min-width: 120px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 22px; background: none;
+  font: inherit; font-size: 15px; font-weight: 500; color: #A89684; text-decoration: underline; text-underline-offset: 3px;
+}
 .gn-stay .link { border: 0; background: none; font: inherit; font-weight: 500; color: var(--copper-hi); padding: 8px 0; text-decoration: underline; }
 /* the Goodnight toast stays 8 s, and its bar drains over the same (app.js sets --toast-ms) */
 .toast::after { animation-duration: var(--toast-ms, 5s); }

@@ -263,3 +263,11 @@ test('a levels command: each light its own level, only from the app', () => {
   assert.throws(() => validateLevels({ type: 'levels', levels: { 'bad id!': 5 } }, 'c'));
   assert.throws(() => validateLevels({ type: 'levels', levels: [5] }, 'c'));
 });
+
+test('a light or a remote can carry a name of its own, trimmed, and an empty one is none', () => {
+  const out = validateConfig({ settings: { device_names: { '5': '  Over  the   sink ', '6': '', 'bad id!': 'x', '7': 42, '8': 'A'.repeat(80) } } });
+  assert.deepStrictEqual(Object.keys(out.settings.device_names).sort(), ['5', '8']);
+  assert.strictEqual(out.settings.device_names['5'], 'Over the sink');
+  assert.strictEqual(out.settings.device_names['8'].length, 40);
+  assert.deepStrictEqual(validateConfig({ settings: { device_names: ['x'] } }).settings.device_names, {});
+});

@@ -43,7 +43,10 @@ export function model(c) {
       routines.push({ id: sc.id, name: sc.name || RT.autoName(sc, L, Sh, !!RT.pairOf(sc)), enabled: sc.enabled !== false, t: n ? n.t : 0, date: sk || (n ? n.date : ''), skipping: !!sk, icon });
     } catch (_) { /* a routine that cannot be read is left out */ }
   }
-  const sig = JSON.stringify([rooms, lights.map(l => l.name), scenes.map(s => s.name)]).length + ':' + rooms.length + ':' + lights.length + ':' + scenes.length;
+  // (a hash of the names, not their length: a light renamed "Hall" to "Hals" is a change the previews should see)
+  const text = JSON.stringify([rooms, lights.map(l => l.name), scenes.map(s => s.name)]);
+  let h = 5381; for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  const sig = h.toString(36) + ':' + rooms.length + ':' + lights.length + ':' + scenes.length;
   return { home: (S.config.settings && S.config.settings.home_name) || '', rooms, lights, scenes, pins, night: night ? { id: night.device_id, name: night.name } : null, routines, sig };
 }
 

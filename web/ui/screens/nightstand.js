@@ -54,8 +54,11 @@ export function view(c) {
   } else if (off) {
     area = ''; title = 'Night light'; sub = "Can't reach the house. Your remotes still work.";
   } else if (on) {
+    // What is true, in the words it had while off: the night light, and that it is on until it goes out by itself.
+    // (It used to say "Off", the tap's outcome, in the place the state is read, over a lamp that was on.) Off is
+    // still a tap, as a lit thing is everywhere in the app; the glow says it is on before the words do.
     const at = offAt(c, d);
-    area = 'data-act="ns-off"'; title = 'Off'; sub = `${d.name} · ${at ? `off at ${at}` : `${lv}%`}`;
+    area = 'data-act="ns-off"'; title = 'Night light'; sub = at ? `On until ${at}` : `On · ${lv}%`;
   } else {
     // the hold is hidden, and it is the only way on: a tap says "Hold" for a moment, and nothing is said until then
     area = 'data-hold="ns-on" data-ms="250" data-act="ns-tap"'; title = 'Night light'; sub = hint ? 'Hold' : '';

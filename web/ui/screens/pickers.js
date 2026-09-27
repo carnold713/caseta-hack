@@ -27,11 +27,11 @@ export function confirmSheet(c, { over = '', title, text, yes, act, data = '' })
 }
 
 // A one-field form for a name, saved as it is typed (quietly) and when it is submitted.
-export function nameSheet(c, { over = '', title, value, act, data = '', max = 40 }) {
+export function nameSheet(c, { over = '', title, value, act, data = '', max = 40, placeholder = '' }) {
   return {
     over, title,
     body: `<form class="name-form" data-form="name" data-act="${act}" ${data}>
-      <input class="field" name="name" value="${c.esc(value)}" maxlength="${max}" autocomplete="off" spellcheck="false" aria-label="${c.esc(title)}">
+      <input class="field" name="name" value="${c.esc(value)}" maxlength="${max}" autocomplete="off" spellcheck="false" aria-label="${c.esc(title)}"${placeholder ? ` placeholder="${c.esc(placeholder)}"` : ''}>
       <button class="pill solid" type="submit">Done</button></form>`,
     after: (c2, r, root) => { const i = root.querySelector('.name-form input'); if (i && document.activeElement !== i) { i.focus(); i.select(); } },
   };

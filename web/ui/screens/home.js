@@ -268,7 +268,7 @@ export const actions = {
   // sleep with the house (goodnightDark). Offline, nothing went dark, so nothing on the page does either.
   async goodnight(c) {
     c.ui.gnHint = 0;
-    if (c.conn() === 'off') { c.toast("The house didn't hear that. Your remotes still work.", { err: true }); return; }
+    if (c.conn() === 'off') { c.toast("The house didn't hear that. Your remotes still work.", { err: true }); c.sayOffline(); return; }
     const acts = c.H.goodnightActions();
     const rooms = c.data.areas().map(a => ({ aid: a.id, L: roomLight(c, a.id) })).filter(r => r.L);
     // every light is shown off at once (turn), then the page goes dark over it
@@ -285,6 +285,8 @@ export const actions = {
     el.closest('.gn-stay')?.remove();
   },
   'what-now'(c) { connActions['conn-open'](c); },
+  // Goodnight's Put back: everything as it was before, and the page wakes with it
+  'gn-put-back'(c) { putBack(c); },
 };
 
 // ---------- Goodnight: the page goes to sleep with the house ----------
@@ -296,7 +298,7 @@ export const actions = {
 //   and shades did 0.5 s after that, and "Goodnight · Put back" stays 8 s
 //   3 s after "Sleep well" the page settles into Nightstand in the night hours, or lifts back to Home (0.4 s EASE_IN)
 // A tap anywhere skips to the end. Nothing cancels Goodnight: it has happened by the time the page dims.
-const GAP = 240, FIRST = 100, DIMMER = 400, FADE = 1600, SETTLE = 3000;
+const GAP = 240, FIRST = 100, DIMMER = 400, FADE = 1600, SETTLE = 3000, PUT_BACK_MS = 2000;
 const STD = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 let gn = null;
 const later = (fn, ms) => { if (gn) gn.timers.push(setTimeout(fn, ms)); };
@@ -326,7 +328,8 @@ function goodnightDark(c, rooms, acts) {
     <div class="gn-moon">${glowHTML({ level: 100, kelvin: 6500, ctx: 'tile', gain: 0.19, cls: 'gn-moon-glow' })}${c.icon('moon', 24, 1.6)}</div>
     <p class="gn-sleep">Sleep well</p>
     ${extras ? `<p class="gn-extras">${extras}</p>` : ''}
-    <div class="gn-stay"></div>`;
+    <div class="gn-stay"></div>
+    <button class="gn-back" data-act="gn-put-back">Put back</button>`;
   document.body.appendChild(el);
   gn = { el, c, timers: [], ended: false, toasted: false };
   // A new touch during it only skips to the end; a button inside it (Turn off) is its own. A new touch, not a click:
@@ -389,6 +392,10 @@ function gnSleep() {
   const { el, c } = gn;
   rise(el.querySelector('.gn-sleep'));
   const ex = el.querySelector('.gn-extras'); if (ex) later(() => fade(ex, 1, 320, STD), 500);
+  // Put back, quietly, at the foot of the screen, for as long as the page is dark: Goodnight held by mistake is
+  // undone where the thumb already is. (It was the toast's; the toasts are off.) The page stays dark a little longer
+  // while it is offered, so there is time to reach it.
+  later(() => fade(el.querySelector('.gn-back'), 1, 320, STD), 500);
   const stayed = c.H.litLights().filter(d => !c.H.timerOn(d.device_id));
   if (stayed.length) {
     const s = el.querySelector('.gn-stay');
@@ -396,7 +403,7 @@ function gnSleep() {
     later(() => fade(s, 1, 320, STD), 500);
   }
   gnToast(c);
-  later(() => gnEnd(c), SETTLE);
+  later(() => gnEnd(c), SETTLE + PUT_BACK_MS);
 }
 function gnToast(c) {
   if (!gn || gn.toasted) return;

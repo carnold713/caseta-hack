@@ -405,8 +405,37 @@
     // A device removed from the app stays hidden even when the bridge goes on listing it: some bridges keep a
     // deleted remote in their own list until it is unpaired there, and it should not come back on the next refresh.
     const hiddenDevices = () => ((S.config && S.config.settings && S.config.settings.hidden_devices) || []);
-    const devices = () => { const hide = hiddenDevices(); return Object.values(S.inv.devices || {}).filter(d => !hide.includes(d.device_id)); };
-    const dev = id => (S.inv.devices || {})[id];
+    // A device can be given a name of its own (settings.device_names), the way a room is: the app's name wins over the
+    // bridge's everywhere the device is named, and clearing it gives the bridge's back. A renamed device is a copy of
+    // the bridge's with its name changed and the bridge's kept beside it (bridge_name), made once for each device
+    // and name and kept while both stay the same, so a device is the same object from one call to the next. (Kept per
+    // device rather than per inventory: a device the add walk writes in, or one removed, changes the list in place.)
+    const deviceNames = () => ((S.config && S.config.settings && S.config.settings.device_names) || {});
+    const copies = new Map();
+    function named(d) {
+      if (!d) return d;
+      const v = deviceNames()[d.device_id], n = typeof v === 'string' ? v.trim() : '';
+      if (!n || n === d.name) return d;
+      const k = copies.get(d.device_id);
+      if (k && k.src === d && k.copy.name === n) return k.copy;
+      const copy = { ...d, name: n, bridge_name: d.name };
+      copies.set(d.device_id, { src: d, copy });
+      return copy;
+    }
+    // Name a device, or with '' give it back the bridge's name.
+    function setDeviceName(id, name) {
+      if (!S.config) return;
+      S.config.settings = S.config.settings || {};
+      const next = { ...deviceNames() };
+      const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+      const raw = (S.inv.devices || {})[id];
+      if (n && !(raw && raw.name === n)) next[id] = n; else delete next[id];
+      S.config.settings.device_names = next;
+    }
+    // The bridge's own name for a device, whatever the app calls it.
+    const bridgeName = id => { const d = (S.inv.devices || {})[id]; return d ? d.name : ''; };
+    const devices = () => { const hide = hiddenDevices(); return Object.values(S.inv.devices || {}).filter(d => !hide.includes(d.device_id)).map(named); };
+    const dev = id => named((S.inv.devices || {})[id]);
 
     // ---------- rooms the app owns ----------
     // settings.rooms is the truth about rooms once it exists: the app's own list, seeded from the bridges the first
@@ -600,7 +629,7 @@
       // the socket and the wire
       apply, noteLive, api, lightHistory, run, gate, hold, expect, sent, settle, landing, saveConfig, restoreConfig, connectWS,
       // inventory and rooms
-      hiddenDevices, devices, dev, appRooms, appRoom, roomIndex, devArea, devAreaName, areaName, areas,
+      hiddenDevices, devices, dev, setDeviceName, bridgeName, appRooms, appRoom, roomIndex, devArea, devAreaName, areaName, areas,
       controllable, remotes, byName, level, isOn, buttonsOf, groups, presets, lutronScenes,
       // targets
       targetDevices, targetName, targetOn, targetExists, targetOptions, isShadeTarget,
