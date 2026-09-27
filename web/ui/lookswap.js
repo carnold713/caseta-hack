@@ -17,7 +17,7 @@
 // is drawn at once and its parts are held back by animations with a delay and `fill: backwards`, which motion.carry
 // carries over should the house redraw the sheet meanwhile. The travelling dot is its own element over both. It all
 // lives inside the sheet, so it scrolls and clips with it, and nothing of it outlives the sheet.
-import { T, reduced, holdFor } from '/ui/motion.js';
+import { T, reduced, holdFor, copySize } from '/ui/motion.js';
 
 const STD = T.ease;                                    // standard, cubic-bezier(0.2, 0.8, 0.2, 1)
 const GATHER = 'cubic-bezier(0.4, 0, 0.2, 1)';         // the wheel folding into its handle
@@ -47,7 +47,7 @@ export function capture(root, to) {
   // a line of the head, laid over the new head: it takes the head's styles with it, as it will not be inside the head
   const copyAt = el => {
     const node = el.cloneNode(true), cs = getComputedStyle(el);
-    for (const k of TEXT) node.style.setProperty(k, cs.getPropertyValue(k));
+    for (const k of TEXT) node.style.setProperty(k, k === 'font-size' ? copySize(cs.getPropertyValue(k)) : cs.getPropertyValue(k));
     return { node, rect: L(el.getBoundingClientRect()) };
   };
   return {

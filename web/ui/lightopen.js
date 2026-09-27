@@ -25,7 +25,7 @@
 // shrinks into the tile and its face comes back only in the last 0.2 s, the light is drawn back into the tile's drawing,
 // the words fly back and cross in the last 0.15 s, and the room returns around it, nearest first.
 import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, last, textBox, centre, px, opacityOf, part, words, chars, span, copyText, copyButton, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim, homeParts } from '/ui/flight.js';
+import { OPEN, CLOSE, last, textBox, centre, px, opacityOf, part, words, chars, span, copyText, copyButton, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim, homeParts, pressOf } from '/ui/flight.js';
 
 const FACE_GO = 80;     // the face starts giving way this far into the open (a third of the surface's growth)
 // and gives way quickly at first, so that by the time the surface is most of the screen little copper is left on it
@@ -48,7 +48,7 @@ export const find = (screen, entry) => screen.querySelector(`${TILE}[data-go="${
 // Everything about the tile, read while it is still where it was drawn, part way through its press.
 export function read(tile) {
   const box = tile.getBoundingClientRect();
-  const k = box.width / (tile.offsetWidth || box.width) || 1;
+  const k = pressOf(tile, box);
   const cs = getComputedStyle(tile);
   const q = s => tile.querySelector(s);
   const vl = q('.vl');

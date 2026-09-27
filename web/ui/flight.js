@@ -16,7 +16,7 @@
 //   arrive       the new page's controls rise in, in reading order, on the standard curve.
 //
 // Transforms, opacity and clip-path only. Everything is measured before anything is written.
-import { T, holdFor } from '/ui/motion.js';
+import { T, holdFor, copySize, layoutSize } from '/ui/motion.js';
 
 export const OPEN = { dur: 550, ease: 'cubic-bezier(0.2, 0, 0, 1)' };
 export const CLOSE = { dur: 450, ease: 'cubic-bezier(0.4, 0, 0.2, 1)' };
@@ -124,6 +124,10 @@ export function textBox(el) {
 }
 export const centre = r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 export const px = n => `${Math.round(n * 100) / 100}px`;
+// a size a copy's words are laid out in, never rounded down below what they need
+const pxUp = n => `${Math.ceil(n * 100 - 1e-6) / 100}px`;
+// How much a thing tapped is pressed (or scaled) as it is seen: its box on screen over its own laid out width.
+export const pressOf = (el, box = el.getBoundingClientRect()) => box.width / (layoutSize(el).w || box.width) || 1;
 export const opacityOf = el => (el ? Number(getComputedStyle(el).opacity) : 0);
 // A part of the thing tapped, by its box less the press it is part way through (offsetWidth would round it, and a
 // line of words cut short by a pixel ends in an ellipsis).
@@ -168,7 +172,9 @@ export function copyText(p, k) {
   const cs = getComputedStyle(p.el);
   const s = document.createElement('span');
   s.textContent = p.text != null ? p.text : p.el.textContent;
-  for (const q of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'color', 'textOverflow', 'overflow']) s.style[q] = cs[q];
+  for (const q of ['fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing', 'color', 'textOverflow', 'overflow']) s.style[q] = cs[q];
+  // (its size as it is drawn, not as a text zoom reads it back: motion.js, copySize)
+  s.style.fontSize = copySize(cs.fontSize);
   // words on more than one line keep their block's own width and wrapping, and its ellipsis after the last line, so
   // the copy breaks exactly where they do and never becomes one line in flight
   if (p.lines) {
@@ -177,10 +183,12 @@ export function copyText(p, k) {
     s.style.display = cs.webkitLineClamp && cs.webkitLineClamp !== 'none' ? '-webkit-box' : cs.display;
     return pin(s, p, k);
   }
-  // one line, as it was: a copy is never narrower than the words it carries
+  // one line, as it was: a copy is never narrower than the words it carries, and words that were whole where they
+  // rested are whole in flight (only a line its ellipsis had cut keeps the ellipsis, where it cut it)
   s.style.whiteSpace = 'nowrap';
+  if (!cutShort(p.el)) { s.style.overflow = 'visible'; s.style.textOverflow = 'clip'; }
   const node = pin(s, p, k);
-  node.style.width = px(p.w + 0.5);
+  node.style.width = pxUp(p.w + 0.5);
   return node;
 }
 export function copyButton(p, k) {
@@ -201,7 +209,7 @@ export function copyNode(p, k) {
   from.forEach((n, i) => {
     const cs = getComputedStyle(n), t = to[i];
     if (!t.style) return;
-    for (const q of LOOK) t.style[q] = cs[q];
+    for (const q of LOOK) t.style[q] = q === 'fontSize' ? copySize(cs[q]) : cs[q];
     t.removeAttribute('class'); t.removeAttribute('data-act'); t.removeAttribute('data-go'); t.removeAttribute('id');
   });
   c.style.position = 'absolute';
@@ -211,7 +219,7 @@ export function pin(node, p, k) {
   const c = centre(p.r);
   node.setAttribute('aria-hidden', 'true');
   Object.assign(node.style, {
-    position: 'absolute', left: px(c.x - p.w / 2), top: px(c.y - p.h / 2), width: px(p.w), height: px(p.h),
+    position: 'absolute', left: px(c.x - p.w / 2), top: px(c.y - p.h / 2), width: pxUp(p.w), height: pxUp(p.h),
     margin: '0', boxSizing: 'border-box', transformOrigin: '50% 50%', transform: `scale(${k})`, pointerEvents: 'none', transition: 'none',
   });
   node._c = c;

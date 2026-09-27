@@ -357,8 +357,10 @@ function play(pose, dur) {
 export function prepare(screen, pose) {
   if (!pose) return null;
   const box = screen.getBoundingClientRect();
+  // (as wide as the page was laid out, to the fraction of a pixel, so a title that only just fits its line still fits
+  // it as the page slides off)
   const gh = el('pb-leaving', {
-    position: 'fixed', left: px(box.left), top: px(box.top), width: px(box.width), height: pose.height, zIndex: '1',
+    position: 'fixed', left: px(box.left), top: px(box.top), width: `${box.width}px`, height: pose.height, zIndex: '1',
     transformOrigin: pose.origin, transform: pose.transform, clipPath: pose.clip, backgroundColor: pose.bg,
   });
   gh.inert = true;
