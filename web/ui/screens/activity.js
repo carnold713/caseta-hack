@@ -25,6 +25,14 @@ function result(c, actions) {
   const T = t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
   switch (a.type) {
     case 'level': return a.level === 'on' ? `${T} on` : a.level === 'off' || a.level === 0 ? `${T} off` : a.level === 'toggle' ? `${T} on or off` : `${T} to ${a.level}%`;
+    // a room or the house dragged as one: "Living room to 40%", "The house off"
+    case 'levels': {
+      const ids = Object.keys(a.levels || {}), lit = ids.map(id => a.levels[id]).filter(v => v > 0);
+      const areas = [...new Set(ids.map(id => { const d = c.data.dev(id); return d ? c.data.devArea(d) : null; }))];
+      const where = areas.length === 1 && areas[0] ? c.data.targetName(`a:${areas[0]}`) : 'the house';
+      const W = where.charAt(0).toUpperCase() + where.slice(1);
+      return lit.length ? `${W} to ${Math.round(lit.reduce((s, v) => s + v, 0) / lit.length)}%` : `${W} off`;
+    }
     case 'preset': return c.data.targetName('p:' + a.preset_id);
     case 'scene': return c.data.targetName('s:' + a.scene_id);
     case 'restore': return `${T} back as it was`;

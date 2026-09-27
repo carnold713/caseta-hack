@@ -240,3 +240,21 @@ test('the scene a room is showing: the one run last wins, and one that leaves ou
   h.noteSceneRun('default');
   assert.equal(h.sceneMatch('a1'), 'default', 'Default run after it takes over');
 });
+
+// A room or the house dragged as one: the lit lights keep their proportions going down, close in on 100 going up,
+// and the mean follows the bar.
+test('scaleLevels keeps the lights in proportion', () => {
+  const { scaleLevels } = require('../../web/data/home.js');
+  const start = { a: 100, b: 50 };
+  assert.deepStrictEqual(scaleLevels(start, 75, 75), { a: 100, b: 50 });
+  // the bar is whole numbers: halfway down from a mean of 80 (100 and 60) is 40, and the lamps are at 50 and 30
+  assert.deepStrictEqual(scaleLevels({ a: 100, b: 60 }, 80, 40), { a: 50, b: 30 });
+  assert.deepStrictEqual(scaleLevels(start, 75, 0), { a: 0, b: 0 });
+  assert.deepStrictEqual(scaleLevels(start, 75, 100), { a: 100, b: 100 });
+  const up = scaleLevels(start, 75, 90);
+  assert.ok(up.a === 100 && up.b > 50 && up.b < 100);
+  // a light that was on stays on until the bar reaches 0
+  assert.strictEqual(scaleLevels({ a: 100, b: 2 }, 51, 1).b, 1);
+  // a dark room comes up together
+  assert.deepStrictEqual(scaleLevels({ a: 0, b: 0 }, 0, 40), { a: 40, b: 40 });
+});

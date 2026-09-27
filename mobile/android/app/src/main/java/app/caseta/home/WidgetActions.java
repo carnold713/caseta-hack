@@ -127,6 +127,18 @@ public class WidgetActions extends BroadcastReceiver {
         }
     }
 
+    /** Each light at its own level (a room the quick panel moved as one, its lights in proportion), and redraw. */
+    static void expectEach(Context c, java.util.Map<String, Integer> each) {
+        try {
+            JSONObject state = WidgetStore.state(c);
+            JSONObject levels = obj(state, "levels");
+            for (java.util.Map.Entry<String, Integer> e : each.entrySet()) levels.put(e.getKey(), (int) e.getValue());
+            show(c, state);
+        } catch (Throwable failed) {
+            Safe.note(c, "quick panel show", failed);
+        }
+    }
+
     private static void show(Context c, JSONObject state) {
         WidgetStore.setState(c, state);
         Widgets.updateAll(c);

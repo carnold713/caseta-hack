@@ -355,11 +355,17 @@
         return LV.inflight[key];
       }
       const sendLevel = (target, level, extra) => sendGated(JSON.stringify(target), target, { type: 'level', target, level, fade: 0, ...(extra || {}) });
+      // Several lights at once, each at its own level (a room or the house moved as one, keeping the lights'
+      // proportions: CasetaHome.scaleLevels). One command in flight per `key`, the newest set next.
+      const sendLevels = (key, levels, extra) => {
+        const target = Object.keys(levels).map(id => `d:${id}`);
+        return sendGated('levels:' + key, target, { type: 'levels', levels, fade: 0, ...(extra || {}) });
+      };
       // Colour or white temperature for a Hue lamp: payload is {kelvin} or {hex}, with an optional level.
       const sendColor = (target, payload) => sendGated('color:' + JSON.stringify(target), target, { type: 'color', target, fade: 0, ...payload });
       // True while a target was set from this phone recently: the bridge's own echo must not pull the slider back.
       const levelQuiet = target => { const q = LV.quiet[JSON.stringify(target)]; return !!(q && q > now()); };
-      return { sendGated, sendLevel, sendColor, levelQuiet };
+      return { sendGated, sendLevel, sendLevels, sendColor, levelQuiet };
     }
 
     // Save the whole config. The hub validates it and hands back what it stored, which becomes the config. Returns

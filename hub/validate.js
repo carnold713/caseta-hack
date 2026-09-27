@@ -29,6 +29,22 @@ function isTarget(v) { return isOneTarget(v) || (Array.isArray(v) && v.length >=
 function targetList(v) { return Array.isArray(v) ? v : [v]; }
 function isClock(v) { return typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }
 
+// Several lights, each at its own level, in one command from the app: a room or the house dragged as one, the lights
+// keeping their proportions. Only ever a command; routines and scenes keep their own shapes.
+function validateLevels(a, where) {
+  if (!a || typeof a !== 'object' || a.type !== 'levels') fail(`${where}: not a levels command`);
+  const levels = a.levels;
+  if (!levels || typeof levels !== 'object' || Array.isArray(levels)) fail(`${where}: levels must be {device: level}`);
+  const ids = Object.keys(levels);
+  if (!ids.length || ids.length > 128) fail(`${where}: levels needs 1 to 128 lights`);
+  for (const id of ids) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) fail(`${where}: bad device id`);
+    if (!isLevel(levels[id])) fail(`${where}: each level must be 0-100`);
+  }
+  if (a.fade != null && !(typeof a.fade === 'number' && a.fade >= 0 && a.fade <= 3600)) fail(`${where}: fade must be seconds`);
+  return { type: 'levels', levels: { ...levels }, ...(a.fade != null ? { fade: a.fade } : {}) };
+}
+
 function validateAction(a, where) {
   if (!a || typeof a !== 'object') fail(`${where}: action must be an object`);
   if (Array.isArray(a.target)) { const u = [...new Set(a.target)]; a.target = u.length === 1 ? u[0] : u; }
@@ -315,4 +331,4 @@ function clampInt(v, lo, hi, dflt) {
   return Math.min(hi, Math.max(lo, v));
 }
 
-module.exports = { validateConfig, validateAction, GESTURES, ACTION_TYPES, FAN_SPEEDS };
+module.exports = { validateConfig, validateAction, validateLevels, GESTURES, ACTION_TYPES, FAN_SPEEDS };

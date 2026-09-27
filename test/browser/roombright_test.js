@@ -33,7 +33,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const was = await C(ids => ids.map(id => window.__copper.data.level(id) || 0), ids);
   const levels = () => C(ids => ids.map(id => window.__copper.data.level(id) || 0), ids);
   const setAll = lvs => C(([ids, lvs]) => Promise.all(ids.map((id, i) => window.__copper.run({ type: 'level', target: `d:${id}`, level: lvs[i] || 'off' }))), [ids, lvs]);
-  await C(() => { const c = window.__copper; window.__lv = []; const l = c.gate.sendLevel; c.gate.sendLevel = (...a) => { window.__lv.push(a); return l(...a); }; });
+  await C(() => { const c = window.__copper; window.__lv = []; const l = c.gate.sendLevels; c.gate.sendLevels = (...a) => { window.__lv.push(a); return l(...a); }; });
   // a finger along the bar, from one share of it to another
   const drag = async (from, to) => {
     const b = await C(() => { const r = document.querySelector('.room-bright .hbar').getBoundingClientRect(); return [r.left, r.top + r.height / 2, r.width]; });
@@ -56,7 +56,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('the level in the count follows the finger', during === '1 on · 30%', during);
   const sent = await C(() => window.__lv.slice(-1)[0]);
   let lv = await levels();
-  check('the drag moves the lights that are on, to where the finger is; the one that was off stays off', sent && sent[1] === 30 && sent[0].length === 1 && lv[0] === 30 && lv[1] === 0, { sent, lv });
+  check('the drag moves the lights that are on, to where the finger is; the one that was off stays off', sent && Object.keys(sent[1]).length === 1 && sent[1][ids[0]] === 30 && lv[0] === 30 && lv[1] === 0, { sent, lv });
+
+  // ---- lights at different levels keep their proportions: 100 and 50 (the bar at their mean, 75) dragged to half
+  // that are 50 and 25, the off one stays off
+  await wait(800);
+  await setAll([100, 50, 0]); await wait(1400);
+  await drag(0.75, 0.375);
+  lv = await levels();
+  check('dragging the room down keeps its lit lights in proportion (100 and 50 become about 50 and 25)', lv[0] >= 45 && lv[0] <= 55 && Math.abs(lv[0] - 2 * lv[1]) <= 2 && lv[2] === 0, lv);
 
   // ---- off: the bar rests empty and says nothing (the Off pill has), and a drag brings the room up
   // (after the 1.5 s this phone holds its own level against the bridge's echoes, data.hold)

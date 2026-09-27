@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { WebSocketServer, WebSocket } = require('ws');
 const store = require('./store');
-const { validateConfig, validateAction } = require('./validate');
+const { validateConfig, validateAction, validateLevels } = require('./validate');
 const lightHistory = require('./history');
 
 const PORT = Number(process.env.PORT) || 4400;
@@ -133,6 +133,15 @@ app.put('/api/config', requireAuth, (req, res) => {
 // A command is one action in the same schema the Pico bindings use, executed by the agent now.
 app.post('/api/command', requireAuth, async (req, res) => {
   try {
+    // A room or the house dragged as one: each light to its own level, sent to the connector as the plain level
+    // commands it already knows, all at once, so the lights move together.
+    if (req.body && req.body.type === 'levels') {
+      const action = validateLevels(req.body, 'command');
+      const fade = action.fade != null ? { fade: action.fade } : {};
+      const results = await Promise.all(Object.entries(action.levels).map(([id, level]) => sendCommand({ type: 'level', target: `d:${id}`, level, ...fade })));
+      record({ kind: 'app', action });
+      return res.json({ ok: true, results });
+    }
     const action = validateAction(req.body, 'command');
     if (action.type === 'preset' && !config.presets.some(p => p.id === action.preset_id)) throw Object.assign(new Error('unknown preset'), { status: 400 });
     const result = await sendCommand(action);

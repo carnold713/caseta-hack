@@ -144,7 +144,8 @@ function wireBright(c, root) {
   const bar = root.querySelector('[data-drag="room-bright"]'); if (!bar) return;
   const aid = bar.dataset.id;
   count(root.querySelector('.room-title [data-rlv]'), `room:${aid}`);
-  let ids = null;
+  // the lit lights' levels when the finger landed, and their mean (the bar's value then): the drag scales from these
+  let ids = null, start = null, ref = 0;
   const set = x => {
     const b = bar.getBoundingClientRect();
     // as the house bar: the knob sits inside the end of the fill, so the fill ends 28 past the finger
@@ -153,10 +154,18 @@ function wireBright(c, root) {
     bar.classList.toggle('low', v / 100 * b.width < 100);
     bar.setAttribute('aria-valuenow', v);
     bar.parentElement.classList.remove('off');
-    if (!ids) ids = brightTargets(c, aid);
+    if (!ids) {
+      ids = brightTargets(c, aid);
+      start = {};
+      for (const id of ids) start[id] = c.data.level(id) || 0;
+      const lit = ids.filter(id => start[id] > 0);
+      ref = lit.length ? lit.reduce((a, id) => a + start[id], 0) / lit.length : 0;
+    }
     if (!ids.length) return;
-    c.assume(ids, v, { held: true });
-    c.gate.sendLevel(ids.map(id => `d:${id}`), v);
+    // lit lights keep their proportions (CasetaHome.scaleLevels); a dark room comes up together
+    const levels = c.H.scaleLevels(start, ref, v);
+    for (const [id, lv] of Object.entries(levels)) c.assume([id], lv, { held: true });
+    c.gate.sendLevels(`a:${aid}`, levels);
     // the count beside the title follows the finger, with the lights the drag has brought on counted in it
     const out = root.querySelector('.room-title .count:not(.wv-two)');
     const n = out && out.querySelector('[data-rlv]'), text = countText(c, aid), m = /^(\d+ on · )(\d+)%$/.exec(text);
@@ -165,7 +174,7 @@ function wireBright(c, root) {
   };
   // a sideways drag only: a finger on its way up or down the page scrolls it (gesture.js). The lights it moves are
   // the ones on when the finger lands, so bringing a dark room up does not start moving other lights part way.
-  track(bar, { c, axis: 'x', start: () => { ids = null; bar.classList.add('held'); }, move: e => set(e.clientX), end: () => { ids = null; } });
+  track(bar, { c, axis: 'x', start: () => { ids = null; start = null; bar.classList.add('held'); }, move: e => set(e.clientX), end: () => { ids = null; start = null; } });
 }
 
 // The room's On and Off: the light page's switch, so the room's state is plain at a glance. The copper pill sits under

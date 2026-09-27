@@ -254,3 +254,12 @@ test('validateConfig returns a fresh document and never the one it was handed', 
   assert.strictEqual(out.extra_top_level, undefined, 'an unknown top-level key is not carried through');
   assert.strictEqual(out.settings.evil, undefined, 'an unknown setting is not carried through');
 });
+
+test('a levels command: each light its own level, only from the app', () => {
+  const { validateLevels } = require('./validate');
+  assert.deepStrictEqual(validateLevels({ type: 'levels', levels: { '5': 50, '6': 25 }, fade: 0 }, 'c'), { type: 'levels', levels: { '5': 50, '6': 25 }, fade: 0 });
+  assert.throws(() => validateLevels({ type: 'levels', levels: {} }, 'c'));
+  assert.throws(() => validateLevels({ type: 'levels', levels: { '5': 150 } }, 'c'));
+  assert.throws(() => validateLevels({ type: 'levels', levels: { 'bad id!': 5 } }, 'c'));
+  assert.throws(() => validateLevels({ type: 'levels', levels: [5] }, 'c'));
+});

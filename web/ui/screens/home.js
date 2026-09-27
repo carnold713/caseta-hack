@@ -173,6 +173,9 @@ export function after(c, r, root) {
   // the house changes by itself (a scene, the bridge settling a light) over the dimmer's 0.4 s, or the scene's 1.0 s
   count(root.querySelector('[data-hlv]'), 'house');
   if (!bar) return;
+  // the lit lights' levels when the finger landed, and their mean (the bar then): the drag scales from these, so the
+  // house dims and brightens in proportion as a room does (CasetaHome.scaleLevels)
+  let start = null, ref = 0;
   const set = x => {
     const b = bar.getBoundingClientRect();
     // The knob sits inside the end of the fill (its centre 28 short of it), so the finger is kept on the knob:
@@ -185,12 +188,19 @@ export function after(c, r, root) {
     // the number above counts with the finger
     const n = document.querySelector('[data-hlv]'); if (n) n.textContent = v;
     count.shown('house', v);
-    const ids = c.H.houseLevelTargets(); if (!ids.length) return;
-    c.assume(ids, v, { held: true });
-    c.gate.sendLevel(ids.map(id => `d:${id}`), v);
+    if (!start) {
+      start = {};
+      for (const id of c.H.houseLevelTargets()) start[id] = c.data.level(id) || 0;
+      const lit = Object.values(start).filter(lv => lv > 0);
+      ref = lit.length ? lit.reduce((a, lv) => a + lv, 0) / lit.length : 0;
+    }
+    if (!Object.keys(start).length) return;
+    const levels = c.H.scaleLevels(start, ref, v);
+    for (const [id, lv] of Object.entries(levels)) c.assume([id], lv, { held: true });
+    c.gate.sendLevels('house', levels);
   };
   // a sideways drag only: a finger passing over it on the way up or down the page scrolls the page (gesture.js)
-  track(bar, { c, axis: 'x', start: () => bar.classList.add('held'), move: e => set(e.clientX) });
+  track(bar, { c, axis: 'x', start: () => { start = null; bar.classList.add('held'); }, move: e => set(e.clientX), end: () => { start = null; } });
 }
 
 // Leaving Home forgets the number shown, so coming back does not count from an old one, and ends editing the pins.

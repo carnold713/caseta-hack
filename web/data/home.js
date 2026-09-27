@@ -364,14 +364,33 @@
       shortenSuggestedFades, moodLevels, levelsMatch, roomScenes, roomHasScenes, roomSuggested, roomHasSuggested,
       sceneMatch, noteSceneRun, suggestedMatch, sceneShortName, presetMax, suggestScenes, keepMoodScene, sceneEntryNow, saveRoomLook,
       fileable, roomById, bridgeTag, ensureRooms, pruneRooms,
-      autoOnLights, powerOnAll, powerOnAction, powerLabel, houseOnLabel, houseOnAction, houseLevelTargets, goodnightActions, roomPhotoURL,
+      autoOnLights, scaleLevels, powerOnAll, powerOnAction, powerLabel, houseOnLabel, houseOnAction, houseLevelTargets, goodnightActions, roomPhotoURL,
     };
     // describe() names a loop of scenes for its room only when it holds all of that room's scenes.
     D.hooks.roomScenes = roomScenes;
     return HOME;
   }
 
-  const CasetaHome = { create, SUGGESTED_FADE, MOODS, OLD_SUGGESTED_FADE, MOOD_ORDER, moodById, ROLE_LABEL, ROLE_CAP, ROLE_CHIPS, guessRole };
+  // A room's (or the house's) one brightness, moving lights that are at different levels. The lights keep their
+  // proportions: dragged down, a lamp at 100 and one at 50 become 50 and 25 at half and reach 0 together; dragged up,
+  // they close in on 100 together and all reach it at the top. The bar reads the mean of the lit lights, and the
+  // mean follows the finger exactly either way. `start` is each lit light's level when the finger landed, `ref` their
+  // mean then, `v` the bar now. A light that was on stays on (at least 1) until the bar is at 0.
+  function scaleLevels(start, ref, v) {
+    const out = {};
+    v = Math.max(0, Math.min(100, Math.round(v)));
+    for (const [id, lv0] of Object.entries(start)) {
+      const lv = Math.max(0, Math.min(100, +lv0 || 0));
+      let x;
+      if (!(ref > 0) || v <= 0) x = v;
+      else if (v <= ref) x = lv * v / ref;
+      else x = ref >= 100 ? 100 : lv + (100 - lv) * (v - ref) / (100 - ref);
+      out[id] = v > 0 ? Math.max(1, Math.min(100, Math.round(x))) : 0;
+    }
+    return out;
+  }
+
+  const CasetaHome = { create, scaleLevels, SUGGESTED_FADE, MOODS, OLD_SUGGESTED_FADE, MOOD_ORDER, moodById, ROLE_LABEL, ROLE_CAP, ROLE_CHIPS, guessRole };
   if (typeof module !== 'undefined' && module.exports) module.exports = CasetaHome;
   if (root) root.CasetaHome = CasetaHome;
 })(typeof window !== 'undefined' ? window : null);

@@ -90,6 +90,9 @@ public class QuickPanelActivity extends ComponentActivity {
     // (uptime) a read of the hub leaves one alone because it was just set here
     private final Map<String, Integer> levels = new HashMap<>();
     private final Map<String, Long> held = new HashMap<>();
+    // a room's bar under a finger: its lit lights' levels when the finger landed, and their mean (the bar then)
+    private final Map<String, Map<String, Integer>> dragStart = new HashMap<>();
+    private final Map<String, Float> dragRef = new HashMap<>();
     private final Map<String, JSONObject> lightsById = new HashMap<>();
     private List<Item> shown = new ArrayList<>();
     private JSONObject model = new JSONObject();
@@ -654,6 +657,7 @@ public class QuickPanelActivity extends ComponentActivity {
      */
     private void setFromFinger(Item it, int level) {
         long until = SystemClock.uptimeMillis() + 2500;
+        if (it.room && level > 0) { scaleRoom(it, level, until); return; }
         for (String id : idsOf(it)) {
             levels.put(id, !it.room || dims(id) ? level : level > 0 ? 100 : 0);
             held.put(id, until);
@@ -662,9 +666,70 @@ public class QuickPanelActivity extends ComponentActivity {
         redraw();
     }
 
+    /**
+     * A room's own bar moved: its lights keep their proportions, as everywhere a room or the house is dimmed as one
+     * (CasetaHome.scaleLevels in the app). Dragged down, a lamp at 100 and one at 50 become 50 and 25 at half and
+     * reach 0 together; dragged up, they close in on 100 together. The bar (their mean) follows the finger exactly.
+     * A dark room comes up together. Lights that only switch are left as they are until the bar reaches 0.
+     */
+    private void scaleRoom(Item it, int level, long until) {
+        Map<String, Integer> start = dragStart.get(it.key);
+        if (start == null) {
+            start = new HashMap<>();
+            List<String> dim = new ArrayList<>();
+            for (String id : idsOf(it)) if (dims(id)) dim.add(id);
+            float sum = 0; int lit = 0;
+            for (String id : dim) {
+                int v = lv(id);
+                if (v < 0) v = 100;
+                if (v > 0) { sum += v; lit++; }
+                start.put(id, v);
+            }
+            dragStart.put(it.key, start);
+            dragRef.put(it.key, lit == 0 ? 0f : sum / lit);
+        }
+        Float refBox = dragRef.get(it.key);
+        float ref = refBox == null ? 0f : refBox;
+        JSONObject out = new JSONObject();
+        try {
+            for (Map.Entry<String, Integer> e : start.entrySet()) {
+                int v = scaled(e.getValue(), ref, level);
+                levels.put(e.getKey(), v);
+                held.put(e.getKey(), until);
+                out.put(e.getKey(), v);
+            }
+            if (out.length() == 0) return;
+            send(app, it.key, new JSONObject().put("type", "levels").put("levels", out).put("fade", 0));
+        } catch (Throwable failed) {
+            Safe.note(app, "quick panel scale", failed);
+        }
+        redraw();
+    }
+
+    /** One light's level with the room's bar at `v`, from its level `lv` when the bar was at `ref` (its lights' mean). */
+    static int scaled(int lv, float ref, int v) {
+        v = Math.max(0, Math.min(100, v));
+        lv = Math.max(0, Math.min(100, lv));
+        float x;
+        if (!(ref > 0) || v <= 0) x = v;
+        else if (v <= ref) x = lv * v / ref;
+        else x = ref >= 100 ? 100 : lv + (100 - lv) * (v - ref) / (100 - ref);
+        return v > 0 ? Math.max(1, Math.min(100, Math.round(x))) : 0;
+    }
+
     /** A level set by a finger (a drag let go, or a tap on a bar): into the widgets' state. */
     private void settled(Item it) {
+        dragStart.remove(it.key);
+        dragRef.remove(it.key);
         touched = true;
+        if (it.room) {
+            // each light as the panel now shows it: a room moved as one keeps its lights' proportions
+            final Map<String, Integer> each = new HashMap<>();
+            for (String id : idsOf(it)) each.put(id, lv(id));
+            final Context a0 = app;
+            bg(a0, () -> WidgetActions.expectEach(a0, each));
+            return;
+        }
         int now = levelOf(it);
         final Context a = app;
         final String key = it.key;
@@ -778,6 +843,8 @@ public class QuickPanelActivity extends ComponentActivity {
 
     private static void sendNow(Context a, String key, Object lv) {
         try {
+            // a room moved as one arrives whole: each light its own level
+            if (lv instanceof JSONObject) { HubClient.command(a, (JSONObject) lv); return; }
             JSONObject act = new JSONObject().put("type", "level").put("target", key).put("level", lv);
             // a level under a finger lands at once, as the app's slider sends it
             if (lv instanceof Integer) act.put("fade", 0);
