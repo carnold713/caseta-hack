@@ -889,9 +889,10 @@ public class QuickPanelActivity extends ComponentActivity {
 
     /**
      * A brightness bar, as the app's house bar: a 56dp pill with the fill in copper up to the level and a white knob
-     * inside the end of the fill. The name sits at the left and the level at the right, always whole: over the fill
-     * they are white, over the empty track the card's ink, and where the knob passes over them they are dark, so they
-     * read wherever the knob is. A name too long for the room left (past about 24 letters at phone width) steps down
+     * inside the end of the fill. The name starts just past where the knob rests when the light is off, so the two never
+     * sit on each other at rest, and the level is at the right, both always whole: over the fill they are white, over
+     * the empty track the card's ink, and where the knob passes over them as it rises they are dark, so they read
+     * wherever the knob is. A name too long for the room left (past about 24 letters at phone width) steps down
      * a size, then takes two lines; it is only ever cut short past that.
      *
      * A sideways drag moves it with the finger and sends each level as it goes (gated). A tap sets the level where it
@@ -906,7 +907,7 @@ public class QuickPanelActivity extends ComponentActivity {
         private final Path fillPath = new Path();
         private final Path knobPath = new Path();
         private final List<String> lines = new ArrayList<>(2);
-        private float laidW = -1;
+        private float laidW = -1, nameX = 20;
         private String laidLabel = null;
         private float downX, downY;
         private int startLevel;
@@ -928,13 +929,14 @@ public class QuickPanelActivity extends ComponentActivity {
         }
 
         /** The name's lines and size for this width: 15sp, else 13sp, else two lines at 13sp. */
-        private void lay(float w) {
+        private void lay(float w, float left) {
             String name = row.label == null ? "" : row.label;
-            if (w == laidW && name.equals(laidLabel)) return;
+            if (w == laidW && left == nameX && name.equals(laidLabel)) return;
             laidW = w;
+            nameX = left;
             laidLabel = name;
             lines.clear();
-            float room = w - 40 * dp - levelInk.measureText("100%") - 12 * dp;
+            float room = w - left - 20 * dp - levelInk.measureText("100%") - 12 * dp;
             nameInk.setTextSize(sp(15));
             if (nameInk.measureText(name) <= room) { lines.add(name); return; }
             nameInk.setTextSize(sp(13));
@@ -956,7 +958,9 @@ public class QuickPanelActivity extends ComponentActivity {
             if (w <= 0 || h <= 0) return;
             int lv = QuickPanelActivity.this.levelOf(row);
             boolean on = lv != 0;
-            lay(w);
+            // past the knob at rest (its circle ends 8dp short of the bar's height), with 12dp to spare; a bar with no
+            // knob keeps the plain 20dp
+            lay(w, row.dimmable ? h + 4 * dp : 20 * dp);
             // the fill is never narrower than the knob's circle, so the knob always has its 8dp all round
             float end = h + (lv < 0 ? 1f : Math.min(100, lv) / 100f) * (w - h);
             box.set(0, 0, w, h);
@@ -998,7 +1002,7 @@ public class QuickPanelActivity extends ComponentActivity {
             levelInk.setColor(sub);
             float lineH = nameInk.descent() - nameInk.ascent();
             float top = h / 2f - lineH * lines.size() / 2f;
-            for (int i = 0; i < lines.size(); i++) canvas.drawText(lines.get(i), pad, top + i * lineH - nameInk.ascent(), nameInk);
+            for (int i = 0; i < lines.size(); i++) canvas.drawText(lines.get(i), nameX, top + i * lineH - nameInk.ascent(), nameInk);
             float base = h / 2f - (levelInk.descent() + levelInk.ascent()) / 2f;
             canvas.drawText(level, w - pad - levelInk.measureText(level), base, levelInk);
         }
