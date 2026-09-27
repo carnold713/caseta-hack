@@ -197,6 +197,39 @@ function drawingAt(sort, want) {
 }
 export const MAX_FIXTURES = 8;
 
+// ---------- the light in depth ----------
+// Where a phone can, the room page draws its lamps' light with three.js (depth.js): the scene becomes a shallow box,
+// the wall and the floor running back from its foot, and each lamp a light standing in it that throws its light as a
+// real one falls. This says, for each drawing, how it aims its light (0 all round, 1 out of a shade open below, 2 open
+// above, 3 a downlight's narrow beam, 4 a drum shade, out of its top and its bottom) and how far in front of the wall
+// it stands, counted in units of floor on screen: its light lands on the floor that far below the wall's foot, where
+// the drawing lays its pool. The drawings whose light is a beam aimed at one place (spots, a track, a picture light,
+// a mirror's ring, a strip, a string of bulbs) are not in it: where their light lands is the drawing itself, so they
+// keep it. The pools the others draw are what the 3D light replaces, and are grouped (rs-pools) so the page can hand
+// from one to the other; without WebGL they are the light, as they always were. The 3D light is laid in beside them
+// (rs-spill), behind the furniture as the pools are, so what stands in the room stands in front of its light.
+export const DEPTH = 5.5;   // scene units of depth for each unit of floor on screen
+const SPILL = {
+  pendant: [1, 16], winpendant: [1, 6], flush: [1, 18], chand: [0, 16], fan: [1, 18], down: [3, 3], table: [4, 6],
+  floor: [4, 10], torch: [2, 10], desk: [1, 6], bed: [1, 4], lantern: [0, 3], bollard: [0, 12], sconce: [4, 1],
+  uplight: [2, 1], panels: [0, 0.5],
+};
+// The marker the page reads a lamp's light from: no size, so nothing is drawn, but its opacity is the lamp's strength
+// and its colour the lamp's, and both move on the dimmer (and wait for a scene's ring, room.js) as every other lit
+// part of it does, so the light drawn in depth keeps the drawing's own clock. `data-e` is each point the light comes
+// from: x and y on the wall's plane, its depth, how it aims, and the y it is drawn at.
+function depthMark(f, s, src, L) {
+  const sp = SPILL[f.draw];
+  if (!sp || !src || !f.lamps.length) return '';
+  const [aim, rows] = sp;
+  // a lamp standing on the floor in front of the wall is drawn lower the further forward it stands: its height over
+  // the floor is what the drawing shows above its foot, and its depth is how far its foot is below the wall's
+  const stand = (s.sort === 'floor' || s.sort === 'ground') && s.y > F ? s.y - F : 0;
+  const deep = Math.max(rows, stand) * DEPTH;
+  const pts = (src.emit || [[src.x, src.y]]).map(([x, y]) => `${n(x)} ${n(y - stand)} ${n(deep)} ${src.aim ?? aim} ${n(y)}`);
+  return `<rect class="rl rs-lamp" data-e="${pts.join(';')}" width="0" height="0" style="opacity:${n(L.I * 1000) / 1000};color:${L.body}"/>`;
+}
+
 // The window as a place for a light: its middle, at its head, with the window itself for the drawing to fit.
 const winSlot = w => ({ x: w.x + w.w / 2, y: w.y, win: w });
 
@@ -263,7 +296,7 @@ export function sceneSVG(model, opts = {}) {
   const flip = rnd() < 0.5;
   const used = new Set();
   const G = (pal, dir = 'd') => { const k = `${PAL[pal] ? pal : combo[pal]}${dir}`; used.add(k); return `url(#${p}${k})`; };
-  const layers = { wall: [], back: [], pool: [], furn: [], wash: [], mood: [], cone: [], fx: [], front: [] };
+  const layers = { wall: [], back: [], pool: [], spill: [], furn: [], wash: [], mood: [], cone: [], fx: [], front: [] };
   const catchers = [];
   const put = (layer, g, fill, extra = '') => { layers[layer].push(`<path d="${g.d}" fill="${fill}"${extra}/>`); return g; };
   // a surface a lamp's light can land on: kept whole (with an id) so each lamp near it can light its edge
@@ -303,6 +336,8 @@ export function sceneSVG(model, opts = {}) {
     const src = DRAW[f.draw]({ ...K, rnd: rngOf(`${model.id}|${model.kind}|${f.slot.sort}${f.slot.i}`) }, f.slot, Lt, q, f);
     // every part of this lamp's light says which lamp it is, so a scene's wave can light it when it arrives (room.js)
     for (const k in at) for (let j = at[k]; j < layers[k].length; j++) layers[k][j] = layers[k][j].replace(/class="rl"/g, `class="rl" data-l="${i}"`);
+    // a light the page may draw in depth: its pools go in the group the page hands over from (depthMark)
+    if (SPILL[f.draw]) layers.spill.push(...layers.pool.splice(at.pool));
     const ids = f.lamps.map(l => l.id).join(' ');
     // the lamp's gradients: a radial reach for pools and edges, the lit shade, a cone, and a soft ellipse
     const st = (o, col, a) => (opts.standalone ? `<stop offset="${o}" stop-color="${col}" stop-opacity="${a}"/>` : `<stop offset="${o}" stop-opacity="${a}" style="color:${col}"/>`);
@@ -318,14 +353,16 @@ export function sceneSVG(model, opts = {}) {
     grads.push([`${q}f`, `<radialGradient id="${q}f">${st(0, Lt.body, 0.5)}${st(0.5, Lt.wash, 0.18)}${st(1, Lt.wash, 0)}</radialGradient>`]);
     lampGrads.push(...grads.map(g => [...g, i]));
     // the fixture's own group carries which lights it shows, for the tests and for the wave (room.js)
-    layers.fx.push(`<g data-fx="${f.draw}" data-i="${i}" data-lamp="${ids}"${f.lamps.length ? '' : ' data-empty="1"'}${src && src.shape ? ` data-shape="${src.shape}"` : ''}>${src ? src.body.replace(/class="rl"/g, `class="rl" data-l="${i}"`) : ''}</g>`);
+    layers.fx.push(`<g data-fx="${f.draw}" data-i="${i}" data-lamp="${ids}"${f.lamps.length ? '' : ' data-empty="1"'}${src && src.shape ? ` data-shape="${src.shape}"` : ''}>${src ? (src.body + (opts.standalone ? '' : depthMark(f, f.slot, src, Lt))).replace(/class="rl"/g, `class="rl" data-l="${i}"`) : ''}</g>`);
   });
 
   const pal = [...used].map(k => {
     const dir = k.slice(-1), name = k.slice(0, -1), [a, b] = PAL[name], [x1, y1, x2, y2] = DIRS[dir];
     return `<linearGradient id="${p}${k}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
   });
-  const body = ['back', 'pool', 'furn', 'wash', 'mood', 'cone', 'fx', 'front'].map(k => layers[k].join('')).join('');
+  // (the spill group is drawn even when empty, so a room's drawing keeps one shape from redraw to redraw, and the page
+  // has somewhere behind the furniture to lay its light)
+  const body = ['back', 'pool', 'spill', 'furn', 'wash', 'mood', 'cone', 'fx', 'front'].map(k => (k === 'spill' ? `<g class="rs-spill"><g class="rs-pools">${layers.spill.join('')}</g></g>` : layers[k].join(''))).join('');
   // only the gradients something uses
   for (const [id, g, i] of lampGrads) if (body.includes(`#${id})`)) defs.push(g.replace(/^<(\w+) /, `<$1 data-l="${i}" `));
   const vb = view === 'thumb' ? THUMB_VB : view === 'frame' ? `0 0 ${W} ${H}` : VB;
@@ -431,7 +468,7 @@ const DRAW = {
       body += `<rect x="${x - 9}" y="-2" width="18" height="6" rx="3" fill="${K.G('stone', 'v')}"/><rect class="rl" x="${x - 6}" y="1" width="12" height="3" rx="1.5" fill="currentColor" style="color:${L.core};opacity:${n(L.I * 1000) / 1000}"/>`;
     }
     layers.pool.push(`<path class="rl" d="${ell(s.x, F + 16, 120, 12).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
-    return { x: s.x, y: 110, r: 110, body };
+    return { x: s.x, y: 110, r: 110, body, emit: xs.map(x => [x, 3]) };
   },
   chand(K, s, L, q) {
     const { layers } = K;
@@ -510,7 +547,7 @@ const DRAW = {
       layers.cone.push(`<path class="rl" d="M${hx - 12} ${hy}L${hx + 12} ${hy}L${hx + 48} ${F + 16}L${hx - 48} ${F + 16}Z" fill="url(#${q}k)" ${op(L.I * 0.55)}/>`);
       layers.pool.push(`<path class="rl" d="${ell(hx, F + 16, 60, 9).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
       return {
-        x: hx, y: hy + 2, r: 110,
+        x: hx, y: hy + 2, r: 110, aim: 1,
         body: `<path d="M${x} ${y - 8}C${x} ${y - 150} ${hx} ${y - 170} ${hx} ${hy - 17}" stroke="${LINE}" stroke-width="1.8" fill="none"/><rect x="${x - 10}" y="${y - 10}" width="20" height="10" rx="3" fill="${K.G('char', 'v')}"/>`
           + `<path d="${shade.d}" fill="${K.G('char', 'v')}"/><path class="rl" d="${shade.d}" fill="url(#${q}s)" ${op(L.I * 0.92)}/><path class="rl" d="${ell(hx, hy, 11, 2.2).d}" fill="currentColor" style="color:${L.core};opacity:${n(L.I * 1000) / 1000}"/>`,
       };

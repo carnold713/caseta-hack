@@ -514,6 +514,13 @@
 :is(.rooms, .room, .settings-page) { position: relative; isolation: isolate; }
 :is(.rooms, .room, .settings-page) > .onelight { z-index: -1; }
 .onelight-lamp { bottom: 0; transform-origin: 50% var(--lamp-y, 112px); }
+/* The same light drawn as a real one falls (depth.js), where the phone can: a canvas in the light's own element, so its
+   strength, its going off and every flight that carries it carry the canvas too. It reaches 8 past each edge so the
+   header's light can drift its few pixels without showing one, and once it draws, the gradient it stands in for is
+   put away. */
+.onelight > canvas.d3 { position: absolute; left: -8px; top: -8px; width: calc(100% + 16px); height: calc(100% + 16px); display: block; pointer-events: none; }
+.onelight-top > canvas.d3 { animation: light-drift var(--ambient) var(--ease-both) infinite; }
+.onelight[data-d3="on"] .ol-c i { opacity: 0; }
 .onelight-lamp i { top: var(--lamp-y, 112px); width: 120%; background: radial-gradient(closest-side, rgba(var(--l-c), 0.2200) 0%, rgba(var(--l-c), 0.2187) 4.2%, rgba(var(--l-c), 0.2148) 8.3%, rgba(var(--l-c), 0.2084) 12.5%, rgba(var(--l-c), 0.1996) 16.7%, rgba(var(--l-c), 0.1888) 20.8%, rgba(var(--l-c), 0.1763) 25%, rgba(var(--l-c), 0.1622) 29.2%, rgba(var(--l-c), 0.1471) 33.3%, rgba(var(--l-c), 0.1312) 37.5%, rgba(var(--l-c), 0.1151) 41.7%, rgba(var(--l-c), 0.0990) 45.8%, rgba(var(--l-c), 0.0834) 50%, rgba(var(--l-c), 0.0685) 54.2%, rgba(var(--l-c), 0.0548) 58.3%, rgba(var(--l-c), 0.0424) 62.5%, rgba(var(--l-c), 0.0316) 66.7%, rgba(var(--l-c), 0.0224) 70.8%, rgba(var(--l-c), 0.0149) 75%, rgba(var(--l-c), 0.0092) 79.2%, rgba(var(--l-c), 0.0050) 83.3%, rgba(var(--l-c), 0.0023) 87.5%, rgba(var(--l-c), 0.0007) 91.7%, rgba(var(--l-c), 0.0001) 95.8%, rgba(var(--l-c), 0) 100%); }
 
 /* A small glow (glowHTML): one soft disc of a light's colour round something lit (an orb, a lamp in a strip), blended

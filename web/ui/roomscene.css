@@ -22,6 +22,12 @@
    the ring of light reaches it. */
 body.scene-arriving .rs-svg .rl, body.scene-arriving .rs-svg stop[style] { transition-duration: var(--scene); }
 .rs-svg .rs-shade { transform-box: fill-box; transform-origin: 50% 0; }
+/* The room's light drawn in depth (depth.js): a canvas laid into the drawing where its pools are, behind the furniture,
+   that adds light to the wall and the floor the way the pools do (screen, so it only ever adds). Once it is drawing,
+   the pools it stands in for are put away; a page without it keeps them, as the light itself. */
+.rs-spill > foreignObject.d3 { mix-blend-mode: screen; overflow: hidden; pointer-events: none; }
+.rs-spill > foreignObject.d3 > canvas { display: block; width: 100%; height: 100%; }
+.room-scene[data-d3="on"] .rs-pools { opacity: 0; }
 /* A fan turns slowly while it is on, and not at all for a phone that asks for less motion. */
 .rs-svg .rs-spin { transform-origin: 0 0; }
 .rs-svg .rs-spin.on { animation: rs-spin 5s linear infinite; }

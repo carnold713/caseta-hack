@@ -37,6 +37,7 @@ import * as native from '/ui/native.js';
 import * as nightstandScreen from '/ui/screens/nightstand.js';
 import * as widgetsScreen from '/ui/screens/widgets.js';
 import * as widgetData from '/ui/widgetdata.js';
+import * as depth from '/ui/depth.js';
 
 const data = create({ storage: localStorage });
 const H = CasetaHome.create(data);
@@ -470,6 +471,10 @@ const note = recs => {
     if (m.type === 'childList' && [...m.addedNodes, ...m.removedNodes].every(n => n.nodeType === 1 && n.classList.contains('xf-old'))) continue;
     // a press and hold marks its element while the finger is down, and a drawing never carries the mark
     if (m.type === 'attributes' && m.attributeName === 'data-holding') continue;
+    // nor the light drawn in depth (depth.js): its canvas, laid into a light, and the mark that puts the drawn light away
+    if (m.type === 'attributes' && m.attributeName === 'data-d3') continue;
+    if (t && t.closest('.d3')) continue;
+    if (m.type === 'childList' && [...m.addedNodes, ...m.removedNodes].every(n => n.nodeType === 1 && n.classList.contains('d3'))) continue;
     // a number counting to what the drawing says, and a dial gliding there, go on to it on the elements they are on:
     // what they write on the way is not a change the next drawing needs to undo
     if (t && t.closest('[data-count], [data-drag="dial"]')) continue;
@@ -836,6 +841,8 @@ if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 if (!history.state || typeof history.state.n !== 'number') stamp({ n: 0 });
 try { sessionStorage.setItem('navN', String(place())); } catch (_) { /* fine */ }
 render();
+// the page's light drawn in depth where the phone can (depth.js): it finds each light as the pages draw them
+depth.start($('#screen'));
 // the header that stays at the top as a page scrolls (M15)
 header.wire();
 // Android's back swipe, followed by the page (M13): what it needs of the app
