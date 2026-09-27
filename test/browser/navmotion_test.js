@@ -99,11 +99,25 @@ function sampler() {
   // ---- a picker inside a sheet moves the sheet's top edge
   const lid = await C(() => window.__copper.data.controllable().find(d => d.domain === 'light').device_id);
   await go(`light/${lid}/about`);
-  const edge = `() => { const s = document.querySelector('#sheet-root .sheet'), u = document.querySelector('.sheet-under'); return s ? Math.round(u ? Math.min(u.getBoundingClientRect().top, s.getBoundingClientRect().top) : s.getBoundingClientRect().top) : null; }`;
-  fr = await rec(edge, 600, () => C(() => document.querySelector('#sheet-root [data-act="about-move"]').click()));
+  // The edge is read on the swap's own clock, a 60 Hz frame at a time: the tap, then every animation it started held
+  // and stepped by hand. Read off the real frames, a busy machine that dropped the frame after the tap (the new sheet's
+  // first paint) showed the start of the curve as one step, which is the machine, not the swap.
+  const stepped = sel => C(async s => {
+    const edge = () => { const sh = document.querySelector('#sheet-root .sheet'), u = document.querySelector('.sheet-under'); return sh ? Math.round(u ? Math.min(u.getBoundingClientRect().top, sh.getBoundingClientRect().top) : sh.getBoundingClientRect().top) : null; };
+    const out = [{ t: 0, v: edge() }];
+    const had = new Set(document.getAnimations());
+    document.querySelector(s).click();
+    const mine = document.getAnimations().filter(a => !had.has(a));
+    mine.forEach(a => a.pause());
+    for (let t = 0; t <= 500; t += 1000 / 60) { mine.forEach(a => { a.currentTime = t; }); out.push({ t: Math.round(t), v: edge() }); }
+    mine.forEach(a => a.play());
+    await new Promise(r => setTimeout(r, 600));
+    return out;
+  }, sel);
+  fr = await stepped('#sheet-root [data-act="about-move"]');
   const tops = fr.map(f => f.v).filter(v => v != null);
   check('a picker opening in a sheet moves its top edge to the new height, never jumping there', Math.abs(tops[tops.length - 1] - tops[0]) > 60 && maxStep(fr) < 0.5 * Math.abs(tops[tops.length - 1] - tops[0]), { from: tops[0], to: tops[tops.length - 1], step: maxStep(fr) });
-  fr = await rec(edge, 600, () => C(() => document.querySelector('#sheet-root [data-act="picker-back"]').click()));
+  fr = await stepped('#sheet-root [data-act="picker-back"]');
   check('and back again the same way', maxStep(fr) < 140 && !(await page.$('.sheet-under')), { step: maxStep(fr) });
   await C(() => window.__copper.dismiss()); await wait(800);
 
@@ -145,11 +159,15 @@ function sampler() {
 
   // ---- a sheet still rising is taken by a back swipe from where it is
   await go(`light/${lid}`);
-  const sheetTop = () => C(() => { const s = document.querySelector('#sheet-root .sheet'); return s ? Math.round(s.getBoundingClientRect().top) : null; });
   await page.click('.dev .hdr .a1'); await wait(60);
-  const rising = await sheetTop();
-  await B('start', 'left', 4, 460);
-  const held = await sheetTop();
+  // where the sheet is and the swipe taking it, in one go: read apart, the sheet rose on by a frame or two in between
+  // (140 px a frame at that point of its rise), and the swipe was blamed for it
+  const { rising, held } = await C(() => {
+    const top = () => { const s = document.querySelector('#sheet-root .sheet'); return s ? Math.round(s.getBoundingClientRect().top) : null; };
+    const rising = top();
+    window.__caseta.back.start('left', 4, 460);
+    return { rising, held: top() };
+  });
   check('a back swipe takes a sheet still rising from where it is', rising != null && held != null && held >= rising - 30, { rising, held });
   await B('cancel'); await wait(700);
   await C(() => window.__copper.dismiss()); await wait(800);

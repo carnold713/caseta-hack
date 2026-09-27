@@ -220,7 +220,13 @@ export function textZoom() {
   zoomNow = Number.isFinite(z) && z > 0 ? z : 1;
   return zoomNow;
 }
-if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { zoomNow = 0; });
+// Read ahead of any transition, while nothing is moving: made on first use, the probe went into the page and the
+// page's style was worked out again in the middle of a tap that opens something (a scene's chip, held).
+function readZoom() { zoomNow = 0; if (typeof document !== 'undefined' && !document.hidden) textZoom(); }
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', readZoom);
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(readZoom, { timeout: 1000 }); else setTimeout(readZoom, 300);
+}
 // A font-size read off an element, as a copy must be given it to draw the same size.
 export function copySize(v) {
   const n = parseFloat(v), z = textZoom();
