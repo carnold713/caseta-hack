@@ -21,7 +21,7 @@
 // BACK runs it the other way in 0.45 s on (0.4, 0, 0.2, 1): the page's content goes first (0.15 s EASE_IN), the stage
 // closes into the card with its spotlight coming back, the remote and the name fly back, and the cards return.
 import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, last, textBox, px, opacityOf, part, words, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim } from '/ui/flight.js';
+import { OPEN, CLOSE, last, textBox, px, opacityOf, part, words, copyNode, topLayer, el, windowGeo, pair, aside, stepAside, rise, going, scrim, pressOf } from '/ui/flight.js';
 
 const SPOT = 250;       // the card's spotlight fades over the first 0.25 s (and comes back over the close's last 0.3 s)
 const KEY = 40;         // the keys arrive this far apart, top first
@@ -40,7 +40,7 @@ export function find(screen, entry) {
 // Everything about the card, read while it is still where it was drawn, part way through its press.
 export function read(card) {
   const box = card.getBoundingClientRect();
-  const k = box.width / (card.offsetWidth || box.width) || 1;
+  const k = pressOf(card, box);
   const q = s => card.querySelector(s);
   const stage = q('.rc-stage');
   const art = stage && stage.querySelector('.pico-photo, .pico-svg');

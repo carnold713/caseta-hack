@@ -35,7 +35,7 @@
 // { total, seek(p), play(), cancel() }, or null when the plain drop applies. seek(p) puts every part at p (0 to 1)
 // of the way through, play() runs on from there and resolves when it has landed, cancel() puts the sheet back as
 // it was. After play(), closing the sheet as usual (closeSheet) does not drop it a second time.
-import { T, reduced, holdFor } from '/ui/motion.js';
+import { T, reduced, holdFor, copySize, layoutSize } from '/ui/motion.js';
 
 const OPEN = { dur: 500, ease: 'cubic-bezier(0.2, 0, 0, 1)' };
 const SHUT = { dur: 450, ease: 'cubic-bezier(0.4, 0, 0.2, 1)', at: 250 };
@@ -133,7 +133,7 @@ function paint(el) {
 // Everything about the source the open needs, read while it is where it was drawn (and still pressed, if it is).
 function measure({ el, word }) {
   const box = el.getBoundingClientRect();
-  const k = box.width / (el.offsetWidth || box.width) || 1;
+  const k = box.width / (layoutSize(el).w || box.width) || 1;
   const cs = getComputedStyle(el);
   // a completed hold is copper all over; anything else opens from its own colour
   const copper = el.dataset.holding === '1' ? getComputedStyle(el, '::before').backgroundColor : null;
@@ -300,7 +300,8 @@ function bloomColour(orb) {
   const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(g.style.getPropertyValue('--g-c') || '');
   return m ? `${m[1]}, ${m[2]}, ${m[3]}` : null;
 }
-const look = cs => Object.fromEntries(['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'color'].map(p => [p, cs[p]]));
+// (its size as it is drawn, not as a text zoom reads it back: motion.js, copySize)
+const look = cs => Object.fromEntries(['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'color'].map(p => [p, p === 'fontSize' ? copySize(cs[p]) : cs[p]]));
 // The chip's word, standing where it stood (at the chip's press scale), in the chip's look.
 function wordCopy(W, O, S) {
   const cs = O.wordCss;
@@ -336,14 +337,16 @@ function bare(c) {
 // word flies on its own (bare); otherwise they stay and go with it, laid out exactly as they were.
 function faceCopy(el) {
   const c = el.cloneNode(true);
-  c._w = el.offsetWidth; c._h = el.offsetHeight;
+  // (its laid out size, unrounded: a whole pixel less, its words were cut or wrapped short of where they rested)
+  const sz = layoutSize(el);
+  c._w = sz.w; c._h = sz.h;
   c.querySelectorAll('.ch-sub, .wv-prog, .row-chev').forEach(n => { n.style.visibility = 'hidden'; });
   for (const a of [...c.attributes]) if (a.name !== 'class') c.removeAttribute(a.name);
   c.classList.add('xf-old', 'm12-face');
   c.setAttribute('aria-hidden', 'true');
   const k = el.getBoundingClientRect().width / (c._w || 1) || 1;
   Object.assign(c.style, {
-    position: 'absolute', width: px(c._w), height: px(c._h), margin: '0', boxSizing: 'border-box', transform: `scale(${k})`, transformOrigin: '50% 50%',
+    position: 'absolute', width: `${c._w}px`, height: `${c._h}px`, margin: '0', boxSizing: 'border-box', transform: `scale(${k})`, transformOrigin: '50% 50%',
     background: 'none', borderColor: 'transparent', boxShadow: 'none', transition: 'none', animation: 'none', pointerEvents: 'none', zIndex: '1',
   });
   return c;

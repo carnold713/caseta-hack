@@ -197,6 +197,49 @@ export function snap(root, next = null) {
   });
   return s;
 }
+// ---------- words copied ----------
+// Android's font size setting reaches the page as a text zoom (the app's WebView takes it from the phone, as Chrome's
+// text scaling does): every font-size is drawn that much larger, and getComputedStyle reads the larger size back. A
+// copy given the size read off its element is enlarged a second time, and its words no longer fit the box measured
+// for them: with the phone's font size at 115%, a room's name closing back into its card ended in an ellipsis for the
+// last of the flight ("Living r…") and stood whole only as it landed, and a light's name and value did the same going
+// into their tile. The zoom is read once off a probe of a known size (hidden, so it is never laid out) and every size
+// a copy is given is divided by it. It is read again when the app comes back to the front, which is where a change
+// to the phone's setting would first be seen.
+let zoomProbe = null, zoomNow = 0;
+export function textZoom() {
+  if (zoomNow) return zoomNow;
+  if (typeof document === 'undefined' || !document.body) return 1;
+  if (!zoomProbe || !zoomProbe.isConnected) {
+    zoomProbe = document.createElement('i');
+    zoomProbe.hidden = true; zoomProbe.setAttribute('aria-hidden', 'true');
+    zoomProbe.style.fontSize = '100px';
+    document.body.appendChild(zoomProbe);
+  }
+  const z = parseFloat(getComputedStyle(zoomProbe).fontSize) / 100;
+  zoomNow = Number.isFinite(z) && z > 0 ? z : 1;
+  return zoomNow;
+}
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { zoomNow = 0; });
+// A font-size read off an element, as a copy must be given it to draw the same size.
+export function copySize(v) {
+  const n = parseFloat(v), z = textZoom();
+  return Number.isFinite(n) && Math.abs(z - 1) > 1e-4 ? `${n / z}px` : v;
+}
+// An element's laid out border box width and height, unrounded: offsetWidth rounds to a whole pixel, and a phone's
+// screen is rarely a whole number of pixels wide (411.43 on the owner's), so a scale worked out against it was a
+// little off even at rest, and a copy sized by it a little narrower or wider than what it copied.
+export function layoutSize(el) {
+  const cs = getComputedStyle(el);
+  let w = parseFloat(cs.width), h = parseFloat(cs.height);
+  if (!Number.isFinite(w) || !Number.isFinite(h)) return { w: el.offsetWidth, h: el.offsetHeight };
+  if (cs.boxSizing !== 'border-box') {
+    const e = s => (parseFloat(cs[`padding${s}`]) || 0) + (parseFloat(cs[`border${s}Width`]) || 0);
+    w += e('Left') + e('Right'); h += e('Top') + e('Bottom');
+  }
+  return { w, h };
+}
+
 // An element's own laid out size (not as a press or a flight has it scaled) and where its edges were on screen, so a
 // copy of it can keep its words laid out exactly as they were. An inline element has no size of its own: its box on
 // screen stands in, and if its words made one line, its copy (taken out of the line) must not wrap where it never did.
@@ -221,7 +264,7 @@ function frozen(el) {
     // frozen card painted its whole room in the card's white for as long as the copy took to fade.
     if (f.closest('svg')) return;
     const cs = getComputedStyle(f);
-    for (const p of FROZEN) to[i].style.setProperty(p, cs.getPropertyValue(p));
+    for (const p of FROZEN) to[i].style.setProperty(p, p === 'font-size' ? copySize(cs.getPropertyValue(p)) : cs.getPropertyValue(p));
   });
   return c;
 }

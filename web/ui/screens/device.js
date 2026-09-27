@@ -95,7 +95,9 @@ function heroArt(c, art) {
     return artInline(art, w, h) || `<img class="hero-art" src="${c.artSrc(art)}" alt="">`;
   }
   const dots = [24, 42, 60, 78, 96].map(x => `<circle cx="${x}" cy="8" r="1.5" fill="white"/>`).join('');
-  return `<svg class="hero-art bar" viewBox="0 0 120 16" width="120" height="16" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="117" height="13" rx="6.5" stroke="white" stroke-width="2.75"/>${dots}</svg>`;
+  // (not "bar": that is the header row that stays at the top, header.css, which would take the drawing for one and
+  // stick it, write the header's scroll onto it and pin it where the header was in a page's copy as it leaves)
+  return `<svg class="hero-art strip" viewBox="0 0 120 16" width="120" height="16" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="117" height="13" rx="6.5" stroke="white" stroke-width="2.75"/>${dots}</svg>`;
 }
 function dialHTML(c, lv, tone) {
   const { icon } = c;
