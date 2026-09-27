@@ -265,7 +265,8 @@ function open(root, sheet, h2, O) {
     // the light blooms as the orb lands, as soft as the orb's own glow
     if (blooms[i]) {
       const b = document.createElement('span');
-      b.className = 'm12-bloom'; b.setAttribute('aria-hidden', 'true');
+      // (a copy laid in for a moment, which a redraw carries along under its orb and never pairs: motion.js walk)
+      b.className = 'xf-old m12-bloom'; b.setAttribute('aria-hidden', 'true');
       const c = blooms[i];
       Object.assign(b.style, {
         position: 'absolute', left: '50%', top: 'var(--y)', width: '160px', height: '160px', margin: '-80px 0 0 -80px', borderRadius: '50%', pointerEvents: 'none',

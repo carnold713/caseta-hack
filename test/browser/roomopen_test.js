@@ -3,6 +3,7 @@
 // the title is, what the old list is doing, and that nothing is left behind. Screenshots are taken with every
 // animation paused at a moment, so they show exactly that moment.
 const { chromium } = require('playwright-core');
+const { stepClock } = require('./stepclock.js');
 const fs = require('fs');
 const path = require('path');
 const PORT = process.env.PORT || 4400;
@@ -14,6 +15,9 @@ const SHOTS = process.env.SHOTS || '';
 
 // In the page: a clock that can be stopped (every animation paused, and the clock with it), and a sample of the
 // transition's parts on every frame it runs.
+// Each frame is a 60 Hz step of the transition's own clock from its first moment (stepclock.js), not whatever frame a
+// busy machine managed to draw: the first frame after the tap came late there, and the transition was read as
+// starting part way in.
 function instrument() {
   const M = window.__m10 = { t0: 0, off: 0, pausedAt: 0, frames: [], stops: [], stopped: null, on: false };
   M.now = () => (M.pausedAt || performance.now()) - M.t0 - M.off;
@@ -32,15 +36,18 @@ function instrument() {
   const words = el => { const g = document.createRange(); g.selectNodeContents(el); return rect(g.getBoundingClientRect()); };
   const tick = () => {
     if (M.on && !M.pausedAt) {
-      const t = M.now();
       const hero = document.querySelector('.page-ghost .room-photo-card') || document.querySelector('#screen .room-photo-card');
+      // the window's own clock: how far into the transition this frame is, or null once it has landed
+      const wa = hero && hero.getAnimations().find(a => a.effect.getKeyframes().some(k => k.clipPath));
+      // and stepped a frame at a time, from its first moment (stepclock.js)
+      const v = window.__clock.tick(wa || null);
+      if (v === 0) M.cb = M.now();
+      const t = v === undefined ? M.now() : M.cb + v;
       const h1 = document.querySelector('.page-ghost .room-title h1') || document.querySelector('#screen .room-title h1');
       const img = hero && hero.querySelector('.room-photo');
       const shade = document.querySelector('.m10-shade');
       const copy = document.querySelector('.m10-top span');
       const list = [...document.querySelectorAll('.page-ghost .rooms-list > *, #screen .rooms-list > *')].filter(k => k.style.visibility !== 'hidden');
-      // the window's own clock: how far into the transition this frame is, or null once it has landed
-      const wa = hero && hero.getAnimations().find(a => a.effect.getKeyframes().some(k => k.clipPath));
       M.frames.push({
         t: Math.round(t), at: wa && wa.playState !== 'finished' && wa.currentTime != null ? Math.round(wa.currentTime) : null, win: hero ? win(hero) : null, img: img ? rect(img.getBoundingClientRect()) : null,
         shade: shade ? rect(shade.getBoundingClientRect()) : null, shadeo: shade ? Number(getComputedStyle(shade).opacity) : null, h1: h1 ? words(h1) : null, h1o: h1 ? Number(getComputedStyle(h1).opacity) : null,
@@ -65,6 +72,7 @@ function instrument() {
   const open = async (opts = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, deviceScaleFactor: 1, ...opts });
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
+    await ctx.addInitScript(stepClock);
     await ctx.addInitScript(instrument);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -81,15 +89,16 @@ function instrument() {
   };
   // run a tap (or a Back) with the clock armed, stopping at each moment for a screenshot, then let it finish
   const play = async (act, stops, prefix) => {
-    await C(s => { const M = window.__m10; M.stops = s.slice(); M.armed = true; M.on = false; M.T = null; }, stops);
+    await C(s => { const M = window.__m10; M.stops = s.slice(); M.armed = true; M.on = false; M.T = null; window.__clock.arm(Math.max(1500, ...s) + 100); }, stops);
     await act();
     for (const s of stops) {
       await page.waitForFunction(x => window.__m10.stopped === x, s, { timeout: 5000 });
       await shot(`${prefix}-${String(s).padStart(4, '0')}`);
       await C(() => window.__m10.go());
     }
+    await page.waitForFunction(() => window.__clock.done(), null, { timeout: 30000 });
     await wait(1500);
-    return C(() => { const M = window.__m10; M.on = false; return M.frames; });
+    return C(() => { const M = window.__m10; M.on = false; window.__clock.disarm(); return M.frames; });
   };
   const near = (a, b, tol) => !!a && !!b && ['l', 't', 'r', 'b'].every(k => Math.abs(a[k] - b[k]) <= tol);
   const mid = r => ({ x: (r.l + r.r) / 2, y: (r.t + r.b) / 2 });

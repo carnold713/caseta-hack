@@ -4,6 +4,7 @@
 // where the title is, how the orbs arrive and leave, and that nothing is left behind. Screenshots are taken with
 // every animation paused at a moment, so they show exactly that moment.
 const { chromium } = require('playwright-core');
+const { stepClock } = require('./stepclock.js');
 const fs = require('fs');
 const path = require('path');
 const PORT = process.env.PORT || 4400;
@@ -15,6 +16,9 @@ const SHOTS = process.env.SHOTS || '';
 
 // In the page: a clock that can be stopped (every animation paused, and the clock with it), and a sample of the
 // transition's parts on every frame it runs. The transition's own clock is its surface's clip animation.
+// Each frame is a 60 Hz step of the transition's own clock from its first moment (stepclock.js), not whatever frame a
+// busy machine managed to draw: the first frame after the tap came late there, and the transition was read as
+// starting part way in.
 function instrument() {
   const M = window.__m12 = { off: 0, pausedAt: 0, frames: [], stops: [], stopped: null, on: false, T: null, mode: 'open' };
   M.now = () => (M.pausedAt || performance.now()) - M.off;
@@ -35,10 +39,13 @@ function instrument() {
   const area = r => Math.max(0, r.r - r.l) * Math.max(0, r.b - r.t);
   const tick = () => {
     if (M.on && !M.pausedAt) {
-      const t = M.now();
       const sheet = M.mode === 'open' ? document.querySelector('#sheet-root .sheet') : document.querySelector('.m12-ghost .sheet');
+      const wa = sheet ? sheet.getAnimations().find(a => a.effect.getKeyframes().some(k => k.clipPath)) || null : null;
+      // on the transition's own clock, a frame at a time, from its first moment (stepclock.js)
+      const v = window.__clock.tick(wa);
+      if (v === 0) M.cb = M.now();
+      const t = v === undefined ? M.now() : M.cb + v;
       if (sheet) {
-        const wa = sheet.getAnimations().find(a => a.effect.getKeyframes().some(k => k.clipPath));
         const h2 = sheet.querySelector('.sheet-head h2');
         const fill = sheet.querySelector('.m12-fill');
         const word = sheet.querySelector('.m12-word');
@@ -76,6 +83,7 @@ function instrument() {
   const open = async (opts = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, deviceScaleFactor: 1, ...opts });
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
+    await ctx.addInitScript(stepClock);
     await ctx.addInitScript(instrument);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -92,15 +100,16 @@ function instrument() {
   };
   // run something with the clock armed, stopping at each moment for a screenshot, then let it finish
   const play = async (mode, act, stops, prefix, after = 1600) => {
-    await C(([m, s]) => { const M = window.__m12; M.mode = m; M.stops = s.slice(); M.frames = []; M.T = null; M.on = true; }, [mode, stops]);
+    await C(([m, s]) => { const M = window.__m12; M.mode = m; M.stops = s.slice(); M.frames = []; M.T = null; M.on = true; window.__clock.arm(Math.max(1500, ...s) + 100); }, [mode, stops]);
     await act();
     for (const s of stops) {
       await page.waitForFunction(x => window.__m12.stopped === x, s, { timeout: 5000 });
       await shot(`${prefix}-${String(s).padStart(4, '0')}`);
       await C(() => window.__m12.go());
     }
+    await page.waitForFunction(() => window.__clock.done(), null, { timeout: 30000 });
     await wait(after);
-    return C(() => { const M = window.__m12; M.on = false; return M.frames; });
+    return C(() => { const M = window.__m12; M.on = false; window.__clock.disarm(); return M.frames; });
   };
   const near = (a, b, tol) => !!a && !!b && ['l', 't', 'r', 'b'].every(k => Math.abs(a[k] - b[k]) <= tol);
   const mid = r => ({ x: (r.l + r.r) / 2, y: (r.t + r.b) / 2 });
@@ -317,6 +326,32 @@ function instrument() {
   check('played, then closed as usual, it goes into the chip once (no second drop)', ext.ghosts === 1, ext.ghosts);
   await wait(900);
   check('and it is the room, one step back', (await C(() => location.hash)) === hashRoom && (await C(() => history.state.n)) === n0 && !(await page.$('#sheet-root .sheet, .sheet-ghost')));
+
+  // ---- a redraw while it opens (the house answering the hold) carries it on: the orbs still rise one by one, each
+  // blooming as it lands. The blooms laid under the orbs moved each orb one place along, and a redraw in the first
+  // second paired every orb with the bloom before it: they all stood there whole at once and the blooms were gone.
+  await C(() => { window.__redrawOrbs = []; window.__redrawAt = null; });
+  await C(() => {
+    const obs = new MutationObserver(() => {
+      if (window.__redrawAt != null || !document.querySelector('#sheet-root .sheet .sc-orb')) return;
+      obs.disconnect();
+      const t0 = window.__redrawAt = performance.now();
+      setTimeout(() => window.__copper.render(), 120);
+      const tick = () => {
+        const t = performance.now() - t0;
+        window.__redrawOrbs.push({ t, o: [...document.querySelectorAll('#sheet-root .sc-orb')].map(o => Number(getComputedStyle(o).opacity)), blooms: document.querySelectorAll('#sheet-root .m12-bloom').length });
+        if (t < 1400) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    obs.observe(document.getElementById('sheet-root'), { childList: true, subtree: true });
+  });
+  await holdOpen();
+  const ro = await C(() => window.__redrawOrbs);
+  const after = ro.filter(f => f.t > 200 && f.t < 380);
+  check('a redraw while it opens: the orbs are still waiting their turn after it (not all whole at once)', after.length > 2 && after.every(f => f.o.every(o => o < 0.3)), after.slice(0, 3).map(f => [Math.round(f.t), f.o.map(o => +o.toFixed(2))]));
+  check('and they still bloom as they land', ro.some(f => f.t > 650 && f.blooms > 0), ro.filter(f => f.t > 600).slice(0, 2).map(f => [Math.round(f.t), f.blooms]));
+  await C(() => window.__copper.dismiss()); await wait(900);
 
   // ---- the plain rise and drop where it was not opened from its chip: its address
   await C(([a, p]) => { location.hash = `room/${a}/scene/${p}`; }, [aid, pid]); await wait(60);

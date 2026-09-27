@@ -2,6 +2,7 @@
 // the drawing on the card growing into the big remote, and Back closes the page into the card again. Read off the
 // running app frame by frame; screenshots are taken with every animation paused at a moment.
 const { chromium } = require('playwright-core');
+const { stepClock } = require('./stepclock.js');
 const fs = require('fs');
 const path = require('path');
 const PORT = process.env.PORT || 4400;
@@ -10,6 +11,9 @@ const check = (what, ok, got) => { bad += ok ? 0 : 1; console.log((ok ? 'PASS ' 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const SHOTS = process.env.SHOTS || '';
 
+// Each frame is a 60 Hz step of the transition's own clock from its first moment (stepclock.js), not whatever frame a
+// busy machine managed to draw: the first frame after the tap came late there, and the transition was read as
+// starting part way in.
 function instrument() {
   const M = window.__m14 = { t0: 0, off: 0, pausedAt: 0, frames: [], stops: [], stopped: null, on: false };
   M.now = () => (M.pausedAt || performance.now()) - M.t0 - M.off;
@@ -25,6 +29,8 @@ function instrument() {
   };
   const words = el => { const g = document.createRange(); g.selectNodeContents(el); return rect(g.getBoundingClientRect()); };
   const op = el => (el ? Number(getComputedStyle(el).opacity) : null);
+  // the transition's own clock: the animation of its window's clip
+  M.clock = () => { const n = document.querySelector('.page-ghost .remote-page .rstage') || document.querySelector('#screen .remote-page .rstage'); return n ? n.getAnimations().find(a => a.effect.getKeyframes().some(k => k.clipPath)) || null : null; };
   M.sample = () => {
     const t = M.now();
     const q = s => document.querySelector(`.page-ghost ${s}`) || document.querySelector(`#screen ${s}`);
@@ -48,7 +54,11 @@ function instrument() {
   };
   const tick = () => {
     if (M.on && !M.pausedAt) {
+      // on the transition's own clock, a frame at a time, from its first moment (stepclock.js)
+      const v = window.__clock.tick(M.clock());
+      if (v === 0) M.cb = M.now();
       const f = M.sample();
+      if (v !== undefined) f.t = Math.round(M.cb + v);
       M.frames.push(f);
       if (f.at) M.T = f.t - f.at;
       if (M.stops.length && M.T != null && f.t - M.T >= M.stops[0]) { M.stopped = M.stops.shift(); M.stop(); }
@@ -67,6 +77,7 @@ function instrument() {
   const open = async (opts = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 412, height: 560 }, hasTouch: true, deviceScaleFactor: 1, ...opts });
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
+    await ctx.addInitScript(stepClock);
     await ctx.addInitScript(instrument);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -82,15 +93,16 @@ function instrument() {
     if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); fs.copyFileSync(`${name}.png`, path.join(SHOTS, `${name}.png`)); }
   };
   const play = async (act, stops, prefix) => {
-    await C(s => { const M = window.__m14; M.stops = s.slice(); M.armed = true; M.on = false; M.T = null; }, stops);
+    await C(s => { const M = window.__m14; M.stops = s.slice(); M.armed = true; M.on = false; M.T = null; window.__clock.arm(Math.max(1500, ...s) + 100); }, stops);
     await act();
     for (const s of stops) {
       await page.waitForFunction(x => window.__m14.stopped === x, s, { timeout: 5000 });
       await shot(`${prefix}-${String(s).padStart(4, '0')}`);
       await C(() => window.__m14.go());
     }
+    await page.waitForFunction(() => window.__clock.done(), null, { timeout: 30000 });
     await wait(1800);
-    return C(() => { const M = window.__m14; M.on = false; return M.frames; });
+    return C(() => { const M = window.__m14; M.on = false; window.__clock.disarm(); return M.frames; });
   };
   const near = (a, b, tol) => !!a && !!b && ['l', 't', 'r', 'b'].every(k => Math.abs(a[k] - b[k]) <= tol);
   const mid = r => ({ x: (r.l + r.r) / 2, y: (r.t + r.b) / 2 });

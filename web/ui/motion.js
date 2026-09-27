@@ -50,11 +50,17 @@ const hasTransition = new Map();
 // Something that comes and goes (data-enter: the offline card, the house's bar) is counted apart from its
 // neighbours, so its coming or going does not move every element after it to another place: counted with them, the
 // offline card arriving at the top of Home paired the house card with the Pinned heading, and each block with the one
-// before it, and played one element's transitions from another's values.
+// before it, and played one element's transitions from another's values. A copy laid in for a moment (xf-old: a
+// crossfade's old words, a scene orb's bloom) is not counted at all, for the same reason: a bloom laid under each orb
+// as a scene's editor opened moved every orb one place along, and a redraw in the first second (the house answering)
+// paired each orb with the bloom before it, so all of them stood there whole at once and the blooms were gone.
 function walk(root, fn) {
   const kids = (el, path) => {
     let i = 0, e = 0;
-    for (const k of el.children) go(k, `${path}${k.hasAttribute('data-enter') ? `+${e++}` : i++}${k.tagName}`);
+    for (const k of el.children) {
+      if (k.classList.contains('xf-old')) continue;
+      go(k, `${path}${k.hasAttribute('data-enter') ? `+${e++}` : i++}${k.tagName}`);
+    }
   };
   const go = (el, path) => {
     if (el.classList.contains('xf-old')) return;   // a fading copy is carried by its element, not paired itself
@@ -160,7 +166,10 @@ export function snap(root, next = null) {
     let any = false;
     if (run.has(el)) { rec.run = run.get(el); any = true; }
     let copies = null;
-    for (let k = el.firstElementChild; k; k = k.nextElementSibling) if (k.classList.contains('xf-old')) (copies || (copies = [])).push(k);
+    // (each with how many of its element's own children stood before it, so it goes back in at the same place: a
+    // crossfade's copy on top, a bloom under its orb)
+    let own = 0;
+    for (let k = el.firstElementChild; k; k = k.nextElementSibling) { if (k.classList.contains('xf-old')) (copies || (copies = [])).push([k, own]); else own++; }
     if (copies) { rec.copies = copies; any = true; }
     // a drawing's shapes have no ::before or ::after to look at; and an element that was not drawn at all (hidden)
     // had no place or look to move from: a swatch's ring, shown for the first time, slid in from the first swatch
@@ -331,7 +340,11 @@ export function carry(s, root) {
         for (const k of kf) for (const p in k) moving.add((e.pseudoElement || '') + p.replace(/[A-Z]/g, c => '-' + c.toLowerCase()));
       }
     }
-    if (rec.copies) { host(el); for (const k of rec.copies) el.appendChild(k); }
+    if (rec.copies) {
+      host(el);
+      const mine = [...el.children].filter(k => !k.classList.contains('xf-old'));
+      for (const [k, at] of rec.copies) el.insertBefore(k, mine[at] || null);
+    }
     if (rec.v && canAnimate(el)) {
       for (const ps in rec.v) {
         const cs = getComputedStyle(el, ps || null);

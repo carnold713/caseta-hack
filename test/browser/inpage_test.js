@@ -17,6 +17,7 @@
 // Needs a room with two dimmable lights; hue_color and nanoleaf first, as the rest of the suite does. It puts back
 // what it changes (levels, scenes it suggested, pins, the night light).
 const { chromium } = require('playwright-core');
+const { stepClock } = require('./stepclock.js');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
 const check = (name, ok, got) => { bad += ok ? 0 : 1; console.log((ok ? 'PASS' : 'FAIL'), name, ok ? '' : `| got: ${JSON.stringify(got)}`); };
@@ -26,6 +27,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
   if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', '1'); } catch (_) {} }, process.env.APP_TOKEN);
+  await ctx.addInitScript(stepClock);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -42,12 +44,22 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
   const hold = async (sel, ms) => { const b = await page.locator(sel).first().boundingBox(); await touch('touchStart', b.x + b.width / 2, b.y + b.height / 2); await wait(ms); await touch('touchEnd'); };
   // Record something per frame for `ms`: `probe` is the body of a function of no arguments run in the page each frame.
-  const record = (probe, ms) => C(({ probe, ms }) => {
+  // `stepped`: on the motion's own clock instead, from the first animation that starts after this, one 60 Hz frame at
+  // a time (stepclock.js). What a check counts in frames (how many between the ends, the biggest step) is then the
+  // motion's, not how many frames a busy machine managed to draw right after the redraw that started it.
+  const record = (probe, ms, { stepped = false } = {}) => C(({ probe, ms, stepped }) => {
     window.__rec = []; const t0 = performance.now(); const f = new Function(probe);
-    const tick = () => { window.__rec.push([Math.round(performance.now() - t0), f()]); if (performance.now() - t0 < ms) requestAnimationFrame(tick); };
+    if (stepped) window.__clock.arm(ms, { any: true });
+    const tick = () => {
+      // (nothing started at all: the record ends as a plain one would)
+      if (stepped && !window.__clock.run && performance.now() - t0 > ms) window.__clock.disarm();
+      const v = stepped ? window.__clock.tick() : undefined;
+      window.__rec.push([Math.round(v === undefined ? performance.now() - t0 : v), f()]);
+      if (stepped ? !window.__clock.done() : performance.now() - t0 < ms) requestAnimationFrame(tick);
+    };
     requestAnimationFrame(tick);
-  }, { probe, ms });
-  const got = () => C(() => window.__rec);
+  }, { probe, ms, stepped });
+  const got = async () => { await page.waitForFunction(() => window.__clock.done(), null, { timeout: 30000 }); return C(() => { window.__clock.disarm(); return window.__rec; }); };
   const steps = rec => { const v = rec.map(r => r[1]).filter(x => typeof x === 'number'); let m = 0; for (let i = 1; i < v.length; i++) m = Math.max(m, Math.abs(v[i] - v[i - 1])); return m; };
   const turns = (rec, tol) => { const v = rec.map(r => r[1]).filter(x => typeof x === 'number'); let n = 0, dir = 0; for (let i = 1; i < v.length; i++) { const d = v[i] - v[i - 1]; if (Math.abs(d) <= tol) continue; const s = Math.sign(d); if (dir && s !== dir) n++; dir = s; } return n; };
 
@@ -72,7 +84,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // ---- the dial, as the light goes off: on to where On brings it back, gliding
   await level(dim, 40); await wait(1200);
   const want = await C(id => Math.round(window.__copper.onLevel(id, `d:${id}`)), dim);
-  await record("const k = document.querySelector('.dial .kn'); return k ? Number(k.getAttribute('cx')) : null;", 900);
+  await record("const k = document.querySelector('.dial .kn'); return k ? Number(k.getAttribute('cx')) : null;", 900, { stepped: true });
   await page.click('.dev > .onoff [data-act="dev-off"]');
   await wait(1000);
   rec = await got();
@@ -81,7 +93,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // ---- All off and All on, the house card
   await goto('home');
   if (!(await page.$('[data-act="house-off"]:not(.folded)'))) { await level(dim, 60); await wait(1200); }
-  await record("const c = document.querySelector('.card.house'); return c ? c.getBoundingClientRect().height : null;", 700);
+  await record("const c = document.querySelector('.card.house'); return c ? c.getBoundingClientRect().height : null;", 700, { stepped: true });
   await page.click('[data-act="house-off"]');
   await wait(60);
   const whole = await C(() => { const x = document.querySelector('.house-head > .xf-old'); return x ? x.textContent.replace(/\s+/g, ' ').trim() : ''; });
@@ -97,7 +109,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   rec = await got();
   const fall = rec.filter(r => typeof r[1] === 'number' && r[1] > 0.02 && r[1] < 0.4);
   check('a hold let go early empties its fill smoothly', steps(rec) < 0.3 && fall.length >= 2, { step: steps(rec), fall });
-  await record("const c = document.querySelector('.card.house'); return c ? c.getBoundingClientRect().height : null;", 900);
+  // (the clock starts with the press's own fill, so the card's opening, 0.6 s later, is counted on it too)
+  await record("const c = document.querySelector('.card.house'); return c ? c.getBoundingClientRect().height : null;", 1400, { stepped: true });
   await hold('.hold-pill', 800);
   await wait(1100);
   rec = await got();
@@ -124,7 +137,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const target = plain >= 0 && plain < scenes.length - 1 ? scenes[plain] : pick;
   // a long fade, so its chip says "Arriving" and runs its line as well as taking its check
   const fade0 = await C(async id => { const c = window.__copper; const p = c.data.presets().find(x => x.id === id); const was = p.fade; p.fade = 3; await c.data.saveConfig(); return was == null ? null : was; }, target.id);
-  await record(`const ls = [...document.querySelectorAll('.room-photo-card .room-scene .rl[data-l]')].slice(0, 12); const ch = [...document.querySelectorAll('.room-chips .chip[data-act="scene"]')]; const i = ch.findIndex(c => c.dataset.id === '${target.id}'); const n = ch[i + 1]; return [ls.map(l => Number(getComputedStyle(l).opacity)), n ? n.getBoundingClientRect().left : null];`, 1700);
+  await record(`const ls = [...document.querySelectorAll('.room-photo-card .room-scene .rl[data-l]')].slice(0, 12); const ch = [...document.querySelectorAll('.room-chips .chip[data-act="scene"]')]; const i = ch.findIndex(c => c.dataset.id === '${target.id}'); const n = ch[i + 1]; return [ls.map(l => Number(getComputedStyle(l).opacity)), n ? n.getBoundingClientRect().left : null];`, 1700, { stepped: true });
   await C(() => window.scrollTo(0, 0));
   await page.click(`.room-chips .chip[data-t="p:${target.id}"]`);
   await wait(1900);
@@ -163,11 +176,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await level(dim, 60); await wait(900);
   await C(async () => { const c = window.__copper; for (const k of Object.keys(c.S.timers || {})) await c.run({ type: 'cancel_timer', target: k.includes('|') ? k.split('|') : k }); });
   await goto(`light/${dim}/timer`, 1300);
-  await record("const s = document.querySelector('#sheet-root .sheet'); return s ? s.getBoundingClientRect().top : null;", 800);
+  await record("const s = document.querySelector('#sheet-root .sheet'); return s ? s.getBoundingClientRect().top : null;", 800, { stepped: true });
   await page.click('.dur[data-m="5"]');
   await wait(1000);
   const grow = await got();
-  await record("const s = document.querySelector('#sheet-root .sheet'); return s ? s.getBoundingClientRect().top : null;", 800);
+  await record("const s = document.querySelector('#sheet-root .sheet'); return s ? s.getBoundingClientRect().top : null;", 800, { stepped: true });
   await page.click('[data-act="timer-cancel"]');
   await wait(1000);
   const shrink = await got();

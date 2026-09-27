@@ -65,9 +65,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await clearCmds();
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   // the ring starts 0.12 s after the press, counted from the tap itself (room.js restates its delay at every redraw,
-  // so the delay on the element depends on when the last redraw ran; where it starts does not). Measured from before
-  // the test's tap, which the browser delivers a good 0.1 s later: never before the 0.12 s, and never much after.
-  await C(() => { window.__tapAt = performance.now(); });
+  // so the delay on the element depends on when the last redraw ran; where it starts does not): never before the
+  // 0.12 s, and never much after. The tap is when the page is given it (the touch's own time stamp), not when the test
+  // sent it: a busy machine delivered it a good 0.1 s to 0.3 s later, which was counted against the ring.
+  await C(() => {
+    window.__tapAt = null;
+    const at = e => { if (window.__tapAt == null) window.__tapAt = e.timeStamp; };
+    for (const t of ['touchstart', 'pointerdown', 'mousedown']) document.addEventListener(t, at, { capture: true, once: true });
+  });
   await page.tap(chip); await wait(60);
   const early = await C(async () => {
     // wait until the ring has started (a busy machine can take a few frames), up to ten frames
