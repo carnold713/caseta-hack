@@ -14,6 +14,7 @@ import * as opening from '/ui/opening.js';
 import * as swipeBack from '/ui/predictiveback.js';
 import * as chipOpen from '/ui/chipopen.js';
 import * as header from '/ui/header.js';
+import * as glass from '/ui/glass.js';
 import { wireSheetDrag } from '/ui/sheetdrag.js';
 import * as homeScreen from '/ui/screens/home.js';
 import * as roomsScreen from '/ui/screens/rooms.js';
@@ -214,8 +215,8 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
   const was = still ? motion.sheetBefore(root) : null;
   root.dataset.key = key;
   root._onClose = onClose;
-  root.innerHTML = `<button class="scrim ${still ? 'still' : ''}" data-act="sheet-close" aria-label="Close"></button>
-    <div class="sheet ${still ? 'still' : ''}" role="dialog" aria-label="${esc(title)}"><div class="grab"></div>
+  root.innerHTML = `<button class="scrim glass-veil ${still ? 'still' : ''}" data-act="sheet-close" aria-label="Close"></button>
+    <div class="sheet glass glass-sheet ${still ? 'still' : ''}" role="dialog" aria-label="${esc(title)}"><div class="grab"></div>
       ${headHTML}
       <div class="sheet-body">${body}</div></div>`;
   root.hidden = false;
@@ -845,6 +846,8 @@ render();
 depth.start($('#screen'));
 // the header that stays at the top as a page scrolls (M15)
 header.wire();
+glass.install();
+glass.wire();
 // Android's back swipe, followed by the page (M13): what it needs of the app
 swipeBack.wire({
   ctx, route, parseRoute, pageOf, depthOf, place, stepBack,

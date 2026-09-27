@@ -185,7 +185,7 @@ function wireBright(c, root) {
 function powerHTML(c, aid, onN) {
   const { icon, esc } = c;
   const on = onN > 0;
-  return `<div class="onoff room-onoff">
+  return `<div class="onoff room-onoff glass glass-control">
         <button data-act="room-on" data-id="${esc(aid)}" aria-pressed="${on}">${icon('power', 22, 2)}<span>On</span></button>
         <button data-act="room-off" data-id="${esc(aid)}" aria-pressed="${!on}">${icon('power', 22, 2)}<span>Off</span></button>
         <span class="onoff-pill ${on ? '' : 'off'}" aria-hidden="true"></span>

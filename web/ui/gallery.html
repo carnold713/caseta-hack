@@ -6,6 +6,7 @@
 <title>Copper Night · components</title>
 <link rel="stylesheet" href="/ui/tokens.css">
 <link rel="stylesheet" href="/ui/components.css">
+<link rel="stylesheet" href="/ui/glass.css">
 <style>
   /* Gallery chrome only. Nothing here is part of the design system. */
   body { padding: 24px 0 80px; }
@@ -263,8 +264,8 @@ html('hdr', `<header class="hdr">
   <button class="hdr-btn a2">${icon('clock', 20)}</button>
 </header><h1 class="t-h1 page-title" style="padding-top:0">Living room</h1>`);
 
-html('stage', `<div class="scrim"></div>
-  <div class="sheet">
+html('stage', `<div class="scrim glass-veil"></div>
+  <div class="sheet glass glass-sheet">
     <div class="grab"></div>
     <div class="sheet-head">
       <div class="t-over">Floor lamp</div>
@@ -290,7 +291,7 @@ html('coming', `<div class="card-row"><span class="row-ic">${icon('clock', 20)}<
 html('toast', `<div class="toast">${icon('check', 20, 1.8)}
   <span class="msg">Living room to Relax</span><button class="act">Undo</button></div>`);
 
-html('tabs', `<nav class="tabbar">
+html('tabs', `<nav class="tabbar glass glass-bar">
   <button aria-current="page">${icon('home')}</button>
   <button>${icon('grid')}</button>
   <button>${icon('remote')}</button>

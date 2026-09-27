@@ -26,7 +26,7 @@
 /* ---- the bar and its scrim ---- */
 .bar, .hdr.bar, .home > .bar { position: sticky; top: 0; z-index: 3; pointer-events: none; }
 .bar > * { pointer-events: auto; }
-/* The scrim: the status bar, the bar and a soft 24 px below it, #121212 at 72% over a 20 px blur, fading in with the
+/* The scrim: the status bar, the bar and a soft 24 px below it, glass without edges (glass.css), fading in with the
    scroll. It hangs off the header row, which stays at the top, so it is fixed to the screen as the page moves and
    sits with the header in the page's own stacking (over the page's content, under its title and circles, and
    under the tab bar and any sheet). A blur shows what is under it only as far as the nearest element being faded, so
@@ -35,8 +35,6 @@
 .bar::before {
   content: ''; position: absolute; left: 50%; top: 0; width: 100vw; height: 124px; margin-left: -50vw; z-index: -1;
   pointer-events: none;
-  background: rgba(18, 18, 18, .72);
-  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
   -webkit-mask-image: linear-gradient(#000 100px, transparent 124px); mask-image: linear-gradient(#000 100px, transparent 124px);
   opacity: var(--hdr-p, 0);
 }

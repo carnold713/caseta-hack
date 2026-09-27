@@ -48,9 +48,7 @@
   bottom: calc(40px + env(safe-area-inset-bottom));
   width: max-content; max-width: calc(100vw - 40px); height: 72px;
   border-radius: 36px;
-  background: rgba(18, 18, 18, .72);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-lift), inset 0 0 0 1px var(--line);
+  /* glass, the bar kind (glass.css): its tint, light, edge and shadow */
   display: flex; align-items: center; gap: min(8px, calc((100vw - 336px) / 4));
   padding: 0 8px;
 }
@@ -330,8 +328,8 @@
 
 .scrim {
   position: fixed; inset: 0; background: var(--scrim); border: 0;
-  /* the page behind a sheet goes darker and a little soft, so the sheet is plainly what is in front */
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  /* the page behind a sheet goes darker and a little soft, so the sheet is plainly what is in front (its blur is the
+     glass veil's, glass.css) */
   animation: fade var(--standard) var(--ease);
 }
 .sheet {
@@ -339,8 +337,7 @@
   /* full width of the screen, whatever the phone: the sheet is the bottom of the screen come up */
   width: 100%;
   border-radius: var(--r-card) var(--r-card) 0 0;
-  background: var(--surface-1);
-  box-shadow: var(--shadow-sheet);
+  /* glass, the sheet kind (glass.css): the densest, over the page the scrim has dimmed */
   padding: 0 0 calc(24px + env(safe-area-inset-bottom));
   animation: rise var(--sheet-in) var(--spring);
 }
