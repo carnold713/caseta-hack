@@ -34,8 +34,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     fire(cn ? 'pointercancel' : 'pointerup', st[st.length - 1]);
   }, [sel, steps, cancel, id]);
   const sent = () => C(() => (window.__sent || []).length);
-  // count the level commands this phone sends
-  await C(() => { window.__sent = []; const c = window.__copper; const g = c.gate.sendLevel; c.gate.sendLevel = (...a) => { window.__sent.push(a); return g(...a); }; });
+  // count the level commands this phone sends (one level for a light, or each lit light's own level as the house and a
+  // room's bar now send them, in proportion: gate.sendLevels)
+  await C(() => { window.__sent = []; const c = window.__copper; for (const k of ['sendLevel', 'sendLevels']) { const g = c.gate[k]; if (g) c.gate[k] = (...a) => { window.__sent.push(a); return g(...a); }; } });
 
   // ---- the house bar (shown only while something is on: with everything off there is nothing for it to move)
   if (!(await page.$('.hbar'))) { await C(async () => { const c = window.__copper; const a = c.data.areas().find(x => c.H.roomLights(x.id).length); await c.run({ type: 'level', target: `a:${a.id}`, level: 60 }); }); await wait(1500); }

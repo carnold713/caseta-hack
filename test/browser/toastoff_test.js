@@ -41,6 +41,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.click('[data-act="scene-new"]'); await wait(1500);
   const pid = await C(() => location.hash.split('/')[1]);
   check('+ makes a scene and opens it', !!pid && !!(await C(id => window.__copper.data.presets().find(p => p.id === id), pid)), pid);
+  // (changed, so it is kept: one made with + and closed untouched is not)
+  await page.click('.chip[data-act="scene-fade"][data-s="3"]'); await wait(900);
   await page.click('.sheet-close'); await wait(700);
   await page.evaluate(id => document.querySelector(`.scene-row[data-id="${id}"]`).scrollIntoView({ block: 'center' }), pid); await wait(300);
   await page.click(`.scene-row[data-id="${pid}"]`); await wait(1400);

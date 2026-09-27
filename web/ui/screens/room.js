@@ -8,7 +8,7 @@
 import { tile, roomPicture, pinButton } from '/ui/screens/parts.js';
 import { roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
-import { sceneSheet, actions as sceneActions, LIST_ACTS, markFresh, dropFresh } from '/ui/screens/scenes.js';
+import { sceneSheet, actions as sceneActions, LIST_ACTS, dropFresh } from '/ui/screens/scenes.js';
 import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
 import { roomTop } from '/ui/screens/home.js';
 import { reduced, count } from '/ui/motion.js';
@@ -472,7 +472,7 @@ export const actions = {
       if (d.domain === 'cover' || c.data.devArea(d) !== aid || d.device_id in p.levels) continue;
       p.levels[d.device_id] = c.H.sceneEntryNow(d, 0);
     }
-    markFresh(c, p);
+    // (kept even closed untouched: a room's New scene is the room's look saved, which is the whole of the ask)
     c.ui.roomScenesEdit = null;
     c.save('', { quiet: true });
     c.go(`room/${aid}/scene/${p.id}`);

@@ -31,8 +31,8 @@ const lutronDots = size => `<span class="sdots s${size}" style="--ring:var(--sur
 const showing = (c, p) => Object.keys(p.levels || {}).length > 0 && c.H.levelsMatch(p.levels);
 
 // ---------- a new scene nobody kept ----------
-// A scene made with + (here, or a room's New scene) and closed exactly as it was made is not kept: a look at + is not
-// a scene worth a row in every list. Anything changed on it, a Try it, or a pin keeps it. Whichever page is drawn
+// A scene made with + here and closed exactly as it was made is not kept: a look at + is not a scene worth a row in
+// every list. (A room's New scene is kept: there it is the room's look saved, which is the whole of the ask.) Anything changed on it, a Try it, or a pin keeps it. Whichever page is drawn
 // next without it open takes it away again, as a routine made with + and left untouched is (routine.js).
 // (what makes it the scene it is: the hub hands back its own tidied copy of a saved scene, so not the object as a whole)
 const sceneAs = p => JSON.stringify([p.name, p.levels || {}, p.fade == null ? null : Number(p.fade), p.area || null]);
