@@ -95,7 +95,7 @@ async function scrollTo(page, y) {
       check(`Rooms at ${y}: no sideways scroll`, m.hscroll <= 0, m.hscroll);
     }
     const s = (await M()).scrim;
-    check('the scrim is 124 tall, full width, #121212 at 72%, blurred 20 and masked from 100 to 124', s.h === 124 && s.w >= W && /blur\(20px\)/.test(s.blur) && /100px/.test(s.mask) && /124px/.test(s.mask) && /rgba\(18, 18, 18, 0\.72\)/.test(s.bg), s);
+    check('the scrim is 124 tall, full width, glass (#121212 at 68%, blurred 20 and saturated) and masked from 100 to 124', s.h === 124 && s.w >= W && /blur\(20px\)/.test(s.blur) && /saturate/.test(s.blur) && /100px/.test(s.mask) && /124px/.test(s.mask) && /rgba\(18, 18, 18, 0\.68\)/.test(s.bg), s);
     check('at 64 the bar spans 44 to 100: the circle is 44 at y 50', await M().then(m => near(m.a1.t, 50) && near(m.a1.b, 94)), null);
 
     // ---- a redraw mid-scroll leaves the header where it was ----
