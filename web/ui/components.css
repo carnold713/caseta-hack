@@ -354,6 +354,13 @@
    shadow, which the black overlay behind it makes unnecessary. */
 .sheet { clip-path: inset(0 round var(--r-card) var(--r-card) 0 0); }
 .sheet::-webkit-scrollbar { display: none; }
+/* On a wide screen (a Fold opened out, a tablet) the page is a 600 column in the middle, and a sheet spanning the whole
+   width put its choices out at the edges, a long reach from the page they belong to and from either thumb. There it
+   comes up the page's width, over the page. The surface a shrinking sheet leaves under itself for a moment
+   (motion.js sheetSwap) keeps the same width. */
+@media (min-width: 640px) {
+  .sheet, .sheet-under { max-width: 600px; margin: 0 auto; }
+}
 .sheet .grab {
   width: 40px; height: 4px; border-radius: 2px; margin: 8px auto 0;
   background: rgba(255, 255, 255, .24);

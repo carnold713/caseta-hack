@@ -213,6 +213,9 @@ export function view(c, r) {
   const d = data.dev(r.id);
   if (!d || d.domain !== 'pico') return `<header class="hdr"><button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button></header><h1 class="t-h1 page-h1">Remote</h1><p class="t-body muted soon">This remote is not in your home any more.</p>`;
   const pid = d.device_id;
+  // a press's own address (#remote/<id>/k2-double, from Activity) shows its button under its sheet
+  const at = parse(r);
+  if (at && c.REM.buttonNumbers(d).includes(at.n)) c.ui.remoteKey = { ...(c.ui.remoteKey || {}), [pid]: at.n };
   const sel = keyOf(c, d);
   const has = REM.buttonNumbers(d).some(n => REM.buttonSet(pid, n));
   const quiet = !data.buttonsOf(pid).length;

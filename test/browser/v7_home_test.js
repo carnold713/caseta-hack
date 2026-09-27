@@ -107,6 +107,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // the header copy keeps its contrast: the greeting and the name stay on top of the light
   const z = await C(() => [getComputedStyle(document.querySelector('.home-head')).zIndex, getComputedStyle(document.querySelector('.house-light')).zIndex]);
   check('the words sit above the light', Number(z[0]) > Number(z[1]), z);
+  // a room's card on Home switches its room from its own power circle, as its card on Rooms does, and stays Home
+  const hallPwr = () => C(() => { const b = document.querySelector('#screen .room-card[data-go="room/23"] .pwr'); return b && { lit: b.closest('.room-card').classList.contains('lit'), label: b.getAttribute('aria-label') }; });
+  const hp = await hallPwr();
+  check('a lit room\'s card on Home has a lit power circle', hp && hp.lit && /^Turn off /.test(hp.label), hp);
+  await C(() => document.querySelector('#screen .room-card[data-go="room/23"] .pwr').click()); await wait(1400);
+  const hp2 = await hallPwr();
+  check('a tap on it turns the room off, and Home stays Home', hp2 && !hp2.lit && (await C(() => location.hash)) === '#home' && !(await C(() => window.__copper.H.roomLights('23').some(d => window.__copper.data.level(d.device_id) > 0))), hp2);
+  await cmd({ type: 'level', target: 'a:23', level: 40 }); await wait(1400);
 
   // ---- 2 · Rooms: a room with no photograph shows its illustration, whose lamps are the room's lights
   // (roomscene.js): a lit room's lamps glow, a room that is off is asleep (dim, cool, no light drawn), and turning a

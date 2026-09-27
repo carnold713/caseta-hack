@@ -217,6 +217,19 @@ export const sunriseActions = {
   },
 };
 export function after(c, r, scr) { wireSunrise(c, scr); }
+// A routine made with + and left exactly as it was made is taken away again. It would otherwise run every evening
+// from then on, and a look at what + does is not a request for the Bedroom to come on at sunset. Anything changed on
+// it (a word in the sentence, Paused, a skip, its name) or a Try it keeps it.
+export function leave(c) {
+  const id = c.ui.freshRoutine, was = c.ui.freshAs;
+  c.ui.freshAs = null;
+  if (!id || !was) return;
+  const sc = c.RT.byId(id);
+  if (!sc || JSON.stringify(sc) !== was || c.RT.byId(`${id}-off`)) return;
+  c.ui.freshRoutine = null;
+  c.RT.remove(id);
+  c.save('', { quiet: true });
+}
 
 // ---------- the sheets ----------
 function whenSheet(c, sc, mode) {
@@ -393,7 +406,7 @@ export const actions = {
     c.saveSoon(300);
     if (k === 'type' || k === 'scene_ref') c.render();
   },
-  try(c, el, r) { const sc = sc0(c, r); if (sc) tryIt(c, sc); },
+  try(c, el, r) { const sc = sc0(c, r); if (sc) { c.ui.freshAs = null; tryIt(c, sc); } },
   delete(c, el, r) {
     const sc = sc0(c, r); if (!sc) return;
     c.openPicker('delete', () => confirmSheet(c, { over: sc.name, title: 'Delete this routine?', act: 'delete-go', yes: 'Delete', text: 'It stops running. Your lights stay as they are.' }));

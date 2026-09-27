@@ -142,7 +142,10 @@ function what(c, kind, cfg, m) {
         ${sec('Buttons')}<div class="group">${toggle('Dimmer and brighter', !!cfg.steps, 'wg-steps', 'When it is tall enough')}</div>`;
     case 'scenes': {
       const chosen = cfg.scenes || [];
-      return `${sec(`Scenes, up to ${MAX_SCENES}`)}<div class="group">${m.scenes.map(s => check(c, chosen.includes(s.key), 'wg-scene', s.key, s.name, s.roomName)).join('') || none('No scenes yet')}</div>`;
+      // a room's scene is named with its room ("Office · Relax"), and its room is the line under it: the name says
+      // only the scene, as the room's own chips do
+      const short = s => (s.roomName && s.name.startsWith(`${s.roomName} · `) ? s.name.slice(s.roomName.length + 3) : s.name);
+      return `${sec(`Scenes, up to ${MAX_SCENES}`)}<div class="group">${m.scenes.map(s => check(c, chosen.includes(s.key), 'wg-scene', s.key, short(s), s.roomName)).join('') || none('No scenes yet')}</div>`;
     }
     case 'house':
       return `<p class="t-cap muted wg-lede">Every light, and All off. Nothing here turns the whole house on.</p>`;

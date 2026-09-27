@@ -187,6 +187,20 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
   check('Activity asks the hub for the day\'s light and draws a ribbon for the kitchen this run lit', real.asked >= 1 && real.rooms.includes(R.kitchen.name) && real.segs >= 1, real);
   check('today has a now line, and the card is headed Today in light (or So far today)', real.now && /today in light|so far today/i.test(real.card || ''), real);
   check('the log is still there below it', (await page.$$('.ev')).length > 0 && (await page.$$('.act-f .chip')).length === 4);
+  // the hall's four levels a moment apart (a finger on a slider) read as the one they ended on
+  const hallName = await C(() => window.__copper.data.dev('11').name);
+  const lines = await C(() => [...document.querySelectorAll('.ev-t p')].map(e => e.textContent));
+  check('a run of levels to one light reads as the last of them', lines.includes(`${hallName} to 64%`) && !lines.some(t => [20, 35, 50].some(v => t === `${hallName} to ${v}%`)), lines.slice(0, 12));
+  // a press opens the press itself, ready to change: "pressed twice" is the Kitchen Pico's button 2, pressed twice
+  const twice = await C(() => (document.querySelector('.ev[data-go="remote/9/k2-double"]') || {}).textContent || null);
+  check('a press in the log opens that press on its remote', !!twice && /pressed twice/.test(twice), twice);
+  await C(() => document.querySelector('.ev[data-go="remote/9/k2-double"]').click()); await wait(1200);
+  const opened = await C(() => ({ hash: location.hash, sheet: !!document.querySelector('#sheet-root .sheet'), key: window.__copper.ui.remoteKey && window.__copper.ui.remoteKey['9'] }));
+  check('with its sheet up and its button picked on the remote under it', opened.hash === '#remote/9/k2-double' && opened.sheet && opened.key === 2, opened);
+  await C(() => window.__copper.dismiss()); await wait(900);
+  check('closing it leaves the remote with that button picked', (await C(() => location.hash)) === '#remote/9' && (await C(() => window.__copper.ui.remoteKey['9'])) === 2, await C(() => location.hash));
+  await C(() => window.__copper.back()); await wait(1200);
+  check('and Back from there is Activity again', (await C(() => location.hash)) === '#activity', await C(() => location.hash));
   await at('14 Activity', [['filters', '.act-f', 0, 192, null, 40], ['Today in light', '.til', 20, 252, 372, null], ['day header', '.ll-head', 0, null, null, 32]]);
   await page.screenshot({ path: 'v7-14-today.png', fullPage: true });
 

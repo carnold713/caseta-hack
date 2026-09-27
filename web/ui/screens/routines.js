@@ -356,6 +356,8 @@ export const actions = {
   new(c) {
     const sc = c.RT.newRoutine();
     c.ui.freshRoutine = sc.id;
+    // as it was made, so leaving it untouched can take it away again (routine.js leave)
+    c.ui.freshAs = JSON.stringify(sc);
     c.save('Routine created');
     c.go(`routine/${sc.id}`);
   },
