@@ -154,6 +154,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // ---- 10 Routines, 23 a routine
   await go('routines');
   await at('10 Routines', [['H1', '.rt-head h1', 20, 58, null, 44], ['plus', '.rt-head .a1', 336, 52, 56, 56]]);
+  // a look at + is not a routine: made and left untouched, it is gone again
+  const nRoutines = (await cfg()).schedules.length;
+  await tap('[data-act="new"]');
+  await tap('[data-act="back"]'); await wait(400);
+  check('+ and straight back leaves no routine behind', (await cfg()).schedules.length === nRoutines && /#routines$/.test(page.url()), { was: nRoutines, now: (await cfg()).schedules.length, url: page.url() });
   await tap('[data-act="new"]');
   check('+ makes a routine and opens it as New routine', /#routine\//.test(page.url()) && (await page.textContent('.page-h1')) === 'New routine');
   const rid = page.url().split('/').pop();

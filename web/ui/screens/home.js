@@ -150,13 +150,24 @@ export function view(c) {
     ${empty ? '' : pinnedHTML(c)}
     ${favScenes.length ? `<div class="chip-row" data-keep="scenes">${favScenes.join('')}<button class="chip more" data-go="scenes">All scenes</button></div>` : ''}
 
-    ${rooms.length ? `<div class="t-over sec">Rooms</div><div class="tile-strip rooms" data-keep="rooms">${rooms.map(a => `
-      <button class="room-card" data-go="room/${esc(a.id)}" data-xf>
-        ${roomPicture(c, a.id, a.name, 'home')}
-        <span class="nm">${esc(a.name)}</span><span class="vl">${esc(roomStatus(c, a.id))}</span>
-      </button>`).join('')}</div>` : ''}
+    ${rooms.length ? `<div class="t-over sec">Rooms</div><div class="tile-strip rooms" data-keep="rooms">${rooms.map(a => roomCard(c, a)).join('')}</div>` : ''}
     ${homeCards(c)}
   </div>`;
+}
+
+// A room on Home: its picture, its name and how much is on, and the power circle its card on Rooms has, so coming
+// home to a dark hall is one tap here rather than the room's page and back. A tap anywhere else opens the room.
+// (A card, not a button: the power circle is a button of its own inside it.)
+function roomCard(c, a) {
+  const { esc, icon, H, data } = c;
+  const lit = H.roomLights(a.id).some(d => (data.level(d.device_id) || 0) > 0);
+  const canToggle = data.controllable().some(d => data.devArea(d) === a.id && d.domain !== 'cover');
+  return `
+      <div class="room-card ${lit ? 'lit' : ''}" data-go="room/${esc(a.id)}" role="link" aria-label="${esc(a.name)}" data-xf>
+        ${roomPicture(c, a.id, a.name, 'home')}
+        <span class="nm">${esc(a.name)}</span><span class="vl">${esc(roomStatus(c, a.id))}</span>
+        ${canToggle ? `<button class="pwr" data-act="room-toggle" data-id="${esc(a.id)}" aria-label="${lit ? 'Turn off' : 'Turn on'} ${esc(a.name)}">${icon('power', 20, 2)}</button>` : ''}
+      </div>`;
 }
 
 // The house brightness: a finger anywhere on the bar sets it, moving what is on (or, with nothing on, bringing every

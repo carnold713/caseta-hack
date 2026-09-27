@@ -50,15 +50,19 @@ export function view(c, r) {
       ${dots(c, p, 14, 'var(--surface-2)')}<span class="row-txt"><span class="t">${esc(H.sceneShortName(p))}</span></span>
       <button class="row-chev as-btn" data-go="scenes/${esc(p.id)}" aria-label="Change ${esc(H.sceneShortName(p))}">${icon('chev', 16, 1.8)}</button></div>`;
   const rooms = data.areas();
+  // The scenes there are come first, room by room; the rooms that have none yet follow them, so a home with scenes in
+  // one room and four rooms still bare opens on its scenes rather than on four offers.
   const groups = rooms.map(a => {
     const ps = H.roomScenes(a.id);
-    if (ps.length) return `<div class="t-over sec">${esc(a.name)}</div><div class="group">${ps.map(row).join('')}</div>`;
-    // a room with dimmers and no scenes yet is offered the five, in one row, until it says not now
-    if (H.roomDimmers(a.id).length && !notNow().includes(a.id)) return `<div class="t-over sec">${esc(a.name)}</div>
+    return ps.length ? `<div class="t-over sec">${esc(a.name)}</div><div class="group">${ps.map(row).join('')}</div>` : '';
+  }).join('');
+  // a room with dimmers and no scenes yet is offered the five, in one row, until it says not now
+  const offers = rooms.map(a => {
+    if (H.roomScenes(a.id).length || !H.roomDimmers(a.id).length || notNow().includes(a.id)) return '';
+    return `<div class="t-over sec">${esc(a.name)}</div>
       <div class="group suggest-card"><div class="row has-ic" data-act="scenes-five" data-area="${esc(a.id)}" role="button" tabindex="0"><span class="row-ic">${icon('sparkle', 20, 1.7)}</span>
         <span class="row-txt"><span class="t">Suggest scenes</span></span>
         <button class="link" data-act="scenes-notnow" data-area="${esc(a.id)}">Not now</button></div></div>`;
-    return '';
   }).join('');
   const loose = all.filter(p => !p.area || !rooms.some(a => a.id === p.area));
   const lutron = theirs.map(sc => `<div class="row scene-row" data-act="scene-run-lutron" data-hold="scene-lutron" data-ms="500" data-sid="${esc(sc.scene_id)}" role="button" tabindex="0">
@@ -73,6 +77,7 @@ export function view(c, r) {
     ${groups}
     ${loose.length ? `<div class="t-over sec">Not in a room</div><div class="group">${loose.map(row).join('')}</div>` : ''}
     ${lutron ? `<div class="t-over sec">Lutron app</div><div class="group">${lutron}</div>` : ''}
+    ${offers}
     ${!all.length && !theirs.length ? `<div class="scenes-empty"><p class="t-body muted">No scenes yet</p><button class="pill ghost" data-act="scene-new">New scene</button></div>` : ''}
   </div>`;
 }

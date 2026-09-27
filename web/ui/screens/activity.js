@@ -70,9 +70,14 @@ function section(c, iso) {
   if (days > 0 && days < 7) return rel;
   return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
 }
-// Where a log entry leads: a remote's page, or the one light a change from the app was made to.
+// Where a log entry leads: the press itself on its remote (what it does, ready to change: "pressed twice, nothing set"
+// is one tap from being set), a remote's page, or the one light a change from the app was made to.
+const PRESS = { single: 'single', double: 'double', hold: 'hold', hold_start: 'hold' };
 function entryGo(c, e) {
-  if (e.kind === 'pico' && c.data.dev(e.device_id)) return `remote/${e.device_id}`;
+  if (e.kind === 'pico' && c.data.dev(e.device_id)) {
+    const g = PRESS[e.gesture];
+    return g && c.REM.buttonNumbers(c.data.dev(e.device_id)).includes(e.button_number) ? `remote/${e.device_id}/k${e.button_number}-${g}` : `remote/${e.device_id}`;
+  }
   const t = e.kind === 'app' && e.action && e.action.target;
   if (typeof t === 'string' && t.startsWith('d:') && c.data.dev(t.slice(2))) return `light/${t.slice(2)}`;
   return '';
@@ -434,7 +439,7 @@ export function view(c) {
   const f = c.ui.actFilter || 'all';
   const all = (c.S.activity || []).filter(e => f === 'all' || e.kind === f || (f === 'app' && e.kind === 'agent'));
   // the press and its release come as one line: a hold's end is not news
-  const list = all.filter(e => !(e.kind === 'pico' && e.gesture === 'hold_end')).slice(0, 100);
+  const list = all.filter(e => !(e.kind === 'pico' && e.gesture === 'hold_end')).filter(burst()).slice(0, 100);
   let html = ''; let cur = null;
   for (const e of list) {
     const sec = section(c, e.at);
@@ -452,6 +457,23 @@ export function view(c) {
     ${lightLog(c)}
     ${html || `<p class="t-body muted soon">Nothing yet.</p>`}
   </div>`;
+}
+// A finger on a slider sends a change every few hundred milliseconds, and each one is logged: dragging a lamp from cool
+// to warm left eight lines. A run of the same kind of change to the same lights, each within a few seconds of the
+// next, reads as the one it ended on (the list is newest first, so the first of a run is kept).
+const BURST_MS = 5000;
+function burst() {
+  let prev = null;
+  return e => {
+    // only a level or a colour moving: on, off and anything else are each news of their own
+    const a = e.kind === 'app' && e.action ? e.action : null;
+    const moving = a && ((a.type === 'level' && typeof a.level === 'number' && a.level > 0) || (a.type === 'color' && !a.follow));
+    const k = moving ? `${a.type}|${JSON.stringify(a.target)}` : null;
+    const t = Date.parse(e.at);
+    const same = k && prev && prev.k === k && Math.abs(prev.t - t) <= BURST_MS;
+    prev = k ? { k, t } : null;
+    return !same;
+  };
 }
 function picoMini(c, d) { return picoSVG({ model: c.REM.modelFor(d), finish: c.REM.finishFor(d), keys: c.REM.slots(d), height: 32 }); }
 

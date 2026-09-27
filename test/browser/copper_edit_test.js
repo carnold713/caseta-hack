@@ -128,6 +128,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await wait(1200);
   await go('scenes');
   check('All scenes, with the five offered to a room that has none', !!(await page.$('.suggest-card [data-act="scenes-five"]')));
+  check('the scenes there are come before the offers', await C(() => { const offer = document.querySelector('.scenes-page .suggest-card'); return [...document.querySelectorAll('.scenes-page .scene-row')].every(r => !!(r.compareDocumentPosition(offer) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
   await at('14 All scenes', [['title (its padding box: the text is at 20, 128)', '.scenes-page .page-h1', 0, 108, null, 64], ['add', '.scenes-page .hdr .a1', 336, 52, 56, 56]]);
   await page.click('[data-act="scene-new"]'); await wait(1500);
   const pid = await C(() => location.hash.split('/')[1]);

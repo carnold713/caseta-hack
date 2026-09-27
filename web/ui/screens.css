@@ -80,12 +80,30 @@
   overflow-x: auto; scrollbar-width: none;
 }
 .chip-row::-webkit-scrollbar { display: none; }
+/* On a phone a sideways strip runs off the edge of the screen, which says there is more. On a wide screen the page is a
+   column in the middle and the strip stopped dead at its edge, halfway through a card, which read as a mistake: there
+   it fades out over the gutter instead. */
+@media (min-width: 640px) {
+  .tile-strip, .chip-row, .gtiles { -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--gutter), #000 calc(100% - 56px), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--gutter), #000 calc(100% - 56px), transparent); }
+}
 .chip-row .chip { flex: none; }
 .tile-strip.rooms { gap: var(--gap); }
 
 /* The room cards on Home draw the room's own art faint in the corner when there is no photograph. */
 .room-card .room-art { position: absolute; inset: auto; right: 12px; top: 10px; width: 72px; height: 72px; opacity: .22; object-fit: contain; }
 .room-card .room-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Its power circle, the Rooms card's own: dark while the room is off, copper while it is lit. It sits level with the
+   name and the status, which stop short of it. */
+.room-card { cursor: pointer; }
+.room-card .nm, .room-card .vl { right: 64px; }
+.room-card .pwr {
+  position: absolute; right: 12px; top: 78px; z-index: 1;
+  width: 44px; height: 44px; border-radius: 22px; border: 0; padding: 0; display: grid; place-items: center;
+  background: var(--bg); color: var(--icon-2);
+  transition: background-color var(--standard) var(--ease), color var(--standard) var(--ease), transform var(--tap) var(--spring-quick);
+}
+.room-card.lit .pwr { background: var(--copper); color: var(--icon-1); }
+.room-card .pwr:active { transform: scale(.96); }
 
 /* ---- Home's Pinned section (pins.js) ------------------------------------------------------------ */
 /* The heading, with Edit (Done) at its right: the overline where a section's overline sits, the link's touch area
