@@ -19,8 +19,8 @@
 //               the tiles, and the room's one light at the top of the screen, fading in as it opens.
 // BACK is the same run the other way, faster (0.45 s on (0.4, 0, 0.2, 1)), with the room's content gone first. A room
 // let go by Android's back swipe (M13) closes from the shrunk pose the finger left (opening.js starts its ghost there).
-import { T } from '/ui/motion.js';
-import { OPEN, CLOSE, CROSS, last, shown, textBox, px, opacityOf, part, copyText, copyButton, topLayer, el, windowGeo, pair, stepAside, parts as barParts, scrim, aside, homeParts, pictureFrame, pictureGeo } from '/ui/flight.js';
+import { T, copySize } from '/ui/motion.js';
+import { OPEN, CLOSE, CROSS, last, shown, textBox, px, opacityOf, part, copyText, copyButton, topLayer, el, windowGeo, pair, stepAside, parts as barParts, scrim, aside, homeParts, pictureFrame, pictureGeo, pressOf } from '/ui/flight.js';
 
 const FACE = 300;       // the card's face fades over the first (open) or last (back) 0.3 s
 const RADIUS = 28;      // the card's corners, which the window keeps
@@ -30,7 +30,7 @@ const RADIUS = 28;      // the card's corners, which the window keeps
 // part way through its press (0.97), so its scale is read too and the window starts exactly where it is.
 function readCard(card) {
   const box = card.getBoundingClientRect();
-  const k = box.width / (card.offsetWidth || box.width) || 1;
+  const k = pressOf(card, box);
   const q = s => card.querySelector(s);
   // an illustrated room (roomscene.js) is a picture like a photograph: the card shows the middle of the page's own
   const photo = card.classList.contains('photo') || card.classList.contains('scene');
@@ -92,7 +92,7 @@ function face(hero, O, G) {
     const cs = getComputedStyle(O.pill.el);
     const c = O.pill.el.cloneNode(true);
     const p = G.loc(O.pill.r.left, O.pill.r.top);
-    for (const q of ['display', 'alignItems', 'gap', 'padding', 'borderRadius', 'backgroundColor', 'color', 'fontSize', 'fontWeight', 'lineHeight', 'fontFamily']) c.style[q] = cs[q];
+    for (const q of ['display', 'alignItems', 'gap', 'padding', 'borderRadius', 'backgroundColor', 'color', 'fontSize', 'fontWeight', 'lineHeight', 'fontFamily']) c.style[q] = q === 'fontSize' ? copySize(cs[q]) : cs[q];
     Object.assign(c.style, { position: 'absolute', left: px(p.x), top: px(p.y), width: px(O.pill.w), height: px(O.pill.h), margin: '0', pointerEvents: 'none' });
     c.setAttribute('aria-hidden', 'true');
     hero.appendChild(c); parts.push([c, { opacity: 1 }, { opacity: 0 }]);
