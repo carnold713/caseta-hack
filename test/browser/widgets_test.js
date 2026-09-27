@@ -129,8 +129,7 @@ const BRIDGE = () => {
   check('square corners', (await calls('setWidget')).at(-1).cfg.corners === 'square' && await page.locator('#screen .wgp.sq').count() === 1);
   await page.locator('[data-act="wg-icons"]').click(); await wait(200);
   check('icons off: saved, and gone from the picture', (await calls('setWidget')).at(-1).cfg.icons === false && await page.locator('#screen .wgp .wgp-ic').count() === 0);
-  await page.locator('[data-act="wg-steps"]').click(); await wait(200);
-  check('Dimmer and brighter off: saved, and gone from the picture', (await calls('setWidget')).at(-1).cfg.steps === false && await page.locator('#screen .wgp .wgp-btn').count() === 0);
+  check('a Room widget has no Dimmer and brighter: its brightness is the quick panel\'s', await page.locator('[data-act="wg-steps"]').count() === 0 && await page.locator('#screen .wgp .wgp-btn').count() === 0);
   await page.locator('[data-act="wg-density"][data-v="compact"]').click(); await wait(200);
   check('compact', (await calls('setWidget')).at(-1).cfg.density === 'compact');
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/widget-page.png`, fullPage: true });
@@ -149,9 +148,9 @@ const BRIDGE = () => {
   const dims = await page.evaluate(() => {
     const p = document.querySelector('.wg-stage .wgp[data-kind="dimmers"]');
     const rows = [...(p ? p.querySelectorAll('.wgp-dim') : [])];
-    return { picture: !!p, rows: rows.length, segs: rows.every(r => r.querySelectorAll('.wgp-segs i').length === 10), pwr: rows.every(r => !!r.querySelector('.wgp-pwr')), note: p ? p.innerText : '' };
+    return { picture: !!p, rows: rows.length, bars: p ? p.querySelectorAll('.wgp-segs').length : 0, pwr: rows.every(r => !!r.querySelector('.wgp-pwr') && !!r.querySelector('b').textContent), note: p ? p.innerText : '' };
   });
-  check('a Dimmers widget\'s page shows its picture: a row per pin with ten segments and a power button, or the note', dims.picture && (dims.rows > 0 ? dims.segs && dims.pwr : /Pin lights and rooms/.test(dims.note)), dims);
+  check('a Dimmers widget\'s page shows its picture: a row per pin with its name and a power button and no bar, or the note', dims.picture && dims.bars === 0 && (dims.rows > 0 ? dims.pwr : /Pin lights and rooms/.test(dims.note)), dims);
   check('and offers the look, with no choice of lamp colour', await page.locator('[data-act="wg-theme"]').count() === 3 && await page.locator('[data-act="wg-accent"]').count() === 0);
   await page.locator('[data-act="wg-theme"][data-v="day"]').click(); await wait(200);
   check('Day saves for it too', (await calls('setWidget')).at(-1).cfg.theme === 'day' && await page.locator('#screen .wgp.wgp-day[data-kind="dimmers"]').count() === 1);

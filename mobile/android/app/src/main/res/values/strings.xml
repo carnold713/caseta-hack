@@ -7,7 +7,7 @@
     <string name="tile_label">All off</string>
     <!-- the eleven widgets, as the widget picker lists them -->
     <string name="wg_room">Room</string>
-    <string name="wg_room_d">A room: on and off, dimmer and brighter</string>
+    <string name="wg_room_d">A room: on and off, and its lights a tap away</string>
     <string name="wg_light">Light</string>
     <string name="wg_light_d">One light, in its own colour while it is on</string>
     <string name="wg_scenes">Scenes</string>

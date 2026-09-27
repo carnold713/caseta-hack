@@ -4,9 +4,9 @@
      open. Its page in the app (#widgets/id) opens when it is placed and edits it live. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
-    android:minHeight="110dp"
+    android:minHeight="50dp"
     android:targetCellWidth="4"
-    android:targetCellHeight="2"
+    android:targetCellHeight="1"
     android:minResizeWidth="110dp"
     android:minResizeHeight="40dp"
     android:resizeMode="horizontal|vertical"

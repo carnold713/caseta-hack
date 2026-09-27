@@ -13,7 +13,7 @@ export let noTabs = false;
 
 // The eleven, in the order the widget picker shows them: [kind, name, what it is, glyph]
 export const KINDS = [
-  ['room', 'Room', 'On and off, dimmer and brighter', 'grid'],
+  ['room', 'Room', 'On and off, and its lights a tap away', 'grid'],
   ['light', 'Light', 'One light, in its own colour while on', 'bulb'],
   ['scenes', 'Scenes', 'One to six scenes, a tap each', 'sparkle'],
   ['house', 'Whole house', 'How many are on, and All off', 'home'],
@@ -136,8 +136,7 @@ function what(c, kind, cfg, m) {
   const none = w => `<div class="row"><span class="row-txt"><span class="d">${w}</span></span></div>`;
   switch (kind) {
     case 'room':
-      return `${sec('Room')}<div class="group">${rooms || none('No rooms with lights yet')}</div>
-        ${sec('Buttons')}<div class="group">${toggle('Dimmer and brighter', cfg.steps !== false, 'wg-steps')}</div>`;
+      return `${sec('Room')}<div class="group">${rooms || none('No rooms with lights yet')}</div>`;
     case 'light':
       return `${sec('Light')}<div class="group">${lights(m.lights) || none('No lights yet')}</div>
         ${sec('Buttons')}<div class="group">${toggle('Dimmer and brighter', !!cfg.steps, 'wg-steps', 'When it is tall enough')}</div>`;
@@ -214,8 +213,8 @@ function preview(c, kind, cfg, m, st) {
     case 'room': {
       if (!room) { body = gone('Choose a room'); break; }
       const o = lit(room.lights);
-      body = head('grid', o.on > 0, room.name, o.on ? `${room.lights.length > 1 ? `${o.on} of ${room.lights.length} on` : 'On'}${L.levels && o.level ? ` · ${o.level}%` : ''}` : 'Off', o.on ? 'on' : 'off')
-        + (cfg.steps !== false ? `<div class="wgp-gap"></div>${btns([['Dimmer', false, 'minus'], ['Brighter', false, 'plus']])}` : '');
+      // the heading alone, in the middle of the card: the room's brightness and its lights are the quick panel's
+      body = `<div class="wgp-gap"></div>${head('grid', o.on > 0, room.name, o.on ? `${room.lights.length > 1 ? `${o.on} of ${room.lights.length} on` : 'On'}${L.levels && o.level ? ` · ${o.level}%` : ''}` : 'Off', o.on ? 'on' : 'off')}<div class="wgp-gap"></div>`;
       break;
     }
     case 'light': {
@@ -273,15 +272,15 @@ function preview(c, kind, cfg, m, st) {
       break;
     }
     case 'dimmers': {
-      // a row each: the name and level over a segmented bar lit up to the level, and the power button
+      // a row each: the glyph, the name, the level and the power button (a room's level is its lit lights that dim)
+      const dims = id => (m.lights.find(l => l.id === id) || {}).dim !== false;
       const list = m.pins.map(k => (k.startsWith('d:') ? ['bulb', m.lights.find(l => l.id === k.slice(2)), k] : ['grid', m.rooms.find(r => r.id === k.slice(2)), k])).filter(x => x[1]).slice(0, 4);
       tall = list.length > 2;
       if (!list.length) { body = head('pin', false, 'Pinned', 'Pin lights and rooms on Home'); break; }
       body = `<div class="wgp-dims">${list.map(([g, x, k]) => {
-        const o = k.startsWith('d:') ? { on: lv(x.id) > 0 ? 1 : 0, level: lv(x.id) } : lit(x.lights);
-        const on = o.on > 0, n = 10, lit10 = on ? Math.max(1, Math.round((o.level || 100) * n / 100)) : 0;
-        const segs = Array.from({ length: n }, (_, i) => `<i class="${i < lit10 ? 'on' : ''}"></i>`).join('');
-        return `<div class="wgp-dim"><div class="wgp-dim-main"><div class="wgp-dim-words">${ic(g, on)}<b>${esc(x.name)}</b><em>${on ? (L.levels && o.level ? `${o.level}%` : 'On') : 'Off'}</em></div><div class="wgp-segs">${segs}</div></div><i class="wgp-pwr ${on ? 'on' : 'off'}">${icon('power', 20, 1.9)}</i></div>`;
+        const o = k.startsWith('d:') ? { on: lv(x.id) > 0 ? 1 : 0, level: lv(x.id) } : { on: lit(x.lights).on, level: lit(x.lights.filter(dims)).level };
+        const on = o.on > 0;
+        return `<div class="wgp-dim">${ic(g, on)}<b>${esc(x.name)}</b>${L.levels ? `<em>${on ? (o.level ? `${o.level}%` : 'On') : 'Off'}</em>` : ''}<i class="wgp-pwr ${on ? 'on' : 'off'}">${icon('power', 20, 1.9)}</i></div>`;
       }).join('')}</div>`;
       break;
     }

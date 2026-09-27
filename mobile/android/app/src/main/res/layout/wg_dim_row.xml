@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A row of the Dimmers widget (Widgets.java): the glyph, the name and the level over a segmented brightness bar,
-     and a round power button at the end. Rows share the height the widget has; the row itself opens the quick panel
-     on its item, each segment sets a level, and the button switches it. -->
+<!-- A row of the Dimmers widget (Widgets.java): the glyph, the name, the level, and a round power button at the end.
+     Rows share the height the widget has. The button switches the item; a tap anywhere else on the row opens the
+     quick panel on it. A long name takes a second line rather than being cut short. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_dim"
     android:layout_width="match_parent"
@@ -10,58 +10,39 @@
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
-    <LinearLayout
+    <ImageView
+        android:id="@+id/wg_dim_ic"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/wi_bulb"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/wg_dim_name"
+        style="@style/WgText.Bold"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:orientation="vertical">
+        android:maxLines="2"
+        android:singleLine="false"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:id="@+id/wg_dim_ic"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_marginEnd="8dp"
-                android:src="@drawable/wi_bulb"
-                android:importantForAccessibility="no" />
-
-            <TextView
-                android:id="@+id/wg_dim_name"
-                style="@style/WgText.Bold"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/wg_dim_lv"
-                style="@style/WgText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:textColor="#9E9E9E"
-                android:textSize="13sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/wg_dim_bar"
-            android:layout_width="match_parent"
-            android:layout_height="28dp"
-            android:orientation="horizontal" />
-    </LinearLayout>
+    <TextView
+        android:id="@+id/wg_dim_lv"
+        style="@style/WgText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textColor="#9E9E9E"
+        android:textSize="13sp" />
 
     <FrameLayout
         android:id="@+id/wg_dim_pwr"
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:layout_marginStart="12dp"
-        android:visibility="gone">
+        android:layout_marginStart="12dp">
 
         <ImageView
             android:id="@+id/wg_dim_pwr_bg"
