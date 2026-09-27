@@ -417,7 +417,10 @@ final class Widgets {
         JSONArray lights = room.optJSONArray("lights");
         int[] onLv = litOf(b, lights);
         boolean on = onLv[0] > 0;
-        String sub = on ? (lights.length() > 1 ? onLv[0] + " of " + lights.length() + " on" : "On") + (b.L.levels && onLv[1] > 0 ? " · " + onLv[1] + "%" : "") : "Off";
+        // said as the app's room card says it ("2 on · 70%"), with the level worked out as the quick panel and the
+        // Dimmers widget do (the mean of the lit lights that dim), so the three never disagree
+        int rl = roomLevel(b.model, b.state, lights);
+        String sub = on ? onLv[0] + " on" + (b.L.levels && rl > 0 ? " · " + rl + "%" : "") : "Off";
         RemoteViews head = b.head(R.drawable.wi_grid, on ? b.L.accent : b.L.sub, room.optString("name"), sub);
         b.power(head, on, b.act(level(target, on ? "off" : "on")), R.drawable.wi_power);
         // Its brightness, and each of its lights, are a tap away in the quick panel, so the card is the heading alone,
