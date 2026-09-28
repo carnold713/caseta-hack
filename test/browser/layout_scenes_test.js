@@ -6,7 +6,7 @@
 // together as "10100%"), sideways scroll on the page, the end of a page hidden under the tab bar, a sheet reaching
 // nearer than 80 to the top, and page errors.
 //
-// Then the transitions (M12, a scene opening from its chip, row or tile and closing back into it; M14, a remote's
+// Then the transitions (a scene's editor rising from a chip, row or tile and dropping; M14, a remote's
 // card opening into its page and back), sampled frame by frame with every animation paused: each piece of words
 // must keep its lines and its ellipsis from rest to rest, and a word that flies into another must read like it at
 // both ends. Puts the config back as it found it; the long names are this phone's only and go with a reload.
@@ -324,7 +324,7 @@ function frames() {
     const TIMES = [0, 16, 40, 60, 80, 110, 150, 200, 260, 330, 420, 520, 650, 800, 1000, 1300];
     const H2 = '.sheet-ghost h2.t-sheet, #sheet-root h2.t-sheet';
     await C(`(${frames})()`);
-    const flight = async (what, trigger, src, dst, sync = false) => {
+    const flight = async (what, trigger, src, dst, sync = false, least = 4) => {
       await C(`(${frames})()`);
       await C(s => window.__frames.rest(s), src);
       if (!sync) await C(() => window.__frames.arm());
@@ -332,7 +332,7 @@ function frames() {
       const info = await C(([t, d]) => window.__frames.sample(t, d), [TIMES, dst]);
       await wait(700);
       const got = await C(() => window.__frames.check());
-      check(`${W}: ${what}: every piece of words keeps its lines and its ellipsis (${info.frames} frames of ${info.span} ms, ${info.anims} animations${got.flew ? ', the word flies' : ''})`, info.anims > 3 && !got.n, got.bad);
+      check(`${W}: ${what}: every piece of words keeps its lines and its ellipsis (${info.frames} frames of ${info.span} ms, ${info.anims} animations${got.flew ? ', the word flies' : ''})`, info.anims >= least && !got.n, got.bad);
     };
     const hold = async sel => { await C(s => document.querySelector(s).scrollIntoView({ block: 'center', inline: 'center' }), sel); await wait(400); const b = await page.locator(sel).boundingBox(); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await wait(650); await page.mouse.up(); };
     const closeX = () => C(() => { document.querySelector('#sheet-root .sheet-close').click(); window.__frames.freeze(); });
@@ -340,18 +340,18 @@ function frames() {
     for (const id of ['lay-k3', 'lay-all']) {
       const chip = `.room-chips .chip[data-id="${id}"]`;
       await C(s => document.querySelector(s).scrollIntoView({ block: 'center', inline: 'center' }), chip); await wait(400);
-      await flight(`M12, a chip held open (${id})`, () => hold(chip), chip, H2); await wait(700);
-      await flight(`M12, closed into its chip (${id})`, closeX, chip, H2, true); await wait(900);
+      await flight(`a scene's editor held open from a chip, rising (${id})`, () => hold(chip), chip, H2, false, 1); await wait(700);
+      await flight(`and dropping (${id})`, closeX, chip, H2, true, 1); await wait(900);
     }
     await go('scenes', 1200);
     const row = '.scene-row[data-id="lay-long"]';
     await C(s => document.querySelector(s).scrollIntoView({ block: 'center' }), row); await wait(400);
-    await flight('M12, a row opened by its chevron', () => C(s => document.querySelector(`${s} .row-chev`).click(), row), `${row} .row-txt .t`, H2); await wait(700);
-    await flight('M12, closed into its row', closeX, `${row} .row-txt .t`, H2, true); await wait(900);
+    await flight('a scene\'s editor opened by its row\'s chevron, rising', () => C(s => document.querySelector(`${s} .row-chev`).click(), row), `${row} .row-txt .t`, H2, false, 1); await wait(700);
+    await flight('and dropping', closeX, `${row} .row-txt .t`, H2, true, 1); await wait(900);
     await C(() => window.scrollTo(0, 0)); await wait(300);
     const tile = '.scene-tile[data-id="lay-long"]';
-    await flight('M12, a tile held open', () => hold(tile), `${tile} .nm`, H2); await wait(700);
-    await flight('M12, closed into its tile', closeX, `${tile} .nm`, H2, true); await wait(900);
+    await flight('a scene\'s editor held open from a tile, rising', () => hold(tile), `${tile} .nm`, H2, false, 1); await wait(700);
+    await flight('and dropping', closeX, `${tile} .nm`, H2, true, 1); await wait(900);
     for (const id of [pid, other]) {
       await go('remotes', 1200);
       const card = `.rcard[data-go="remote/${id}"]`;

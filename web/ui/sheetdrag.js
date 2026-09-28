@@ -12,8 +12,8 @@ const OWN_DRAG = '[data-drag], .wheel, .ws-track, input, textarea, select, [cont
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // root: #sheet-root. dismiss(): close it for good, without a second drop animation. handoff(dy), when given, may
-// take a sheet let go past the point of closing and close it its own way from where the finger left it (a scene's
-// editor goes back into its chip, chipopen.js); it says true when it has.
+// take a sheet let go past the point of closing and close it its own way from where the finger left it; it says
+// true when it has.
 export function wireSheetDrag(root, dismiss, { handoff = null } = {}) {
   let d = null;   // {sheet, scrim, y0, x0, t0, dy, live, head, lastY, lastT, v}
   const sheetOf = t => t && t.closest && t.closest('#sheet-root .sheet');

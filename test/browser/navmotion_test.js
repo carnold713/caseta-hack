@@ -172,8 +172,8 @@ function sampler() {
   await B('cancel'); await wait(700);
   await C(() => window.__copper.dismiss()); await wait(800);
 
-  // ---- Back while a scene's editor grows out of its chip turns it round
-  // (a room with scenes, as chipopen_test makes one)
+  // ---- a scene's editor, held open from its chip, rises from the bottom as every sheet does (no growing out of
+  // the chip), and Back drops it
   const sid = await C(async () => {
     const c = window.__copper;
     const a = c.data.areas().slice().sort((x, y) => c.H.roomLights(y.id).length - c.H.roomLights(x.id).length)[0];
@@ -185,13 +185,13 @@ function sampler() {
   if (await page.$(chip)) {
     await C(s => document.querySelector(s).scrollIntoView({ block: 'center', inline: 'center' }), chip); await wait(300);
     const b = await page.locator(chip).first().boundingBox();
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await wait(560); await page.mouse.up();
-    fr = await rec(`() => { const s = document.querySelector('.m12-ghost .sheet') || document.querySelector('#sheet-root .sheet'); if (!s) return null; const m = /inset\\(([\\d.e-]+)px/.exec(getComputedStyle(s).clipPath); return m ? Math.round(Number(m[1])) : 0; }`, 900, async () => { await wait(120); await C(() => history.back()); });
-    const ins = fr.map(f => f.v).filter(v => v != null);
-    const low = Math.min(...ins), at = ins.indexOf(low);
-    check('Back while a scene\'s editor grows turns it round: it never stands open, and goes back into the chip steadily', ins.length > 5 && low > 20 && ins.slice(at).every((v, i, a) => i === 0 || v >= a[i - 1] - 1), { least: low, frames: ins.length });
-    await wait(600);
-    check('and nothing of it is left', !(await page.$('.m12-ghost, .sheet-ghost')) && (await C(() => document.querySelector('#sheet-root').hidden)));
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down();
+    fr = await rec(`() => { const s = document.querySelector('#sheet-root .sheet'); if (!s) return null; const cp = getComputedStyle(s).clipPath; const r = s.getBoundingClientRect(); return { top: Math.round(r.top), chip: r.width < innerWidth * 0.8 || /inset\\((?:[3-9]\\d|\\d{3})/.test(cp || '') }; }`, 1100, async () => { await wait(540); await page.mouse.up(); });
+    const seen = fr.map(f => f.v).filter(Boolean);
+    const tops = seen.map(v => v.top);
+    check('a scene\'s editor held open from its chip rises from the bottom at its full width, never grown out of the chip', seen.length > 3 && !seen.some(v => v.chip) && tops[0] > tops[tops.length - 1] + 40, { first: tops[0], last: tops[tops.length - 1], chipLike: seen.filter(v => v.chip).length });
+    await C(() => history.back()); await wait(700);
+    check('and Back puts it away', !!(await C(() => document.querySelector('#sheet-root').hidden)));
   } else check('the room has a scene chip to hold', false);
 
   // ---- the header's scroll is on its rows

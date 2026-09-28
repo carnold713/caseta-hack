@@ -145,8 +145,8 @@
 /* Try it as wide as its words and a pill's ends, leaving "Show it on the room" as much of the row as it can have */
 .sc-play .sc-try { flex: none; width: auto; min-width: 96px; height: 48px; padding: 0 24px; }
 /* The hold on a scene chip (0.5 s to change it) fills it with copper from the left, LINEAR, as the house shows a
-   hold (M12); let go early and it empties in 0.2 s EASE_IN. Held to the end, the copper is where the scene's editor
-   grows from (chipopen.js). */
+   hold (M12); let go early and it empties in 0.2 s EASE_IN. Held to the end, the scene's editor rises from the
+   bottom as every sheet does. */
 .room-chips .chip { isolation: isolate; }
 .room-chips .chip::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--copper); transform: scaleX(0); transform-origin: left center; transition: transform var(--exit) var(--ease-in); }
 .room-chips .chip[data-holding='1']::before { transform: scaleX(1); transition: transform 500ms linear; }

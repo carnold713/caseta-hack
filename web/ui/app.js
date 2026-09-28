@@ -12,7 +12,6 @@ import { lampTint } from '/ui/tint.js';
 import * as motion from '/ui/motion.js';
 import * as opening from '/ui/opening.js';
 import * as swipeBack from '/ui/predictiveback.js';
-import * as chipOpen from '/ui/chipopen.js';
 import * as header from '/ui/header.js';
 import * as glass from '/ui/glass.js';
 import { wireSheetDrag } from '/ui/sheetdrag.js';
@@ -226,14 +225,11 @@ function openSheet({ over = '', title, body, key = '', onClose = null, back = fa
 // It drops rather than vanishing (0.28 s EASE_IN, the scrim fading with it); what falls is a copy, and the sheet
 // itself is gone at once, so nothing on it can be tapped on the way down.
 // (A sheet swiped down has already fallen: `dropped` closes it without a second drop.)
-// A scene's editor opened from its chip goes back into the chip instead (chipopen.js, M12).
-function closeSheet({ dropped = false } = {}) { const root = $('#sheet-root'); if (!dropped && !chipOpen.close(root)) motion.sheetOut(root); root.innerHTML = ''; root.hidden = true; root.dataset.key = ''; root._onClose = null; }
+function closeSheet({ dropped = false } = {}) { const root = $('#sheet-root'); if (!dropped) motion.sheetOut(root); root.innerHTML = ''; root.hidden = true; root.dataset.key = ''; root._onClose = null; }
 function dismissSheet(o) { const root = $('#sheet-root'); const f = root._onClose; closeSheet(o); if (f) f(); }
-// Swiping a sheet down puts it away, as the close button does (sheetdrag.js).
-// A scene's editor opened from its chip, let go past the point of closing, goes into the chip from where it is.
-wireSheetDrag($('#sheet-root'), () => dismissSheet({ dropped: true }), {
-  handoff: dy => { if (!chipOpen.close($('#sheet-root'), { dy })) return false; dismissSheet({ dropped: true }); return true; },
-});
+// Swiping a sheet down puts it away, as the close button does (sheetdrag.js). Every sheet, a scene's editor
+// included, rises from the bottom and drops back down: a small button is not somewhere a sheet needs to come from.
+wireSheetDrag($('#sheet-root'), () => dismissSheet({ dropped: true }));
 
 // ---------- the route ----------
 // #home, #rooms, #room/<id>, #light/<id>, #remotes, #remote/<id>, #routines, #settings, #activity, #scenes. The old
@@ -549,7 +545,6 @@ function routedSheet(screen, r) {
   const root = openSheet({ ...spec, key: pk ? `${key}#${pk.name}` : key, onClose: close });
   if (spec.after) spec.after(ctx, r, root);
   // a scene's editor held open from its chip grows out of the chip (M12)
-  chipOpen.opened(root, key);
 }
 // Open a picker inside the current sheet. `spec(ctx, r)` draws it; its taps are the screen's actions as usual.
 function openPicker(name, spec) { ctx.ui.picker = { key: location.hash.replace(/^#/, ''), name, spec }; render(); }
@@ -615,11 +610,10 @@ document.addEventListener('click', e => {
   if (Date.now() - heldAt < 700) { e.preventDefault(); return; }
   // while a page is opening out of what was tapped (or closing back into it), or a scene's chip into its editor, a
   // second tap does nothing
-  if (opening.busy() || chipOpen.busy()) { e.preventDefault(); return; }
+  if (opening.busy()) { e.preventDefault(); return; }
   // the innermost target wins: a tile navigates, the power circle inside it toggles
   const el = e.target.closest('[data-act], [data-go]'); if (!el) return;
   if (el.dataset.act) { tapped = el; tappedAt = Date.now(); }
-  chipOpen.tap(el);
   // a link to a tab's own page (Settings' Rooms row, the Nightstand's Home) is that tab's button: tabs never stack
   if (!el.dataset.act) { e.preventDefault(); closeSheet(); if (el.closest('#tabs') || TABS.some(t => t[0] === el.dataset.go)) goTab(el.dataset.go); else { opening.tap(el); go(el.dataset.go); } return; }
   const act = el.dataset.act;
@@ -779,8 +773,6 @@ function endHold(fire) {
   const h = hold; if (!h) return;
   hold = null;
   clearTimeout(h.timer);
-  // a scene's chip held to the end opens into its editor from where it is, copper and all (M12)
-  if (fire) chipOpen.held(h.el);
   h.el.dataset.holding = '0';
   ctx.endDrag();
   if (fire) {
