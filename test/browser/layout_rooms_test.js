@@ -264,7 +264,7 @@ function badFrames(before, after, frames) {
     const on = o.querySelector('[data-act="room-on"]'), off = o.querySelector('[data-act="room-off"]'), pill = o.querySelector('.onoff-pill');
     const pr = pill.getBoundingClientRect(), a = on.getBoundingClientRect(), b = off.getBoundingClientRect();
     return { word: on.textContent.trim(), offWord: off.textContent.trim(), onPressed: on.getAttribute('aria-pressed'), under: Math.abs(pr.left - a.left) < 2 ? 'on' : Math.abs(pr.left - b.left) < 2 ? 'off' : 'between',
-      count: document.querySelector('#screen .room-title .count').textContent.trim(), old: !!document.querySelector('.room-acts, .room-photo-card .glass:not(.room-onoff)'), moving: pill.getAnimations().length };
+      count: document.querySelector('#screen .room-title .count').textContent.trim(), old: !!document.querySelector('.room-acts, .room-photo-card .glass'), moving: pill.getAnimations().length };
   });
   let t0 = await toggle();
   check('the room page has On and Off in place of All on and All off', !!t0 && !t0.old && t0.offWord === 'Off', t0);

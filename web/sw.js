@@ -21,7 +21,7 @@ const APP = [
   '/ui/art/lutron-sunrise.svg', '/ui/art/lutron-wireless.svg', '/ui/art/room-bathroom.svg',
   '/ui/art/room-bedroom.svg', '/ui/art/room-dining-room.svg', '/ui/art/room-entry.svg', '/ui/art/room-garage.svg',
   '/ui/art/room-garden.svg', '/ui/art/room-kitchen.svg', '/ui/art/room-living-room.svg', '/ui/art/room-office.svg',
-  '/ui/art/room-porch.svg', '/ui/colour.js', '/ui/components.css', '/ui/gesture.js', '/ui/icons.js', '/ui/motion.js', '/ui/predictiveback.js', '/ui/opening.js', '/ui/flight.js', '/ui/roomopen.js', '/ui/lightopen.js', '/ui/remoteopen.js', '/ui/lookswap.js', '/ui/header.js', '/ui/header.css', '/ui/glass.js', '/ui/glass.css', '/ui/pins.js', '/ui/sheetdrag.js', '/ui/photo.js', '/ui/pico.js',
+  '/ui/art/room-porch.svg', '/ui/colour.js', '/ui/components.css', '/ui/gesture.js', '/ui/icons.js', '/ui/motion.js', '/ui/predictiveback.js', '/ui/opening.js', '/ui/flight.js', '/ui/roomopen.js', '/ui/lightopen.js', '/ui/remoteopen.js', '/ui/lookswap.js', '/ui/header.js', '/ui/header.css', '/ui/pins.js', '/ui/sheetdrag.js', '/ui/photo.js', '/ui/pico.js',
   '/ui/screens.css', '/ui/screens/about.js', '/ui/screens/activity.js', '/ui/screens/add.js', '/ui/screens/conn.js',
   '/ui/screens/device.js', '/ui/screens/follow.js', '/ui/screens/guided.js', '/ui/screens/home.js',
   '/ui/screens/looks.js', '/ui/screens/next.js', '/ui/screens/parts.js', '/ui/screens/pickers.js',

@@ -128,7 +128,7 @@ export function view(c) {
     ${st === 'off' ? offlineCard(c) : ''}
     ${empty ? `<div class="connect-card"><span class="ic-c">${icon('wifi', 22, 1.6)}</span><p class="t-row">Let's connect your home</p><button class="pill blue" data-go="settings/how">Show me how</button></div>` : ''}
 
-    <section class="card house glass glass-panel ${lit.length ? 'lit' : ''}">
+    <section class="card house ${lit.length ? 'lit' : ''}">
       <div class="t-over">Whole house</div>
       ${houseHead(c, lit, lv)}
       <div class="house-bar">${lit.length ? `<div class="hbar ${lv >= 30 ? '' : 'low'}" data-enter="fade" data-drag="house" style="--pct:${lv}%" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}">

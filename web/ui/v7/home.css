@@ -10,8 +10,12 @@
 .home { position: relative; }
 .home > :not(.onelight) { position: relative; z-index: 1; }
 
-/* The whole-house card is glass over the light (glass.css, the panel kind), and its own copper glow is gone: the light
-   at the top tells that story, and the card does not tell it twice. */
+/* The whole-house card is frosted glass over the light (88% with a background blur), and its own copper glow is
+   gone: the light at the top tells that story, and the card does not tell it twice. */
+.card.house {
+  background: rgba(38, 38, 38, .88);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
 .card.house.lit::before { content: none; }
 .house-head .hh-w { display: inline-block; }
 
