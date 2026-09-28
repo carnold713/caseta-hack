@@ -12,9 +12,9 @@
 // animate the elements they always did: this reads them each frame (an element's opacity, its colour, the crossfade
 // copies over it, a lamp's marker in the drawing) and sends what it reads to the worker, so the light in depth keeps
 // every clock the page keeps (the dimmer, a scene's ring reaching each lamp, a room opening from its card, Goodnight).
-// What the worker sends back is laid into a canvas inside the light's own element. The page's own drawing of the light
-// stays under it, put away only once the canvas has its first picture, and comes back if the GPU is lost: no WebGL,
-// reduced motion, a software GPU, a low battery or a hidden page all simply leave the page as it was.
+// The worker draws each picture straight into a canvas inside the light's own element. The page's own drawing of the
+// light stays under it, put away only once the canvas has its first picture, and comes back if the GPU is lost: no
+// WebGL, reduced motion, a software GPU, a low battery or a hidden page all simply leave the page as it was.
 //
 // One worker, one WebGL context, for every light on every page. It is started the first time a page has a light and
 // let go a few seconds after the last page with one is left, or after the app has been in the background a while.
@@ -52,7 +52,7 @@ function allowed() {
   const p = pref();
   if (p === 'off' || mode === 'failed') return false;
   if (reduced()) return false;
-  if (typeof WebGL2RenderingContext !== 'function' || typeof OffscreenCanvas !== 'function' || typeof Worker !== 'function' || !('transferToImageBitmap' in OffscreenCanvas.prototype)) return false;
+  if (typeof WebGL2RenderingContext !== 'function' || typeof OffscreenCanvas !== 'function' || typeof Worker !== 'function' || !('transferToImageBitmap' in OffscreenCanvas.prototype) || !('transferControlToOffscreen' in HTMLCanvasElement.prototype)) return false;
   if (p === 'on') return true;
   // a battery nearly out and not charging, or a phone with very little memory, keeps the page's own light
   if (battery && !battery.charging && battery.level <= 0.2) return false;
@@ -93,7 +93,8 @@ function stop() {
   if (raf) cancelAnimationFrame(raf);
   raf = 0; inflight = false;
   if (mode !== 'failed') mode = 'off';
-  for (const s of sites.values()) unreveal(s, false);
+  // each canvas was handed to that worker to draw in, and goes with it: a new worker gets new ones
+  for (const s of sites.values()) { unreveal(s, false); if (s.holder) s.holder.remove(); Object.assign(s, { holder: null, canvas: null, tid: 0 }); }
 }
 function onMessage(e) {
   // (a worker already let go still says goodbye: its context going with it is not this page losing the GPU)
@@ -107,13 +108,12 @@ function onMessage(e) {
   else if (m.type === 'frame') {
     inflight = false;
     stats.drawMs += m.ms || 0; stats.drawMax = Math.max(stats.drawMax, m.ms || 0);
+    // The worker has already put each picture in its canvas (depthworker.js): all this thread does is note it, and
+    // bring the canvas in over the page's own light the first time.
     const t0 = performance.now();
     for (const o of m.out) {
       const s = byId.get(o.id);
-      if (!s || !s.bctx || mode !== 'on') { o.bmp.close(); continue; }
-      if (s.canvas.width !== o.bmp.width) s.canvas.width = o.bmp.width;
-      if (s.canvas.height !== o.bmp.height) s.canvas.height = o.bmp.height;
-      s.bctx.transferFromImageBitmap(o.bmp);
+      if (!s || !s.canvas || mode !== 'on') continue;
       s.sig = o.sig; stats.pictures++;
       if (!s.shown) reveal(s);
     }
@@ -127,7 +127,7 @@ function onMessage(e) {
   } else if (m.type === 'restored') {
     stats.restored++;
     mode = 'on';
-    for (const s of sites.values()) { s.sig = ''; if (!s.canvas && s.el.isConnected) attach(s); }
+    for (const s of sites.values()) { s.sig = ''; s.dirty = true; if (!s.canvas && s.el.isConnected) attach(s); }
     wake();
   }
 }
@@ -136,16 +136,19 @@ function onMessage(e) {
 function kindOf(el) { return el.classList.contains('room-scene') ? 'room' : el.classList.contains('onelight-lamp') ? 'lamp' : 'top'; }
 function found(el) {
   if (sites.has(el)) return;
-  const s = { id: nextId++, el, kind: kindOf(el), canvas: null, bctx: null, shown: false, sig: '', geo: null, vis: true, handed: false, obs: null };
-  sites.set(el, s); byId.set(s.id, s);
+  const s = { id: nextId++, el, kind: kindOf(el), canvas: null, tid: 0, dirty: true, shown: false, sig: '', geo: null, vis: true, handed: false, obs: null };
+  sites.set(el, s);
   clearTimeout(idleTimer);
   if (mode === 'on') attach(s);
   else if (mode === 'off') startWorker();
 }
-function forget(s) {
+// (`keep`: its canvas has been taken over by the light that replaced it, so the worker goes on drawing into it)
+function forget(s, keep = false) {
   if (s.obs) for (const o of s.obs) o.disconnect();
   s.obs = null;
-  sites.delete(s.el); byId.delete(s.id);
+  sites.delete(s.el);
+  if (byId.get(s.tid) === s) byId.delete(s.tid);
+  if (!keep && s.tid && worker) worker.postMessage({ type: 'drop', id: s.tid });
 }
 // A light drawn again (the page redrawn) takes over the canvas of the one it replaces, picture and all, so nothing
 // is ever seen without it; a light on a page just opened gets a canvas of its own, and the page's own light shows
@@ -159,8 +162,8 @@ function attach(s) {
   let from = null;
   for (const o of sites.values()) if (o !== s && o.kind === s.kind && o.canvas && !o.el.isConnected) { from = o; break; }
   if (from) {
-    Object.assign(s, { holder: from.holder, canvas: from.canvas, bctx: from.bctx, shown: from.shown });
-    forget(from);
+    Object.assign(s, { holder: from.holder, canvas: from.canvas, tid: from.tid, shown: from.shown });
+    forget(from, true);
     at.appendChild(s.holder);
     if (s.shown) s.el.dataset.d3 = 'on';
   } else {
@@ -174,19 +177,25 @@ function attach(s) {
     }
     holder.classList.add('d3');
     at.appendChild(holder);
-    Object.assign(s, { holder, canvas: c, bctx: c.getContext('bitmaprenderer') });
+    // The canvas is handed to the worker, which draws each picture straight into it: laying a picture in from this
+    // thread cost 6 to 25 ms the first time a canvas took one, all of it on the page's own thread.
+    const off = c.transferControlToOffscreen();
+    const tid = nextId++;
+    worker.postMessage({ type: 'site', id: tid, canvas: off }, [off]);
+    Object.assign(s, { holder, canvas: c, tid });
   }
+  byId.set(s.tid, s);
   // the header's light drifts on the document's clock, as motion.js settle keeps every loop: a canvas put back in the
   // page starts its drift again from nothing, which would move the light in one frame
   if (s.kind === 'top') for (const a of s.canvas.getAnimations()) if (a.effect && a.effect.getTiming().iterations === Infinity) a.startTime = 0;
-  const ro = new ResizeObserver(() => { s.geo = null; s.sig = ''; wake(); });
+  const ro = new ResizeObserver(() => { s.geo = null; s.sig = ''; s.dirty = true; wake(); });
   ro.observe(s.el);
   const io = new IntersectionObserver(es => { s.vis = es.some(x => x.isIntersecting); if (s.vis) wake(); });
   io.observe(s.el);
-  const mo = new MutationObserver(recs => { if (recs.some(r => !s.holder.contains(r.target))) wake(); });
+  const mo = new MutationObserver(recs => { if (recs.some(r => !s.holder || !s.holder.contains(r.target))) { s.dirty = true; wake(); } });
   mo.observe(s.el, { subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
   s.obs = [ro, io, mo];
-  s.geo = null; s.sig = '';
+  s.geo = null; s.sig = ''; s.dirty = true;
   wake();
 }
 
@@ -236,7 +245,9 @@ function running(el) {
 }
 function scaleFor(kind) { return CAP[kind === 'room' ? 'room' : 'light']; }
 
-function readLight(s) {
+// Each reader only reads; what it has to write (a canvas's height, where the room's picture lies) it hands back, and the
+// frame writes them all after every light has been read, so no read waits on the page being worked out again.
+function readLight(s, writes) {
   const el = s.el;
   if (!s.geo) {
     const w = el.clientWidth, h = el.clientHeight;
@@ -245,7 +256,7 @@ function readLight(s) {
     const cw = w + 2 * M, ch = s.kind === 'lamp' ? Math.min(h + 2 * M, lampY + r + 2 * M) : h + 2 * M;
     const sc = scaleFor(s.kind), pw = Math.max(1, Math.round(cw * sc)), ph = Math.max(1, Math.round(ch * sc));
     s.geo = { w, h, lampY, r, cw, ch, pw, ph, sc: pw / cw, k: strengthAt(L.peak), hh: L.h, cx: M + w / 2, cy: M + L.y({ lampY }) };
-    if (s.kind === 'lamp') s.canvas.style.height = `${ch}px`;
+    if (s.kind === 'lamp') writes.push(() => { s.canvas.style.height = `${ch}px`; });
   }
   const g = s.geo;
   if (!g.w) return null;
@@ -261,10 +272,10 @@ function readLight(s) {
     col = col.map((v, i) => v + (c[i] - v) * o);
   }
   const u = { cx: g.cx, cy: g.cy, r: g.r, h: g.hh, k: g.k, s: r4(S), gain: r4(gain), col: col.map(r4) };
-  return { id: s.id, kind: 'light', pw: g.pw, ph: g.ph, scale: g.sc, u, sig: `${u.s}|${u.gain}|${u.col}|${g.pw}x${g.ph}` };
+  return { id: s.tid, kind: 'light', pw: g.pw, ph: g.ph, scale: g.sc, u, sig: `${u.s}|${u.gain}|${u.col}|${g.pw}x${g.ph}` };
 }
 
-function readRoom(s) {
+function readRoom(s, writes) {
   const el = s.el;
   if (!s.geo) {
     const svg = el.querySelector('svg');
@@ -281,7 +292,8 @@ function readRoom(s) {
     const y0 = Math.max(vb.y, -oy / k), y1 = Math.min(vb.y + vb.height, (h - oy) / k);
     const lx = flip ? 372 - x1 : x0, uw = x1 - x0, uh = y1 - y0;
     const sc = scaleFor('room'), pw = Math.max(1, Math.round(uw * k * sc)), ph = Math.max(1, Math.round(uh * k * sc));
-    for (const [a, v] of [['x', lx], ['y', y0], ['width', uw], ['height', uh]]) s.holder.setAttribute(a, String(Math.round(v * 100) / 100));
+    const holder = s.holder;
+    writes.push(() => { for (const [a, v] of [['x', lx], ['y', y0], ['width', uw], ['height', uh]]) holder.setAttribute(a, String(Math.round(v * 100) / 100)); });
     s.geo = {
       w, h, pw, ph, sc: 1, unit: pw / uw, ox: lx, oy: y0,
       marks: [...svg.querySelectorAll('.rs-lamp')].map(m => ({ m, pts: String(m.dataset.e || '').split(';').map(p => p.split(' ').map(Number)).filter(p => p.length === 5 && p.every(Number.isFinite)) })),
@@ -296,7 +308,7 @@ function readRoom(s) {
     for (const p of pts) { pos.push(p[0], p[1], p[2], p[3]); at.push(p[4]); col.push(...c, I); }
   }
   const u = { unit: g.unit, ox: g.ox, oy: g.oy, floor: FLOOR, depth: DEPTH, pos, col, at };
-  return { id: s.id, kind: 'room', pw: g.pw, ph: g.ph, scale: g.sc, u, sig: `${col.join(',')}|${g.pw}x${g.ph}|${g.unit}` };
+  return { id: s.tid, kind: 'room', pw: g.pw, ph: g.ph, scale: g.sc, u, sig: `${col.join(',')}|${g.pw}x${g.ph}|${g.unit}` };
 }
 
 // ---------- each frame ----------
@@ -311,22 +323,30 @@ function tick() {
   if (mode !== 'on' || document.hidden || !worker) return;
   const t0 = performance.now();
   let busy = false;
-  const jobs = [];
+  const jobs = [], writes = [];
   for (const s of [...sites.values()]) {
     // gone from the page with nothing to take its place (the redraw that dropped it has already given its canvas away)
     if (!s.el.isConnected) { forget(s); continue; }
     // taken into a page that is leaving: it keeps its last picture and goes with it
-    if (!scr.contains(s.el)) { away(s); continue; }
+    if (!scr.contains(s.el)) { writes.push(() => away(s)); continue; }
     if (!s.canvas || !s.vis) continue;
-    if (running(s.el)) busy = true;
-    const job = s.kind === 'room' ? readRoom(s) : readLight(s);
-    if (job && (job.sig !== s.sig || !s.shown)) jobs.push(job);
+    // A light is read only while something about it is moving, or once after anything about it changed (its style or
+    // class, its size, a new drawing): a light standing still is not read at all.
+    const moving = running(s.el);
+    if (!moving && !s.dirty && s.shown) continue;
+    if (moving) busy = true;
+    // (still moving: read again next frame, and once more after it stops, so its last value is the one drawn)
+    s.dirty = moving;
+    const job = s.kind === 'room' ? readRoom(s, writes) : readLight(s, writes);
+    if (!job) { s.dirty = true; continue; }
+    if (job.sig !== s.sig || !s.shown) jobs.push(job);
   }
+  for (const w of writes) w();
   if (jobs.length) {
     if (!inflight) {
       inflight = true; frameN++; stats.frames++;
       worker.postMessage({ type: 'frame', n: frameN, jobs });
-    } else busy = true;
+    } else { busy = true; for (const j of jobs) byId.get(j.id).dirty = true; }
   }
   if (busy) wake();
   idle();
@@ -364,7 +384,7 @@ export function start(screen) {
   document.addEventListener('visibilitychange', () => {
     clearTimeout(hiddenTimer);
     if (document.hidden) { if (raf) cancelAnimationFrame(raf); raf = 0; hiddenTimer = setTimeout(() => { if (document.hidden) stop(); }, HIDDEN_MS); return; }
-    if (worker) { for (const s of sites.values()) s.sig = ''; wake(); } else review();
+    if (worker) { for (const s of sites.values()) { s.sig = ''; s.dirty = true; } wake(); } else review();
   });
   if (navigator.getBattery) navigator.getBattery().then(b => { battery = b; b.addEventListener('levelchange', review); b.addEventListener('chargingchange', review); review(); }).catch(() => {});
 }

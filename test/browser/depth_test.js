@@ -272,10 +272,12 @@ function png(buf) {
     // The page's thread does two things for it: reading the lights after each frame, and laying each picture in.
     // Neither may come near a long task. (The rig draws WebGL in software, whose CPU the page's own frames share:
     // the long tasks seen either way are listed, as the rig's, not the light's.)
-    if (rate === 1) {
-      const own = await A.C(() => ({ tick: Math.round(window.__depth.stats.tickMax * 10) / 10, lay: Math.round(window.__depth.stats.layMax * 10) / 10 }));
-      check('no new long task at normal speed: what the page\'s thread does for it stays far under 50 ms', own.tick < 16 && own.lay < 16, { own, longGL: gl.long, longCSS: css.long });
-    }
+    // (at normal speed over everything this page has done since it opened; four times slower, over these moves)
+    const own = await A.C(() => ({ tick: Math.round(window.__depth.stats.tickMax * 10) / 10, lay: Math.round(window.__depth.stats.layMax * 10) / 10 }));
+    console.log(`     ${rate}x: the page's thread, for the light in depth: ${own.tick} ms at most reading the lights in a frame, ${own.lay} ms at most taking a picture in (long tasks in depth ${JSON.stringify(gl.long)}, with the page's own light ${JSON.stringify(css.long)})`);
+    if (rate === 1) check('no new long task at normal speed: what the page\'s thread does for it stays far under 50 ms', own.tick < 16 && own.lay < 16, { own, longGL: gl.long, longCSS: css.long });
+    else check('and four times slower, still no long task of its own', own.tick < 50 && own.lay < 50, own);
+    await A.C(() => { window.__depth.stats.tickMax = 0; window.__depth.stats.layMax = 0; });
   }
 
   // put the lights back, colours first

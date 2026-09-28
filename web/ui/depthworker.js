@@ -1,8 +1,9 @@
 // The light, drawn with three.js off the page's own thread (depth.js is the page's side of it). One WebGL context for
 // the whole app, on an OffscreenCanvas in this worker: the page sends what each of its lights looks like this frame
-// (sampled from the elements the stylesheet and motion.js are animating), and gets back one picture per light, which
-// it lays into that light's own canvas. Everything costly (the context, compiling the two shaders, drawing) happens
-// here, so a phone's main thread never waits on the GPU and a slow first compile is never a stall in a transition.
+// (sampled from the elements the stylesheet and motion.js are animating), and each picture is put straight into that
+// light's own canvas, which the page handed over to this worker (transferControlToOffscreen). Everything costly (the
+// context, compiling the two shaders, drawing, laying the pictures in) happens here, so a phone's main thread never
+// waits on the GPU and a slow first compile is never a stall in a transition.
 //
 // Two pictures:
 //   light  the page's one light (glow.js lightHTML, 'top' or 'lamp'): an area light over the page, its falloff the
@@ -127,6 +128,8 @@ void main() {
   outColor = vec4(clamp(v, 0.0, 1.0), 1.0);
 }`;
 
+// the page's canvases, handed over to be drawn in (depth.js): each picture goes straight into its own
+const targets = new Map();
 let R = null, canvas = null, scene = null, cam = null, mesh = null, mats = null, lost = false, loseExt = null;
 
 function setup(force) {
@@ -198,16 +201,26 @@ onmessage = e => {
     return;
   }
   if (m.type === 'frame') {
-    const out = [], moved = [], t0 = performance.now();
+    const out = [], t0 = performance.now();
     if (R && !lost) {
       for (const job of m.jobs) {
-        try { const bmp = draw(job); out.push({ id: job.id, bmp, sig: job.sig }); moved.push(bmp); } catch (_) { /* this light keeps its last picture */ }
+        const t = targets.get(job.id);
+        if (!t) continue;
+        try {
+          const bmp = draw(job);
+          if (t.canvas.width !== bmp.width) t.canvas.width = bmp.width;
+          if (t.canvas.height !== bmp.height) t.canvas.height = bmp.height;
+          t.ctx.transferFromImageBitmap(bmp);
+          out.push({ id: job.id, sig: job.sig });
+        } catch (_) { /* this light keeps its last picture */ }
       }
     }
     // how long the pictures took here (with a real GPU, the time to hand them to it; in software, the drawing itself)
-    postMessage({ type: 'frame', n: m.n, out, ms: performance.now() - t0 }, moved);
+    postMessage({ type: 'frame', n: m.n, out, ms: performance.now() - t0 });
     return;
   }
+  if (m.type === 'site') { targets.set(m.id, { canvas: m.canvas, ctx: m.canvas.getContext('bitmaprenderer') }); return; }
+  if (m.type === 'drop') { targets.delete(m.id); return; }
   // WEBGL_lose_context, for the tests: the page is told as it would be by a real loss, and gets it back on restore
   if (m.type === 'lose' && loseExt) { loseExt.loseContext(); return; }
   if (m.type === 'restore' && loseExt) { loseExt.restoreContext(); return; }
