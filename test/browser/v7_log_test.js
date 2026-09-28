@@ -164,7 +164,7 @@ const press = p => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JS
   // offline: the phone cannot hear presses, the page says so calmly
   await C(() => { const c = window.__copper; window.__was = { a: c.S.agent.online, t: c.S.troubleSince }; c.S.agent.online = false; c.S.troubleSince = Date.now() - 20000; c.render(); });
   const deaf = await C(() => (document.querySelector('.listen.deaf') || {}).textContent || '');
-  check('offline: "Offline. Your remotes still work."', deaf.trim() === 'Offline. Your remotes still work.', deaf);
+  check('offline: "Offline." (no promise about the remotes, which need the house computer)', deaf.trim() === 'Offline.', deaf);
   await C(() => { const c = window.__copper; c.S.agent.online = window.__was.a; c.S.troubleSince = window.__was.t; c.render(); });
 
   // reduced motion: the bead and the tap go, the light still comes and goes as a crossfade

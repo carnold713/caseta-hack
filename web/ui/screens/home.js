@@ -268,7 +268,7 @@ export const actions = {
   // sleep with the house (goodnightDark). Offline, nothing went dark, so nothing on the page does either.
   async goodnight(c) {
     c.ui.gnHint = 0;
-    if (c.conn() === 'off') { c.toast("The house didn't hear that. Your remotes still work.", { err: true }); c.sayOffline(); return; }
+    if (c.conn() === 'off') { c.toast("The house didn't hear that.", { err: true }); c.sayOffline(); return; }
     const acts = c.H.goodnightActions();
     const rooms = c.data.areas().map(a => ({ aid: a.id, L: roomLight(c, a.id) })).filter(r => r.L);
     // every light is shown off at once (turn), then the page goes dark over it

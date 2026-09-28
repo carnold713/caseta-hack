@@ -142,7 +142,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
         greet: document.querySelector('.home-head .greet').textContent.trim(),
       };
     });
-    check(/offline/.test(off.cls) && /The house computer isn't answering\./.test(off.card) && /Your remotes still work\./.test(off.card), 'one calm sentence names the cause, and the remotes still work', off.card);
+    check(/offline/.test(off.cls) && /The house computer isn't answering\./.test(off.card) && /The remotes need it\./.test(off.card), 'one calm sentence names the cause, and says the remotes need the house computer', off.card);
     check(off.ember[0] !== 'none' && /ember/.test(off.ember[1]) && off.ember[2].startsWith('4.8s') && !/ember/.test(off.ember[3]), 'Home\'s light is one ember, one soft light breathing on the ember token (4.8 s)', off.ember);
     check(off.field === 'none' || Number(off.field) === 0, 'the living field has gone out into it', off.field);
     check(off.dot && !/204, 0, 0/.test(off.dot.join()) && off.dot[1] === 'rgb(158, 158, 158)' && off.dot[2] === 'breathe' && off.dot[3] === '1.6s', 'no red dot: a grey one breathing, as it waits', off.dot);

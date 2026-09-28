@@ -8,7 +8,7 @@
    It also keeps the lock screen's one notification per running sleep timer (20 · Beyond the app, web/ui/beyond.js):
    the app hands it the timers and its sign-in; "Off now" and "Add 15 min" act through the API with that sign-in, and
    nothing here ever turns a light on. */
-const VERSION = 'v65';
+const VERSION = 'v66';
 const APP = [
   '/', '/index.html', '/ui/', '/ui/index.html', '/ui/app.js', '/ui/art.js', '/ui/art/light-arc-lamp.svg',
   '/ui/art/light-bedside-lamp.svg', '/ui/art/light-ceiling-fan.svg', '/ui/art/light-chandelier.svg',
@@ -151,7 +151,7 @@ self.addEventListener('notificationclick', e => {
     } catch (err) {
       if (err.signedOut) { n.close(); return openApp(); }
       // the house did not answer: say so on the same notification, and keep its buttons
-      await show(d, { body: "Can't reach the house right now. Your remotes still work." });
+      await show(d, { body: "Can't reach the house right now." });
     }
   })());
 });

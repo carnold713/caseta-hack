@@ -38,7 +38,7 @@ export function connSheet(c) {
           : "Your home isn't answering";
   const rows = L.map(([n, ok, word]) => `<div class="row cn-row"><span class="cn-ic ${ok === false ? 'bad' : ok ? 'ok' : ''}">${icon(ok === false ? 'x' : ok ? 'check' : 'dots', 20, 1.7)}</span><span class="row-txt"><span class="t">${n}</span></span><span class="row-val">${esc(word)}</span></div>`).join('');
   const deaf = h && h.buttons_ok === false ? `<div class="note warn">${icon('info', 20, 1.4)}<p>The bridge has stopped reporting presses, so remotes do nothing here. Unplug it for ten seconds to fix this.</p></div>` : '';
-  const help = st === 'ok' ? '' : `<p class="t-body muted sheet-p">${firstBad && firstBad[0] === 'Phone' ? 'Check its Wi-Fi or mobile data.' : 'Your remotes still work. Check that the computer running the connector is on and online.'}</p>`;
+  const help = st === 'ok' ? '' : `<p class="t-body muted sheet-p">${firstBad && firstBad[0] === 'Phone' ? 'Check its Wi-Fi or mobile data.' : firstBad && firstBad[0] === 'Server' ? 'Your remotes still work.' : 'Check that the house computer is on and online. The remotes need it.'}</p>`;
   // buttons, not button settings: a button with a tap, a double press and a hold is still one button set up
   const set = c.data.remotes().flatMap(d => c.REM.buttonNumbers(d).filter(n => c.REM.buttonSet(d.device_id, n))).length;
   const remotesLine = h ? `${set} of ${h.buttons || 0} buttons set up` : `${set} ${set === 1 ? 'button' : 'buttons'} set up`;
@@ -75,7 +75,8 @@ export function remotesSheet(c) {
   };
 }
 // 18 · Offline, calmly (v7, 12815:50887). Ten seconds into a drop Home says, in one sentence, which link is out and
-// what, if anything, to do, and that the remotes still work. Never an alarm: no red, and the card opens the same
+// what, if anything, to do, and whether the remotes still work: they do while the house computer runs (it keeps
+// the settings it last had), so only a phone or server out leaves them working. Never an alarm: no red, and the card opens the same
 // connection sheet as the dot.
 const WIFI_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 5.2-2.8"/><path d="M13.8 10.1A10 10 0 0 1 19 12.9"/><path d="M2 9.3a15 15 0 0 1 4.3-2.6"/><path d="M10.7 5.6A15 15 0 0 1 22 9.3"/><circle cx="12" cy="20" r=".6" fill="currentColor"/></svg>';
 // The first link that is out, from this phone outwards, as the card's two lines.
@@ -85,7 +86,8 @@ export function offlineCause(c) {
   if (which === 'Phone') return ['This phone is offline.', 'Your remotes still work.'];
   if (which === 'Server') return ["Can't reach the app's server.", 'Your remotes still work.'];
   if (which === 'Lutron bridge') return ["The Lutron bridge isn't answering.", 'Check it has power.'];
-  return ["The house computer isn't answering.", 'Your remotes still work.'];
+  // the remotes' presses are the house computer's to act on: with it off, so are they
+  return ["The house computer isn't answering.", 'Check it\'s on. The remotes need it.'];
 }
 export function offlineCard(c) {
   const [head, sub] = offlineCause(c);
@@ -95,7 +97,7 @@ export function offlineCard(c) {
 }
 // What a tap says while the house cannot be reached. Nothing is queued: a light changing by itself half an hour after
 // the tap would be worse than the tap failing.
-export const OFFLINE_TAP = "Can't reach the house right now. Your remotes still work.";
+export const OFFLINE_TAP = "Can't reach the house right now.";
 
 export const connActions = {
   'conn-open'(c) { c.openSheet({ ...connSheet(c), key: 'conn', onClose: () => c.render() }); },

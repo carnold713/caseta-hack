@@ -29,9 +29,9 @@ export function notePress(c, m) {
   setTimeout(() => c.soon(), 2260);
   if (g === 'hold') setTimeout(() => { const h = c.ui.pressFx; if (h && h.at === t && h.holding) { h.holding = false; h.releasedAt = Date.now(); c.soon(); } }, 30000);
 }
-// The phone hears presses only through the house; offline, the remotes still work and nothing here can light.
+// The phone hears presses only through the house; offline, nothing here can light.
 export const listenLine = (c, pin) => c.conn() === 'off'
-  ? `<div class="listen ${pin ? 'pin' : ''} deaf"><span>Offline. Your remotes still work.</span></div>`
+  ? `<div class="listen ${pin ? 'pin' : ''} deaf"><span>Offline.</span></div>`
   : `<div class="listen ${pin ? 'pin' : ''}"><span class="breath"><i></i></span><span>Press a remote to find it</span></div>`;
 
 // A remote on its stage: the drawing, or the owner's photograph under the same keys.

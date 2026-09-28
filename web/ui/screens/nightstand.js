@@ -52,7 +52,7 @@ export function view(c) {
   if (!d) {
     area = 'data-act="ns-pick"'; title = 'Pick a light for night'; sub = '';
   } else if (off) {
-    area = ''; title = 'Night light'; sub = "Can't reach the house. Your remotes still work.";
+    area = ''; title = 'Night light'; sub = "Can't reach the house.";
   } else if (on) {
     // What is true, in the words it had while off: the night light, and that it is on until it goes out by itself.
     // (It used to say "Off", the tap's outcome, in the place the state is read, over a lamp that was on.) Off is
