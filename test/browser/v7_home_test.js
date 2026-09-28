@@ -84,10 +84,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('it drifts on the ambient 8 s, ease in and out, for as long as it is lit', drift.some(a => a.name === 'light-drift' && a.dur === 8000 && a.iter === Infinity), drift.map(a => [a.name, a.dur, a.iter]));
   const ease = await C(() => getComputedStyle(document.querySelector('.house-light i')).animationTimingFunction);
   check('the drift eases in and out each way', ease === 'ease-in-out', ease);
-  // the glass card (glass.css, the panel kind): #262626 at 86% over a blur (on its lens layer where the lens is
-  // drawn), and no glow of its own
-  const card = await C(() => { const el = document.querySelector('.card.house'); const cs = getComputedStyle(el), a = getComputedStyle(el, '::after'); return { glass: el.classList.contains('glass'), bg: a.content !== 'none' && a.content !== 'normal' ? a.backgroundColor : cs.backgroundColor, blur: cs.backdropFilter || cs.webkitBackdropFilter, before: getComputedStyle(el, '::before').content, lit: el.classList.contains('lit') }; });
-  check('the house card is glass: #262626 at 86%, blurred and saturated', card.glass && card.bg === 'rgba(38, 38, 38, 0.86)' && /blur\(10px\)/.test(card.blur) && /saturate/.test(card.blur), card);
+  // the glass card (glass.css, the panel kind): #262626 at 86% over the page its bezel refracts (glass.js), and no
+  // glow of its own
+  const card = await C(() => { const el = document.querySelector('.card.house'); const cs = getComputedStyle(el); return { glass: el.classList.contains('glass'), bg: cs.backgroundColor, blur: cs.backdropFilter || cs.webkitBackdropFilter, before: getComputedStyle(el, '::before').content, lit: el.classList.contains('lit') }; });
+  check('the house card is glass: #262626 at 86% over its refracting pane', card.glass && card.bg === 'rgba(38, 38, 38, 0.86)' && /url\("?#glass-f/.test(card.blur), card);
   check('and its old copper glow is gone', card.lit && (card.before === 'none' || card.before === 'normal'), card.before);
   check('the headline reads "1 on · N%" or "2 on · N%"', /^\d+ on · \d+%$/.test((await page.textContent('.house-head')).replace(/\s+/g, ' ').trim()), await page.textContent('.house-head'));
   // the house bar's fill is flat copper
