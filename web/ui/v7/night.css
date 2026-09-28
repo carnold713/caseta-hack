@@ -95,7 +95,7 @@ html:has(.ns-page) #app .screen { padding-bottom: 0; }
 /* The toast and a sheet over Nightstand keep to its palette (the sheet's glass without its light: nothing white). */
 html:has(.ns-page) .toast { background: #1A1411; color: #BFA38A; box-shadow: inset 0 0 0 1px #2A2019; }
 html:has(.ns-page) .toast .act { color: #E0B48A; }
-html:has(.ns-page) .sheet { --glass-tint: rgba(20, 16, 13, .92); --glass-solid: #14100D; --glass-spec: 0; color: #BFA38A; --text-1: #BFA38A; --text-2: #7D6A5A; --icon-1: #BFA38A; --icon-2: #7D6A5A; --surface-2: #1A1411; --hairline: #2A2019; }
+html:has(.ns-page) .sheet { --glass-tint: rgba(20, 16, 13, .92); --glass-solid: #14100D; --glass-strength: 0; color: #BFA38A; --text-1: #BFA38A; --text-2: #7D6A5A; --icon-1: #BFA38A; --icon-2: #7D6A5A; --surface-2: #1A1411; --hairline: #2A2019; }
 html:has(.ns-page) .sheet .radio.on { background: #B86C35; border-color: #B86C35; }
 /* the chosen light is its tick, in the night's ink: no blue under it */
 html:has(.ns-page) .sheet .row.way.sel { background: none; }

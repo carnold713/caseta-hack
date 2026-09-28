@@ -202,8 +202,7 @@ const SHOTS = process.env.SHOTS || '';
   const sd = await C(() => { const s = document.querySelector('#sheet-root .sheet'); return { y: new DOMMatrix(getComputedStyle(s).transform).f, screen: document.querySelector('#screen').getAttribute('style'), behind: !!document.querySelector('.pb-behind') }; });
   check('the sheet drops with the progress and the page stays put', sd.y > 20 && !sd.screen && !sd.behind, sd);
   await B('cancel'); await wait(450);
-  // (the sheet's own glass optics, glass.js's --glass-* custom properties, are not the gesture's and stay)
-  const sc = await C(() => { const s = document.querySelector('#sheet-root .sheet'); return { style: (s.getAttribute('style') || '').replace(/--glass-[\w-]+:\s*(?:url\("[^"]*"\)|[^;"])*;?\s*/g, '').trim(), scrim: document.querySelector('#sheet-root .scrim').getAttribute('style'), y: new DOMMatrix(getComputedStyle(s).transform).f, dragging: window.__copper.ui.dragging }; });
+  const sc = await C(() => { const s = document.querySelector('#sheet-root .sheet'); return { style: s.getAttribute('style'), scrim: document.querySelector('#sheet-root .scrim').getAttribute('style'), y: new DOMMatrix(getComputedStyle(s).transform).f, dragging: window.__copper.ui.dragging }; });
   check('a cancel lifts it back as it was', !sc.style && !sc.scrim && sc.y === 0 && !sc.dragging && (await state()).hash === withSheet.hash, sc);
   await drag('left', [0.2, 0.4, 0.5]);
   await still('m13-sheet-drag-50');
