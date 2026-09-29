@@ -46,7 +46,8 @@ public abstract class BaseWidget extends AppWidgetProvider {
 
     @Override
     public void onDisabled(Context c) {
-        Safe.run(c, "last widget removed", () -> { if (Widgets.count(c) == 0) WidgetRefreshJob.cancel(c); });
+        // the job stays while it still watches the house computer (WidgetRefreshJob.wanted)
+        Safe.run(c, "last widget removed", () -> WidgetRefreshJob.sync(c));
     }
 
     /** A home screen restored from a backup brings its widgets back under new ids: their configs follow them. */

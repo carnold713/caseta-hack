@@ -1,13 +1,20 @@
 # systemd unit for a Raspberry Pi or any always-on Linux box.
 #   sudo cp caseta-agent.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now caseta-agent
+# On the Pi, agent/setup-watchdog.sh installs it (and the hardware watchdog) in one go and is safe to re-run.
+#
+# Type=notify with a watchdog: the connector says READY=1 once it runs and WATCHDOG=1 every 20 seconds from its
+# event loop (agent.py, sd_notify). If a minute passes without one, systemd restarts it, so a connector that hangs
+# comes back the same way one that crashes does. Restart=always covers the crash.
 [Unit]
 Description=caseta-hack agent (Pico gestures for Lutron Caseta)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+WatchdogSec=60
 User=pi
 WorkingDirectory=/home/pi/caseta-hack/agent
 EnvironmentFile=/home/pi/caseta-hack/agent/.env

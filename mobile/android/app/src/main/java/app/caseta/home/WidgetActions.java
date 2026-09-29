@@ -107,6 +107,8 @@ public class WidgetActions extends BroadcastReceiver {
             if (r.ok()) {
                 JSONObject s = WidgetStore.fromSnapshot(c, r.body);
                 if (s != null) WidgetStore.setState(c, s);
+                // the same read says whether the house computer is there
+                HouseWatch.fromSnapshot(c, r.body);
             }
         });
         Safe.run(c, "widget redraw", () -> Widgets.updateAll(c));

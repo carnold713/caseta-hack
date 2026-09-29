@@ -18,7 +18,7 @@ const BRIDGE = () => {
   const calls = window.__calls = [];
   const cfg = kind => ({ kind, theme: 'night', shade: 40, corners: 'system', accent: kind === 'light' || kind === 'colour' ? 'lamp' : 'copper', labels: true, levels: true, icons: true, density: 'roomy', steps: kind === 'room', levelsAt: [25, 50, 75, 100], minutes: [15, 30, 60], nightLevel: 10, routine: '', colours: ['k2700', '#FF5A4E', '#4C8DFF'] });
   const placed = [{ id: 11, kind: 'room', cfg: cfg('room') }, { id: 12, kind: 'colour', cfg: cfg('colour') }, { id: 13, kind: 'dimmers', cfg: cfg('dimmers') }];
-  let phone = { timerMode: 'live', notifications: true, liveUpdates: true, android: 36, widgets: 2, canAdd: true };
+  let phone = { timerMode: 'live', houseAlerts: true, notifications: true, liveUpdates: true, android: 36, widgets: 2, canAdd: true };
   window.Capacitor = {
     isNativePlatform: () => true,
     nativePromise(plugin, method, opts) {
@@ -92,6 +92,13 @@ const BRIDGE = () => {
   check('and turning that off is none at all', (await calls('setPhone')).at(-1).timerMode === 'none');
   await page.locator('[data-act="phone-live"]').click(); await wait(400);
   check('and back on is the status bar again', (await calls('setPhone')).at(-1).timerMode === 'live');
+  // the house computer: one notification when it has been offline a while, on unless turned off here
+  check('House computer offline sits beside the timer, on', await page.locator('.phone-group [data-act="phone-house"]').getAttribute('aria-checked') === 'true');
+  await page.locator('[data-act="phone-house"]').click(); await wait(400);
+  check('turning it off saves on the phone', (await calls('setPhone')).at(-1).houseAlerts === false, await calls('setPhone'));
+  check('and shows off', await page.locator('[data-act="phone-house"]').getAttribute('aria-checked') === 'false');
+  await page.locator('[data-act="phone-house"]').click(); await wait(400);
+  check('and back on', (await calls('setPhone')).at(-1).houseAlerts === true);
   check('the house\'s config was not touched by it', !(await page.evaluate(() => JSON.stringify(window.__copper.S.config))).includes('timerMode'));
   clean('This phone', await page.locator('.phone-group').innerText());
 

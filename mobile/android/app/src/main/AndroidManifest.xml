@@ -98,7 +98,7 @@
         <receiver android:name=".WidgetActions" android:exported="false" />
         <!-- A running timer's minute, and its end -->
         <receiver android:name=".TimerTick" android:exported="false" />
-        <!-- The widgets reading the hub every 15 minutes -->
+        <!-- The widgets and the house computer watch (HouseWatch) reading the hub every 15 minutes -->
         <service
             android:name=".WidgetRefreshJob"
             android:exported="true"
@@ -135,6 +135,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- the widgets' 15 minute read waits for a network; Android 14 and later refuse that job without this -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- that read is kept through a restart of the phone, so the house computer is watched before the app is opened -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- a running sleep timer on the lock screen; Android 13 and later ask once, from the app, never on launch -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 16 and later: a running sleep timer as a Live Update, its countdown in the status bar (Settings,

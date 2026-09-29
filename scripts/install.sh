@@ -83,6 +83,10 @@ elif command -v systemctl >/dev/null 2>&1; then
 Description=Pico Hack home connector
 After=network-online.target
 [Service]
+# restarted when it hangs, not only when it exits: it pings systemd from its event loop (agent.py, sd_notify)
+Type=notify
+NotifyAccess=main
+WatchdogSec=60
 WorkingDirectory=$DIR/agent
 EnvironmentFile=$DIR/agent/.env
 ExecStart=$DIR/agent/.venv/bin/python agent.py

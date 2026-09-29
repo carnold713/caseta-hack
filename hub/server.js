@@ -52,6 +52,11 @@ const history = lightHistory.create(store.read('history', null));
 let agent = null;   // the single connected agent socket
 let updating = false;
 let agentInfo = null;
+// When the connector was last heard going away, kept on the volume so a hub restart does not make an outage look
+// new (the phone's notification is one per outage, keyed on this). Null while it is connected. A hub that starts
+// with none on file and no connector yet counts from its own start: that is when anyone last knew anything.
+let agentOfflineSince = null;
+agentOffline(store.read('agent', () => ({})).offline_since || new Date().toISOString());
 const appClients = new Set();
 const pending = new Map(); // command id -> {resolve, reject, timer}
 
@@ -378,7 +383,9 @@ wssAgent.on('connection', (ws, req) => {
   ws.on('close', () => {
     if (agent === ws) {
       agent = null; agentInfo = null; timers = {}; follow = null; addSession = { ...addSession, active: false };
-      broadcast({ type: 'agent', online: false });
+      // a socket that closes before its hello leaves the outage where it began
+      if (!agentOfflineSince) agentOffline(new Date().toISOString());
+      broadcast({ type: 'agent', online: false, offline_since: agentOfflineSince });
       broadcast({ type: 'timers', timers });
       record({ kind: 'agent', online: false });
       console.log('[hub] agent disconnected');
@@ -392,6 +399,7 @@ function handleAgentMessage(ws, msg) {
   switch (msg.type) {
     case 'hello':
       agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, nanoleaf: msg.nanoleaf || null, health: msg.health || null, since: new Date().toISOString() };
+      agentOffline(null);
       if (agentInfo.update_available && config.settings.auto_update !== false && !updating) {
         console.log(`[hub] connector ${msg.version} is behind ${LATEST_AGENT_VERSION}, updating it`);
         setTimeout(() => sendCommand({ type: 'update' }, 15 * 60 * 1000).then(r => { updating = false; console.log('[hub] connector updated', JSON.stringify(r.detail)); }).catch(e => { updating = false; console.warn('[hub] connector update failed:', e.message); broadcast({ type: 'toast', level: 'error', msg: `Connector update failed: ${e.message}` }); }), 3000);
@@ -521,7 +529,13 @@ function keepMinutes(next, was) {
   return next;
 }
 function snapshot() {
-  return { inventory, states, config, timers, sun, follow, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo }, add: addSession };
+  return { inventory, states, config, timers, sun, follow, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo, offline_since: agent ? null : agentOfflineSince }, add: addSession };
+}
+// Written only when it changes: a connector going away, or saying hello again.
+function agentOffline(since) {
+  if (since === agentOfflineSince) return;
+  agentOfflineSince = since;
+  try { store.write('agent', { offline_since: since }); } catch (e) { log('connector state not saved:', e.message); }
 }
 let activityDirty = false;
 function record(entry) {

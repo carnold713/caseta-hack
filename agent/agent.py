@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -41,11 +42,68 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.23.0"
+VERSION = "0.24.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
+# How long the bridge may stay logged out, while it still answers on its port, before the connector stops telling
+# systemd it is well and lets it restart the process. See Agent.heartbeat.
+BRIDGE_GIVE_UP_S = 30 * 60
 LOG = logging.getLogger("agent")
+
+
+# ---------- systemd ----------
+# caseta-agent.service is Type=notify with WatchdogSec=60: systemd restarts the connector when it stops hearing
+# from it, not only when it exits. A hung event loop is the case that matters: the process is still there, so
+# Restart=always never fires, and every Pico press goes unanswered until somebody notices.
+def sd_notify(state: str) -> bool:
+    """Tell systemd something ("READY=1", "WATCHDOG=1", "STATUS=...") over $NOTIFY_SOCKET, a plain datagram.
+
+    Without the variable (a dev machine, Docker, launchd, the old Type=simple unit) this does nothing, and it never
+    raises: a watchdog that could take the connector down by itself would be worse than none. True when sent."""
+    addr = os.environ.get("NOTIFY_SOCKET", "")
+    if not addr:
+        return False
+    if addr.startswith("@"):  # an abstract socket: the name starts with a NUL byte
+        addr = "\0" + addr[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+            sock.connect(addr)
+            sock.sendall(state.encode())
+        return True
+    except OSError as exc:
+        LOG.debug("could not tell systemd %s: %s", state.split("=")[0], exc)
+        return False
+
+
+def watchdog_every() -> Optional[float]:
+    """Seconds between watchdog pings: a third of WatchdogSec, from $WATCHDOG_USEC. None when nothing is watching
+    this process (no variable, or WATCHDOG_PID names another one)."""
+    try:
+        usec = int(os.environ.get("WATCHDOG_USEC", ""))
+    except ValueError:
+        return None
+    pid = os.environ.get("WATCHDOG_PID", "")
+    if usec <= 0 or (pid and pid != str(os.getpid())):
+        return None
+    return usec / 3 / 1_000_000
+
+
+async def port_answers(host: str, port: int = 8081, timeout: float = 5.0) -> bool:
+    """Whether anything accepts a connection at host:port. The bridge's LEAP port, to tell a bridge that is there
+    but will not talk from one that is unplugged."""
+    if not host:
+        return False
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+    except (OSError, asyncio.TimeoutError):
+        return False
+    writer.close()
+    try:
+        await writer.wait_closed()
+    except Exception:  # noqa: BLE001
+        pass
+    return True
 
 
 class BridgeWatch(logging.Handler):
@@ -217,6 +275,7 @@ class Agent:
         self._button_seen: Dict[str, float] = {}
         self._resubscribing = False
         self._resub_next = 0.0
+        self._bridge_down_since: Optional[float] = None  # monotonic; when the bridge was last seen logged out
 
     # ---------- config ----------
     def _load_cached_config(self) -> Dict[str, Any]:
@@ -498,6 +557,8 @@ class Agent:
             # difference between "your remote is broken" and "your bridge stopped talking about buttons".
             "buttons_ok": WATCH.sub_failed_at is None,
             "uptime_s": round(time.time() - self._started_at),
+            # WatchdogSec, when systemd is watching this process (caseta-agent.service); null when nothing is
+            "watchdog_s": round(watchdog_every() * 3) if watchdog_every() else None,
             "lib": lib_version(),
             "notes": WATCH.notes[-4:],
             # nothing in what the bridge has said needs anybody to do anything
@@ -947,11 +1008,14 @@ class Agent:
                 async with websockets.connect(url, ping_interval=20, ping_timeout=20, max_size=4 * 1024 * 1024) as ws:
                     self.ws = ws
                     backoff = 1
+                    # git runs off the loop: the watchdog restarts a connector whose loop stalls for a minute, and a
+                    # slow SD card can keep git that long
+                    commit = await asyncio.get_running_loop().run_in_executor(None, current_commit)
                     # Drop anything queued while offline; a fresh hello carries the current truth.
                     while not self._send_q.empty():
                         self._send_q.get_nowait()
                     await ws.send(json.dumps({
-                        "type": "hello", "version": VERSION, "commit": current_commit(), "bridge": {"host": BRIDGE_HOST},
+                        "type": "hello", "version": VERSION, "commit": commit, "bridge": {"host": BRIDGE_HOST},
                         "inventory": self.inventory(), "states": self.all_states(),
                         "timers": self.runner.timers, "sun": self.sun_today(), "next_runs": self.next_fire_times(), "hue": self.hue.info(),
                         "nanoleaf": self.nanoleaf.info(),
@@ -1154,6 +1218,54 @@ class Agent:
         # Replace this process with a fresh one on the new code. Works with or without systemd/launchd.
         os.execv(sys.executable, [sys.executable, *sys.argv])
 
+    async def heartbeat(self) -> None:
+        """systemd's watchdog, pinged from the event loop itself, so a loop that blocks stops the pings and systemd
+        restarts the connector (caseta-agent.service, WatchdogSec). A no-op when nothing is watching.
+
+        It also stops pinging, on purpose, in one case the loop cannot see from inside: the Lutron library logged out
+        and not coming back. pylutron-caseta reconnects on its own through a bridge restart or a Wi-Fi drop, and stays
+        logged in throughout, so a long logout means its reconnect loop has died or its login failed, and only a
+        fresh process gets it back. Two guards keep that from becoming a restart loop:
+          * it waits BRIDGE_GIVE_UP_S (30 minutes) first, counted from each start, so at most one restart per 30;
+          * it gives up only while the bridge still answers on its port. A bridge that is unplugged or off the
+            network is not helped by a restart, so the connector just keeps waiting for it.
+        """
+        every = watchdog_every()
+        if not every:
+            return
+        giving_up = False
+        while True:
+            try:
+                stuck = await self._bridge_stuck()
+            except Exception as exc:  # noqa: BLE001  a bad check must never be what stops the pings
+                LOG.warning("watchdog check: %s", exc)
+                stuck = False
+            if stuck:
+                if not giving_up:
+                    LOG.error("the bridge answers but the connector has been logged out for %d minutes; "
+                              "letting systemd restart it", BRIDGE_GIVE_UP_S // 60)
+                    sd_notify("STATUS=Logged out of the bridge, restarting")
+                giving_up = True
+            else:
+                if giving_up:
+                    LOG.info("the bridge is back; the watchdog is fed again")
+                    sd_notify("STATUS=Running")
+                giving_up = False
+                sd_notify("WATCHDOG=1")
+            await asyncio.sleep(every)
+
+    async def _bridge_stuck(self) -> bool:
+        """True once the bridge has been logged out for BRIDGE_GIVE_UP_S and still answers on its port."""
+        if self.bridge is not None and getattr(self.bridge, "logged_in", False):
+            self._bridge_down_since = None
+            return False
+        now = time.monotonic()
+        if self._bridge_down_since is None:
+            self._bridge_down_since = now
+        if now - self._bridge_down_since < BRIDGE_GIVE_UP_S:
+            return False
+        return await port_answers(BRIDGE_HOST)
+
     async def button_watch(self) -> None:
         """Two ways a remote goes quiet, watched on the same loop.
 
@@ -1252,7 +1364,13 @@ async def main() -> None:
         LOG.error("no bridge address: run  python pair.py <bridge-ip>  first, or set BRIDGE_HOST")
         sys.exit(2)
     agent = Agent()
+    # Ready as soon as the loop runs, not once the bridge answers: a bridge that is unplugged at boot would otherwise
+    # hold the start past systemd's start timeout, and systemd would kill and restart the connector over and over
+    # for a bridge a restart cannot bring back. The pings start here too, so a start that blocks the loop is caught.
+    beat = asyncio.create_task(agent.heartbeat())
+    sd_notify("READY=1\nSTATUS=Connecting to the bridge")
     await agent.connect_bridge()
+    sd_notify("STATUS=Running")
     await agent.hue.start()  # no-op until a Hue bridge is paired from the app
     await agent.nanoleaf.start()  # no-op until a Nanoleaf controller is paired from the app
     stop = asyncio.Event()
@@ -1267,6 +1385,8 @@ async def main() -> None:
     watch = asyncio.create_task(agent.button_watch())
     follow = asyncio.create_task(agent.follow_loop())
     await stop.wait()
+    sd_notify("STOPPING=1")
+    beat.cancel()
     hub.cancel()
     sched.cancel()
     watch.cancel()

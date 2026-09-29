@@ -343,6 +343,38 @@ when the lamp has acted, so a Pico Off sent to several lamps at once could lose 
 light commands now go out about ten a second in the order asked, the newest winning for a lamp asked twice, and a
 whole Hue room going off is one room command. Every off, from any button, scene, timer or screen, is then checked
 by asking the lamp's own bridge, sent again if it is still on, and shown as on in the app if it will not go off.
+0.24.0 pings systemd's watchdog from its event loop, so a connector that hangs is restarted the same way one that
+crashes is (below).
+
+### Watchdogs on the Pi
+
+The hub updates the connector's code, but not systemd's settings, so this part is one paste on the Pi, once:
+
+```
+cd /home/pi/caseta-hack && git pull --ff-only && sudo bash agent/setup-watchdog.sh
+```
+
+It is safe to run again, and prints what it changed. It does two things:
+
+- **A hung connector restarts.** The unit becomes `Type=notify` with `WatchdogSec=60`: the connector says
+  `READY=1` when it starts and `WATCHDOG=1` every 20 seconds from its event loop, and systemd restarts it after a
+  minute without one. `Restart=always` still covers a crash. The connector also stops pinging on purpose if the
+  Lutron library has been logged out for 30 minutes while the bridge still answers on its port, which only a fresh
+  process fixes. An unplugged bridge never causes a restart: a restart cannot bring it back.
+  It updates whichever unit the Pi runs the connector from: `caseta-agent.service`, or `picohack-connector`, the
+  user service the app's install line sets up (as a drop-in beside it).
+- **A frozen Pi reboots.** `/etc/systemd/system.conf.d/caseta-watchdog.conf` sets `RuntimeWatchdogSec=15s` and
+  `RebootWatchdogSec=2min`, so systemd feeds the Pi's own hardware watchdog (bcm2835, `/dev/watchdog`), and the chip
+  reboots a Pi that stops feeding it. If `/dev/watchdog` is missing the script says so: add
+  `dtparam=watchdog=on` to `/boot/firmware/config.txt`, reboot, and run it again.
+
+It ends with `WatchdogUSec=1min` for the connector and `RuntimeWatchdogUSec=15s` for systemd when both are on.
+The connector also reports `watchdog_s` in its health, so the hub's `/api/snapshot` shows whether the unit is live.
+
+When the house computer is offline for 5 minutes, the Android app posts one notification for that outage ("House
+computer is offline", with the time it went) and replaces it, silently, with "House computer is back" when it
+returns. Settings, This phone, House computer offline turns it off. The hub keeps when the connector went away
+(`agent.offline_since` in `/api/snapshot`) through its own restarts.
 
 ## Configure
 
@@ -519,4 +551,5 @@ python3 test_beforeon.py    a lamp comes on already the colour it is going to be
 python3 test_restore.py     back the way it was: levels, colours, and which lights belong to the press
 python3 test_offmeansoff.py every off is checked and sent again if it did not take, Hue and Nanoleaf
                             lamps read back from their bridge (needs aiohttp)
+python3 test_watchdog.py    systemd's watchdog: the notify datagram, the interval, a blocked loop going quiet
 ```

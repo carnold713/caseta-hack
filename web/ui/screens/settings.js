@@ -110,7 +110,8 @@ export function view(c, r) {
 
 // ---------- This phone (the Android app only) ----------
 // What this phone does with the house outside the app, which is the phone's own choice and not the house's: how a
-// running sleep timer shows, and its widgets. Saved on the phone (native.js setPhone), never in the house's config.
+// running sleep timer shows, whether it says when the house computer has gone quiet, and its widgets. Saved on the
+// phone (native.js setPhone), never in the house's config.
 let phoneAsked = false;
 function phoneGroup(c) {
   if (!native.isNative) return '';
@@ -124,6 +125,7 @@ function phoneGroup(c) {
     <div class="group phone-group">
       ${toggle('Timer in the status bar', mode === 'live', 'phone-live', d)}
       ${mode === 'live' ? '' : toggle('Quiet notification instead', mode === 'quiet', 'phone-quiet', 'One you can swipe away')}
+      ${toggle('House computer offline', p.houseAlerts !== false, 'phone-house', !p.notifications ? 'Notifications are off for this app' : 'A notification after 5 minutes')}
       ${row(c, 'Widgets', p.widgets ? plural(p.widgets, 'widget') : 'None', 'widgets')}
     </div>`;
 }
@@ -270,6 +272,14 @@ export const actions = {
     const on = (p.timerMode || 'live') !== 'live';
     if (on && !p.notifications) await native.askNotifications();
     await native.setPhone({ timerMode: on ? 'live' : 'quiet' });
+    c.render();
+  },
+  // a notification when the house computer has been offline five minutes (Android's HouseWatch), once per outage
+  async 'phone-house'(c) {
+    const p = native.phone || {};
+    const on = p.houseAlerts === false;
+    if (on && !p.notifications) await native.askNotifications();
+    await native.setPhone({ houseAlerts: on });
     c.render();
   },
   async 'phone-quiet'(c) {

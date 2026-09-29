@@ -151,6 +151,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await page.click('.offline-card');  await wait(500);
     check((await C(() => (document.querySelector('#sheet-root .t-over') || {}).textContent)) === 'Connection', 'the card opens the connection sheet');
     await C(() => window.__copper.closeSheet());
+    // gone a while (the hub says since when): the sheet's row says so, in the home's time, and nothing louder
+    await C(() => { const c = window.__copper; c.S.agent.offline_since = new Date(Date.now() - 20 * 60000).toISOString(); c.render(); });
+    await wait(300);
+    await page.click('.offline-card'); await wait(500);
+    const since = await C(() => [...document.querySelectorAll('#sheet-root .cn-row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()).find(t => /House computer/.test(t)) || '');
+    check(/^House computer Since \d{1,2}:\d\d [ap]m$/.test(since), 'after a while the connection sheet says since when the house computer went quiet', since);
+    await C(() => { const c = window.__copper; c.S.agent.offline_since = new Date(Date.now() - 60000).toISOString(); c.closeSheet(); c.render(); });
+    await wait(300);
+    await page.click('.offline-card'); await wait(500);
+    const blip = await C(() => [...document.querySelectorAll('#sheet-root .cn-row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()).find(t => /House computer/.test(t)) || '');
+    check(blip === 'House computer Not heard from', 'a minute is not a while: it still says Not heard from', blip);
+    await C(() => { window.__copper.S.agent.offline_since = null; window.__copper.closeSheet(); });
     // a tap on a light answers at once and sends nothing
     const aid = await C(id => window.__copper.data.devArea(window.__copper.data.dev(id)), lamp);
     await C(a => { location.hash = `room/${a}`; }, aid); await wait(900);

@@ -32,7 +32,8 @@ import org.json.JSONObject;
  *   widgetData                          the home as the widgets draw it: rooms, lights, scenes, pins, routines, levels
  *   widgets / widget / setWidget        the placed widgets and each one's choices, for the app's Widgets page
  *   addWidget / widgetDone              put a widget on the home screen from the app; Done on a widget's page
- *   phone / setPhone                    this phone's own choices: how a running timer shows (status bar, quiet, none)
+ *   phone / setPhone                    this phone's own choices: how a running timer shows (status bar, quiet, none),
+ *                                       and whether it says when the house computer is offline (HouseWatch)
  *   lastCrash                           the last thing that went wrong on the Android side, once, for the hub's log
  */
 @CapacitorPlugin(
@@ -47,6 +48,8 @@ public class HubPlugin extends Plugin {
         if (url == null || token == null || token.isEmpty()) { call.reject("url and token"); return; }
         HubStore.setCredentials(getContext(), url, token);
         HouseWidget.refreshSoon(getContext());
+        // signed in: the phone watches the house computer from now on, widgets or not
+        WidgetRefreshJob.sync(getContext());
         call.resolve();
     }
 
@@ -54,6 +57,8 @@ public class HubPlugin extends Plugin {
     public void clearCredentials(PluginCall call) {
         HubStore.clear(getContext());
         TimerNotifications.sync(getContext(), new org.json.JSONArray());
+        HouseWatch.forget(getContext());
+        WidgetRefreshJob.sync(getContext());
         HouseWidget.refreshSoon(getContext());
         call.resolve();
     }
@@ -185,6 +190,7 @@ public class HubPlugin extends Plugin {
         Context c = getContext();
         JSObject r = new JSObject();
         r.put("timerMode", WidgetStore.timerMode(c));
+        r.put("houseAlerts", HouseWatch.on(c));
         r.put("notifications", notificationsAllowed());
         NotificationManager nm = c.getSystemService(NotificationManager.class);
         // Android 16 and later: whether this app's Live Updates are allowed (the system's own switch for it)
@@ -201,6 +207,13 @@ public class HubPlugin extends Plugin {
         if (mode.equals("live") || mode.equals("quiet") || mode.equals("none")) {
             WidgetStore.setTimerMode(getContext(), mode);
             TimerNotifications.redraw(getContext());
+        }
+        Boolean house = call.getBoolean("houseAlerts", null);
+        if (house != null) {
+            Safe.run(getContext(), "house watch switch", () -> {
+                HouseWatch.setOn(getContext(), house);
+                WidgetRefreshJob.sync(getContext());
+            });
         }
         phone(call);
     }

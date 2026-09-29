@@ -70,7 +70,8 @@ export async function widgetDone() { const r = await call('widgetDone'); return 
 
 // ---------- this phone ----------
 // This phone's own choices, which are not the house's: how a running sleep timer shows ("live" in the status bar,
-// "quiet", or "none"), and what the Settings rows need to say about it. Kept here once read, so a redraw has it.
+// "quiet", or "none"), whether it says when the house computer is offline (houseAlerts), and what the Settings rows
+// need to say about them. Kept here once read, so a redraw has it.
 export let phone = null;
 export async function loadPhone() { if (!isNative) return null; const r = await call('phone'); if (r) phone = r; return phone; }
 export async function setPhone(opts) { if (!isNative) return null; const r = await call('setPhone', opts); if (r) phone = r; return phone; }

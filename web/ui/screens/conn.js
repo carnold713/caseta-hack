@@ -9,6 +9,17 @@ const ago = ms => {
   const d = Math.round(h / 24); return `${d} ${d === 1 ? 'day' : 'days'} ago`;
 };
 const health = c => ((c.S.agent && c.S.agent.info) || {}).health || null;
+// When the house computer went quiet, once that has lasted a while (the hub keeps it through its own restarts): the
+// time today, the day before that. Null for a blip, or with the house computer running.
+const QUIET_FOR = 5 * 60 * 1000;
+function quietSince(c) {
+  const a = c.S.agent || {};
+  const t = !a.online && a.offline_since ? Date.parse(a.offline_since) : NaN;
+  if (!(Date.now() - t >= QUIET_FOR)) return null;
+  const z = c.RT.zparts(new Date(t));
+  const rel = c.RT.dayRel(z.date);
+  return `Since ${rel === 'today' ? c.RT.fmtTime(z.hm) : rel === 'yesterday' ? `yesterday, ${c.RT.fmtTime(z.hm)}` : rel}`;
+}
 
 // The four links, in order from this phone outwards, each with a word for how it is.
 function links(c) {
@@ -20,7 +31,7 @@ function links(c) {
   return [
     ['Phone', phone, phone ? 'Online' : 'No internet'],
     ['Server', server, server ? 'Reachable' : phone ? 'Not answering' : 'Waiting for the phone'],
-    ['House computer', house, house ? 'Running' : server ? 'Not heard from' : 'Unknown'],
+    ['House computer', house, house ? 'Running' : server ? quietSince(c) || 'Not heard from' : 'Unknown'],
     ['Lutron bridge', bridge, bridge == null ? (house ? 'Checking' : 'Unknown') : bridge ? 'Connected' : 'Not answering'],
   ];
 }

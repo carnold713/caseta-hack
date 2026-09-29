@@ -172,7 +172,7 @@
           S.config = m.config; S.lastSaved = text; return { type: 'config', changed: true };
         }
         case 'agent': {
-          S.agent = { online: m.online, info: m.info || null };
+          S.agent = { online: m.online, info: m.info || null, offline_since: m.offline_since || null };
           return { type: 'agent', changed: true, conn: noteConn(!!m.online) };
         }
         case 'activity': {
