@@ -134,7 +134,6 @@ final class HouseWatch {
             .setContentTitle("House computer is back")
             .setWhen(System.currentTimeMillis())
             .setOnlyAlertOnce(true);
-        if (Build.VERSION.SDK_INT >= 31) b.setSilent(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) b.setTimeoutAfter(BACK_SHOWN_MS);
         return b.build();
     }
