@@ -271,14 +271,22 @@ function badFrames(before, after, frames) {
   await C(() => document.querySelector('#screen [data-act="room-on"]').click()); await wait(1600);
   let t1 = await toggle();
   check('with anything on, the pill is under On, On says just On, and the count beside the title says how many and how bright', t1.under === 'on' && t1.onPressed === 'true' && /^\d+ on( · \d+%)?$/.test(t1.count) && t1.word === 'On', t1);
+  // the room's fan is running (a fan's own Medium), so Off has a fan to stop as well as its lights
+  const fanOn = await C(p => !!p.fan && (window.__copper.S.states[p.fan] || {}).fan_speed !== 'Off' && !!(window.__copper.S.states[p.fan] || {}).fan_speed, plan);
+  // every frame from the tap: where the pill is, and whether the room reads off
+  await C(() => { window.__pill = []; const t0 = performance.now(); const tick = () => { const o = document.querySelector('#screen .room-onoff'); if (o) { const pr = o.querySelector('.onoff-pill').getBoundingClientRect(), b = o.querySelector('[data-act="room-off"]').getBoundingClientRect(), a = o.querySelector('[data-act="room-on"]').getBoundingClientRect(); window.__pill.push({ t: performance.now() - t0, x: pr.left, toOff: Math.abs(pr.left - b.left) < 2, atOn: Math.abs(pr.left - a.left) < 2, moving: o.querySelector('.onoff-pill').getAnimations().length }); } if (performance.now() - t0 < 1600) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
   await C(() => document.querySelector('#screen [data-act="room-off"]').click());
   const moving = await C(() => new Promise(r => requestAnimationFrame(() => r(document.querySelector('#screen .room-onoff .onoff-pill').getAnimations().length))));
   await wait(1600);
   const t2 = await toggle();
   check('Off turns it all off: the pill slides under Off and On says just On', moving > 0 && t2.under === 'off' && t2.onPressed === 'false' && t2.word === 'On' && t2.count === '', { moving, t2 });
+  // With a fan running the pill still moves on the tap (the fan lands where its room's Off puts it, as a light does),
+  // and once it has left On it never goes back there when the bridge answers.
+  const pill = await C(() => { const f = window.__pill; const first = f.findIndex(x => x.moving > 0 || !x.atOn); const back = first >= 0 && f.slice(first).some((x, i, a) => i > 0 && x.atOn); return { fanOn: null, startsAt: first >= 0 ? Math.round(f[first].t) : null, back, endsUnderOff: f.length && f[f.length - 1].toOff }; });
+  check('with the room\'s fan running, the pill slides at the tap, and nothing jumps back when the bridge answers', fanOn && pill.startsAt != null && pill.startsAt < 60 && !pill.back && pill.endsUnderOff, { ...pill, fanOn });
   await C(() => document.querySelector('#screen [data-act="room-on"]').click()); await wait(1600);
-  // back to the levels the rest of this test lays out
-  await C(async p => { const c = window.__copper; if (p.long) await c.run({ type: 'level', target: `d:${p.long}`, level: 60 }); if (!p.ownColour) await c.run({ type: 'color', target: `d:${p.colour}`, hex: '#4C8DFF' }); }, plan); await wait(800);
+  // back to the levels the rest of this test lays out (the room's On set the fan to the on level's speed)
+  await C(async p => { const c = window.__copper; if (p.fan) await c.run({ type: 'fan', target: `d:${p.fan}`, speed: 'Medium' }); if (p.long) await c.run({ type: 'level', target: `d:${p.long}`, level: 60 }); if (!p.ownColour) await c.run({ type: 'color', target: `d:${p.colour}`, hex: '#4C8DFF' }); }, plan); await wait(800);
   await dress();
 
   // ---- every page and sheet, at both widths

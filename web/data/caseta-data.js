@@ -54,6 +54,10 @@
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   function fmtDur(s) { return s >= 60 ? `${Math.round(s / 60)} min` : `${s} ${s === 1 ? 'second' : 'seconds'}`; }
+  // A level sent to a fan (its room's On or Off) sets the speed that level stands for, as engine.py does; the
+  // controller then reports the level of that speed.
+  const FAN_LEVEL = { Off: 0, Low: 25, Medium: 50, MediumHigh: 75, High: 100 };
+  const fanSpeedAt = lv => (lv <= 0 ? 'Off' : lv <= 25 ? 'Low' : lv <= 50 ? 'Medium' : lv <= 75 ? 'MediumHigh' : 'High');
   function fanName(s) { return { Off: 'off', Low: 'low', Medium: 'medium', MediumHigh: 'medium-high', High: 'high' }[s] || s; }
   function fmtTime(hm) { const [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${ap}`; }
   // A scene's entry for a light is a number, a fan speed, or {level, kelvin?, hex?} for a Hue lamp with its colour.
@@ -237,7 +241,11 @@
     const same = (a, b) => flat(a || null) === flat(b || null);
     // A report reached what was expected: a dimmer within a percent of it, a switch (whatever level it reports) on
     // or off as expected.
+    const isFanDev = id => (dev(id) || {}).domain === 'fan';
+    // what a light (or a fan) is shown as while it is held at `level`: a fan shows the speed the level stands for
+    const heldAt = (id, st, level) => ({ ...(st || {}), level, ...(isFanDev(id) ? { fan_speed: fanSpeedAt(level) } : {}) });
     function reached(id, e, st) {
+      if (isFanDev(id) && st && st.fan_speed && e.level != null) return st.fan_speed === fanSpeedAt(e.level);
       if (!st || st.level == null || e.level == null) return false;
       if ((dev(id) || {}).domain === 'switch') return (st.level > 0) === (e.level > 0);
       return Math.abs(st.level - e.level) <= 1;
@@ -251,7 +259,7 @@
         e.heard = true;
         if (!e.slider && reached(id, e, st)) { e.until = Math.min(e.until, now() + REACH_SETTLE); plan(); }
         // a finger's colour is held with its level; a switched light's colour is the bridge's
-        const next = { ...st, level: cur ? cur.level : e.level, ...(e.slider && cur && cur.color ? { color: cur.color } : {}) };
+        const next = { ...heldAt(id, st, cur ? cur.level : e.level), ...(e.slider && cur && cur.color ? { color: cur.color } : {}) };
         S.states[id] = next;
         return !same(cur, next);
       }
@@ -301,7 +309,7 @@
         const cur = S.states[id];
         // a light already showing that level (a room's lamp that was already off) has nothing to hold
         if (!S.expect[id] && cur && cur.level === level) continue;
-        S.states[id] = { ...(cur || {}), level };
+        S.states[id] = heldAt(id, cur, level);
         S.expect[id] = { level, n, fade: ms, since: t, until: t + ms + EXPECT_CAP, heard: false };
       }
       plan();
@@ -331,6 +339,7 @@
     // (the connector sends it the on level like any other light), where a Hue plug reports the level it was sent.
     function landing(id, level) {
       const d = dev(id) || {};
+      if (d.domain === 'fan') return FAN_LEVEL[fanSpeedAt(level)];
       if (level > 0 && d.domain === 'switch' && !/^(hue_|nanoleaf_)/.test(id)) return 100;
       return clamp(Math.round(level), 0, 100);
     }

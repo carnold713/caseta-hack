@@ -105,13 +105,16 @@ function assume(ids, level, { held = false } = {}) { if (data.connState() === 'o
 // Where each light lands, decided the way the connector decides it (engine.py run_one): "on" is each light's own on
 // level for this target, "toggle" is off when anything in it is on, a scene is its own levels. A restore or a Lutron
 // scene lands where only the connector knows, so those are not shown ahead: their lights change as the bridge says.
-// Fans and shades are left to the bridge too. Null when nothing can be said ahead of the bridge.
+// A fan switched with its room (its On or Off) lands at the speed the level stands for, as the connector sends it,
+// so a room with its fan running still switches at the tap. A fan's own speeds and the shades are left to the bridge.
+// Null when nothing can be said ahead of the bridge.
 function landFor(action) {
   const s = S.config.settings || {};
   const lamp = id => { const d = data.dev(id); return !!d && (d.domain === 'light' || d.domain === 'switch'); };
   const levels = {};
   if (action.type === 'level' || (action.type === 'color' && action.level != null)) {
-    const ids = data.targetDevices(action.target).filter(lamp);
+    const fan = id => action.type === 'level' && (data.dev(id) || {}).domain === 'fan';
+    const ids = data.targetDevices(action.target).filter(id => lamp(id) || fan(id));
     const anyOn = ids.some(data.isOn);
     for (const id of ids) {
       const l = action.level;

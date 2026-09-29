@@ -132,7 +132,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   if (fan) {
     await go(`room/${fan.aid}`);
     const spin = () => C(i => { const el = document.querySelector(`#screen .rs-svg [data-fan="${i}"]`); return el ? { on: el.classList.contains('on'), turning: el.getAnimations().some(a => a.playState === 'running') } : null; }, fan.id);
-    // the fake bridge refuses fan commands on purpose, so the fan's state is told to it directly (fake-do.json)
+    // the fan's state is told to the fake bridge directly (fake-do.json), a change at the wall
     const fanTo = speed => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSON.stringify({ states: { [fan.id]: { fan_speed: speed, level: speed === 'Off' ? 0 : 50 } } }));
     fanTo('Medium'); await wait(1200);
     const s1 = await spin();
