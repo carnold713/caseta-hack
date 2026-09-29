@@ -104,11 +104,15 @@ function ranRecently(c, sc) {
 // A run skipped for tonight still gets its card (greyed, with Don't skip) until its time has passed.
 function skippedSoon(c) {
   const { RT } = c; const now = hmMin(RT.nowHm());
+  const today = RT.today(), tomorrow = RT.addDays(today, 1);
   for (const sc of RT.schedules()) {
-    if (sc.enabled === false || RT.parentOf(sc) || !turnsOn(sc) || RT.skipping(sc) !== RT.today()) continue;
+    // the run skipped is today's, or tomorrow's when it falls just past midnight (a routine at 12:03 am skipped at
+    // 11:57 pm is tomorrow's run, and its Don't skip must stay in reach all the same)
+    const sk = RT.skipping(sc);
+    if (sc.enabled === false || RT.parentOf(sc) || !turnsOn(sc) || (sk !== today && sk !== tomorrow)) continue;
     const hm = sc.at.type === 'time' ? sc.at.time : RT.sunAt(sc.at.type, sc.at.offset_min);
     if (!hm) continue;
-    const m = hmMin(hm) - now;
+    const m = hmMin(hm) + (sk === tomorrow ? 1440 : 0) - now;
     if (m > 0 && m <= 60) return { sc, hm, min: m };
   }
   return null;

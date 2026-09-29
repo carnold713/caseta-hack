@@ -5,7 +5,9 @@
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
-const check = (ok, what, got) => { bad += ok ? 0 : 1; console.log((ok ? 'PASS ' : 'FAIL ') + what + (got === undefined ? '' : ` | ${JSON.stringify(got)}`)); };
+// check(what, ok, got): the label first, as every check in this file is written (it had the two the other way round, so
+// every check passed whatever it found)
+const check = (what, ok, got) => { bad += ok ? 0 : 1; console.log((ok ? 'PASS ' : 'FAIL ') + what + (got === undefined ? '' : ` | ${JSON.stringify(got)}`)); };
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
@@ -290,6 +292,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('reduced motion: the room\'s light is still drawn, and nothing drifts', rmv.pools === 1 && rmv.long === 0, rmv);
   await rm.page.evaluate(() => window.__copper.run({ type: 'level', target: 'h:all', level: 'off' })); await wait(800);
   await rm.ctx.close();
+
+  // ---- across midnight: a routine at 12:03 am skipped at 11:57 pm is tomorrow's run, and its Don't skip stays
+  // in reach (the skipped card used to look for today's skip only, and vanished with no way back)
+  const mn = await open();
+  await mn.page.goto(root + '#home'); await mn.page.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 }); await wait(600);
+  const shift = await mn.page.evaluate(() => { const RT = window.__copper.RT; return ((1437 - RT.hmMin(RT.nowHm()) + 1440) % 1440) * 60000; });
+  await mn.page.clock.setSystemTime(new Date(Date.now() + shift));
+  await mn.page.evaluate(async () => {
+    const c = window.__copper; const RT = c.RT;
+    c.S.config.schedules = (c.S.config.schedules || []).filter(s => !/^v7home/.test(s.id));
+    c.S.config.schedules.push({ id: 'v7home-mn', name: 'Porch at midnight', enabled: true, at: { type: 'time', time: RT.hmAdd(RT.nowHm(), 6), offset_min: 0 }, days: [...RT.ALL_DAYS], actions: [{ type: 'level', target: 'a:21', level: 'on' }], only_if: null, skip_until: null, kind: 'welcome' });
+    await c.data.saveConfig(); c.render();
+  });
+  await wait(800);
+  check('across midnight: the routine six minutes out has its card, close', await mn.page.evaluate(() => !!document.querySelector('.arrival.close [data-act="next-skip"]')));
+  const mnNow = await mn.page.evaluate(() => window.__copper.RT.nowHm());
+  await mn.page.evaluate(() => { const el = document.querySelector('.arrival [data-act="next-skip"]'); if (el) el.click(); }); await wait(900);
+  const mnSk = await mn.page.evaluate(() => { const el = document.querySelector('.arrival'); return el && { skipped: el.classList.contains('skipped'), unskip: !!el.querySelector('[data-act="next-unskip"]') }; });
+  check(`across midnight (${mnNow}): a skipped run just past midnight keeps its Don't skip`, !!(mnSk && mnSk.skipped && mnSk.unskip), mnSk);
+  await mn.page.evaluate(async () => { const c = window.__copper; c.S.config.schedules = c.S.config.schedules.filter(s => !/^v7home/.test(s.id)); await c.data.saveConfig(); });
+  await mn.ctx.close();
 
   // no em or en dash anywhere this group put on screen
   check('no page errors', !errors.length, errors);
