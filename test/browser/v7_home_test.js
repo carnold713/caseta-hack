@@ -13,12 +13,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   const errors = [];
+  // the one command meant to fail (the fan that does not answer, below) is the hub's 502 for it, not a fault
+  let fanFailing = false;
   const open = async (opts = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, ...opts });
     if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|404/.test(m.text())) errors.push('console: ' + m.text()); });
+    page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|404/.test(m.text()) && !(fanFailing && /status of 502/.test(m.text()))) errors.push('console: ' + m.text()); });
     return { ctx, page };
   };
   const root = `http://127.0.0.1:${PORT}/ui/`;
@@ -259,7 +261,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const moon = await C(() => { const el = document.querySelector('.gn-night'); return el && { moon: Number(getComputedStyle(el.querySelector('.gn-moon')).opacity), sleep: el.querySelector('.gn-sleep').textContent, sleepOp: Number(getComputedStyle(el.querySelector('.gn-sleep')).opacity), extras: (el.querySelector('.gn-extras') || {}).textContent || '' }; });
   const moonAt = await gnAt('moon', '>', 0), sleepAt = await gnAt('sleep', '>', 0);
   check('"Sleep well" on a faint moon, after the veil has closed', moon && moon.sleep === 'Sleep well' && moon.sleepOp > 0.9 && moon.moon > 0.5 && moonAt >= veilAt + 1500 && sleepAt >= moonAt + 300, { ...moon, veilAt, moonAt, sleepAt });
-  check('the fans and shades said as they finish', moon && /Fans stopped|Shades closed|^$/.test(moon.extras), moon && moon.extras);
+  check('the fans said as they answered: the rig\'s one fan stopped', moon && moon.extras === 'Fans stopped', moon && moon.extras);
   const toastTxt = await page.textContent('#toast-root');
   check('no toast: the dark page is the answer', toastTxt === '', toastTxt);
   const pb = await C(() => { const b = document.querySelector(".gn-night .gn-back"); return b && { text: b.textContent.trim(), op: Number(getComputedStyle(b).opacity), bottom: Math.round(innerHeight - b.getBoundingClientRect().bottom), h: Math.round(b.getBoundingClientRect().height) }; });
@@ -295,6 +297,20 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('a tap skips straight to "Sleep well"', skipped && skipped.sleep > 0.9 && skipped.veil > 0.9, skipped);
   check('and Goodnight still happened', (await C(() => window.__copper.H.litLights().length)) === 0);
   await wait(5600);
+  await go('home');
+
+  // ---- 10 · a fan that does not answer: the dark page never says it stopped. The line is decided by the answers
+  // (it used to be written from what was sent, before anything had answered).
+  const fakeDo = o => require('fs').writeFileSync(require('path').join(process.cwd(), 'fake-do.json'), JSON.stringify(o));
+  fakeDo({ fan_fail: true }); fanFailing = true; await wait(600);
+  await cmd({ type: 'level', target: 'a:20', level: 60 }); await wait(1200);
+  await hold('[data-hold="goodnight"]', 1150);
+  await C(() => { window.__said = []; const tick = () => { const n = document.querySelector('.gn-night'); const ex = n && n.querySelector('.gn-extras'); if (ex && ex.textContent && Number(getComputedStyle(ex).opacity) > 0) window.__said.push(ex.textContent); if (n) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
+  await page.waitForFunction(() => { const ex = document.querySelector('.gn-night .gn-extras'); return ex && Number(getComputedStyle(ex).opacity) > 0.99; }, null, { timeout: 7000, polling: 'raf' }).catch(() => {});
+  const failSaid = await C(() => [...new Set(window.__said)]);
+  check('a fan that did not stop: the dark page says "The fan didn\'t stop", never "Fans stopped"', failSaid.length === 1 && failSaid[0] === "The fan didn't stop", failSaid);
+  fakeDo({ fan_fail: false }); await wait(600); fanFailing = false;
+  await page.waitForFunction(() => !document.querySelector('.gn-night'), null, { timeout: 9000 }).catch(() => {});
   await go('home');
 
   // ---- 10 · offline: the hold still fills and nothing darkens; with toasts off, its own word says "Offline" a moment

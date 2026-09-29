@@ -332,6 +332,24 @@ test('a light switched on is shown on at once and stays on while the bridge repo
   assert.equal(d.S.truth['1'].level, 100, 'the bridge is heard the whole time');
 });
 
+test('a fan switched with its room is shown at the speed it will land at, and a late report does not undo it', () => {
+  const { d, c } = rig();
+  d.S.inv.devices[7] = { device_id: '7', name: 'Fan', domain: 'fan', area: 'a2', type: 'CasetaFanSpeedController' };
+  echo(d, { 7: { level: 50, fan_speed: 'Medium' } });
+  assert.equal(d.landing('7', 0), 0);
+  assert.equal(d.landing('7', 60), 75, 'a level lands at the level of the speed it stands for');
+  const n = d.expect({ 7: 0 }, 0.5);
+  assert.equal(d.S.states[7].fan_speed, 'Off', 'shown off from the tap');
+  assert.equal(d.isOn('7'), false);
+  c.step(40); d.sent(n, true);
+  assert.equal(echo(d, { 7: { level: 50, fan_speed: 'Medium' } }).changed, false, 'a report from before the tap is not news');
+  assert.equal(d.S.states[7].fan_speed, 'Off');
+  c.step(100); echo(d, { 7: { level: 0, fan_speed: 'Off' } });
+  c.step(CD.REACH_SETTLE + 10);
+  assert.deepEqual(Object.keys(d.S.expect), [], 'let go once it has got there');
+  assert.equal(d.S.states[7].fan_speed, 'Off');
+});
+
 test('a report of the old brightness just after the new one is not shown as a step back', () => {
   const { d, c } = rig();
   const n = d.expect({ 2: 100 }, 0.5);

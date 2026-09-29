@@ -188,22 +188,27 @@ ws.on('message', raw => {
     const a = m.action;
     // LAG_MS simulates a slow bridge round trip: the result and the echo come back late, like the real thing
     const lag = a.type === 'level' || a.type === 'color' ? Number(process.env.LAG_MS || 0) : 0;
-    // A fan command is answered as the real connector answers it: done. It used to fail every time, which no test
-    // asked for, and so the hub answered 502 to every Goodnight's "fans off" in the suite, and the dark page said
-    // "Fans stopped" of a fan that had not. The fake still keeps no speed of its own for the fan (a room's Off would
-    // then have to stop it too, as engine.py's does). FAN_FAIL=1 brings back a fan that fails, for a test of that.
-    const fanFails = a.type === 'fan' && !!process.env.FAN_FAIL;
+    // A fan does what the real connector's does (engine.py): a fan command sets its speed and is answered done, and a
+    // level sent to it (its room's On or Off) sets the speed that level stands for. FAN_FAIL=1 (or {"fan_fail": true}
+    // in fake-do.json) makes it a fan that never answers: every fan command fails and nothing about it changes.
+    const fanFails = a.type === 'fan' && FAN_FAIL;
     const result = () => send({ type: 'result', id: m.id, ok: !fanFails, error: fanFails ? 'simulated failure' : undefined });
+    if (fanFails) { setTimeout(result, lag); return; }
     // With the bridge's own pace (ECHO=bridge, below) a light command is answered once every light has been sent
     // its part, as the connector's run() is; the echoes come on their own time around it.
     if (ECHO === 'bridge' && ['level', 'restore', 'preset'].includes(a.type)) echoCommand(a, result);
     else { setTimeout(result, lag); plainCommand(a, lag); }
   }
 });
+// The level a Caseta fan controller reports at each speed, and the speed engine.py sends for a level.
+const FAN_LEVEL = { Off: 0, Low: 25, Medium: 50, MediumHigh: 75, High: 100 };
+const isFan = id => !!(inventory.devices[id] && inventory.devices[id].domain === 'fan');
+const fanSpeed = lv => (lv <= 0 ? 'Off' : lv <= 25 ? 'Low' : lv <= 50 ? 'Medium' : lv <= 75 ? 'MediumHigh' : 'High');
+const fanAt = (id, lv) => ({ ...(states[id] || {}), fan_speed: fanSpeed(lv), level: FAN_LEVEL[fanSpeed(lv)] });
 function plainCommand(a, lag) {
     if (a.type === 'restore') {
       const ids = resolve(a.target); const upd = {}; const picks = ids.filter(id => lastOn[id]);
-      for (const id of (picks.length ? picks : ids)) { states[id] = { ...(states[id] || {}), level: picks.length ? lastOn[id] : 100 }; upd[id] = states[id]; }
+      for (const id of (picks.length ? picks : ids)) { const v = picks.length ? lastOn[id] : 100; states[id] = isFan(id) ? fanAt(id, v) : { ...(states[id] || {}), level: v }; upd[id] = states[id]; }
       setTimeout(() => send({ type: 'state', states: upd }), lag);
     }
     if (a.type === 'level') {
@@ -211,8 +216,13 @@ function plainCommand(a, lag) {
       const upd = {};
       // remember what was lit before the house goes dark, like the connector does
       if (a.level === 'off' || a.level === 0 || a.level === 'toggle') { const lit = {}; for (const [id, st] of Object.entries(states)) if ((st.level || 0) > 0) lit[id] = st.level; if (Object.keys(lit).length) lastOn = lit; }
-      for (const id of ids) { const cur = (states[id] || {}).level || 0; const v = a.level === 'toggle' ? (ids.some(x => ((states[x] || {}).level || 0) > 0) ? 0 : onLevel(id, a.target)) : a.level === 'on' ? onLevel(id, a.target) : a.level === 'off' ? 0 : Number(a.level); states[id] = { ...(states[id] || {}), level: v }; upd[id] = states[id]; if (cur === v) continue; }
+      for (const id of ids) { const cur = (states[id] || {}).level || 0; const v = a.level === 'toggle' ? (ids.some(x => ((states[x] || {}).level || 0) > 0) ? 0 : onLevel(id, a.target)) : a.level === 'on' ? onLevel(id, a.target) : a.level === 'off' ? 0 : Number(a.level); states[id] = isFan(id) ? fanAt(id, v) : { ...(states[id] || {}), level: v }; upd[id] = states[id]; if (cur === v) continue; }
       if (Object.keys(upd).length) setTimeout(() => { send({ type: 'state', states: upd }); for (const id of Object.keys(upd)) followZone(id, upd[id].level); }, lag);
+    }
+    if (a.type === 'fan') {
+      const upd = {};
+      for (const id of resolve(a.target).filter(isFan)) { states[id] = { ...(states[id] || {}), fan_speed: a.speed, level: FAN_LEVEL[a.speed] ?? 0 }; upd[id] = states[id]; }
+      if (Object.keys(upd).length) setTimeout(() => send({ type: 'state', states: upd }), lag);
     }
     if (a.type === 'color' && a.follow) {
       // follow the day again: a lamp a colour set by hand had paused
@@ -255,6 +265,7 @@ function plainCommand(a, lag) {
 // {"stuck": [ids]} makes lights ignore what they are asked, to show what the app does when a light fails to change.
 let ECHO = process.env.FAKE_ECHO === 'bridge' ? 'bridge' : 'plain';
 let STUCK = new Set();
+let FAN_FAIL = !!process.env.FAN_FAIL;
 const hueBri = {};   // the brightness a Hue lamp had when it last went off, which its event stream reports first
 const dirty = {}; let flushT = null;
 function report(id, level) {
@@ -306,6 +317,8 @@ function bridgeEcho(changes, fade) {
 function echoCommand(a, result) {
   const changes = [];
   const set = (id, v) => {
+    // a fan goes to the speed the level stands for and says so once, as a fan controller does
+    if (isFan(id)) { states[id] = fanAt(id, v); setTimeout(() => send({ type: 'state', states: { [id]: states[id] } }), 60); return; }
     const from = (states[id] || {}).level || 0;
     const to = (inventory.devices[id] || {}).domain === 'switch' && !isLamp(id) && v > 0 ? 100 : v;
     if (!STUCK.has(id)) states[id] = { ...(states[id] || {}), level: to };
@@ -356,7 +369,8 @@ function resolve(t) {
   if (k === 'a') {
     // the app's own rooms once it has them, as engine.py _resolve reads them: the room that names a device has it,
     // else the room standing for its bridge room. A lamp moved into a room in the app is switched with that room.
-    const lamp = d => d && ['light', 'switch'].includes(d.domain);
+    // (every device in it but a shade, as engine.py _resolve has it: a room's Off stops its fan too)
+    const lamp = d => d && ['light', 'switch', 'fan'].includes(d.domain);
     const rooms = ((config && config.settings && config.settings.rooms) || []).filter(r => r && r.id);
     const room = rooms.find(r => String(r.id) === id);
     if (room) {
@@ -414,6 +428,7 @@ setInterval(() => {
     if (d.states) { for (const [id, st] of Object.entries(d.states)) states[id] = { ...(states[id] || {}), ...st }; send({ type: 'state', states: d.states }); }
     if (d.echo) { ECHO = d.echo === 'bridge' ? 'bridge' : 'plain'; console.log('echo', ECHO); }
     if (d.stuck) STUCK = new Set(d.stuck);
+    if ('fan_fail' in d) { FAN_FAIL = !!d.fan_fail; console.log('fan fail', FAN_FAIL); }
   }
 }, 200);
 

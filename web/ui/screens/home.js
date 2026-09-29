@@ -273,10 +273,11 @@ export const actions = {
     const rooms = c.data.areas().map(a => ({ aid: a.id, L: roomLight(c, a.id) })).filter(r => r.L);
     // every light is shown off at once (turn), then the page goes dark over it
     const off = c.turn(acts[0]);
-    goodnightDark(c, rooms, acts);
+    const g = goodnightDark(c, rooms, acts);
     c.soon();
     await off;
-    for (const a of acts.slice(1)) c.run(a);
+    // the fans and the shades, each answered: the dark page says what they did once it knows (gnSaid)
+    g.answer(Promise.all(acts.slice(1).map(a => Promise.resolve(c.run(a)).then(ok => ({ a, ok: ok !== false }), () => ({ a, ok: false })))));
   },
   // A light that stayed on through Goodnight: a tap turns it off.
   'gn-off'(c, el) {
@@ -322,16 +323,18 @@ function goodnightDark(c, rooms, acts) {
   const el = document.createElement('div');
   el.className = 'gn-night';
   el.setAttribute('role', 'status');
-  const extras = [acts.some(a => a.type === 'fan') ? 'Fans stopped' : '', acts.some(a => a.type === 'lower') ? 'Shades closed' : ''].filter(Boolean).join(' · ');
   el.innerHTML = `<span class="gn-veil"></span>
     <div class="gn-route"></div>
     <div class="gn-moon">${glowHTML({ level: 100, kelvin: 6500, ctx: 'tile', gain: 0.19, cls: 'gn-moon-glow' })}${c.icon('moon', 24, 1.6)}</div>
     <p class="gn-sleep">Sleep well</p>
-    ${extras ? `<p class="gn-extras">${extras}</p>` : ''}
+    ${acts.length > 1 ? '<p class="gn-extras"></p>' : ''}
     <div class="gn-stay"></div>
     <button class="gn-back" data-act="gn-put-back">Put back</button>`;
   document.body.appendChild(el);
   gn = { el, c, timers: [], ended: false, toasted: false };
+  // what the fans and shades said, once they have: a promise of [{ a, ok }], handed in by the action (answer)
+  let answer; gn.answered = new Promise(r => { answer = r; });
+  gn.answer = p => { Promise.resolve(p).then(answer, () => answer([])); };
   // A new touch during it only skips to the end; a button inside it (Turn off) is its own. A new touch, not a click:
   // the finger that held Goodnight lifts over this veil, and the click that lift makes skipped the whole dark-out.
   el.addEventListener('pointerdown', e => { if (!e.target.closest('[data-act]')) gnSkip(); });
@@ -343,6 +346,7 @@ function goodnightDark(c, rooms, acts) {
   const out = rooms.length ? FIRST + (rooms.length - 1) * GAP + DIMMER : 0;
   const veilAt = out + (rooms.length ? 220 : 0);
   later(() => gnVeil(), veilAt);
+  return gn;
 }
 // The veil closes; a light that stays for the way to bed glows alone on it, its timer running down round the ring.
 function gnVeil() {
@@ -391,7 +395,7 @@ function gnSleep() {
   gn.sleep = true;
   const { el, c } = gn;
   rise(el.querySelector('.gn-sleep'));
-  const ex = el.querySelector('.gn-extras'); if (ex) later(() => fade(ex, 1, 320, STD), 500);
+  const ex = el.querySelector('.gn-extras'); if (ex) later(() => gnSaid(ex), 500);
   // Put back, quietly, at the foot of the screen, for as long as the page is dark: Goodnight held by mistake is
   // undone where the thumb already is. (It was the toast's; the toasts are off.) The page stays dark a little longer
   // while it is offered, so there is time to reach it.
@@ -404,6 +408,27 @@ function gnSleep() {
   }
   gnToast(c);
   later(() => gnEnd(c), SETTLE + PUT_BACK_MS);
+}
+// What the fans and shades did, said only once they have answered, and only as it is: "Fans stopped" when every fan
+// did, "The fan didn't stop" when one did not. Nothing is said for what has not answered by the time the page settles.
+function gnSaid(ex) {
+  const g = gn;
+  g.answered.then(res => {
+    if (gn !== g || !ex.isConnected) return;
+    const line = extrasLine(res);
+    if (!line) return;
+    ex.textContent = line;
+    fade(ex, 1, 320, STD);
+  });
+}
+function extrasLine(res) {
+  const part = (type, done, noun, didnt) => {
+    const all = res.filter(r => r.a.type === type); if (!all.length) return '';
+    const bad = all.filter(r => !r.ok).length;
+    if (!bad) return done;
+    return `${bad === all.length ? (all.length === 1 ? `The ${noun}` : `The ${noun}s`) : bad === 1 ? `A ${noun}` : `${bad} ${noun}s`} didn't ${didnt}`;
+  };
+  return [part('fan', 'Fans stopped', 'fan', 'stop'), part('lower', 'Shades closed', 'shade', 'close')].filter(Boolean).join(' · ');
 }
 function gnToast(c) {
   if (!gn || gn.toasted) return;
