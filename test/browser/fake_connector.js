@@ -188,7 +188,12 @@ ws.on('message', raw => {
     const a = m.action;
     // LAG_MS simulates a slow bridge round trip: the result and the echo come back late, like the real thing
     const lag = a.type === 'level' || a.type === 'color' ? Number(process.env.LAG_MS || 0) : 0;
-    const result = () => send({ type: 'result', id: m.id, ok: m.action.type !== 'fan', error: m.action.type === 'fan' ? 'simulated failure' : undefined });
+    // A fan command is answered as the real connector answers it: done. It used to fail every time, which no test
+    // asked for, and so the hub answered 502 to every Goodnight's "fans off" in the suite, and the dark page said
+    // "Fans stopped" of a fan that had not. The fake still keeps no speed of its own for the fan (a room's Off would
+    // then have to stop it too, as engine.py's does). FAN_FAIL=1 brings back a fan that fails, for a test of that.
+    const fanFails = a.type === 'fan' && !!process.env.FAN_FAIL;
+    const result = () => send({ type: 'result', id: m.id, ok: !fanFails, error: fanFails ? 'simulated failure' : undefined });
     // With the bridge's own pace (ECHO=bridge, below) a light command is answered once every light has been sent
     // its part, as the connector's run() is; the echoes come on their own time around it.
     if (ECHO === 'bridge' && ['level', 'restore', 'preset'].includes(a.type)) echoCommand(a, result);

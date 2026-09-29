@@ -178,10 +178,20 @@ function sayOffline(el = Date.now() - tappedAt < 1500 ? tapped : null) {
   if (!t) for (const [box, lab] of SAY_IN) { const b = el.closest(box); const l = b && b.querySelector(lab); if (l) { t = words(l); break; } }
   if (!t || t.nodeValue.trim() === 'Offline') return;
   const was = t.nodeValue;
+  const holder = t.parentElement;
+  // The word is said over the drawing, not a change to it: a redraw that would draw the same page (the minute tick)
+  // is skipped only while nothing has touched the page, and counting the word as a touch redrew the page under it
+  // and took the word away early. So its writes, there and back, are left out of what counts (see note).
+  if (holder) saying.add(holder);
   t.nodeValue = 'Offline';
-  const holder = t.parentElement; if (holder) holder.classList.add('said-off');
-  setTimeout(() => { if (t.isConnected && t.nodeValue === 'Offline') { t.nodeValue = was; if (holder) holder.classList.remove('said-off'); } }, SAY_MS);
+  if (holder) holder.classList.add('said-off');
+  setTimeout(() => {
+    if (t.isConnected && t.nodeValue === 'Offline') { t.nodeValue = was; if (holder) holder.classList.remove('said-off'); }
+    if (touches) note(touches.takeRecords());
+    if (holder) saying.delete(holder);
+  }, SAY_MS);
 }
+const saying = new Set();
 
 // ---------- the sheet ----------
 // One-choice interactions are a sheet over the page. A screen hands in the overline, title and body.
@@ -474,6 +484,8 @@ const note = recs => {
     // a number counting to what the drawing says, and a dial gliding there, go on to it on the elements they are on:
     // what they write on the way is not a change the next drawing needs to undo
     if (t && t.closest('[data-count], [data-drag="dial"]')) continue;
+    // nor a control saying "Offline" for a moment (sayOffline)
+    if (t && saying.size && [...saying].some(h => h.contains(t))) continue;
     touched = true; return;
   }
 };

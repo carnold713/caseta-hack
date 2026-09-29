@@ -37,6 +37,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const hold = async (sel, ms) => { const b = await page.locator(sel).first().boundingBox(); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await wait(ms); await page.mouse.up(); };
 
   await page.goto(root + '#home'); await ready(); await wait(1200);
+  // the app's own night hours, for what the page's light is capped to
+  await C(async () => { const m = await import('/ui/screens/home.js'); window.nightNow = () => m.nightNow(window.__copper); });
   await C(async () => { const c = window.__copper; c.closeSheet(); if (!c.S.config.settings.greeted) { c.S.config.settings.greeted = true; await c.data.saveConfig(); } });
   // a clean start: every light off, the Kitchen (20) and the Hall (23) the two rooms this test lights
   await cmd({ type: 'level', target: 'h:all', level: 'off' }); await wait(1400);
@@ -48,11 +50,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const home = document.querySelector('.home'), g = home.querySelector('.house-light');
     if (!g) return null;
     const i = g.querySelector('i'), ir = i.getBoundingClientRect(), hr = home.getBoundingClientRect();
+    // where it rests: less the ambient drift it is always somewhere along (light-drift, up to 6 across and 4 up)
+    const [dx = 0, dy = 0] = (getComputedStyle(i).translate === 'none' ? '' : getComputedStyle(i).translate).split(' ').filter(Boolean).map(parseFloat);
     return {
       off: g.classList.contains('off'), op: Number(getComputedStyle(g).opacity), lights: home.querySelectorAll('.onelight').length,
-      pools: home.querySelectorAll('.hl-pool, .house-light .glow').length, cx: Math.round(ir.left + ir.width / 2 - hr.left - hr.width / 2),
-      cy: Math.round(ir.top + ir.height / 2 - hr.top), r: ir.width / 2 / hr.width, colour: g.querySelector('.ol-c').style.getPropertyValue('--l-c').replace(/\s/g, ''),
-      blend: getComputedStyle(i).mixBlendMode, level: window.__copper.H.houseLevel(),
+      pools: home.querySelectorAll('.hl-pool, .house-light .glow').length, cx: Math.round(ir.left + ir.width / 2 - dx - hr.left - hr.width / 2),
+      cy: Math.round(ir.top + ir.height / 2 - dy - hr.top), r: ir.width / 2 / hr.width, colour: g.querySelector('.ol-c').style.getPropertyValue('--l-c').replace(/\s/g, ''),
+      blend: getComputedStyle(i).mixBlendMode, level: window.__copper.H.houseLevel(), night: nightNow(),
     };
   });
   // what the lit lamps add up to, by glow.js's own mixing, to hold the page's light to
@@ -62,7 +66,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     const b = m.blendLight(lamps); if (!b) return null;
     const h = b.hex.replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
   });
-  const strength = lv => 0.35 + 0.65 * lv / 100;
+  // the house's curve, capped to 0.7 in the night hours so the phone is never the brightest thing in a dark room (glow.js
+  // lightStrength, home.js nightNow): the check read the day's strength only, so it failed whenever it ran at night
+  const strength = (lv, night) => (0.35 + 0.65 * lv / 100) * (night ? 0.7 : 1);
   const l0 = await light();
   check('all off: the page\'s light is out (drawn, at no strength)', l0 && l0.off && l0.op === 0, l0);
   check('all off: the headline reads "All off"', (await page.textContent('.house-head')).trim() === 'All off', await page.textContent('.house-head'));
@@ -79,7 +85,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const l1 = await light();
   check('one room lit: one light on the page and nothing else (no pools)', l1 && !l1.off && l1.lights === 1 && l1.pools === 0 && l1.blend === 'screen', l1);
   check('it is at the top centre, just above the top edge, its radius 70% of the screen\'s width', l1 && Math.abs(l1.cx) <= 1 && l1.cy === -12 && Math.abs(l1.r - 0.7) < 0.01, l1);
-  check(`its strength is the house's level on the house's curve (${l1 && l1.level}%)`, l1 && Math.abs(l1.op - strength(l1.level)) < 0.01, l1);
+  check(`its strength is the house's level on the house's curve (${l1 && l1.level}%${l1 && l1.night ? ', at night' : ''})`, l1 && Math.abs(l1.op - strength(l1.level, l1.night)) < 0.01, l1);
   const want1 = await blend();
   check('its colour is the warm white of what is on', l1 && want1 && l1.colour === want1, { got: l1 && l1.colour, want: want1 });
   const drift = (await anims('.house-light')).filter(a => a.css === 'CSSAnimation');
@@ -104,7 +110,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('a room coming on: the light moves to the house\'s new level on the dimmer, 0.4 s EASE_IN_AND_OUT', grow.some(a => a.props.includes('opacity') && a.dur === 400 && a.ease === 'ease-in-out'), grow.map(a => [a.cls, a.props.join('+'), a.dur, a.ease]));
   await wait(1200);
   const l2 = await light();
-  check('two rooms lit: still one light, at the house\'s level', l2 && l2.lights === 1 && !l2.off && Math.abs(l2.op - strength(l2.level)) < 0.01, l2);
+  check('two rooms lit: still one light, at the house\'s level', l2 && l2.lights === 1 && !l2.off && Math.abs(l2.op - strength(l2.level, l2.night)) < 0.01, l2);
   await page.screenshot({ path: 'v7-home-lit.png' });
   // the header copy keeps its contrast: the greeting and the name stay on top of the light
   const z = await C(() => [getComputedStyle(document.querySelector('.home-head')).zIndex, getComputedStyle(document.querySelector('.house-light')).zIndex]);
@@ -123,12 +129,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // room on lights its lamps on the dimmer. The page's one light is the house's, at the top; a card draws no glow.
   await go('rooms');
   // the page's one light is the house's, from the top; the cards draw none of their own
-  const rl = await C(() => { const p = document.querySelector('.rooms'), g = p.querySelector(':scope > .rooms-light'); return { lights: p.querySelectorAll('.onelight').length, cardGlows: p.querySelectorAll('.room-big .glow').length, lit: g && !g.classList.contains('off'), op: g && Number(g.style.opacity), level: window.__copper.H.houseLevel() }; });
-  check('Rooms: one light from the top at the house\'s level, no glow on any card', rl.lights === 1 && !rl.cardGlows && rl.lit && Math.abs(rl.op - strength(rl.level)) < 0.01, rl);
+  const rl = await C(() => { const p = document.querySelector('.rooms'), g = p.querySelector(':scope > .rooms-light'); return { lights: p.querySelectorAll('.onelight').length, cardGlows: p.querySelectorAll('.room-big .glow').length, lit: g && !g.classList.contains('off'), op: g && Number(g.style.opacity), level: window.__copper.H.houseLevel(), night: nightNow() }; });
+  check('Rooms: one light from the top at the house\'s level, no glow on any card', rl.lights === 1 && !rl.cardGlows && rl.lit && Math.abs(rl.op - strength(rl.level, rl.night)) < 0.01, rl);
   // and a room's page has its own: its lights that are on, at their mean
   await go('room/20');
-  const rp = await C(() => { const p = document.querySelector('.room'), g = p.querySelector(':scope > .room-light'); const c = window.__copper; const ls = c.H.roomLights('20').map(d => c.data.level(d.device_id) || 0).filter(v => v > 0); return { lights: p.querySelectorAll('.onelight').length, lit: g && !g.classList.contains('off'), op: g && Number(g.style.opacity), mean: ls.reduce((a, v) => a + v, 0) / ls.length }; });
-  check('a room: one light from the top at its lights\' mean', rp.lights === 1 && rp.lit && Math.abs(rp.op - strength(rp.mean)) < 0.01, rp);
+  const rp = await C(() => { const p = document.querySelector('.room'), g = p.querySelector(':scope > .room-light'); const c = window.__copper; const ls = c.H.roomLights('20').map(d => c.data.level(d.device_id) || 0).filter(v => v > 0); return { lights: p.querySelectorAll('.onelight').length, lit: g && !g.classList.contains('off'), op: g && Number(g.style.opacity), mean: ls.reduce((a, v) => a + v, 0) / ls.length, night: nightNow() }; });
+  check('a room: one light from the top at its lights\' mean', rp.lights === 1 && rp.lit && Math.abs(rp.op - strength(rp.mean, rp.night)) < 0.01, rp);
   await go('rooms');
   // a card's lamps: the strongest glow drawn, and the veil a dark room sleeps under
   const cardLight = sel => C(s => { const el = document.querySelector(s); const rl = [...el.querySelectorAll('.rs-svg [data-l]')].filter(p => p.classList.contains('rl')); const veil = el.querySelector('.rs-svg .rs-veil'); return { scene: el.classList.contains('scene'), lit: el.classList.contains('lit'), glow: Math.max(0, ...rl.map(p => Number(p.style.opacity) || 0)), veil: veil ? Number(veil.style.opacity) : null }; }, sel);
@@ -202,6 +208,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('when it runs: "Porch is on", the lantern lit with its glow, no Skip', ran && ran.ran && / is on/.test(ran.d) && ran.glow && !ran.link, ran);
   await page.screenshot({ path: 'v7-arrival-on.png' });
   await C(async id => { const c = window.__copper; c.S.config.schedules = c.S.config.schedules.filter(s => s.id !== id); c.S.activity = (c.S.activity || []).filter(e => e.id !== id); await c.data.saveConfig(); }, sid);
+  // and the porch it lit goes back off, so what Goodnight puts to sleep below is the Kitchen and the Hall, as above
+  await cmd({ type: 'level', target: 'a:21', level: 'off' }); await wait(600);
   await C(() => window.scrollTo(0, 0));
 
   // ---- 10 · Goodnight: the page goes dark room by room, then "Sleep well" on a moon, a quiet Put back at its foot; no toast
@@ -210,28 +218,59 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const litBefore = await C(() => window.__copper.H.litLights().map(d => [d.device_id, window.__copper.data.level(d.device_id)]));
   await C(() => { document.querySelector('#toast-root').innerHTML = ''; });
   const before = await light();
+  const gnRooms = await C(() => { const c = window.__copper; return c.data.areas().filter(a => c.H.roomLights(a.id).some(d => (c.data.level(d.device_id) || 0) > 0)).length; });
+  // The dark page, frame by frame from the moment it appears, which is the moment the file's timeline counts from:
+  // the checks below wait for each step and read when it came, where they used to look at fixed moments that the
+  // steps had not reached yet (the veil closes 0.22 s after the last room is out, not 0.5 s after the hold).
+  await C(() => {
+    const q = s => document.querySelector(s), op = e => (e ? Number(getComputedStyle(e).opacity) : null);
+    const G = window.__gn = { t0: null, f: [] };
+    const tick = () => {
+      const n = q('.gn-night');
+      if (n && G.t0 == null) G.t0 = performance.now();
+      if (G.t0 != null) G.f.push({ t: performance.now() - G.t0, night: !!n, page: op(n), veil: op(n && n.querySelector('.gn-veil')), moon: op(n && n.querySelector('.gn-moon')), sleep: op(n && n.querySelector('.gn-sleep')), back: op(n && n.querySelector('.gn-back')), hash: location.hash, light: (l => (l ? Number(l.style.opacity) : null))(q('#screen .home > .house-light')) });
+      if (G.t0 == null || n) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  // when a piece of it first went past (or under) a value: gnAt('veil', '>', 0)
+  const gnAt = (key, cmp, v) => C(([k, gt, v]) => { const x = window.__gn.f.find(y => y[k] != null && (gt ? y[k] > v : y[k] < v)); return x ? Math.round(x.t) : null; }, [key, cmp === '>', v]);
   const gb = await page.locator('[data-hold="goodnight"]').boundingBox();
   await page.mouse.move(gb.x + 22, gb.y + 22); await page.mouse.down(); await wait(1150); await page.mouse.up();
   await wait(120);
   const t1 = await C(() => ({ night: !!document.querySelector('.gn-night'), op: Number(document.querySelector('.house-light').style.opacity), off: document.querySelector('.house-light').classList.contains('off'), houseLit: window.__copper.H.litLights().length }));
   check('held a second: everything goes off at once', t1.houseLit === 0, t1);
-  check('but the page goes dark room by room: 0.12 s in, the light is down to the room still lit', t1.night && before && !before.off && !t1.off && t1.op > 0 && t1.op < before.op, { before, ...t1 });
+  // read off the frames, not at one moment after the hold: a moment 0.27 s after the press landed after the second
+  // room's turn (0.34 s) whenever the hold ran a little late, and the check failed on a page doing just what it should
+  const steps = await C(() => { const out = []; for (const x of window.__gn.f) if (x.light != null && (!out.length || out[out.length - 1].op !== x.light)) out.push({ t: Math.round(x.t), op: x.light }); return out; });
+  const mid = steps.find(x => x.op > 0 && before && x.op < before.op && x.t >= 90 && x.t < 340), dark = steps.find(x => x.op === 0);
+  check('but the page goes dark room by room: 0.1 s in, the light is down to the room still lit', t1.night && before && !before.off && mid && (!dark || dark.t >= 330), { before: before && before.op, steps });
   await wait(400);
-  check('0.24 s later the next room is out too, and the light with it', (await C(() => document.querySelector('.house-light').classList.contains('off'))));
+  const dark2 = await C(() => { const x = window.__gn.f.find(y => y.light === 0); return x ? Math.round(x.t) : null; });
+  check('0.24 s later the next room is out too, and the light with it', (await C(() => document.querySelector('.house-light').classList.contains('off'))) && dark2 >= 330 && dark2 <= 700, dark2);
+  // the veil: 0.22 s after the last room's light is out (0.1 s, then 0.24 s a room, each out over the dimmer's 0.4 s)
+  const veilPlan = 100 + (gnRooms - 1) * 240 + 400 + 220;
+  await page.waitForFunction(() => window.__gn.f.some(x => x.veil > 0), null, { timeout: 4000, polling: 'raf' }).catch(() => {});
   const veilA = await anims('.gn-night');
-  check('then the night veil closes on the night fade, 1.6 s EASE_IN_AND_OUT, to 0.97', veilA.some(a => /gn-veil/.test(a.cls) && a.dur === 1600 && a.ease === 'ease-in-out' && Math.abs(Number(a.to.opacity) - 0.97) < 0.001), veilA.map(a => [a.cls, a.dur, a.to.opacity]));
-  await wait(2300);
+  const veilAt = await gnAt('veil', '>', 0);
+  check(`then the night veil closes on the night fade, 1.6 s EASE_IN_AND_OUT, to 0.97, once the last of the ${gnRooms} rooms is out`, veilA.some(a => /gn-veil/.test(a.cls) && a.dur === 1600 && a.ease === 'ease-in-out' && Math.abs(Number(a.to.opacity) - 0.97) < 0.001) && veilAt != null && veilAt >= veilPlan - 40 && veilAt <= veilPlan + 500, { anims: veilA.map(a => [a.cls, a.dur, a.ease, a.to.opacity]), at: veilAt, plan: veilPlan });
+  // the moon on the night fade, "Sleep well" rising 0.4 s into it, then what the fans and shades did and Put back
+  await page.waitForFunction(() => { const b = document.querySelector('.gn-night .gn-back'); return b && Number(getComputedStyle(b).opacity) > 0.99; }, null, { timeout: 6000, polling: 'raf' }).catch(() => {});
   const moon = await C(() => { const el = document.querySelector('.gn-night'); return el && { moon: Number(getComputedStyle(el.querySelector('.gn-moon')).opacity), sleep: el.querySelector('.gn-sleep').textContent, sleepOp: Number(getComputedStyle(el.querySelector('.gn-sleep')).opacity), extras: (el.querySelector('.gn-extras') || {}).textContent || '' }; });
-  check('"Sleep well" on a faint moon', moon && moon.sleep === 'Sleep well' && moon.sleepOp > 0.9 && moon.moon > 0.5, moon);
+  const moonAt = await gnAt('moon', '>', 0), sleepAt = await gnAt('sleep', '>', 0);
+  check('"Sleep well" on a faint moon, after the veil has closed', moon && moon.sleep === 'Sleep well' && moon.sleepOp > 0.9 && moon.moon > 0.5 && moonAt >= veilAt + 1500 && sleepAt >= moonAt + 300, { ...moon, veilAt, moonAt, sleepAt });
   check('the fans and shades said as they finish', moon && /Fans stopped|Shades closed|^$/.test(moon.extras), moon && moon.extras);
   const toastTxt = await page.textContent('#toast-root');
   check('no toast: the dark page is the answer', toastTxt === '', toastTxt);
   const pb = await C(() => { const b = document.querySelector(".gn-night .gn-back"); return b && { text: b.textContent.trim(), op: Number(getComputedStyle(b).opacity), bottom: Math.round(innerHeight - b.getBoundingClientRect().bottom), h: Math.round(b.getBoundingClientRect().height) }; });
   check('Put back, quietly, at the foot of the dark page', pb && pb.text === 'Put back' && pb.op > 0.9 && pb.bottom < 120 && pb.h >= 44, pb);
   await page.screenshot({ path: 'v7-goodnight.png' });
-  await wait(5300);
+  // it settles 3 s after "Sleep well", and 2 s more while Put back is offered; the veil lifts over 0.4 s
+  await page.waitForFunction(() => !document.querySelector('.gn-night'), null, { timeout: 9000, polling: 'raf' }).catch(() => {});
   const after = await C(() => ({ gone: !document.querySelector('.gn-night'), hash: location.hash }));
-  check('5 s on (Put back had its time), the page settles: into Nightstand at night, else back to Home', after.gone && /^#(home|nightstand)$/.test(after.hash), after);
+  const settleAt = await gnAt('page', '<', 1), backAt = await gnAt('back', '>', 0.99);
+  const backHeld = await C(([a, b]) => window.__gn.f.filter(x => x.t >= a && x.t < b).every(x => x.back > 0.99), [backAt, settleAt]);
+  check('5 s on (Put back had its time), the page settles: into Nightstand at night, else back to Home', after.gone && /^#(home|nightstand)$/.test(after.hash) && settleAt - sleepAt >= 4900 && settleAt - sleepAt <= 5600 && backHeld, { ...after, sleepAt, backAt, settleAt, backHeld });
   check('and no toast offering Put back', !(await page.$('#toast-root [data-act="toast-undo"]')));
   // put back what was on, directly
   await C(async l => { for (const [id, lv] of l) await window.__copper.run({ type: 'level', target: `d:${id}`, level: lv }); }, litBefore); await wait(1500);
@@ -269,10 +308,16 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // on a room's page and a light's: the control tapped says Offline, and nothing is sent
   await C(() => { window.__sent = []; const c = window.__copper; c.__run0 = c.data.run; c.data.run = a => { window.__sent.push(a); return c.__run0(a); }; });
   await go('room/20');
-  await C(() => document.querySelector('[data-act="room-off"]').click()); await wait(300);
+  // tapped with a finger, as the owner does. And a redraw of the unchanged page while it says so (the app's minute
+  // tick is one): the word counted as a change to the page, so that redraw drew the page again under it and took the
+  // word away early. This test reached the room a minute after it opened, just as the tick came, and failed with it.
+  const fingerTap = async sel => { const b = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2); };
+  await fingerTap('[data-act="room-off"]'); await wait(150);
+  await C(() => window.__copper.soon()); await wait(400);
   const ro = await C(() => ({ words: document.querySelector('[data-act="room-off"]').textContent.trim(), sent: window.__sent.length }));
-  check('offline, a room\'s Off says Offline, and nothing is sent', ro.words === 'Offline' && ro.sent === 0, ro);
-  await C(() => document.querySelector('.room-grid .tile .pwr').click()); await wait(300);
+  check('offline, a room\'s Off says Offline, still after a redraw, and nothing is sent', ro.words === 'Offline' && ro.sent === 0, ro);
+  await fingerTap('.room-grid .tile .pwr'); await wait(150);
+  await C(() => window.__copper.soon()); await wait(400);
   check('and a tile\'s power circle says it under the tile\'s name', (await C(() => document.querySelector('.room-grid .tile .vl').textContent)) === 'Offline');
   const lid = await C(() => window.__copper.H.roomLights('20')[0].device_id);
   await go(`light/${lid}`);

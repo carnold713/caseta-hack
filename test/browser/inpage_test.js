@@ -31,7 +31,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  // (Goodnight stops the fans too, and the fake connector fails every fan command on purpose: the hub answers 502)
+  // (a 502 is the hub saying a command failed; the fake's fan fails every command only with FAN_FAIL=1)
   page.on('console', m => { if (m.type() === 'error' && !/fonts.googleapis|net::ERR|status of 502/.test(m.text())) errors.push('console: ' + m.text()); });
   const C = (fn, arg) => page.evaluate(fn, arg);
   const goto = async (h, ms = 1100) => { await C(x => { location.hash = x; }, h); await wait(ms); };
