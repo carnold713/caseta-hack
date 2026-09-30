@@ -282,7 +282,9 @@ function badFrames(before, after, frames) {
   check('Off turns it all off: the pill slides under Off and On says just On', moving > 0 && t2.under === 'off' && t2.onPressed === 'false' && t2.word === 'On' && t2.count === '', { moving, t2 });
   // With a fan running the pill still moves on the tap (the fan lands where its room's Off puts it, as a light does),
   // and once it has left On it never goes back there when the bridge answers.
-  const pill = await C(() => { const f = window.__pill; const first = f.findIndex(x => x.moving > 0 || !x.atOn); const back = first >= 0 && f.slice(first).some((x, i, a) => i > 0 && x.atOn); return { fanOn: null, startsAt: first >= 0 ? Math.round(f[first].t) : null, back, endsUnderOff: f.length && f[f.length - 1].toOff }; });
+  // (back is counted from the first frame the pill has left On: a slide's first frame or two move it less than the
+  // 2 px that says it has, and those are still its start, not a return)
+  const pill = await C(() => { const f = window.__pill; const first = f.findIndex(x => x.moving > 0 || !x.atOn); const left = f.findIndex(x => !x.atOn); const back = left >= 0 && f.slice(left).some(x => x.atOn); return { fanOn: null, startsAt: first >= 0 ? Math.round(f[first].t) : null, back, endsUnderOff: f.length && f[f.length - 1].toOff }; });
   check('with the room\'s fan running, the pill slides at the tap, and nothing jumps back when the bridge answers', fanOn && pill.startsAt != null && pill.startsAt < 60 && !pill.back && pill.endsUnderOff, { ...pill, fanOn });
   await C(() => document.querySelector('#screen [data-act="room-on"]').click()); await wait(1600);
   // back to the levels the rest of this test lays out (the room's On set the fan to the on level's speed)
