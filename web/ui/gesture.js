@@ -19,8 +19,10 @@ let scrolledAt = 0;
 if (typeof document !== 'undefined') document.addEventListener('scroll', () => { scrolledAt = performance.now(); }, { capture: true, passive: true });
 export const scrollingNow = () => performance.now() - scrolledAt < AFTER_SCROLL;
 
-// track(el, { c, axis, accept(e) -> bool, grab(e) -> bool, start(e), move(e), end(), tap(e) })
+// track(el, { c, axis, accept(e) -> bool, grab(e) -> bool, start(e), move(e), end(), tap(e), late })
 // `accept` says whether a finger landing there is on the control at all (a dial's band, a track's height).
+// `late` takes the finger only once the drag is real, for a control whose buttons still answer a plain tap themselves
+// (On and Off): taken at once, the tap's click would land on the control rather than the button under the finger.
 export function track(el, o) {
   if (!el) return;
   let g = null;   // the finger on it: {id, x, y, live}
@@ -31,6 +33,7 @@ export function track(el, o) {
   const begin = e => {
     g.live = true;
     hold();
+    if (o.late) try { el.setPointerCapture(e.pointerId); } catch (_) { /* fine */ }
     if (o.start) o.start(e);
     o.move(e);
   };
@@ -40,7 +43,7 @@ export function track(el, o) {
     hold();
     // keep the finger (or the mouse) on this control even as it drifts off it while deciding; a touch that turns
     // out to be a scroll still scrolls, because touch-action, not capture, decides that
-    try { el.setPointerCapture(e.pointerId); } catch (_) { /* fine */ }
+    if (!o.late) try { el.setPointerCapture(e.pointerId); } catch (_) { /* fine */ }
     if (o.grab && o.grab(e)) { e.preventDefault(); begin(e); }
   });
   el.addEventListener('pointermove', e => {
@@ -64,5 +67,6 @@ export function track(el, o) {
   };
   el.addEventListener('pointerup', e => finish(e, false));
   el.addEventListener('pointercancel', e => finish(e, true));
-  el.addEventListener('lostpointercapture', e => { if (g && e.pointerId === g.id) finish(e, true); });
+  // only the control's own capture ending: a late take (above) ends the button's hold on a touch, which bubbles here
+  el.addEventListener('lostpointercapture', e => { if (e.target === el && g && e.pointerId === g.id) finish(e, true); });
 }

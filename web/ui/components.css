@@ -151,7 +151,7 @@
 }
 .chip-dots i:last-child { margin-right: 0; }
 
-/* On / Off. Tap only: this design has no swipe or drag control anywhere. */
+/* On / Off. Either half is tapped, or the pill is dragged across like a switch (onoffdrag.js). */
 .onoff {
   display: flex; gap: 6px; padding: 6px;
   height: 72px; border-radius: 36px; background: var(--surface-2);
@@ -167,7 +167,9 @@
 .onoff.blue button[aria-pressed='true'] { background: var(--blue); }
 /* Where the page draws a pill, the pill is what moves: it slides to the other half in 0.24 s standard while the
    labels change colour (M2's "Selection pill · copper", 183 px). The pressed half then shows the pill through. */
-.onoff:has(.onoff-pill) { position: relative; }
+.onoff:has(.onoff-pill) { position: relative; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+/* while the pill is held the half under the finger does not also press in */
+.onoff.held button, .onoff.held button:active { transform: none; }
 .onoff:has(.onoff-pill) button { position: relative; z-index: 1; }
 .onoff:has(.onoff-pill) button[aria-pressed='true'] { background: none; }
 .onoff-pill {

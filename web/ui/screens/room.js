@@ -13,6 +13,7 @@ import { glowHTML, whiteStops, isNight } from '/ui/glow.js';
 import { roomTop } from '/ui/screens/home.js';
 import { reduced, count } from '/ui/motion.js';
 import { track } from '/ui/gesture.js';
+import { wireOnOff } from '/ui/onoffdrag.js';
 
 // Room setup and the room's sleep timer are sheets over it (setup.js), and so is a scene's editor
 // (#room/<id>/scene/<scene id>, the same sheet All scenes opens), so changing a scene never leaves the room.
@@ -285,6 +286,7 @@ function waveLayer(w) {
 // light's state arriving) picks each part up exactly where it was.
 export function after(c, r, scr) {
   wireBright(c, scr);
+  wireOnOff(c, scr);
   const w = wave;
   if (!w || w.aid !== r.id || reduced() || since(w) > lifeOf(w) + 50) return;
   const room = scr.querySelector('.room'); if (!room) return;

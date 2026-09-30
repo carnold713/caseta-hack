@@ -2,6 +2,7 @@
 // No tab bar on any of them, as the file draws them. The white, colour, sleep timer, Follow the day and "about"
 // pages hang off a light as #light/<id>/<page>.
 import { track } from '/ui/gesture.js';
+import { wireOnOff } from '/ui/onoffdrag.js';
 import { CasetaDaylight } from '/data/index.js';
 import { lightHTML, setLight } from '/ui/glow.js';
 import { colourName } from '/ui/colour.js';
@@ -277,6 +278,7 @@ export function after(c, r, root) {
   const d = c.data.dev(r.id); if (!d) return;
   if (r.sub === 'follow') followAfter(c, r, root);
   const id = d.device_id;
+  wireOnOff(c, root);
   if (d.domain === 'light') { const el = root.querySelector('[data-drag="dial"]'); const set = wireDial(c, id, el); glide(c, id, el); wireNudges(c, id, el, set); }
   if (d.domain === 'cover') wireShade(c, id, root.querySelector('[data-drag="shade"]'));
 }
