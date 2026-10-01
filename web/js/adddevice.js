@@ -191,7 +191,8 @@ function openRemoveDevice(id, opts = {}) {
   const uses = bindings().filter(b => isPico ? b.device_id === id : [...b.actions, ...((b.night && b.night.actions) || [])].some(a => tlist(a.target).includes('d:' + id))).length;
   sheet.open(`Remove ${esc(d.name)}?`, `<div class="tip"><div class="grow"><span class="cap">${esc(devAreaName(d))}</span><div class="t">It leaves your Lutron bridge</div><div class="d">It stops working until it is added again${isPico ? ', and its button settings here are cleared' : uses ? `, and the ${plural(uses, 'button')} that used it forget it` : ''}. The Lutron app will not list it any more either.</div></div></div>
     ${AD.showLog ? `<p class="d" style="margin:12px 0 0">This part of the bridge is not documented either; if it keeps saying no, the Lutron app can still remove it.</p>${adLogHTML()}` : ''}
-    <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">Remove</button><button class="btn ghost block" data-act="${AD.removeBack ? 'sheet-back' : 'sheet-close'}">Keep it</button></div>`,
+    ${AD.showLog ? `<p class="d" style="margin:12px 0 0">Or take it out of this app only: its settings here are cleared and it is hidden. It stays paired to the bridge, so remove it in the Lutron app too if you want it gone everywhere.</p>` : ''}
+    <div class="sfoot"><button class="btn danger lg block" data-act="dev-remove-go" data-id="${esc(id)}">${AD.showLog ? 'Try again' : 'Remove'}</button>${AD.showLog ? `<button class="btn lg block" data-act="dev-forget-go" data-id="${esc(id)}">Remove from this app only</button>` : ''}<button class="btn ghost block" data-act="${AD.removeBack ? 'sheet-back' : 'sheet-close'}">Keep it</button></div>`,
     { detent: 'compact', sub: `${esc(devAreaName(d))} · ${isPico ? 'remote' : d.domain}`, back: !!AD.removeBack, onBack: AD.removeBack });
 }
 // What a removed device was part of, and hiding one a bridge keeps listing: the data layer's (web/data/edit.js).
@@ -221,6 +222,17 @@ async function removeDevice(id, btn) {
     toast(`The bridge said no: ${e.message}`, { err: true });
     AD.showLog = true; openRemoveDevice(id, { onBack: AD.removeBack });  // the same sheet again, with the technical details open
   }
+}
+
+// The bridge would not let it go: let go of it here anyway (web/data/edit.js removeFromAppOnly), with Undo.
+async function removeFromAppOnly(id) {
+  const d = dev(id); if (!d) return;
+  const before = JSON.stringify(S.config);
+  EDIT.removeFromAppOnly(id);
+  if (S.remote === id) S.remote = null;
+  sheet.close();
+  await save({ msg: `${d.name} removed from this app`, quiet: true, render: true });
+  toast(`${d.name} removed from this app. Still paired to the bridge`, { undo: async () => { S.config = JSON.parse(before); await save({ msg: 'Put back' }); render(); } });
 }
 
 window.AddDevice = {
@@ -254,6 +266,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'dev-remove-go': removeDevice(d.id, el); break;
+    case 'dev-forget-go': removeFromAppOnly(d.id); break;
   }
 });
 document.addEventListener('input', e => { if (e.target.id === 'ad-name') AD.name = e.target.value; });

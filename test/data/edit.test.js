@@ -155,3 +155,24 @@ test('adding a Lutron device: its name, the rooms offered, the bridge area it is
   assert.equal(d.devArea(d.dev('9')), den.id, 'it lives where it was put, whatever area the bridge used');
   assert.deepEqual(e.hidden(), [], 'and a device removed once comes back');
 });
+
+test('removed from the app only: a remote the bridge will not let go of leaves the app, its buttons forgotten', () => {
+  const inv = inventory();
+  inv.devices[7] = { device_id: '7', name: 'Hall Pico', domain: 'pico', area: 'a1' };
+  const d = CD.create();
+  d.apply({ type: 'snapshot', inventory: inv, states: {}, agent: { online: true }, activity: [],
+    config: { version: 3, presets: [], groups: [], schedules: [], settings: {},
+      favorites: ['d:7'],
+      bindings: [{ id: 'b1', device_id: '7', button_number: 2, gesture: 'single', actions: [{ type: 'level', target: 'd:1', level: 'on' }] },
+        { id: 'b2', device_id: '9', button_number: 2, gesture: 'single', actions: [{ type: 'level', target: 'd:1', level: 'on' }] }] } });
+  let n = 0;
+  const uid = () => 'id' + (++n);
+  const e = CE.create(d, CH.create(d, { kinds: KIND_DEF, uid }), { kinds: KIND_DEF, uid });
+  e.removeFromAppOnly('7');
+  assert.deepEqual(d.S.config.bindings.map(b => b.id), ['b2'], 'its button settings are cleared, others kept');
+  assert.ok(!d.S.config.favorites.includes('d:7'), 'its pin is gone');
+  assert.ok(e.hidden().includes('7'), 'it is hidden');
+  assert.ok(!d.devices().some(x => x.device_id === '7'), 'and no longer listed');
+  e.unhideDevice('7');
+  assert.ok(d.devices().some(x => x.device_id === '7'), 'Settings, Hidden devices brings it back');
+});

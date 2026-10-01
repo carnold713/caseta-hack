@@ -26,6 +26,12 @@ export function confirmSheet(c, { over = '', title, text, yes, act, data = '' })
   };
 }
 
+// What follows a remove the bridge would not do: the reason, and the way out that does not need the bridge.
+export function removeRefusedSheet(c, d, err, act) {
+  return confirmSheet(c, { over: d.name, title: 'The bridge would not remove it', act, yes: 'Remove from this app only',
+    text: `${err && err.message ? err.message : 'It did not answer'}. You can take it out of this app instead: its settings here are cleared and it is hidden, so it does nothing from here. It stays paired to your Lutron bridge, so remove it in the Lutron app too if you want it gone everywhere.` });
+}
+
 // A one-field form for a name, saved as it is typed (quietly) and when it is submitted.
 export function nameSheet(c, { over = '', title, value, act, data = '', max = 40, placeholder = '' }) {
   return {

@@ -27,7 +27,7 @@ const ORDER = [
   'polish_test', 'ia_test', 'v7_light_test', 'lookswap_test', 'v7_scenes_test', 'roomscene_test', 'roombright_test', 'onoffdrag_test', 'roomart_test', 'roomkinds_test', 'depth_test', 'ui_test2', 'kinds_test', 'height_test', 'hscroll_test', 'swipe_test',
   'slide_test', 'night_test', 'onescene_test', 'cycle_test', 'fade_test', 'back_test', 'hold_test',
   'power_test', 'now_test', 'dimoff_test', 'lag_test', 'add_test', 'bugs_test', 'quiet_test', 'toggle_smooth_test',
-  'health_test', 'huearea_test', 'err_test', 'remove_test', 'rooms_test', 'reconnect_test', 'sheetscroll_test', 'nav_test',
+  'health_test', 'huearea_test', 'err_test', 'remove_test', 'remove_refused_test', 'rooms_test', 'reconnect_test', 'sheetscroll_test', 'nav_test',
   'v7_home_test', 'v7_night_test', 'v7_log_test', 'v7_setup_test', 'toastoff_test', 'roomopen_test', 'predictiveback_test', 'lightopen_test', 'remoteopen_test', 'navmotion_test', 'layout_scenes_test',
   'layout_rooms_test',
   'header_test', 'titles_motion_test',

@@ -20,6 +20,7 @@ const AGENT_TOKEN = process.env.AGENT_TOKEN || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256').update(`caseta-hack|${APP_PASSWORD}|${AGENT_TOKEN}`).digest('hex');
 
 const log = (...a) => console.log('[hub]', ...a);
+const { healthLine } = require('./healthline');
 if (!APP_PASSWORD) console.warn('[hub] APP_PASSWORD is not set: the app is open to anyone who finds the URL');
 if (!AGENT_TOKEN) console.warn('[hub] AGENT_TOKEN is not set: any agent can connect');
 
@@ -479,8 +480,7 @@ function handleAgentMessage(ws, msg) {
     // it saw. The app shows it in Settings so a dead button can be told apart from a dead link.
     case 'health': {
       const h = msg.health || {};
-      log(`connector holds ${h.bindings} button settings, bridge ${h.bridge_ok ? 'answering' : 'not answering'} with ${h.buttons} buttons, ${h.presses} presses seen`
-        + ((h.quiet_remotes || []).length ? `, no buttons listed for ${h.quiet_remotes.join(', ')}` : ''));
+      log(healthLine(h));
       if (agentInfo) { agentInfo.health = msg.health || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     }

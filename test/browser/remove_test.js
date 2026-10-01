@@ -58,6 +58,14 @@ const PORT = process.env.PORT || 4400;
   await page.evaluate(() => { S.inv.devices['99'] = { device_id: '99', name: 'Ghost', type: 'WallDimmer', domain: 'light', area: '20', zone: '9' }; });
   await page.evaluate(() => openRemoveDevice('99')); await page.waitForSelector('[data-act="dev-remove-go"]'); await page.click('[data-act="dev-remove-go"]'); await page.waitForTimeout(1000);
   console.log('refused: sheet still open:', await page.evaluate(() => sheet.isOpen()), '| toast:', await page.textContent('#toast span'));
+  // and the way out that does not need the bridge
+  const forget = await page.$('[data-act="dev-forget-go"]');
+  console.log('refused: offers Remove from this app only:', !!forget);
+  if (forget) {
+    await forget.click(); await page.waitForTimeout(900);
+    console.log('removed from this app only: hidden:', await page.evaluate(() => (S.config.settings.hidden_devices || []).includes('99')), '| sheet closed:', await page.evaluate(() => !sheet.isOpen()), '| toast:', await page.textContent('#toast span'));
+    await page.evaluate(async () => { EDIT.unhideDevice('99'); delete S.inv.devices['99']; await save({ quiet: true, render: true }); });
+  }
   console.log('errors:', errors.length ? errors.join('\n') : 'none');
   await browser.close();
 })().catch(e => { console.error('FAILED', e); process.exit(1); });

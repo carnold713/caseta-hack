@@ -246,6 +246,14 @@
       if (stillListed) hideDevice(id);
       return { stillListed };
     }
+    // When the bridge will not let a device go (the connector offline, a link that has stopped answering, a bridge that
+    // refuses the undocumented delete), the app can still let go of it: everything here that named it is forgotten
+    // and it is hidden, so it leaves every list and its buttons stop doing anything from this app. The bridge still
+    // has it paired; the Lutron app removes it from there. Settings, Hidden devices, brings it back.
+    function removeFromAppOnly(id) {
+      forgetDevice(id);
+      hideDevice(id);
+    }
 
     // ---------- adding a Lutron device ----------
     // What the bridge calls a device it heard, in plain words, and the name a new one starts with.
@@ -306,7 +314,7 @@
       createRoom, renameRoom, deleteRoom, moveDevice, roomContents, bridgeMakeRoom, bridgeRenameRoom, bridgeMoveDevice,
       markEdited, newScene, renameScene, sceneInclude, sceneSetLevel, sceneSetColour, sceneSetRoom, sceneSetFade,
       sceneCapture, sceneSuggest, deleteScene, sceneDevices, lightsText,
-      setKind, setRole, hidden, hideDevice, unhideDevice, forgetDevice, canRemove, removeDevice,
+      setKind, setRole, hidden, hideDevice, unhideDevice, forgetDevice, canRemove, removeDevice, removeFromAppOnly,
     };
   }
 

@@ -42,10 +42,15 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.24.0"
+VERSION = "0.25.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
+# The link check (Agent._check_link): how often it runs, how long one probe of the bridge may take, and the least time
+# between two fresh connections it starts, so a bridge having a bad minute is not hammered with logins.
+LINK_EVERY_S = 30
+LINK_PROBE_S = 10.0
+LINK_KICK_GAP_S = 120.0
 # How long the bridge may stay logged out, while it still answers on its port, before the connector stops telling
 # systemd it is well and lets it restart the process. See Agent.heartbeat.
 BRIDGE_GIVE_UP_S = 30 * 60
@@ -276,6 +281,17 @@ class Agent:
         self._resubscribing = False
         self._resub_next = 0.0
         self._bridge_down_since: Optional[float] = None  # monotonic; when the bridge was last seen logged out
+        # Which buttons the bridge has agreed to report on the LEAP session that is open now. A new session (the
+        # library reconnecting after a dropped ping, a bridge restart) starts from nothing, so the set is kept per
+        # session: _sub_session is id() of the session it belongs to. See _subscribe_buttons and _check_link.
+        self._subscribed: set = set()
+        self._sub_session: Optional[int] = None
+        self._sub_retry_at = 0.0            # monotonic; the earliest the link check asks again for refused buttons
+        self._link_kick_at = -LINK_KICK_GAP_S  # monotonic; when the connector last started a fresh bridge connection
+        self._link_ok_at: Optional[float] = None  # wall clock; the bridge last answered the link check's probe
+        self._probe_fails = 0
+        self._reconnects = 0                # fresh bridge connections the link check started since this process began
+        self._link_problem: Optional[str] = None  # the last thing the link check found wrong, in words, for the app
 
     # ---------- config ----------
     def _load_cached_config(self) -> Dict[str, Any]:
@@ -342,6 +358,11 @@ class Agent:
                 LOG.error("missing %s. Run:  python pair.py %s", p, BRIDGE_HOST or "<bridge-ip>")
                 sys.exit(1)
         self.bridge = Smartbridge.create_tls(BRIDGE_HOST, str(key), str(crt), str(ca), on_connect_callback=self._on_bridge_connect)
+        # The library's own walk over the buttons stops at the first one that fails, and says nothing at all when
+        # that failure is a timeout rather than a refusal, so a slow answer during a login leaves every remote in
+        # the house unheard while everything else looks fine. Its login calls this by name, so the connector's
+        # version, which asks for each button on its own and remembers which ones took, runs in its place.
+        self.bridge._subscribe_to_button_status = self._subscribe_buttons  # noqa: SLF001
         LOG.info("connecting to bridge at %s ...", BRIDGE_HOST)
         await self.bridge.connect()
         LOG.info("bridge connected: %d devices, %d buttons, %d scenes",
@@ -499,6 +520,131 @@ class Agent:
         LOG.error("the bridge is still refusing to report button presses; remotes will do nothing")
         self.send({"type": "health", "health": self.health()})
 
+    async def _subscribe_buttons(self) -> None:
+        """Ask the bridge to report presses for every button it lists that is not already reported on this session.
+
+        Stands in for Smartbridge._subscribe_to_button_status (see connect_bridge). One button failing, by refusal
+        or by timeout, is noted and the walk goes on to the next; it never raises, so the library's login carries
+        on to the lights' state behind it. Buttons that did not take are asked for again by _check_link, and
+        WATCH.sub_failed_at is set so health says so and _ensure_buttons_subscribed retries as it always has."""
+        # one pass at a time: the library's login, the link check and the older retry (_resubscribe_buttons) can all
+        # ask, and two passes over the same missing buttons would subscribe them twice
+        lock = getattr(self, "_sub_lock", None)
+        if lock is None:
+            lock = self._sub_lock = asyncio.Lock()
+        async with lock:
+            await self._subscribe_buttons_once()
+
+    async def _subscribe_buttons_once(self) -> None:
+        br = self.bridge
+        if br is None:
+            return
+        leap = getattr(br, "_leap", None)
+        if leap is None:
+            return
+        if id(leap) != self._sub_session:
+            self._sub_session = id(leap)
+            self._subscribed = set()
+        try:
+            self._wire_subscriptions()  # a button the bridge has just listed gets its key before its first press
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("wiring button subscribers: %s", exc)
+        missing = [b for b in list(br.buttons) if b not in self._subscribed]
+        failed: List[str] = []
+        for button in missing:
+            try:
+                response, _ = await br._subscribe(f"/button/{button}/status/event", br._handle_button_status)  # noqa: SLF001
+                br._handle_button_status(response)  # noqa: SLF001
+                self._subscribed.add(button)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001  a refusal, a timeout, a dropped session: all the same here
+                failed.append(f"{button} ({type(exc).__name__})")
+        if failed:
+            WATCH.sub_failed_at = time.time()
+            LOG.warning("the bridge did not take %d of %d button subscriptions: %s",
+                        len(failed), len(missing), ", ".join(failed[:6]))
+        elif missing:
+            LOG.info("the bridge reports presses for %d buttons", len(self._subscribed))
+
+    def _subs_complete(self) -> Optional[bool]:
+        """Whether every button the bridge lists is reported on the session open now. None when that cannot be known
+        (no bridge, no session, or a bridge object that is not the library's, as in the tests)."""
+        br = self.bridge
+        leap = getattr(br, "_leap", None) if br is not None else None
+        if leap is None:
+            return None
+        if id(leap) != getattr(self, "_sub_session", None):
+            return False  # nothing has been subscribed on this session yet
+        return not (set(br.buttons) - self._subscribed)
+
+    async def _check_link(self) -> None:
+        """Every LINK_EVERY_S: is the bridge link really carrying button presses, and if not, put it right.
+
+        The library keeps its own link alive (a ping every minute, a new session when one goes unanswered), but
+        three ways for it to go quiet slip past that, and each one looked like this from the app: the bridge
+        answering, the remotes listed, and nothing happening when a button is pressed.
+          * its connection loop has stopped altogether: start it again;
+          * a session came back but logging in on it failed partway, so nothing on it is subscribed: drop that
+            session, which makes the library open a fresh one and log in again;
+          * the session is fine but some buttons were never subscribed on it: ask for those, once a minute;
+        and, to catch whatever else, a probe of the connector's own: two unanswered in a row drop the session too.
+        A fresh connection is started at most once every LINK_KICK_GAP_S."""
+        br = self.bridge
+        if br is None:
+            return
+        now = time.monotonic()
+        may_kick = now - self._link_kick_at >= LINK_KICK_GAP_S
+
+        def kick(why: str) -> None:
+            self._link_kick_at = now
+            self._reconnects += 1
+            self._link_problem = why
+            self._last_kick = {"at": time.time(), "why": why}
+            LOG.error("%s; starting a fresh connection to the bridge", why)
+
+        monitor = getattr(br, "_monitor_task", None)
+        if monitor is None or monitor.done():
+            if may_kick:
+                kick("the bridge connection loop had stopped")
+                await br.connect()
+            return
+        leap = getattr(br, "_leap", None)
+        if leap is None:
+            return  # between sessions: the library is already reconnecting
+        login = getattr(br, "_login_task", None)
+        if login is not None and login.done() and not login.cancelled() and login.exception() is not None:
+            if may_kick:
+                kick(f"logging back in to the bridge failed ({type(login.exception()).__name__}: {login.exception()})")
+                leap.close()
+            return
+        if login is not None and not login.done():
+            return  # still logging in; its own subscription pass has not run yet
+        if self._subs_complete() is False and now >= self._sub_retry_at:
+            await self._subscribe_buttons()
+            if self._subs_complete() is False:
+                self._sub_retry_at = now + 60
+                self._link_problem = "the bridge has not agreed to report every button yet"
+            else:
+                WATCH.sub_failed_at = None
+                self._link_problem = None
+                self.send({"type": "health", "health": self.health()})
+        try:
+            await asyncio.wait_for(br._request("ReadRequest", "/server/1/status/ping"), LINK_PROBE_S)  # noqa: SLF001
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            self._probe_fails += 1
+            if self._probe_fails >= 2 and may_kick:
+                self._probe_fails = 0
+                kick(f"the bridge did not answer two checks in a row ({type(exc).__name__})")
+                leap.close()
+            return
+        self._probe_fails = 0
+        self._link_ok_at = time.time()
+        if self._subs_complete() is not False:
+            self._link_problem = None  # answering, and every button heard: whatever was wrong is put right
+
     def inventory(self) -> Dict[str, Any]:
         assert self.bridge
         b = self.bridge
@@ -555,7 +701,16 @@ class Agent:
             "presses": self._press_count,
             # False once the bridge has refused to report presses and would not take it back. This is the
             # difference between "your remote is broken" and "your bridge stopped talking about buttons".
-            "buttons_ok": WATCH.sub_failed_at is None,
+            "buttons_ok": WATCH.sub_failed_at is None and self._subs_complete() is not False,
+            # how many of the bridge's buttons it has agreed to report on the session open now (null: unknown)
+            "subscribed": (None if self._subs_complete() is None
+                           else len(self._subscribed) if id(self.bridge._leap) == self._sub_session else 0),  # noqa: SLF001
+            # the link check (_check_link): when the bridge last answered it, how many fresh connections it has
+            # started since this process began, and the last thing it found wrong
+            "link_ok_at": getattr(self, "_link_ok_at", None),
+            "reconnects": getattr(self, "_reconnects", 0),
+            "link_problem": getattr(self, "_link_problem", None),
+            "last_reconnect": getattr(self, "_last_kick", None),  # {at, why} of the last fresh connection it started
             "uptime_s": round(time.time() - self._started_at),
             # WatchdogSec, when systemd is watching this process (caseta-agent.service); null when nothing is
             "watchdog_s": round(watchdog_every() * 3) if watchdog_every() else None,
@@ -1273,7 +1428,7 @@ class Agent:
         The bridge does list them eventually, so look again every few minutes until it does, and say so.
         The other way is the bridge refusing to report presses at all, which takes every remote out at
         once and is worth catching sooner, so that check runs on the shorter beat."""
-        every = 30
+        every = LINK_EVERY_S
         since_sweep = 0
         while True:
             await asyncio.sleep(every)
@@ -1281,6 +1436,7 @@ class Agent:
             try:
                 if not self.bridge:
                     continue
+                await self._check_link()
                 await self._ensure_buttons_subscribed()
                 if since_sweep < 300:
                     continue

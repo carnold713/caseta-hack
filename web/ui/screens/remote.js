@@ -9,7 +9,7 @@ import { keyCentres, PICO_BOX } from '/ui/pico.js';
 import { remoteArt, pressedKey, notePress, listenLine } from '/ui/screens/remotes.js';
 import { glowHTML } from '/ui/glow.js';
 import { valueLine, lampHex } from '/ui/screens/parts.js';
-import { roomPicker, confirmSheet } from '/ui/screens/pickers.js';
+import { roomPicker, confirmSheet, removeRefusedSheet } from '/ui/screens/pickers.js';
 import { picoSVG } from '/ui/pico.js';
 import { colourName } from '/ui/colour.js';
 import { stepCards } from '/ui/screens/steps.js';
@@ -672,8 +672,17 @@ export const actions = {
       if (!stillListed) setTimeout(() => { if (c.data.dev(d.device_id)) { c.EDIT.hideDevice(d.device_id); c.save('', { quiet: true }); } }, 4000);
     } catch (e) {
       el.disabled = false; el.textContent = 'Remove';
-      c.toast(`The bridge said no: ${e.message}`, { err: true });
+      c.openPicker('remove-refused', () => removeRefusedSheet(c, d, e, 'rm-forget-go'));
     }
+  },
+  async 'rm-forget-go'(c, el, r) {
+    const d = c.data.dev(r.id); if (!d) return;
+    const prev = JSON.stringify(c.S.config);
+    c.EDIT.removeFromAppOnly(d.device_id);
+    c.closePicker(); c.closeSheet();
+    await c.save('', { quiet: true });
+    c.go('remotes');
+    c.toast(`${d.name} removed from this app. Still paired to the bridge`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };
 

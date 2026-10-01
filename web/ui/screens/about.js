@@ -1,6 +1,6 @@
 // 19 · About this light (12744:111930): a sheet over the light's page. What it is for, what it is, which room it is
 // in, hiding it, removing it. For a fan or a shade only the last three.
-import { roomPicker, confirmSheet, undoMove, nameSheet } from '/ui/screens/pickers.js';
+import { roomPicker, confirmSheet, undoMove, nameSheet, removeRefusedSheet } from '/ui/screens/pickers.js';
 
 // What each role does in the five suggested scenes, as the file says it.
 const ROLES = [
@@ -129,7 +129,17 @@ export const actions = {
       if (!stillListed) setTimeout(() => { if (c.data.dev(r.id)) { c.EDIT.hideDevice(r.id); c.save('', { quiet: true }); } }, 4000);
     } catch (e) {
       el.disabled = false; el.textContent = 'Remove';
-      c.toast(`The bridge said no: ${e.message}`, { err: true });
+      c.openPicker('remove-refused', () => removeRefusedSheet(c, d, e, 'about-forget-go'));
     }
+  },
+  async 'about-forget-go'(c, el, r) {
+    const d = c.data.dev(r.id); if (!d) return;
+    const prev = JSON.stringify(c.S.config);
+    c.EDIT.removeFromAppOnly(d.device_id);
+    c.closePicker(); c.closeSheet();
+    await c.save('', { quiet: true });
+    const aid = c.data.devArea(d);
+    c.leave(aid ? `room/${aid}` : 'rooms');
+    c.toast(`${d.name} removed from this app. Still paired to the bridge`, { keepUndo: true, undo: async () => { c.data.restoreConfig(prev); await c.save('Put back'); } });
   },
 };
