@@ -140,7 +140,7 @@ function ask(c) {
         <span class="nt-app"><img src="/icons/timer-candle.png" alt="">Caseta · now</span>
         <span class="nt-title">${esc(t.title)}</span><i class="nt-candle"></i>
         <span class="nt-btns"><span>Off now</span><span>Add 15 min</span></span></div>
-      <p class="t-body muted sheet-p">Only while a timer runs. Its buttons turn the light off or add time; nothing there turns a light on.</p>
+      <p class="t-body muted sheet-p">Only while a timer runs.</p>
       <div class="sheet-btns"><button class="pill solid" data-act="notify-allow">Allow</button><button class="pill ghost" data-act="notify-later">Not now</button></div>`,
   });
 }

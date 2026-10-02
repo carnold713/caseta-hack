@@ -22,7 +22,7 @@ export const KINDS = [
   ['nightstand', 'Nightstand', 'The night light, dim, with a timer', 'moon'],
   ['routine', 'Next routine', 'What runs next, with Skip tonight', 'clock'],
   ['pinned', 'Pinned', 'What is pinned on Home', 'pin'],
-  ['colour', 'Colours', 'Colours for a colour lamp', 'palette'],
+  ['colour', 'Colours', 'For a colour lamp', 'palette'],
   ['dimmers', 'Dimmers', 'What is pinned, each with its brightness', 'tune'],
 ];
 const KIND = Object.fromEntries(KINDS.map(k => [k[0], k]));
@@ -70,7 +70,7 @@ function listPage(c) {
   const w = ui(c);
   if (!native.isNative) {
     return `<div class="wg-page">${header(c, 'Widgets')}
-      <p class="t-body muted wg-lede">Widgets live in the Android app. Open it on the phone to add one.</p>
+      <p class="t-body muted wg-lede">Widgets live in the Android app.</p>
       <div class="group">${KINDS.map(([, name, d, ic]) => `<div class="row has-ic"><span class="row-ic">${icon(ic, 20, 1.4)}</span><span class="row-txt"><span class="t">${esc(name)}</span><span class="d">${esc(d)}</span></span></div>`).join('')}</div>
     </div>`;
   }
@@ -147,8 +147,6 @@ function what(c, kind, cfg, m) {
       const short = s => (s.roomName && s.name.startsWith(`${s.roomName} · `) ? s.name.slice(s.roomName.length + 3) : s.name);
       return `${sec(`Scenes, up to ${MAX_SCENES}`)}<div class="group">${m.scenes.map(s => check(c, chosen.includes(s.key), 'wg-scene', s.key, short(s), s.roomName)).join('') || none('No scenes yet')}</div>`;
     }
-    case 'house':
-      return `<p class="t-cap muted wg-lede">Every light, and All off. Nothing here turns the whole house on.</p>`;
     case 'levels': {
       const at = cfg.levelsAt || [];
       return `${sec('Room')}<div class="group">${rooms || none('No rooms with lights yet')}</div>
@@ -170,7 +168,7 @@ function what(c, kind, cfg, m) {
     case 'routine':
       return `${sec('Routine')}<div class="group">${radio(c, !cfg.routine, 'wg-routine', '', 'Whichever is next')}${m.routines.map(r => radio(c, cfg.routine === r.id, 'wg-routine', r.id, r.name, r.enabled ? '' : 'Paused')).join('')}</div>`;
     case 'pinned':
-      return `<p class="t-cap muted wg-lede">What is pinned on Home, as many as fit. Pin a light or a room from its page.</p>`;
+      return `<p class="t-cap muted wg-lede">What is pinned on Home, as many as fit.</p>`;
     case 'dimmers':
       return `<p class="t-cap muted wg-lede">What is pinned on Home, as many as fit.</p>`;
     case 'colour': {

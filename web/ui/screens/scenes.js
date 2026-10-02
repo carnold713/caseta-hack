@@ -196,10 +196,9 @@ function stageHTML(c, p, ds) {
   // lights in the scene's room that are not in the scene wait on a shelf below the stage, as hollow rings
   const shelf = p.area ? c.data.controllable().filter(d => c.data.devArea(d) === p.area && d.domain !== 'cover' && !(d.device_id in p.levels)) : [];
   const shelfHTML = shelf.length ? `<div class="sc-shelf" data-keep="sc-shelf"><span class="sc-shelf-t">Also in the room</span>${shelf.map(d => `<button class="sc-ring" data-act="stage-add" data-id="${esc(d.device_id)}" aria-label="Add ${esc(d.name)} to this scene"><i></i>${esc(d.name)}</button>`).join('')}</div>` : '';
-  const empty = !ds.length ? `<p class="sc-empty">Tap a light below to add it</p>` : '';
   return `<div class="sc-stage ${off ? 'offline' : ''}" style="--lanes:${Math.max(1, ds.length)}">
       <span class="sc-floor" aria-hidden="true"></span>
-      <div class="sc-lanes" data-keep="sc-lanes">${lanes}</div>${empty}
+      <div class="sc-lanes" data-keep="sc-lanes">${lanes}</div>
     </div>
     ${off ? `<p class="sc-off">Can't change scenes while the house is out of reach.</p>` : ''}
     ${shelfHTML}`;

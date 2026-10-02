@@ -3,15 +3,15 @@
 // nearest city from a bundled list. It is kept on the home's own hub; no service is ever called.
 const LOC = { busy: false, denied: false };
 
-// The question, or once answered, one line saying where.
-export function whereBlock(c, { compact = false } = {}) {
+// The question, or once answered, one line saying where. In its own sheet the sheet's title asks it (bare).
+export function whereBlock(c, { compact = false, bare = false } = {}) {
   const { esc, icon } = c;
   const loc = c.S.config.settings.location;
   if (loc) {
     return `<p class="t-cap muted where-line">${icon('sun', 18, 1.6)}<span>${loc.name ? `Near ${esc(loc.name)}` : 'Location saved'} <button class="link blue" data-act="loc-city">Change</button></span></p>`;
   }
-  const why = LOC.denied ? "Your phone didn't share its location. Pick the nearest city instead." : 'For sunrise and sunset. It stays on your hub.';
-  return `<div class="loc-ask ${compact ? 'compact' : ''}"><p class="t-row">Where is your home?</p><p class="t-cap muted">${why}</p>
+  const why = LOC.denied ? "Your phone didn't share its location. Pick the nearest city instead." : bare ? '' : 'For sunrise and sunset.';
+  return `<div class="loc-ask ${compact ? 'compact' : ''}">${bare ? '' : '<p class="t-row">Where is your home?</p>'}${why ? `<p class="t-cap muted">${why}</p>` : ''}
     <div class="btns"><button class="pill blue" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button><button class="pill ghost" data-act="loc-city">Pick a city</button></div></div>`;
 }
 
@@ -41,7 +41,7 @@ export function whereSheet(c) {
   return { over: 'For sunrise and sunset', title: 'Where the home is', body: loc
     ? `<div class="group"><div class="row"><span class="row-txt"><span class="t">${c.esc(loc.name || 'Saved')}</span>${c.RT.sunAt('sunset', 0) ? `<span class="d">Sunset ${c.RT.fmtTime(c.RT.sunAt('sunset', 0))}</span>` : ''}</span></div></div>
        <div class="sheet-btns"><button class="pill ghost" data-act="loc-city">Pick a different city</button><button class="pill ghost" data-act="loc-use" ${LOC.busy ? 'disabled' : ''}>${LOC.busy ? 'Finding you…' : 'Use my location'}</button></div>`
-    : whereBlock(c) };
+    : whereBlock(c, { bare: true }) };
 }
 
 export const whereActions = {

@@ -123,7 +123,6 @@
 /* Under a finger the light is locked to it: nothing eases (M6, and the frame's LINEAR keyframes). */
 .sc-stage.dragging .sc-orb, .sc-stage.dragging .sc-stem, .sc-stage.dragging .sc-lv,
 .sc-stage.dragging .glow > i { transition: none !important; }
-.sc-empty { position: absolute; left: 0; right: 0; top: 150px; margin: 0; text-align: center; font-size: 15px; color: var(--text-3); z-index: 2; }
 /* Out of reach: the stage greys and stops taking a finger, and one line says why. */
 .sc-stage.offline .sc-lanes { filter: grayscale(1); opacity: .5; }
 .sc-stage.offline .sc-orb { cursor: default; }

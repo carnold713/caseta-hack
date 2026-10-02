@@ -82,7 +82,7 @@ export function view(c, r) {
 
     <div class="t-over sec">Connector</div>
     <div class="group">
-      ${toggle('Updates itself', s.auto_update !== false, 'auto-update', i.update_available ? esc(`${i.latest} is out`) : '')}
+      ${toggle('Updates itself', s.auto_update !== false, 'auto-update')}
       ${i.update_available ? `<button class="row" data-act="update-now"><span class="row-txt"><span class="t">Update to ${esc(i.latest)} now</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
       ${row(c, 'How your home connects', '', 'settings/how')}
     </div>
@@ -120,12 +120,12 @@ function phoneGroup(c) {
   const mode = p.timerMode || 'live';
   const d = !p.notifications ? 'Notifications are off for this app'
     : mode === 'live' && p.android >= 36 && !p.liveUpdates ? "Live updates are off in Android's settings"
-    : 'A live countdown while a timer runs';
+    : '';
   return `<div class="t-over sec">This phone</div>
     <div class="group phone-group">
       ${toggle('Timer in the status bar', mode === 'live', 'phone-live', d)}
-      ${mode === 'live' ? '' : toggle('Quiet notification instead', mode === 'quiet', 'phone-quiet', 'One you can swipe away')}
-      ${toggle('House computer offline', p.houseAlerts !== false, 'phone-house', !p.notifications ? 'Notifications are off for this app' : 'A notification after 5 minutes')}
+      ${mode === 'live' ? '' : toggle('Quiet notification instead', mode === 'quiet', 'phone-quiet')}
+      ${toggle('House computer offline', p.houseAlerts !== false, 'phone-house', !p.notifications ? 'Notifications are off for this app' : 'After 5 minutes')}
       ${row(c, 'Widgets', p.widgets ? plural(p.widgets, 'widget') : 'None', 'widgets')}
     </div>`;
 }
@@ -232,11 +232,11 @@ const SHEETS = {
   how(c) {
     const line = `curl -fsSL "${location.origin}/install.sh?token=${c.S.token}" | sh`;
     return { over: 'Connector', title: 'How your home connects', body: `<div class="how">
-      <p class="t-body muted sheet-p">A computer at home that stays on links this app to your Lutron bridge. In its Terminal, run:</p>
+      <p class="t-body muted sheet-p">On a computer at home that stays on, run this in Terminal:</p>
       <div class="code"><code>${c.esc(line)}</code><button class="pill ghost sm" data-act="copy" data-text="${c.esc(line)}">Copy</button></div>
       <p class="t-body muted sheet-p">When it asks, press the black button on the back of the bridge.</p></div>` };
   },
-  restore: c => ({ over: 'Backup', title: 'Restore from a backup', body: `<p class="t-cap muted sheet-p">Everything is replaced. Undo puts it back.</p>
+  restore: c => ({ over: 'Backup', title: 'Restore from a backup', body: `<p class="t-cap muted sheet-p">Everything is replaced.</p>
     <div class="restore"><textarea class="field" data-input="restore-text" rows="6" placeholder="Paste here" aria-label="Backup">${c.esc(c.ui.restoreText || '')}</textarea></div>
     <div class="sheet-btns"><button class="pill solid" data-act="restore-go">Restore</button><label class="pill ghost">Pick a file<input type="file" accept="application/json,.json" data-change="restore-file" hidden></label></div>` }),
   logout: c => ({ over: 'This phone', title: 'Log out?', body: `<p class="t-body muted sheet-p">Your home keeps running.</p>
@@ -341,7 +341,7 @@ export const actions = {
   },
   'set-delete'(c) {
     const g = c.data.groups().find(x => x.id === c.ui.setOpen); if (!g) return;
-    c.openPicker('delete', () => confirmSheet(c, { over: g.name, title: 'Delete this set?', act: 'set-delete-go', yes: 'Delete', text: 'Buttons and routines that control it stop controlling those lights. The lights themselves are not touched.' }));
+    c.openPicker('delete', () => confirmSheet(c, { over: g.name, title: 'Delete this set?', act: 'set-delete-go', yes: 'Delete', text: 'Buttons and routines that control it stop controlling those lights.' }));
   },
   'set-delete-go'(c) {
     const id = c.ui.setOpen;

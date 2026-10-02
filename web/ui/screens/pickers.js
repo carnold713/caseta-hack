@@ -17,11 +17,11 @@ export function roomPicker(c, { over = '', title, current, act, data = '', none 
   return { over, title, body };
 }
 
-// "Are you sure": what happens, one button that does it, one that does not.
-export function confirmSheet(c, { over = '', title, text, yes, act, data = '' }) {
+// "Are you sure": what happens (when it is not plain from the title), one button that does it, one that does not.
+export function confirmSheet(c, { over = '', title, text = '', yes, act, data = '' }) {
   return {
     over, title,
-    body: `<p class="t-body muted sheet-p">${c.esc(text)}</p>
+    body: `${text ? `<p class="t-body muted sheet-p">${c.esc(text)}</p>` : ''}
       <div class="sheet-btns"><button class="pill solid" data-act="${act}" ${data}>${c.esc(yes)}</button><button class="pill ghost" data-act="picker-back">Keep it</button></div>`,
   };
 }
@@ -29,7 +29,7 @@ export function confirmSheet(c, { over = '', title, text, yes, act, data = '' })
 // What follows a remove the bridge would not do: the reason, and the way out that does not need the bridge.
 export function removeRefusedSheet(c, d, err, act) {
   return confirmSheet(c, { over: d.name, title: 'The bridge would not remove it', act, yes: 'Remove from this app only',
-    text: `${err && err.message ? err.message : 'It did not answer'}. You can take it out of this app instead: its settings here are cleared and it is hidden, so it does nothing from here. It stays paired to your Lutron bridge, so remove it in the Lutron app too if you want it gone everywhere.` });
+    text: `${err && err.message ? err.message : 'It did not answer'}. Removing it here clears its settings and hides it. It stays paired to your Lutron bridge until you remove it in the Lutron app.` });
 }
 
 // A one-field form for a name, saved as it is typed (quietly) and when it is submitted.

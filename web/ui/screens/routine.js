@@ -409,7 +409,7 @@ export const actions = {
   try(c, el, r) { const sc = sc0(c, r); if (sc) { c.ui.freshAs = null; tryIt(c, sc); } },
   delete(c, el, r) {
     const sc = sc0(c, r); if (!sc) return;
-    c.openPicker('delete', () => confirmSheet(c, { over: sc.name, title: 'Delete this routine?', act: 'delete-go', yes: 'Delete', text: 'It stops running. Your lights stay as they are.' }));
+    c.openPicker('delete', () => confirmSheet(c, { over: sc.name, title: 'Delete this routine?', act: 'delete-go', yes: 'Delete' }));
   },
   async 'delete-go'(c, el, r) {
     const sc = sc0(c, r); if (!sc) return;
