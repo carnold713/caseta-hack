@@ -220,3 +220,14 @@
 :root.ahead .dial .nudge, :root.ahead .nudge { background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line); }
 /* a white light's arc is the owner's amber; a colour lamp's stays its own colour */
 :root.ahead .dial.white .fil { stroke: #F4A53C; }
+
+/* ---- Remotes: a remote is a Lutron thing, so its finder and its pressed keys keep Lutron's blue --------------- */
+:root.ahead :is(.remotes-page, .remote-page) { --blue: var(--lutron); --blue-hi: var(--lutron); }
+:root.ahead .listen .breath::before { background: rgba(76, 143, 228, .3); }
+:root.ahead .rcard { border-radius: 22px; background: var(--surface-1); }
+:root.ahead .rc-usual { color: #2FA59C; font-weight: 600; }
+
+/* ---- Routines: the set up tiles carry a Sage square, Routines' colour --------------------------------------- */
+:root.ahead .gtile { border-radius: 22px; }
+:root.ahead .gtile .ic-c { border-radius: 14px; background: var(--sage); color: var(--tide-800); }
+:root.ahead .group .row-ic, :root.ahead .row .ic-c { color: var(--icon-1); }
