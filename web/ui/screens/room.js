@@ -5,6 +5,7 @@
 // across the page at the wave token (60 ms per 100 px). Each tile, and the photograph's light, crossfades when the
 // ring reaches it or when its light's state arrives, whichever is later, so a slow bridge shows as a tile catching up
 // and never as a lie. The count settles last, and the toast offers Put back.
+import { ahead } from '/ui/look.js';
 import { tile, roomPicture, pinButton } from '/ui/screens/parts.js';
 import { roomPower } from '/ui/screens/rooms.js';
 import { sheets as setupSheets, actions as setupActions } from '/ui/screens/setup.js';
@@ -244,13 +245,40 @@ export function view(c, r) {
     : countHTML0(c, aid, count);
   const layer = w ? waveLayer(w) : '';
 
-  return `<div class="room">
-    ${roomTop(c, aid)}
-    <header class="hdr bar">
+  const header = `<header class="hdr bar">
       <button class="hdr-btn back" data-act="back" aria-label="Back">${icon('back', 22, 1.7)}</button>
       ${pinButton(c, `a:${aid}`, a.name)}
       <button class="hdr-btn a1" data-go="room/${esc(aid)}/setup" aria-label="Room setup">${icon('dots', 22, 2.4)}</button>
-    </header>
+    </header>`;
+  const rest = `${brightHTML(c, aid)}
+    ${scenesHead}
+    ${scenes.length || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${suggest}${newScene}</div>` : ''}
+    ${ds.length
+      ? `<div class="tile-grid room-grid">${ds.map(d => tile(c, d)).join('')}</div>`
+      : `<div class="group room-empty"><button class="row sub has-ic" data-go="room/${esc(aid)}/setup"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Move something in here</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>`}
+    ${layer}`;
+
+  // The Ahead look (web/ui/ahead.css) draws the room as the owner's frame does: the picture full bleed at the top
+  // under the header circles, the name and count under it, then On and Off on their own. The name stays where it is
+  // as the page scrolls; the circles keep to the top.
+  if (ahead()) return `<div class="room ahead-room">
+    ${roomTop(c, aid)}
+    ${header}
+    <div class="room-photo-card hero ${photo ? '' : 'scene'}">
+      ${roomPicture(c, aid, a.name, 'page')}
+      ${photo ? roomLight(c, aid, lights) : ''}
+    </div>
+    <div class="room-title">
+      <h1 class="t-h1 ${titleFit(a.name)}">${esc(a.name)}</h1>
+      ${countHTML}
+    </div>
+    ${canToggle ? powerHTML(c, aid, onN) : ''}
+    ${rest}
+  </div>`;
+
+  return `<div class="room">
+    ${roomTop(c, aid)}
+    ${header}
     <div class="room-title bar-pin">
       <h1 class="t-h1 bar-t ${titleFit(a.name)}">${esc(a.name)}</h1>
       ${countHTML}
@@ -261,13 +289,7 @@ export function view(c, r) {
       ${canToggle ? powerHTML(c, aid, onN) : ''}
       ${photo ? '' : `<button class="add-photo" data-go="room/${esc(aid)}/setup" aria-label="Add a photo">${icon('camera', 20, 1.7)}</button>`}
     </div>
-    ${brightHTML(c, aid)}
-    ${scenesHead}
-    ${scenes.length || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${suggest}${newScene}</div>` : ''}
-    ${ds.length
-      ? `<div class="tile-grid room-grid">${ds.map(d => tile(c, d)).join('')}</div>`
-      : `<div class="group room-empty"><button class="row sub has-ic" data-go="room/${esc(aid)}/setup"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Move something in here</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>`}
-    ${layer}
+    ${rest}
   </div>`;
 }
 

@@ -19,6 +19,7 @@
 // opacity, a transform or a `color` on an element whose place in the markup never depends on the light's state, so
 // when the app redraws, motion.js pairs the old element with the new one and plays the change on the dimmer.
 // Gradient stops take their colour as `currentColor` from their own `color` for the same reason.
+import { ahead } from '/ui/look.js';
 import { whiteStops, colourStops } from '/ui/glow.js';
 import { roomArt } from '/ui/art.js';
 
@@ -36,6 +37,14 @@ const PAL = {
   olive: ['#76834A', '#2B3317'], wood: ['#65503F', '#2C221B'], plum: ['#5A4658', '#241B25'],
   glass: ['#1F2940', '#0F141E'], shade: ['#4D4640', '#2E2926'],
 };
+// The Ahead look's rooms (web/ui/ahead.css): the owner's teal walls, a warm dark floor and a teal rug, the window a
+// little brighter. Everything else, and every lamp, is the same.
+const PAL_AHEAD = {
+  ...PAL,
+  wall: ['#1F4646', '#143132'], floor: ['#3B2621', '#22150F'], rug: ['#1E4C49', '#123634'],
+  glass: ['#3A6A80', '#1B3A4A'], char: ['#2C3A3B', '#111C1D'], shade: ['#4A5654', '#2A3433'],
+};
+const palette = () => (ahead() ? PAL_AHEAD : PAL);
 const LINE = '#5B5550';                            // legs, cords and frames: a soft grey, never black
 const COMBOS = [
   { A: 'ink', B: 'slate', C: 'char', D: 'teal' }, { A: 'teal', B: 'stone', C: 'char', D: 'ink' },
@@ -357,7 +366,7 @@ export function sceneSVG(model, opts = {}) {
   });
 
   const pal = [...used].map(k => {
-    const dir = k.slice(-1), name = k.slice(0, -1), [a, b] = PAL[name], [x1, y1, x2, y2] = DIRS[dir];
+    const dir = k.slice(-1), name = k.slice(0, -1), [a, b] = palette()[name], [x1, y1, x2, y2] = DIRS[dir];
     return `<linearGradient id="${p}${k}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
   });
   // (the spill group is drawn even when empty, so a room's drawing keeps one shape from redraw to redraw, and the page

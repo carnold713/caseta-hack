@@ -168,3 +168,32 @@
 :root.ahead .tabbar button::after { content: attr(aria-label); font-size: 11px; font-weight: 500; line-height: 13px; }
 :root.ahead .tabbar button[aria-current='page'] { background: var(--tide-50); color: var(--blue); }
 :root.ahead .tabbar button[aria-current='page']::after { font-weight: 600; }
+
+/* ---- text links (Edit, Done): Tide, semibold, no underline -------------------------------------------------- */
+:root.ahead .link { color: var(--blue); font-weight: 600; text-decoration: none; }
+
+/* ---- a room: the picture full bleed under the header circles, then the name, then On and Off ---------------- */
+:root.ahead .ahead-room .room-photo-card.hero { margin: -108px 0 0; height: 313px; border-radius: 0; }
+:root.ahead .ahead-room .room-photo-card.hero::after {
+  content: ''; position: absolute; inset: auto 0 0 0; height: 64px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(16, 23, 25, 0), var(--bg));
+}
+:root.ahead .ahead-room .room-title { position: relative; padding: 12px 24px 0; }
+:root.ahead .ahead-room .room-title h1 { font-size: 34px; line-height: 41px; max-width: calc(100% - 110px); }
+:root.ahead .ahead-room .room-title h1.fit1 { font-size: 30px; top: 0; }
+:root.ahead .ahead-room .room-title h1.fit2 { font-size: 26px; top: 0; }
+:root.ahead .ahead-room .room-title .count { right: 24px; top: 26px; font-size: 15px; font-weight: 500; color: var(--text-3); }
+:root.ahead .ahead-room > .room-onoff { margin: 20px 16px 0; height: 64px; border-radius: 32px; padding: 6px; gap: 6px; }
+:root.ahead .ahead-room .room-bright { margin: 20px 16px 0; }
+:root.ahead .ahead-room .room-sec { margin: 24px 24px 0; }
+:root.ahead .ahead-room .room-grid { padding: 0 16px; margin-top: 20px; }
+:root.ahead .ahead-room .tile-grid .tile { height: 156px; }
+
+/* ---- room pictures: teal walls (roomscene.js PAL_AHEAD); the hero's picture fills its 313 -------------------- */
+:root.ahead .room-scene, :root.ahead .room-big.scene, :root.ahead .room-photo-card.scene { background: #143132; }
+:root.ahead .ahead-room .hero .room-scene { height: 100%; }
+:root.ahead .room-big.scene::after { background: linear-gradient(180deg, rgba(5, 23, 26, 0) 40%, rgba(5, 23, 26, .7) 100%); }
+
+/* ---- a tile's name sits over its value, both from the bottom, so a two line name never runs into it ---------- */
+:root.ahead .tile .vl { top: auto; bottom: 16px; line-height: 16px; }
+:root.ahead .tile .nm { bottom: 36px; }
