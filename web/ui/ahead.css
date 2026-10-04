@@ -1,0 +1,170 @@
+/* Ahead × Copper Night, dark. The owner's own frames in Figma (Ahead × Copper Night, node 13196:26442) are the
+   source: a deep teal-black room, cards a step lighter with a hairline, lights that are on drawn in warm cream with
+   dark ink, amber for the light itself (bars, the On pill), and Tide teal only for action and selection.
+   Loaded last; everything is scoped under :root.ahead so the Copper Night look is untouched without it. */
+
+:root.ahead, :root.ahead.night {
+  /* the room */
+  --bg: #101719;              /* canvas */
+  --surface-1: #182225;       /* surface: cards, tiles, buttons, the tab bar */
+  --surface-2: #182225;       /* grouped lists sit on the same surface, divided by hairlines */
+  --surface-3: #202C2F;       /* inset: tracks, an off light's power circle, icon circles */
+  --line: #2A3639;
+  --hairline: rgba(238, 242, 239, .07);
+  --scrim: rgba(16, 23, 25, .8);
+
+  /* ink */
+  --text-1: #EEF2EF;
+  --text-2: #B9C4C1;
+  --text-3: #93A09D;
+  --text-4: #4C5A5D;
+  --icon-1: #EEF2EF;
+  --icon-2: #93A09D;
+  --night-white: #FFFFFF;
+
+  /* action and selection: Tide. Lutron things keep their own blue (--lutron). */
+  --blue: #2FA59C;
+  --blue-hi: #2FA59C;
+  --lutron: #4C8FE4;
+  --chip-line: #2A3639;
+  --chip-line-sel: #2FA59C;
+  --ghost-line: rgba(238, 242, 239, .8);
+  --solid-fill: #EEF2EF;
+  --solid-ink: #0A2F33;
+
+  /* light: amber for the light itself, cream for a light that is on */
+  --copper: #F4A53C;
+  --copper-hi: #FFDB99;
+  --copper-lo: #E38E37;
+  --copper-pale: #FFE6C4;
+  --tile-on: #FFE6C4;
+  --tile-on-ink: #0A2F33;
+  --tile-on-meta: #8A5A22;
+  --tile-on-line: transparent;
+  --arc-fill: #F4A53C;
+  --arc-track: #202C2F;
+  --amber-fill: linear-gradient(90deg, #FFDB99, #F4A53C);
+
+  /* the rest of the palette, for what each colour means */
+  --tide-50: #13302F;
+  --tide-100: #173C3B;
+  --tide-800: #0A2F33;
+  --sky: #D4EAFA;
+  --breeze: #DDE2FB;
+  --lilac: #ECDEFB;
+  --sage: #E1EECB;
+  --rose: #FADDDD;
+
+  --r-card: 22px;
+  --r-group: 20px;
+  --shadow-lift: 0 16px 40px rgba(5, 23, 26, .55);
+  --shadow-sheet: 0 -8px 40px rgba(5, 23, 26, .5);
+  --shadow-soft: 0 4px 16px rgba(13, 43, 43, .18);
+}
+/* The night look warms the chrome of the Copper Night look; this look is already the night room, so it stays. */
+:root.ahead.drift { transition: none; }
+:root.ahead { color-scheme: dark; }
+
+/* ---- type: medium weight, not light; secondary ink is the grey-green ink-2 ----------------------------------- */
+:root.ahead .t-h1, :root.ahead .t-hero, :root.ahead .t-sheet, :root.ahead .house-head { font-weight: 500; letter-spacing: -.01em; }
+:root.ahead .t-h1 { font-size: 34px; line-height: 40px; }
+:root.ahead .t-hero { font-size: 34px; }
+:root.ahead .home-head h1 { font-size: 30px; }
+:root.ahead .home-head h1.fit1 { font-size: 27px; }
+:root.ahead .home-head h1.fit2 { font-size: 24px; }
+:root.ahead .home-head .greet { font-size: 15px; font-weight: 500; color: var(--text-3); }
+:root.ahead .house-head { font-size: 34px; }
+:root.ahead .t-over { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--text-3); }
+
+/* ---- round header buttons: surface with a hairline; a pinned pin is Tide ------------------------------------- */
+:root.ahead .hdr-btn { background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line); }
+:root.ahead .hdr-btn.pin.pinned { background: var(--tide-50); box-shadow: inset 0 0 0 1px var(--tide-100); color: var(--blue); }
+
+/* ---- Home: the whole house sits on the room itself, not in a card -------------------------------------------- */
+:root.ahead .card.house { background: none; box-shadow: none; border: 0; }
+
+/* ---- bars: an inset track, a warm amber fill, a white knob -------------------------------------------------- */
+:root.ahead .hbar { background: var(--surface-3); }
+:root.ahead .hbar .fill { background: var(--amber-fill); }
+:root.ahead .hbar .lo { color: #5A3510; }
+:root.ahead .hbar .knob {
+  top: 6px; width: 44px; height: 44px; border-radius: 22px;
+  left: calc(max(56px, var(--pct)) - 50px);
+  box-shadow: 0 2px 8px rgba(13, 43, 43, .18);
+}
+
+/* ---- pills: All off and All on are both quiet surface buttons ----------------------------------------------- */
+:root.ahead .pill.ghost { background: var(--surface-1); border-color: var(--line); }
+:root.ahead .house-pills .pill { height: 54px; border-radius: 16px; background: var(--surface-1); color: var(--text-1); border: 1px solid var(--line); }
+:root.ahead .house-pills .pill .ic { color: var(--icon-1); }
+
+/* ---- tiles: off is a plain surface; on is cream with dark ink ------------------------------------------------ */
+:root.ahead .tile { border-radius: 22px; box-shadow: none; }
+:root.ahead .tile .pwr { background: var(--surface-3); color: var(--icon-2); }
+:root.ahead .tile .vl { font-size: 13px; color: var(--text-3); }
+:root.ahead .tile .nm { font-size: 17px; font-weight: 600; line-height: 21px; }
+:root.ahead .tile.on { background: var(--tile-on); color: var(--tile-on-ink); box-shadow: none; }
+:root.ahead .tile.on .vl { color: var(--tile-on-meta); }
+:root.ahead .tile.on .pwr { background: var(--surface-1); color: var(--copper); box-shadow: 0 2px 8px rgba(13, 43, 43, .10); }
+/* the device's own drawing is white line art: on cream it is drawn in the light's amber */
+:root.ahead .tile.on .art { filter: brightness(0) saturate(100%) invert(62%) sepia(76%) saturate(560%) hue-rotate(347deg) brightness(97%); opacity: .95; }
+:root.ahead .tile.tinted { color: var(--tile-on-ink); box-shadow: none; }
+:root.ahead .tile.tinted .vl { color: rgba(10, 47, 51, .75); }
+:root.ahead .tile.tinted .pwr { background: var(--surface-1); color: var(--icon-1); }
+:root.ahead .tile.tinted .art { filter: brightness(0) opacity(.6); }
+/* a running fan is Breeze, a shade Sky: each colour means one kind of thing */
+:root.ahead .tile.fan.running { background: var(--breeze); color: var(--tile-on-ink); }
+:root.ahead .tile.fan.running .vl { color: #3D4A93; }
+:root.ahead .tile.fan.running .speed i { background: rgba(61, 74, 147, .25); }
+:root.ahead .tile.fan.running .speed i.on { background: #3D4A93; }
+:root.ahead .tile.fan.running .pwr { background: var(--surface-1); color: var(--icon-1); }
+:root.ahead .tile.fan.running .art { filter: brightness(0) opacity(.55); }
+:root.ahead .tile-timer { background: var(--surface-1); color: var(--text-1); border-radius: 999px; font-weight: 600; }
+
+/* ---- room cards: the room's own picture under a deep teal fade; the power circle is a dark disc ------------- */
+:root.ahead .room-card, :root.ahead .room-big, :root.ahead .pin-room { border-radius: 22px; background: var(--tide-800); }
+:root.ahead .room-card::after { background: linear-gradient(180deg, rgba(5, 23, 26, 0) 0%, rgba(5, 23, 26, .7) 100%); }
+:root.ahead .room-card .nm { font-weight: 600; }
+:root.ahead .room-card .pwr, :root.ahead .room-big .pwr, :root.ahead .pin-room .pwr { background: var(--surface-3); color: var(--icon-2); box-shadow: none; }
+:root.ahead .room-card.lit .pwr, :root.ahead .room-big.lit .pwr, :root.ahead .pin-room.lit .pwr { background: var(--surface-1); color: var(--copper); box-shadow: 0 2px 8px rgba(13, 43, 43, .10); }
+
+/* ---- chips: surface with a hairline; chosen is Tide; a scene chip is Lilac with dark ink -------------------- */
+:root.ahead .chip { background: var(--surface-1); border-color: var(--line); color: var(--text-1); font-size: 15px; }
+:root.ahead .chip[aria-pressed='true'] { background: var(--tide-50); border: 2px solid var(--blue); color: var(--blue); font-weight: 600; }
+:root.ahead .chip.current { background: var(--tide-50); border: 2px solid var(--blue); color: var(--blue); font-weight: 600; }
+:root.ahead .chip.scene { background: var(--lilac); border-color: transparent; color: var(--tide-800); --ring: var(--lilac); }
+:root.ahead .chip.more { background: var(--surface-1); border: 1px solid var(--line); color: var(--text-1); }
+
+/* ---- On and Off: a dark track, the On half a warm amber pill with brown ink -------------------------------- */
+:root.ahead .onoff { background: var(--surface-1); box-shadow: 0 6px 20px rgba(13, 43, 43, .14); }
+:root.ahead .dev .onoff { background: var(--surface-3); box-shadow: none; }
+:root.ahead .onoff-pill, :root.ahead .dev .onoff-pill, :root.ahead .room-onoff .onoff-pill {
+  background: var(--amber-fill); box-shadow: 0 4px 14px rgba(245, 153, 51, .35);
+}
+:root.ahead .onoff .onoff-pill.off { background: var(--surface-3); box-shadow: none; }
+:root.ahead .onoff.blue .onoff-pill { background: var(--breeze); box-shadow: none; }
+:root.ahead .onoff.blue .onoff-pill.off { background: var(--surface-3); }
+:root.ahead .onoff button { color: var(--text-3); }
+:root.ahead .onoff button[aria-pressed='true'] { color: #5A3510; font-weight: 600; }
+:root.ahead .onoff.blue button[aria-pressed='true'] { color: #3D4A93; }
+:root.ahead .onoff:has(.onoff-pill.off) button[aria-pressed='true'] { color: var(--text-1); font-weight: 500; }
+:root.ahead .room-photo-card .room-onoff { background: rgba(16, 23, 25, .55); }
+
+/* ---- toggles are Tide when on ------------------------------------------------------------------------------- */
+:root.ahead .toggle { background: var(--surface-3); }
+
+/* ---- the tab bar: a full width surface bar, each tab labelled, the current one a Tide pill ------------------ */
+:root.ahead .tabbar {
+  width: calc(100vw - 32px); max-width: 420px; height: 68px; border-radius: 26px;
+  background: var(--surface-1); backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 8px 28px rgba(13, 43, 43, .08), inset 0 0 0 1px var(--line);
+  justify-content: space-between; gap: 0; padding: 0 8px;
+}
+:root.ahead .tabbar button {
+  flex: 1 1 0; width: auto; height: 52px; border-radius: 18px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--icon-2);
+}
+:root.ahead .tabbar button::after { content: attr(aria-label); font-size: 11px; font-weight: 500; line-height: 13px; }
+:root.ahead .tabbar button[aria-current='page'] { background: var(--tide-50); color: var(--blue); }
+:root.ahead .tabbar button[aria-current='page']::after { font-weight: 600; }
