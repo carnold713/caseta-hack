@@ -197,3 +197,26 @@
 /* ---- a tile's name sits over its value, both from the bottom, so a two line name never runs into it ---------- */
 :root.ahead .tile .vl { top: auto; bottom: 16px; line-height: 16px; }
 :root.ahead .tile .nm { bottom: 36px; }
+
+/* ---- a light's page: the owner's quiet cards, pills with a hairline, a slimmer amber dial --------------------- */
+:root.ahead .dev .where { color: var(--text-3); font-weight: 500; }
+:root.ahead .look { border-radius: 22px; background: var(--surface-1); }
+:root.ahead .look.showing { background: var(--tide-50); box-shadow: none; }
+:root.ahead .look .c { width: 40px; height: 40px; border-radius: 20px; background: var(--surface-3); }
+:root.ahead .look.showing .c { background: var(--tile-on); color: var(--copper-lo); }
+:root.ahead .look .t { font-size: 17px; font-weight: 600; }
+:root.ahead .look .d { color: var(--text-3); font-size: 13px; }
+:root.ahead .feat { background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line); }
+:root.ahead .feat .c { left: 10px; top: 10px; width: 44px; height: 44px; border-radius: 22px; background: var(--surface-3); }
+:root.ahead .feat.on .c { background: var(--sage); color: var(--tide-800); }
+:root.ahead .feat.on .d { color: var(--blue); }
+:root.ahead .feat .d { color: var(--text-3); }
+:root.ahead .dial .trk { stroke: var(--surface-3); }
+:root.ahead .dial .trk, :root.ahead .dial .fil { stroke-width: 30; }
+:root.ahead .dial .kn { fill: #fff; stroke: none; filter: drop-shadow(0 2px 4px rgba(13, 43, 43, .25)); }
+:root.ahead .dial .lbl { color: var(--text-3); font-weight: 500; }
+:root.ahead .dial .num b { font-weight: 500; font-size: 72px; line-height: 80px; letter-spacing: -.02em; }
+:root.ahead .dial .num span { font-weight: 500; font-size: 28px; color: var(--text-3); }
+:root.ahead .dial .nudge, :root.ahead .nudge { background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--line); }
+/* a white light's arc is the owner's amber; a colour lamp's stays its own colour */
+:root.ahead .dial.white .fil { stroke: #F4A53C; }

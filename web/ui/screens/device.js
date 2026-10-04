@@ -106,7 +106,7 @@ function dialHTML(c, lv, tone) {
   // The arc is a flat fill of the lamp's own light: copper for a white, a colour lamp's colour for a colour lamp.
   const arc = tone.hex || '#D98A4E';
   // The label is only ever "Brightness": the light's name is the page's title, and a long one under the dial was cut.
-  return `<div class="dial shifted ${lv >= 50 ? 'bright' : ''}" data-drag="dial" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}"
+  return `<div class="dial shifted ${lv >= 50 ? 'bright' : ''} ${tone.hex ? 'hue' : 'white'}" data-drag="dial" role="slider" aria-label="Brightness" aria-valuemin="1" aria-valuemax="100" aria-valuenow="${lv}"
     style="--kx:${kx.toFixed(1)}px;--ky:${ky.toFixed(1)}px">
     <svg viewBox="0 0 340 190" width="340" height="190" aria-hidden="true">
       <path class="trk" d="M20 170 A150 150 0 0 1 320 170"/>
