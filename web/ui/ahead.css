@@ -231,3 +231,33 @@
 :root.ahead .gtile { border-radius: 22px; }
 :root.ahead .gtile .ic-c { border-radius: 14px; background: var(--sage); color: var(--tide-800); }
 :root.ahead .group .row-ic, :root.ahead .row .ic-c { color: var(--icon-1); }
+
+/* ---- Goodnight: the deep Tide room, a cream moon, Tuck asleep and saying so in a bubble ---------------------- */
+:root.ahead .gn-veil { background: radial-gradient(120% 80% at 50% 20%, #0F3A3E 0%, #0A2F33 45%, #071F22 100%); }
+:root.ahead .gn-moon > .ic { color: #F6E7C8; }
+:root.ahead .gn-sleep.tucked { display: flex; align-items: center; justify-content: center; gap: 14px; top: calc(42.4% + 20px); }
+:root.ahead .gn-sleep .tuck { width: 92px; height: 92px; flex: none; animation: tuck-breathe 3.2s ease-in-out infinite; transform-origin: 50% 90%; }
+:root.ahead .gn-bubble {
+  position: relative; padding: 12px 18px; border-radius: 18px; background: #EEF2EF; color: var(--tide-800);
+  font-size: 24px; font-weight: 500; line-height: 28px; letter-spacing: -.01em;
+}
+:root.ahead .gn-bubble::before { content: ''; position: absolute; left: -6px; top: 50%; width: 12px; height: 12px; margin-top: -6px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
+:root.ahead .gn-sleep .tuck .zz { animation: tuck-zz 3.2s ease-in-out infinite; }
+:root.ahead .gn-extras { color: #93A09D; top: calc(42.4% + 120px); }
+:root.ahead .gn-stay { top: calc(42.4% + 148px); color: #B9C4C1; }
+:root.ahead .gn-back { background: rgba(238, 242, 239, .1); color: #EEF2EF; }
+@keyframes tuck-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes tuck-zz { 0%, 100% { opacity: .35; transform: translateY(2px); } 50% { opacity: 1; transform: translateY(-2px); } }
+
+/* ---- the house computer is not answering: Tuck, worried, by his unplugged cord, in a soft Rose card ----------- */
+:root.ahead .offline-card.v7.tucked {
+  grid-template-columns: 132px 1fr; gap: 8px; padding: 14px 16px 14px 8px; background: var(--rose); border-radius: 22px;
+}
+:root.ahead .offline-card.tucked .oc-art { position: relative; height: 96px; }
+:root.ahead .offline-card.tucked .tuck { position: absolute; left: -2px; top: -6px; width: 96px; height: 96px; animation: tuck-breathe 3.2s ease-in-out infinite; transform-origin: 50% 90%; }
+:root.ahead .offline-card.tucked .tuck-plug { position: absolute; left: 62px; top: 52px; width: 70px; height: 32px; }
+:root.ahead .offline-card.tucked .oc-txt { background: var(--surface-1); border-radius: 16px; padding: 12px 14px; gap: 4px; }
+:root.ahead .offline-card.tucked .t { font-size: 15px; font-weight: 600; }
+:root.ahead .offline-card.tucked .d { font-size: 13px; color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { :root.ahead .tuck, :root.ahead .tuck .zz { animation: none; } }
+:root.ahead .gn-back { text-decoration: none; }

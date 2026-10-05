@@ -1,6 +1,8 @@
 // 12 · the connection sheet (12733:48815): the four links between this phone and the lights, each ticked or not,
 // and a row into what the remotes are doing. Opened from the dot beside the greeting, the offline card's "What can I
 // do?", and Settings. Its headline says the one thing that matters: nothing, a blip, or what to check.
+import { ahead } from '/ui/look.js';
+import { TUCK_WORRIED, TUCK_PLUG } from '/ui/tuck.js';
 const ago = ms => {
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
   if (s < 45) return 'just now';
@@ -102,6 +104,9 @@ export function offlineCause(c) {
 }
 export function offlineCard(c) {
   const [head, sub] = offlineCause(c);
+  // The Ahead look: Tuck, worried, beside his unplugged cord, the words in a bubble (the owner's frame)
+  if (ahead()) return `<button class="offline-card v7 tucked" data-act="conn-open" data-enter="drop" aria-label="Connection">
+    <span class="oc-art">${TUCK_WORRIED}${TUCK_PLUG}</span><span class="oc-txt"><span class="t">${c.esc(head)}</span><span class="d">${c.esc(sub)}</span></span></button>`;
   return `<button class="offline-card v7" data-act="conn-open" data-enter="drop" aria-label="Connection">
     <span class="oc-ic">${WIFI_OFF}</span><span class="oc-txt"><span class="t">${c.esc(head)}</span><span class="d">${c.esc(sub)}</span></span>
     <span class="oc-chev">${c.icon('chev', 20, 1.8)}</span></button>`;

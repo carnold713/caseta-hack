@@ -5,6 +5,8 @@
 // v7 (design-v7-ui.md 1 and 10, frames 12814:126, 12817:96, 12817:49280): behind the header lies the house's own
 // light, one soft light from the top of the screen in the colour of what is on, and holding Goodnight puts the page
 // to sleep room by room with the house.
+import { ahead } from '/ui/look.js';
+import { TUCK_SLEEPY, TUCK_WORRIED, TUCK_PLUG } from '/ui/tuck.js';
 import { track } from '/ui/gesture.js';
 import { glowHTML, lightHTML, setLight, blendLight, whiteStops } from '/ui/glow.js';
 import { reduced, count } from '/ui/motion.js';
@@ -326,7 +328,7 @@ function goodnightDark(c, rooms, acts) {
   el.innerHTML = `<span class="gn-veil"></span>
     <div class="gn-route"></div>
     <div class="gn-moon">${glowHTML({ level: 100, kelvin: 6500, ctx: 'tile', gain: 0.19, cls: 'gn-moon-glow' })}${c.icon('moon', 24, 1.6)}</div>
-    <p class="gn-sleep">Sleep well</p>
+    ${ahead() ? `<p class="gn-sleep tucked">${TUCK_SLEEPY}<span class="gn-bubble">Sleep well</span></p>` : '<p class="gn-sleep">Sleep well</p>'}
     ${acts.length > 1 ? '<p class="gn-extras"></p>' : ''}
     <div class="gn-stay"></div>
     <button class="gn-back" data-act="gn-put-back">Put back</button>`;
