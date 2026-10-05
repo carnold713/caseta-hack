@@ -2,6 +2,7 @@
 // before the password (01), Settings (11) and its sheets, the connection sheet (12), adding a Lutron device (20)
 // with the fake bridge hearing a Pico, and Home's suggestion card, greeting and night look. Puts the config back and
 // takes the device it added out again.
+// (The Copper Night look's measured positions and colours: this test runs in that look, ?look=copper.)
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -38,7 +39,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // ---- the classic app, kept at /classic/
   const ctx = await browser.newContext({ viewport: { width: 412, height: 915 } });
-  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.removeItem('next:shown'); for (const k of Object.keys(localStorage)) if (/^next:/.test(k)) localStorage.removeItem(k); } catch (_) {} }, process.env.APP_TOKEN);
+  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('look', 'copper'); localStorage.setItem('onboarded', '1'); sessionStorage.removeItem('next:shown'); for (const k of Object.keys(localStorage)) if (/^next:/.test(k)) localStorage.removeItem(k); } catch (_) {} }, process.env.APP_TOKEN);
   const page = await ctx.newPage(); watch(page);
   await page.goto(root + 'classic/'); await wait(2500);
   check('the classic app still opens at /classic/', !!(await page.$('#nav')) || !!(await page.$('#pw')) || !!(await page.$('.tabs')), await page.title());

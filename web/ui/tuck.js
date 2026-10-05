@@ -1,8 +1,11 @@
 // Tuck, the Ahead look's lampshade (the owner's Figma file, Tuck set 13163:125). He turns up only where a moment
 // calls for someone: asleep on Goodnight's page, worried on the card that says the house computer is not answering.
-// The drawings are the file's own, exported as SVG; CSS sizes them.
+// The drawings are the file's own, exported as SVG; CSS sizes them. Each is one line, so no stray text sits
+// between its tags (the page's words around Tuck read cleanly).
 
-export const TUCK_SLEEPY = `<svg class="tuck sleepy" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+const oneLine = svg => svg.replace(/>\s+</g, '><').trim();
+
+export const TUCK_SLEEPY = oneLine(`<svg class="tuck sleepy" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 <path opacity="0.1" d="M60 108C76.5685 108 90 106.209 90 104C90 101.791 76.5685 100 60 100C43.4315 100 30 101.791 30 104C30 106.209 43.4315 108 60 108Z" fill="#0C2B2C"/>
 <path d="M54 89C54 86.2386 51.7614 84 49 84C46.2386 84 44 86.2386 44 89V91C44 93.7614 46.2386 96 49 96C51.7614 96 54 93.7614 54 91V89Z" fill="#77C3B8"/>
 <path d="M76 89C76 86.2386 73.7614 84 71 84C68.2386 84 66 86.2386 66 89V91C66 93.7614 68.2386 96 71 96C73.7614 96 76 93.7614 76 91V89Z" fill="#77C3B8"/>
@@ -16,9 +19,9 @@ export const TUCK_SLEEPY = `<svg class="tuck sleepy" viewBox="0 0 120 120" fill=
 <path d="M102 65.7181C105.314 65.7181 108 63.0318 108 59.7181C108 56.4044 105.314 53.7181 102 53.7181C98.6863 53.7181 96 56.4044 96 59.7181C96 63.0318 98.6863 65.7181 102 65.7181Z" fill="#F6E7C8"/>
 <path d="M55.0001 19.7181L56.4001 22.5181L59.4001 22.9181L57.2001 24.9181L57.8001 27.9181L55.0001 26.5181L52.2001 27.9181L52.8001 24.9181L50.6001 22.9181L53.6001 22.5181L55.0001 19.7181Z" fill="#F4A53C"/>
 <path class="zz" d="M96 10H104L96 19H104M106 0H111L106 6H111" stroke="#6E7A77" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
+</svg>`);
 
-export const TUCK_WORRIED = `<svg class="tuck worried" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+export const TUCK_WORRIED = oneLine(`<svg class="tuck worried" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 <path opacity="0.1" d="M60 108C76.5685 108 90 106.209 90 104C90 101.791 76.5685 100 60 100C43.4315 100 30 101.791 30 104C30 106.209 43.4315 108 60 108Z" fill="#0C2B2C"/>
 <path d="M54 89C54 86.2386 51.7614 84 49 84C46.2386 84 44 86.2386 44 89V91C44 93.7614 46.2386 96 49 96C51.7614 96 54 93.7614 54 91V89Z" fill="#77C3B8"/>
 <path d="M76 89C76 86.2386 73.7614 84 71 84C68.2386 84 66 86.2386 66 89V91C66 93.7614 68.2386 96 71 96C73.7614 96 76 93.7614 76 91V89Z" fill="#77C3B8"/>
@@ -30,9 +33,9 @@ export const TUCK_WORRIED = `<svg class="tuck worried" viewBox="0 0 120 120" fil
 <path d="M50 57.2C51.7674 57.2 53.2001 55.7673 53.2001 54C53.2001 52.2327 51.7674 50.8 50 50.8C48.2327 50.8 46.8 52.2327 46.8 54C46.8 55.7673 48.2327 57.2 50 57.2Z" fill="#0C2B2C"/>
 <path d="M70 57.2C71.7674 57.2 73.2 55.7673 73.2 54C73.2 52.2327 71.7674 50.8 70 50.8C68.2327 50.8 66.8 52.2327 66.8 54C66.8 55.7673 68.2327 57.2 70 57.2Z" fill="#0C2B2C"/>
 <path d="M54 65C56 63 58 63 60 65C62 67 64 67 66 65" stroke="#0C2B2C" stroke-width="3" stroke-linecap="round"/>
-</svg>`;
+</svg>`);
 
-export const TUCK_PLUG = `<svg class="tuck-plug" viewBox="0 0 140 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+export const TUCK_PLUG = oneLine(`<svg class="tuck-plug" viewBox="0 0 140 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 <path d="M4 46C24 46 26 22 48 22C70 22 68 42 86 42" stroke="#0C2B2C" stroke-width="3" stroke-linecap="round"/>
 <path d="M97 32H89C86.2386 32 84 34.2386 84 37V47C84 49.7614 86.2386 52 89 52H97C99.7614 52 102 49.7614 102 47V37C102 34.2386 99.7614 32 97 32Z" fill="#4E6A68"/>
 <path d="M108.5 36H103.5C102.672 36 102 36.6716 102 37.5C102 38.3284 102.672 39 103.5 39H108.5C109.328 39 110 38.3284 110 37.5C110 36.6716 109.328 36 108.5 36Z" fill="#0C2B2C"/>
@@ -41,4 +44,4 @@ export const TUCK_PLUG = `<svg class="tuck-plug" viewBox="0 0 140 64" fill="none
 <path d="M126.4 36.2C126.4 35.5373 125.863 35 125.2 35C124.537 35 124 35.5373 124 36.2V39.8C124 40.4627 124.537 41 125.2 41C125.863 41 126.4 40.4627 126.4 39.8V36.2Z" fill="#6E7A77"/>
 <path d="M132.4 36.2C132.4 35.5373 131.863 35 131.2 35C130.537 35 130 35.5373 130 36.2V39.8C130 40.4627 130.537 41 131.2 41C131.863 41 132.4 40.4627 132.4 39.8V36.2Z" fill="#6E7A77"/>
 <path d="M112 30L114 24M114 54L116 60" stroke="#F4A53C" stroke-width="2" stroke-linecap="round"/>
-</svg>`;
+</svg>`);

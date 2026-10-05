@@ -5,6 +5,7 @@
 //
 // Runs after nanoleaf_test so the Office has a colour lamp. It pins a light, saves a look and moves levels, and
 // puts the pins and the scenes back on the way out.
+// (The Copper Night look's measured positions and colours: this test runs in that look, ?look=copper.)
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -77,7 +78,7 @@ const FAN = [
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   const ctx = await browser.newContext({ viewport: { width: 412, height: 915 } });
-  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, process.env.APP_TOKEN);
+  if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('look', 'copper'); } catch (_) {} }, process.env.APP_TOKEN);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));

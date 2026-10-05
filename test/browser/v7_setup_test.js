@@ -2,6 +2,7 @@
 // (the light that lands in its room chip), 18 Offline, calmly (the ember, the one sentence, a tap that queues
 // nothing), and 20 Beyond the app (the icon's shortcuts and the lock screen notification for a running sleep timer).
 // Puts back the lights it turned on, takes out the device it added, and cancels the timer it set.
+// (The Copper Night look's measured positions and colours: this test runs in that look, ?look=copper.)
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -76,7 +77,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // ================= signed in =================
   const ctx = await browser.newContext({ viewport: { width: 412, height: 915 } });
-  const initSeed = t => { try { if (t) localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', '1'); } catch (_) {} };
+  const initSeed = t => { try { if (t) localStorage.setItem('token', t); localStorage.setItem('look', 'copper'); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', '1'); } catch (_) {} };
   await ctx.addInitScript(initSeed, process.env.APP_TOKEN || '');
   const page = await ctx.newPage(); watch(page);
   const C = (fn, arg) => page.evaluate(fn, arg);

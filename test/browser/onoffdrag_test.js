@@ -92,6 +92,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('a quick flick toward Off turns the room off, though let go short of the middle', !(await roomOn()) && s.pillOff, { s, on: await roomOn() });
 
   // up the page from the switch: a scroll, not a switch
+  // (a short room can fit the screen; the page is given room to scroll so the swipe has somewhere to go)
+  await C(() => { document.querySelector('#screen').style.paddingBottom = '900px'; });
   n0 = await sentNow();
   const y0 = await C(() => (document.scrollingElement || document.documentElement).scrollTop);
   await drag(s.off.x, s.off.y, s.off.x - 6, s.off.y - 220, { n: 10, ms: 16, hold: 0 });
@@ -99,7 +101,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const y1 = await C(() => (document.scrollingElement || document.documentElement).scrollTop);
   s = await sw();
   check('a swipe up that starts on the switch scrolls the page and switches nothing', y1 > y0 && await sentSince(n0) === 0 && s.pillOff, { y0, y1, sent: await sentSince(n0), s });
-  await C(() => { (document.scrollingElement || document.documentElement).scrollTop = 0; }); await wait(400);
+  await C(() => { (document.scrollingElement || document.documentElement).scrollTop = 0; document.querySelector('#screen').style.paddingBottom = ''; }); await wait(400);
   s = await sw();
 
   // a tap is still a tap

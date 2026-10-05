@@ -2,6 +2,7 @@
 // sheet's detents and spacing, a scene one tap from Home, every room page and room setup page reachable, Colour as
 // one row on the light page, sheets that push instead of growing, and Settings on one screen.
 // PORT=4485 node ia_test.js
+// (The Copper Night look's measured positions and colours: this test runs in that look, ?look=copper.)
 const { chromium } = require('playwright-core');
 const fs = require('fs');
 const PORT = process.env.PORT || 4400; const BASE = `http://127.0.0.1:${PORT}`;
@@ -26,7 +27,7 @@ const PLAN_HOME_CONTROLS = 19;   // docs/ia-v5.md 3: Home at rest, five rooms an
   let token = process.env.APP_TOKEN || null;
   const open = async size => {
     const ctx = await browser.newContext({ ...SIZES[size], timezoneId: 'America/Los_Angeles' });
-    if (token) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); } catch (_) {} }, token);
+    if (token) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('look', 'copper'); } catch (_) {} }, token);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push(`[${size}] pageerror: ` + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/net::ERR|favicon|sw\.js/.test(m.text())) errors.push(`[${size}] console: ` + m.text()); });

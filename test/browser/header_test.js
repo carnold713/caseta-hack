@@ -4,6 +4,7 @@
 // and the circles are at each scroll, the scrim, a room's title taking its two steps past the back button, a long
 // name cut the same at every step, a redraw mid-scroll, Rooms put back where it was scrolled, a room closing into its
 // card from a scrolled page, and a sheet over a scrolled page.
+// (The Copper Night look's measured positions and colours: this test runs in that look, ?look=copper.)
 const { chromium } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
@@ -62,7 +63,7 @@ async function scrollTo(page, y) {
   for (const [W, H] of [[412, 915], [360, 780]]) {
     console.log(`\n---- ${W} x ${H}`);
     const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
-    if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
+    if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('look', 'copper'); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|404|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });

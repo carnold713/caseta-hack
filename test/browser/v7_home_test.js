@@ -2,6 +2,7 @@
 // lamps (2), Goodnight putting the page to sleep (10) and the welcome light's countdown ring (12). Read off the running
 // app: where the light is and how strong, what each animation's duration and curve is (document.getAnimations()), and
 // what a person reads.
+// (The Copper Night look's measured positions and colours: this test runs in that look, ?look=copper.)
 const { chromium } = require('playwright-core');
 const PORT = process.env.PORT || 4400;
 let bad = 0;
@@ -17,7 +18,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   let fanFailing = false;
   const open = async (opts = {}) => {
     const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, ...opts });
-    if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
+    if (process.env.APP_TOKEN) await ctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('look', 'copper'); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/fonts|favicon|net::ERR|404/.test(m.text()) && !(fanFailing && /status of 502/.test(m.text()))) errors.push('console: ' + m.text()); });
