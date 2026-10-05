@@ -38,13 +38,17 @@ import * as widgetsScreen from '/ui/screens/widgets.js';
 import * as widgetData from '/ui/widgetdata.js';
 import * as depth from '/ui/depth.js';
 
-// The Ahead look (web/ui/ahead.css), the owner's dark redesign. Until every screen is drawn in it, it is on only with
-// ?look=ahead (remembered) or localStorage look=ahead; ?look=copper turns it off again.
-try {
-  const q = new URLSearchParams(location.search).get('look');
-  if (q === 'ahead' || q === 'copper') localStorage.setItem('look', q);
-  if ((q || localStorage.getItem('look')) === 'ahead') document.documentElement.classList.add('ahead');
-} catch (_) { /* fine */ }
+// The Ahead look (web/ui/ahead.css), the owner's dark redesign, is the app's look. ?look=copper (remembered) brings
+// back the Copper Night look it replaced; ?look=ahead returns.
+{
+  let look = null;
+  try {
+    const q = new URLSearchParams(location.search).get('look');
+    if (q === 'ahead' || q === 'copper') localStorage.setItem('look', q);
+    look = q || localStorage.getItem('look');
+  } catch (_) { /* fine */ }
+  if (look !== 'copper') document.documentElement.classList.add('ahead');
+}
 
 const data = create({ storage: localStorage });
 const H = CasetaHome.create(data);

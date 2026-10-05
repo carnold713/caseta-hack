@@ -52,7 +52,7 @@ final class Widgets {
     private Widgets() {}
 
     static final String[] KINDS = { "room", "light", "scenes", "house", "levels", "timer", "nightstand", "routine", "pinned", "colour", "dimmers" };
-    static final int COPPER = 0xFFD98A4E;
+    static final int COPPER = 0xFFF4A53C;   // the Ahead look's amber: a light that is on
 
     static Class<?> providerOf(String kind) {
         switch (kind) {
@@ -138,14 +138,15 @@ final class Widgets {
             L.ink = 0xFFFFFFFF; L.sub = 0xFFE0E0E0; L.btn = 0xFFFFFFFF; L.btnAlpha = 46; L.btnInk = 0xFFFFFFFF;
             L.solid = 0xFFF8F8F8; L.solidInk = 0xFF262626;
         } else {
-            L.bg = 0xFF1E1E1E; L.bgAlpha = 255; L.ink = 0xFFFFFFFF; L.sub = 0xFF9E9E9E; L.btn = 0xFF2B2B2B; L.btnAlpha = 255; L.btnInk = 0xFFFFFFFF;
-            L.solid = 0xFFF8F8F8; L.solidInk = 0xFF262626;
+            // the Ahead look, dark: the owner's surface, ink and inset (web/ui/ahead.css)
+            L.bg = 0xFF182225; L.bgAlpha = 255; L.ink = 0xFFEEF2EF; L.sub = 0xFF93A09D; L.btn = 0xFF202C2F; L.btnAlpha = 255; L.btnInk = 0xFFEEF2EF;
+            L.solid = 0xFFEEF2EF; L.solidInk = 0xFF0A2F33;
         }
         L.accent = COPPER;
         if ("lamp".equals(cfg.optString("accent")) && lampHex != null) {
             try { L.accent = Color.parseColor(lampHex) | 0xFF000000; } catch (Exception ignored) { /* copper then */ }
         }
-        L.onInk = light(L.accent) ? 0xFF1A1A1A : 0xFFFFFFFF;
+        L.onInk = light(L.accent) ? 0xFF0A2F33 : 0xFFFFFFFF;
         return L;
     }
 

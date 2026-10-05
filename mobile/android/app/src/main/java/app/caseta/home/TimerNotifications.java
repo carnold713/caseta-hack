@@ -41,7 +41,7 @@ import java.util.Set;
 final class TimerNotifications {
     static final String CHANNEL = "timers";
     private static final String PREFS = "timer-notes";
-    private static final int COPPER = 0xFFD98A4E;
+    private static final int COPPER = 0xFFF4A53C;
 
     private TimerNotifications() {}
 

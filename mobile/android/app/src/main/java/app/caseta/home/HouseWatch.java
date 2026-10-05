@@ -40,7 +40,7 @@ final class HouseWatch {
     static final long QUIET_MS = 5 * 60 * 1000L;
     private static final long SAME_OUTAGE_MS = 6 * 60 * 60 * 1000L;
     private static final long BACK_SHOWN_MS = 30 * 60 * 1000L;
-    private static final int COPPER = 0xFFD98A4E;
+    private static final int COPPER = 0xFFF4A53C;
 
     private HouseWatch() {}
 

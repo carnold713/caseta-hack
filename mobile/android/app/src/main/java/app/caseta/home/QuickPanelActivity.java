@@ -111,13 +111,13 @@ public class QuickPanelActivity extends ComponentActivity {
     private ImageView chevron;
     private boolean closing, touched, reconciled, moving, fingerDown;
 
-    /** Copper Night, or Day when the widget it was opened from is in Day. Copper is "on" in both. */
+    /** The Ahead look's dark, or Day when the widget it was opened from is in Day. Copper is "on" in both. */
     private static final class Palette {
         int card, ink, sub, track, rest;
 
         Palette(boolean day) {
             if (day) { card = 0xFFF5F2EE; ink = 0xFF1A1A1A; sub = 0xFF6E6E6E; track = 0xFFE6E1DB; rest = 0xFFD3CCC4; }
-            else { card = 0xFF1E1E1E; ink = 0xFFFFFFFF; sub = 0xFF9E9E9E; track = 0xFF2B2B2B; rest = 0xFF3D3D3D; }
+            else { card = 0xFF182225; ink = 0xFFEEF2EF; sub = 0xFF93A09D; track = 0xFF202C2F; rest = 0xFF2A3639; }   // the Ahead look
         }
     }
 
@@ -193,7 +193,7 @@ public class QuickPanelActivity extends ComponentActivity {
 
         FrameLayout root = new FrameLayout(this);
         scrim = new View(this);
-        scrim.setBackgroundColor(0x80000000);
+        scrim.setBackgroundColor(0xB3101719);   // the canvas, as the owner's frame dims the home screen
         scrim.setAlpha(0f);
         scrim.setOnClickListener(tapped -> close());
         root.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -766,8 +766,8 @@ public class QuickPanelActivity extends ComponentActivity {
         int level = levelOf(it);
         boolean on = level != 0;
         if (it.dot != null) {
-            it.dot.setColor(on ? COPPER : pal.track);
-            it.power.setColorFilter(on ? 0xFFFFFFFF : pal.ink);
+            it.dot.setColor(on ? 0xFFFFE6C4 : pal.track);   // a lit light's power: a cream disc, its glyph amber (the owner's frame)
+            it.power.setColorFilter(on ? 0xFFE38E37 : pal.ink);
             it.power.setContentDescription("Turn " + it.name + (on ? " off" : " on"));
         }
         if (it.bar != null) it.bar.redraw();
@@ -1042,7 +1042,7 @@ public class QuickPanelActivity extends ComponentActivity {
 
             canvas.save();
             canvas.clipPath(fillPath);
-            words(canvas, w, h, level, on ? 0xFFFFFFFF : pal.ink, on ? 0xD9FFFFFF : pal.sub);
+            words(canvas, w, h, level, on ? 0xFF5A3510 : pal.ink, on ? 0xCC5A3510 : pal.sub);   // brown ink on the amber, as the On pill
             canvas.restore();
             canvas.save();
             clipOut(canvas, fillPath);
