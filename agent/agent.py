@@ -42,7 +42,7 @@ from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from sun import solar_noon, sun_times
 
-VERSION = "0.25.0"
+VERSION = "0.26.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -51,6 +51,8 @@ RESUB_WAITS = (2, 4, 6)
 LINK_EVERY_S = 30
 LINK_PROBE_S = 10.0
 LINK_KICK_GAP_S = 120.0
+LOGIN_FAILS_RESTART = 3  # failed logins in a row on fresh sessions before the connector restarts itself
+RESTART_MIN_UP_S = 10 * 60  # and it never restarts itself sooner than this after a start
 # How long the bridge may stay logged out, while it still answers on its port, before the connector stops telling
 # systemd it is well and lets it restart the process. See Agent.heartbeat.
 BRIDGE_GIVE_UP_S = 30 * 60
@@ -292,6 +294,9 @@ class Agent:
         self._probe_fails = 0
         self._reconnects = 0                # fresh bridge connections the link check started since this process began
         self._link_problem: Optional[str] = None  # the last thing the link check found wrong, in words, for the app
+        self._lib_logging_in = False        # the library's login is running, with the other lights set aside
+        self._merge_deferred: list = []     # what a merge asked to tell the app while they were set aside
+        self._login_fails = 0               # logins on a fresh session that failed since the last one that worked
 
     # ---------- config ----------
     def _load_cached_config(self) -> Dict[str, Any]:
@@ -363,6 +368,9 @@ class Agent:
         # the house unheard while everything else looks fine. Its login calls this by name, so the connector's
         # version, which asks for each button on its own and remembers which ones took, runs in its place.
         self.bridge._subscribe_to_button_status = self._subscribe_buttons  # noqa: SLF001
+        # The same for its login, which runs again on every fresh session: see _login_bridge.
+        self._lib_login = self.bridge._login  # noqa: SLF001
+        self.bridge._login = self._login_bridge  # noqa: SLF001
         LOG.info("connecting to bridge at %s ...", BRIDGE_HOST)
         await self.bridge.connect()
         LOG.info("bridge connected: %d devices, %d buttons, %d scenes",
@@ -379,6 +387,45 @@ class Agent:
             self._merge_nanoleaf(send=False)
             self.send({"type": "inventory", "inventory": self.inventory()})
             self.send({"type": "state", "states": self.all_states()})
+
+    async def _login_bridge(self) -> None:
+        """The library's login, with the Hue and Nanoleaf lights out of its way.
+
+        Those lights live in the library's own dictionaries (_merge_hue, _merge_nanoleaf) so the rest of the
+        connector reads one list. The library's login walks those dictionaries too, and expects every entry to be
+        one of its own: it reads device["button_groups"] off each one, and asks the bridge for the state of each
+        zone it finds. The first login after a start runs before any of them are merged, so it always worked; the
+        next one, whenever the bridge next dropped the session days later, failed with KeyError 'button_groups'
+        on the first Hue light, and every one after it failed the same way. The bridge kept answering, the
+        remotes stayed listed, and no press was ever reported again until the connector was restarted.
+
+        So they are taken out for the length of the login and put back when it ends, however it ends."""
+        br = self.bridge
+        assert br is not None
+        self._lib_logging_in = True
+        for coll in (br.devices, br.areas, br.scenes):
+            for k in [k for k in coll if self._backend_for(k) is not None]:
+                del coll[k]
+        ok = False
+        try:
+            await self._lib_login()
+            ok = True
+        except Exception:
+            self._login_fails += 1
+            raise
+        finally:
+            self._lib_logging_in = False
+            self._merge_hue(send=False)
+            self._merge_nanoleaf(send=False)
+            if ok:
+                self._login_fails = 0
+                self._wire_subscriptions()
+            if ok or self._merge_deferred:
+                self.send({"type": "inventory", "inventory": self.inventory()})
+                self.send({"type": "state", "states": self.all_states()})
+            for info in self._merge_deferred:
+                self.send(info())
+            self._merge_deferred = []
 
     # ---------- dispatch: which backend a device id belongs to ----------
     def _backend_for(self, device_id: str) -> Optional[Any]:
@@ -425,6 +472,10 @@ class Agent:
     def _merge_hue(self, send: bool = True) -> None:
         if not self.bridge:
             return
+        if self._lib_logging_in:  # the login puts them back when it ends (_login_bridge)
+            if send:
+                self._merge_deferred.append(lambda: {"type": "hue", "hue": self.hue.info()})
+            return
         for coll, src in ((self.bridge.devices, self.hue.devices), (self.bridge.areas, self.hue.areas), (self.bridge.scenes, self.hue.scenes)):
             for k in [k for k in coll if str(k).startswith("hue_")]:
                 if k not in src:
@@ -442,6 +493,10 @@ class Agent:
     # ---------- Nanoleaf: a list of directly-paired controllers, each its own light in the same dictionaries ----------
     def _merge_nanoleaf(self, send: bool = True) -> None:
         if not self.bridge:
+            return
+        if self._lib_logging_in:  # as _merge_hue
+            if send:
+                self._merge_deferred.append(lambda: {"type": "nanoleaf", "nanoleaf": self.nanoleaf.info()})
             return
         for k in [k for k in self.bridge.devices if str(k).startswith("nanoleaf_")]:
             if k not in self.nanoleaf.devices:
@@ -614,6 +669,13 @@ class Agent:
             return  # between sessions: the library is already reconnecting
         login = getattr(br, "_login_task", None)
         if login is not None and login.done() and not login.cancelled() and login.exception() is not None:
+            if self._login_fails >= LOGIN_FAILS_RESTART:
+                # Fresh sessions keep connecting and keep failing to log in. Whatever the library has kept from the
+                # session that worked is what it trips on (that is how the Hue lights did it), and a fresh process
+                # keeps nothing, so the connector replaces itself with one. restart() returns only when it is too
+                # soon after a start to, and then this goes on to try a fresh session as before.
+                self.restart(f"logging in to the bridge has failed {self._login_fails} times in a row "
+                             f"({type(login.exception()).__name__}: {login.exception()})")
             if may_kick:
                 kick(f"logging back in to the bridge failed ({type(login.exception()).__name__}: {login.exception()})")
                 leap.close()
@@ -709,6 +771,7 @@ class Agent:
             # started since this process began, and the last thing it found wrong
             "link_ok_at": getattr(self, "_link_ok_at", None),
             "reconnects": getattr(self, "_reconnects", 0),
+            "login_fails": getattr(self, "_login_fails", 0),  # failed logins in a row on fresh sessions
             "link_problem": getattr(self, "_link_problem", None),
             "last_reconnect": getattr(self, "_last_kick", None),  # {at, why} of the last fresh connection it started
             "uptime_s": round(time.time() - self._started_at),
@@ -1371,6 +1434,19 @@ class Agent:
             except Exception:  # noqa: BLE001
                 pass
         # Replace this process with a fresh one on the new code. Works with or without systemd/launchd.
+        os.execv(sys.executable, [sys.executable, *sys.argv])
+
+    def restart(self, why: str) -> None:
+        """Replace this process with a fresh one, as an update does. A connector that started less than
+        RESTART_MIN_UP_S ago does not, so a fault a restart cannot cure never turns into a restart loop."""
+        if time.time() - self._started_at < RESTART_MIN_UP_S:
+            return
+        LOG.error("restarting: %s", why)
+        for h in logging.getLogger().handlers:
+            try:
+                h.flush()
+            except Exception:  # noqa: BLE001
+                pass
         os.execv(sys.executable, [sys.executable, *sys.argv])
 
     async def heartbeat(self) -> None:

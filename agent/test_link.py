@@ -118,6 +118,9 @@ def fresh_agent(bridge):
     a._probe_fails = 0
     a._reconnects = 0
     a._link_problem = None
+    a._login_fails = 0
+    a._lib_logging_in = False
+    a._merge_deferred = []
     a.sent = []
     a.send = a.sent.append
     return a
