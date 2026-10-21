@@ -45,7 +45,7 @@ jobs:
         shell: pwsh
         run: |
           $p = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--selftest' -RedirectStandardOutput selftest.txt -Wait -PassThru -NoNewWindow
-          Get-Content selftest.txt
+          Get-Content selftest.txt, selftest.json -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { exit 1 }
 
       - uses: actions/upload-artifact@v4

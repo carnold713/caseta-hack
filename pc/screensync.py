@@ -317,6 +317,8 @@ def tray(sync: Sync) -> None:
 
 
 def selftest() -> int:
+    # a windowed .exe can start with no stdout at all: the answer then goes to selftest.json beside it
+    out = sys.stdout if sys.stdout is not None else open("selftest.json", "w", encoding="utf-8")
     s = Screen()
     t0 = time.perf_counter()
     f = None
@@ -326,13 +328,13 @@ def selftest() -> int:
             break
         time.sleep(0.05)
     if f is None:
-        print(json.dumps({"capture": s.kind, "frame": None}))
+        print(json.dumps({"capture": s.kind, "frame": None}), file=out, flush=True)
         return 0
     cells = grid(f)
     t = (time.perf_counter() - t0) * 1000
     a = np.frombuffer(cells, dtype=np.uint8).reshape(-1, 3).mean(axis=0)
     print(json.dumps({"capture": s.kind, "screen": list(f.shape), "grid": [GRID_W, GRID_H],
-                      "average": [int(v) for v in a], "ms": round(t, 1)}))
+                      "average": [int(v) for v in a], "ms": round(t, 1)}), file=out, flush=True)
     return 0
 
 
