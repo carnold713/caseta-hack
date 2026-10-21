@@ -318,6 +318,30 @@ what makes Android trust the app and hide the browser bar: from
 `ANDROID_CERT_SHA256` and `ANDROID_PACKAGE_NAME` (or a whole `ASSETLINKS_JSON`)
 are set on Railway, which win.
 
+### 4. PC screen (optional)
+
+A room's Hue colour lights can follow the colours on a Windows PC's screen, about
+25 changes a second (Hue's own limit). The PC looks at its screen and sends a small
+grid of colours to the connector over the home network; the connector streams them
+to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
+
+1. On the PC, download `CasetaScreenSync.exe` from the
+   [screensync-latest release](https://github.com/carnold713/caseta-hack/releases/download/screensync-latest/CasetaScreenSync.exe)
+   and run it. It sits in the tray (the icon is the screen's colour) and finds the
+   connector by itself; `--pi <address>` gives it the address if it cannot. Its menu
+   can start it with Windows.
+2. In the app, open the room and switch on **PC screen**. The first time, a Hue
+   pairing from before this feature needs the bridge's button pressed once more (the
+   row says so): streaming needs a second key that older pairings did not keep.
+3. The connector makes a Hue entertainment area for the room's colour lights (or
+   uses one that already holds exactly them), with a light named "left" or "right"
+   on that side.
+
+It stops a few seconds after the PC goes quiet (closed, locked, asleep) and puts the
+lights back as they were. Changing one of those lights from the app, a remote or a
+routine pauses it; switch it on again, or choose Resume in the tray. The PC and the
+Pi need UDP port 47700 open between them.
+
 ### Updating the connector
 
 Settings shows the connector's version next to the hub's. Tap **Update
@@ -501,6 +525,9 @@ agent/nanoleaf.py A list of directly-paired Nanoleaf controllers, each its own n
                   levels, colour and warmth, no bridge and no native room, a light poll instead of an event stream
 agent/color.py    CIE xy <-> hex with gamut clamping, kelvin <-> mirek, hue/sat <-> rgb, a black-body tint (no dependencies)
 agent/daylight.py Follow the day: the anchor table, the sun-anchored curve, mireds, and each lamp's own limits
+agent/screensync.py  a room's Hue colour lights following a PC's screen: the PC's frames in, the colours worked out,
+                  start, pause, stop and putting the lights back; huestream.py is the DTLS stream to the Hue bridge
+pc/screensync.py  the PC half (Windows tray program, built into an .exe by .github/workflows/screensync.yml)
 agent/sun.py      sunrise, sunset and solar noon for a date and a place (NOAA, no network)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js

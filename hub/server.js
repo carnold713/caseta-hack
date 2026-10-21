@@ -178,6 +178,13 @@ app.post('/api/hue', requireAuth, async (req, res) => {
   try { res.json(await sendCommand(action, b.op === 'pair' ? 70000 : 25000)); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
+// Screen sync: pause or resume the room following the PC's screen. Which room follows is a setting in the config.
+app.post('/api/screensync', requireAuth, async (req, res) => {
+  const op = (req.body || {}).op;
+  if (!['pause', 'resume'].includes(op)) return res.status(400).json({ error: 'op must be pause or resume' });
+  try { res.json(await sendCommand({ type: `screensync_${op}` })); }
+  catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
 // Nanoleaf: unlike Hue there is no bridge, so this covers a list of directly-paired controllers, each with
 // its own address and its own held-button pairing. "forget" names which one by its serial.
 app.post('/api/nanoleaf', requireAuth, async (req, res) => {
@@ -399,7 +406,7 @@ wssAgent.on('connection', (ws, req) => {
 function handleAgentMessage(ws, msg) {
   switch (msg.type) {
     case 'hello':
-      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, nanoleaf: msg.nanoleaf || null, health: msg.health || null, since: new Date().toISOString() };
+      agentInfo = { version: msg.version || null, commit: msg.commit || null, latest: LATEST_AGENT_VERSION, update_available: versionLess(msg.version, LATEST_AGENT_VERSION), bridge: msg.bridge || null, hue: msg.hue || null, nanoleaf: msg.nanoleaf || null, health: msg.health || null, screen_sync: msg.screen_sync || null, since: new Date().toISOString() };
       agentOffline(null);
       if (agentInfo.update_available && config.settings.auto_update !== false && !updating) {
         console.log(`[hub] connector ${msg.version} is behind ${LATEST_AGENT_VERSION}, updating it`);
@@ -466,6 +473,10 @@ function handleAgentMessage(ws, msg) {
     }
     case 'hue':
       if (agentInfo) { agentInfo.hue = msg.hue || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
+      break;
+    // A room's Hue lights following a PC's screen (agent/screensync.py): what it is doing, for the room's page.
+    case 'screen_sync':
+      if (agentInfo) { agentInfo.screen_sync = msg.screen_sync || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     case 'nanoleaf':
       if (agentInfo) { agentInfo.nanoleaf = msg.nanoleaf || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }

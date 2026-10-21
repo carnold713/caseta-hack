@@ -13,3 +13,6 @@ pylutron-caseta>=0.29,<0.30
 websockets>=12,<16
 zeroconf>=0.130,<1
 aiohttp>=3.9,<4
+#   Screen sync's stream to the Hue bridge (huestream.py) is DTLS, which Python's own ssl cannot do. Imported only
+#   when a stream starts, so a connector without it still runs.
+pyOpenSSL>=24,<27

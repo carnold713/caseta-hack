@@ -1,0 +1,6 @@
+# The PC half of screen sync (pc/screensync.py). dxcam is Windows only; mss is the fallback grab everywhere.
+numpy>=1.26,<3
+mss>=9,<11
+dxcam>=0.0.5; sys_platform == "win32"
+pystray>=0.19,<1
+Pillow>=10,<13

@@ -5,6 +5,7 @@
 // across the page at the wave token (60 ms per 100 px). Each tile, and the photograph's light, crossfades when the
 // ring reaches it or when its light's state arrives, whichever is later, so a slow bridge shows as a tile catching up
 // and never as a lie. The count settles last, and the toast offers Put back.
+import { syncRow, syncActions } from '/ui/screens/screensync.js';
 import { ahead } from '/ui/look.js';
 import { tile, roomPicture, pinButton } from '/ui/screens/parts.js';
 import { roomPower } from '/ui/screens/rooms.js';
@@ -253,6 +254,7 @@ export function view(c, r) {
   const rest = `${brightHTML(c, aid)}
     ${scenesHead}
     ${scenes.length || suggest || newScene ? `<div class="chip-row room-chips ${scenesHead ? 'headed' : ''}" data-keep="room-scenes">${scenes.join('')}${suggest}${newScene}</div>` : ''}
+    ${syncRow(c, aid)}
     ${ds.length
       ? `<div class="tile-grid room-grid">${ds.map(d => tile(c, d)).join('')}</div>`
       : `<div class="group room-empty"><button class="row sub has-ic" data-go="room/${esc(aid)}/setup"><span class="row-ic">${icon('plus', 20, 1.7)}</span><span class="row-txt"><span class="t">Move something in here</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button></div>`}
@@ -476,6 +478,7 @@ addEventListener('hashchange', () => {
 export const actions = {
   ...setupActions,
   ...sheetActs,
+  ...syncActions,
   'room-on'(c, el) { roomPower(c, el.dataset.id, true); },
   'room-off'(c, el) { roomPower(c, el.dataset.id, false); },
   // a scene chip: one tap runs it, with Put back; hold it to change it, as a scene tile does on All scenes

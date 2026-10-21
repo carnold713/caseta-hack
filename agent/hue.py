@@ -54,6 +54,9 @@ class Hue:
         self.file = data_dir / "hue.json"
         self.host: Optional[str] = None
         self.key: Optional[str] = None
+        # The clientkey the bridge hands out beside the key: the pre-shared key for its streaming mode (screen sync,
+        # huestream.py). A pairing from before screen sync did not keep it, so it can be missing on a paired bridge.
+        self.clientkey: Optional[str] = None
         self.scheme = scheme
         self.devices: Dict[str, dict] = {}     # hue_<light> -> pylutron-shaped device dict
         self.areas: Dict[str, dict] = {}       # hue_<room> -> {name, parent_id, children, grouped}
@@ -72,7 +75,7 @@ class Hue:
         self._group_at = 0.0
         try:
             saved = json.loads(self.file.read_text())
-            self.host, self.key = saved.get("host"), saved.get("key")
+            self.host, self.key, self.clientkey = saved.get("host"), saved.get("key"), saved.get("clientkey")
         except Exception:  # noqa: BLE001
             pass
 
@@ -82,7 +85,7 @@ class Hue:
         return bool(self.host and self.key)
 
     def info(self) -> dict:
-        return {"paired": self.paired, "host": self.host, "lights": len(self.devices), "rooms": len(self.areas), "scenes": len(self.scenes), "error": self.error, "live": bool(self._events and not self._events.done())}
+        return {"paired": self.paired, "host": self.host, "lights": len(self.devices), "rooms": len(self.areas), "scenes": len(self.scenes), "error": self.error, "live": bool(self._events and not self._events.done()), "stream_key": bool(self.clientkey)}
 
     # ----- http -----
     def _base(self) -> str:
@@ -115,6 +118,11 @@ class Hue:
             if r.status >= 400:
                 raise RuntimeError(f"Hue bridge said {r.status}: {(await r.text())[:200]}")
             return await r.json(content_type=None)
+
+    async def app_id(self) -> Optional[str]:
+        """The application id the bridge knows this key by: the identity for its streaming mode."""
+        async with self._sess().get(self._base() + "/auth/v1", headers={"hue-application-key": self.key or ""}) as r:
+            return r.headers.get("hue-application-id")
 
     # ----- discovery and pairing -----
     async def discover(self) -> List[dict]:
@@ -166,8 +174,9 @@ class Hue:
                 item = data[0] if isinstance(data, list) and data else {}
                 if "success" in item:
                     self.key = item["success"]["username"]
+                    self.clientkey = item["success"].get("clientkey")
                     self.file.parent.mkdir(parents=True, exist_ok=True)
-                    self.file.write_text(json.dumps({"host": self.host, "key": self.key}))
+                    self.file.write_text(json.dumps({"host": self.host, "key": self.key, "clientkey": self.clientkey}))
                     self.error = None
                     await self.start()
                     return self.info()
@@ -180,7 +189,7 @@ class Hue:
 
     async def forget(self) -> dict:
         await self.stop()
-        self.host = self.key = None
+        self.host = self.key = self.clientkey = None
         self.devices, self.areas, self.scenes = {}, {}, {}
         try:
             self.file.unlink()

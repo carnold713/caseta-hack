@@ -40,9 +40,10 @@ from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
 from hue import Hue, color_state
 from nanoleaf import Nanoleaf
+from screensync import ScreenSync
 from sun import solar_noon, sun_times
 
-VERSION = "0.26.0"
+VERSION = "0.27.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -240,6 +241,10 @@ class Agent:
         # hands it is a small dispatcher that looks at the device id's prefix and calls the matching backend, keyed
         # by this table, so a third backend is one more entry here rather than a new call site in engine.py.
         self._backends: Dict[str, Any] = {"hue_": self.hue, "nanoleaf_": self.nanoleaf}
+        # A room's Hue colour lights following a PC's screen (screensync.py). It sits in front of the Hue backend:
+        # a command for one of those lights stops the stream first, so the bridge hears it.
+        self.sync = ScreenSync(self.hue, room_lights=lambda r: self.runner._resolve(f"a:{r}"),  # noqa: SLF001
+                               config=lambda: self.config, send=self.send, room_name=self._room_name)
         self.runner.hue_set = self._level_set_bridge
         self.runner.hue_color = self._color_set
         self.runner.hue_scene = self._scene_recall
@@ -435,7 +440,14 @@ class Agent:
                 return backend
         return None
 
+    def _room_name(self, room_id: str) -> Optional[str]:
+        for r in (self.config.get("settings") or {}).get("rooms") or []:
+            if isinstance(r, dict) and str(r.get("id")) == str(room_id):
+                return r.get("name")
+        return None
+
     async def _level_set_bridge(self, device_id: str, level: int, fade_s: Optional[float]) -> None:
+        await self.sync.yield_for(device_id)
         backend = self._backend_for(device_id)
         if backend is None:
             raise RuntimeError(f"no light backend for {device_id}")
@@ -449,6 +461,7 @@ class Agent:
         return await backend.verify(device_id, adopt)
 
     async def _color_set(self, device_id: str, kelvin: Optional[float] = None, hex: Optional[str] = None, fade_s: Optional[float] = None, level: Optional[int] = None) -> None:  # noqa: A002
+        await self.sync.yield_for(device_id)
         backend = self._backend_for(device_id)
         if backend is None:
             raise RuntimeError(f"no light backend for {device_id}")
@@ -464,7 +477,7 @@ class Agent:
         """Follow the day's own path to a lamp (agent.py's _follow_apply), one backend removed: same three
         promises as Hue.set_warmth and Nanoleaf.set_warmth, for whichever backend this id belongs to."""
         backend = self._backend_for(device_id)
-        if backend is None:
+        if backend is None or self.sync.owns(device_id):  # following the screen: the day can wait
             return False
         return await backend.set_warmth(device_id, kelvin, fade_s=fade_s, level=level, while_off=while_off)
 
@@ -1239,6 +1252,7 @@ class Agent:
                         "nanoleaf": self.nanoleaf.info(),
                         "follow": self.follow_state(),
                         "health": self.health(),
+                        "screen_sync": self.sync.status(),
                     }))
                     LOG.info("hub connected")
                     sender = asyncio.create_task(self._pump(ws))
@@ -1316,6 +1330,13 @@ class Agent:
                 elif kind == "hue_pair":
                     detail = await self.hue.pair(str(action.get("host") or ""))
                     self.send({"type": "hue", "hue": self.hue.info()})
+                elif kind in ("screensync_pause", "screensync_resume"):
+                    if kind == "screensync_pause":
+                        self.sync.pause()
+                    else:
+                        self.sync.resume()
+                    detail = self.sync.status()
+                    self.send({"type": "screen_sync", "screen_sync": detail})
                 elif kind == "hue_forget":
                     detail = await self.hue.forget()
                     self._merge_hue()
@@ -1605,6 +1626,7 @@ async def main() -> None:
     sd_notify("STATUS=Running")
     await agent.hue.start()  # no-op until a Hue bridge is paired from the app
     await agent.nanoleaf.start()  # no-op until a Nanoleaf controller is paired from the app
+    await agent.sync.start()  # listens for the PC; streams only once a room is set to follow it
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -1623,6 +1645,7 @@ async def main() -> None:
     sched.cancel()
     watch.cancel()
     follow.cancel()
+    await agent.sync.stop()
     await agent.hue.stop()
     await agent.nanoleaf.stop()
     if agent.bridge:

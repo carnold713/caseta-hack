@@ -1,0 +1,67 @@
+# The PC half of screen sync (pc/): one Windows .exe, built on every push that touches it and put at one fixed
+# address, the "screensync-latest" release:
+#   https://github.com/carnold713/caseta-hack/releases/download/screensync-latest/CasetaScreenSync.exe
+name: Screen sync for Windows
+
+on:
+  push:
+    paths:
+      - 'pc/**'
+      - '.github/workflows/screensync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screensync-exe
+  cancel-in-progress: true
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pc/requirements.txt
+
+      - name: Install
+        run: |
+          python -m pip install -r pc/requirements.txt
+          python -m pip install "pyinstaller>=6,<7"
+
+      - name: Tests
+        run: python pc/test_screensync.py
+
+      - name: Build the .exe
+        run: pyinstaller --onefile --noconsole --name CasetaScreenSync --collect-all dxcam pc/screensync.py
+
+      # The runner has a desktop to look at; this proves the .exe starts, imports everything and can grab the screen
+      - name: The .exe looks at the screen once
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--selftest' -RedirectStandardOutput selftest.txt -Wait -PassThru -NoNewWindow
+          Get-Content selftest.txt
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screensync-exe
+          path: dist/CasetaScreenSync.exe
+
+      - name: Publish to the screensync-latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="Built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}. Download CasetaScreenSync.exe on the PC and run it. Then, in the app, open the room and switch on PC screen."
+          if gh release view screensync-latest >/dev/null 2>&1; then
+            gh release upload screensync-latest dist/CasetaScreenSync.exe --clobber
+            gh release edit screensync-latest --notes "$notes" --prerelease
+          else
+            gh release create screensync-latest dist/CasetaScreenSync.exe --title "Caseta screen sync for Windows (latest)" --notes "$notes" --prerelease --target "$GITHUB_SHA"
+          fi

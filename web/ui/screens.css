@@ -293,6 +293,8 @@
 .room-chips.headed { margin-top: 10px; }
 .chip.editing .ic { color: var(--copper); }
 .room-grid { margin-top: 16px; padding-bottom: 8px; }
+/* the PC screen's row (screensync.js), between the scenes and the lights */
+.sync-rows { margin-top: 16px; }
 /* M11: a tile on a room presses to the file's 0.97, held while the finger is down, and opens from there (lightopen.js). */
 .room-grid .tile:active { transform: scale(.97); }
 .room-empty { margin-top: 16px; }

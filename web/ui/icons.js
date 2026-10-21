@@ -10,6 +10,7 @@ export const PATHS = {
   back:    '<path d="M15 5l-7 7 7 7"/>',
   chev:    '<path d="M9 5l7 7-7 7"/>',
   chevD:   '<path d="M6 9l6 6 6-6"/>',
+  screen:  '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>',
   power:   '<path d="M12 3v8"/><path d="M6.3 6.6a8 8 0 1 0 11.4 0"/>',
   tune:    '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
   home:    '<path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M9 20v-5h6v5"/>',

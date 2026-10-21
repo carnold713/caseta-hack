@@ -174,11 +174,12 @@ ws.on('open', () => {
 ws.on('message', raw => {
   const m = JSON.parse(raw);
   if (m.type === 'config') { config = m.config;
-    setTimeout(() => send({ type: 'health', health: { bridge_ok: true, buttons: Object.keys(inventory.buttons).length, bindings: (config.bindings || []).length, last_press_at: Math.floor(Date.now() / 1000) - 120, last_press: '9/0', presses: 3 } }), 50); console.log('got config with', config.bindings.length, 'bindings,', (config.schedules || []).length, 'schedules'); send({ type: 'sun', sun: sun(), next_runs: nextRuns() }); followConfig(); }
+    setTimeout(() => send({ type: 'health', health: { bridge_ok: true, buttons: Object.keys(inventory.buttons).length, bindings: (config.bindings || []).length, last_press_at: Math.floor(Date.now() / 1000) - 120, last_press: '9/0', presses: 3 } }), 50); console.log('got config with', config.bindings.length, 'bindings,', (config.schedules || []).length, 'schedules'); send({ type: 'sun', sun: sun(), next_runs: nextRuns() }); followConfig(); sendSync(); }
   if (m.type === 'command') {
     console.log('command', JSON.stringify(m.action));
     if (m.action.type && m.action.type.startsWith('add_')) { addCommand(m); return; }
     if (m.action.type && m.action.type.startsWith('hue_')) { hueCommand(m); return; }
+    if (m.action.type && m.action.type.startsWith('screensync_')) { syncCommand(m); return; }
     if (m.action.type && m.action.type.startsWith('nanoleaf_')) { nanoleafCommand(m); return; }
     if (m.action.type && m.action.type.startsWith('room_')) { roomCommand(m); return; }
     if (m.action.type === 'remove_device') { const id = m.action.id; if (!inventory.devices[id]) { send({ type: 'result', id: m.id, ok: false, error: 'Bridge returned 404 NotFound' }); return; }
@@ -429,8 +430,26 @@ setInterval(() => {
     if (d.echo) { ECHO = d.echo === 'bridge' ? 'bridge' : 'plain'; console.log('echo', ECHO); }
     if (d.stuck) STUCK = new Set(d.stuck);
     if ('fan_fail' in d) { FAN_FAIL = !!d.fan_fail; console.log('fan fail', FAN_FAIL); }
+    if (d.sync) { Object.assign(SYNC, d.sync); sendSync(); }
   }
 }, 200);
+
+// ----- Screen sync (agent/screensync.py), pretended. No PC has been seen until a test says so through fake-do.json
+// ({"sync": {"pc": true, "key": false, "state": "problem", "why": "..."}}), so no other page grows the row. The room in
+// the config follows unless paused; a pause or resume from the app is answered as the connector answers it.
+const SYNC = { pc: false, key: true, paused: false, state: null, why: null };
+function syncStatus() {
+  const room = (((config || {}).settings || {}).screen_sync || {}).room || null;
+  const state = SYNC.state || (!room ? 'off' : SYNC.paused ? 'paused' : 'syncing');
+  return { state, room, room_name: room && inventory.areas[room] ? inventory.areas[room].name : null, lights: [], area: null, why: SYNC.why,
+    pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000 } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key };
+}
+const sendSync = () => { if (ws.readyState === 1) send({ type: 'screen_sync', screen_sync: syncStatus() }); };
+function syncCommand(m) {
+  SYNC.paused = m.action.type === 'screensync_pause';
+  send({ type: 'result', id: m.id, ok: true, detail: syncStatus() });
+  sendSync();
+}
 
 // ----- "Add a device": pretend the bridge hears a Pico 2.5 s after listening starts -----
 let addState = { active: false, until: 0, heard: [], log: [] };
@@ -542,6 +561,7 @@ function hueCommand(m) {
     if (a.host === '10.0.0.9') { setTimeout(() => send({ type: 'result', id: m.id, ok: false, error: 'the Hue bridge did not hand out a key: link button not pressed' }), 1200); return; }
     setTimeout(() => {
       hue = { paired: true, host: a.host, lights: 3, rooms: 1, scenes: 0, error: null, live: true };
+      SYNC.key = true; setTimeout(sendSync, 50);
       inventory.areas['hue_room1'] = { id: 'hue_room1', name: 'Office' };
       inventory.devices['hue_l1'] = { device_id: 'hue_l1', name: 'Desk lamp', type: 'HueLight', domain: 'light', area: 'hue_room1', zone: 'l1', color: true, ct: true, ct_range: [2000, 6500] };
       inventory.devices['hue_l2'] = { device_id: 'hue_l2', name: 'Ceiling', type: 'HueLight', domain: 'light', area: 'hue_room1', zone: 'l2', ct: true, ct_range: [2200, 6500] };

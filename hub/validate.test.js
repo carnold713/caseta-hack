@@ -271,3 +271,11 @@ test('a light or a remote can carry a name of its own, trimmed, and an empty one
   assert.strictEqual(out.settings.device_names['8'].length, 40);
   assert.deepStrictEqual(validateConfig({ settings: { device_names: ['x'] } }).settings.device_names, {});
 });
+
+test('the room that follows the PC screen is an id or nobody', () => {
+  const room = s => validateConfig({ settings: { screen_sync: s } }).settings.screen_sync.room;
+  assert.strictEqual(room({ room: 'hue_room1' }), 'hue_room1');
+  assert.strictEqual(room({ room: '../etc' }), null);
+  assert.strictEqual(room(undefined), null);
+  assert.strictEqual(room({ room: null }), null);
+});

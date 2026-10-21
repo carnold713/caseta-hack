@@ -152,6 +152,7 @@
 
 /* ---- toggles are Tide when on ------------------------------------------------------------------------------- */
 :root.ahead .toggle { background: var(--surface-3); }
+:root.ahead .toggle[aria-checked='true'] { background: var(--blue); }
 
 /* ---- the tab bar: a full width surface bar, each tab labelled, the current one a Tide pill ------------------ */
 :root.ahead .tabbar {
@@ -187,6 +188,7 @@
 :root.ahead .ahead-room .room-bright { margin: 20px 16px 0; }
 :root.ahead .ahead-room .room-sec { margin: 24px 24px 0; }
 :root.ahead .ahead-room .room-grid { padding: 0 16px; margin-top: 20px; }
+:root.ahead .ahead-room .sync-rows { margin: 20px 16px 0; }
 :root.ahead .ahead-room .tile-grid .tile { height: 156px; }
 
 /* ---- room pictures: teal walls (roomscene.js PAL_AHEAD); the hero's picture fills its 313 -------------------- */
