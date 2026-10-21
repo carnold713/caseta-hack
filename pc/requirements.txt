@@ -1,6 +1,9 @@
-# The PC half of screen sync (pc/screensync.py). dxcam is Windows only; mss is the fallback grab everywhere.
+# The computer's half of screen sync (pc/screensync.py), Windows and macOS. dxcam is Windows only; mss is the
+# fallback grab everywhere.
 numpy>=1.26,<3
 mss>=9,<11
 dxcam>=0.0.5; sys_platform == "win32"
+# Quartz: the Mac's screen grab at nominal resolution and its Screen Recording permission (pystray needs it too)
+pyobjc-framework-Quartz>=10; sys_platform == "darwin"
 pystray>=0.19,<1
 Pillow>=10,<13

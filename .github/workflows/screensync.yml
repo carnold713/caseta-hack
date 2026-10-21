@@ -1,7 +1,10 @@
-# The PC half of screen sync (pc/): one Windows .exe, built on every push that touches it and put at one fixed
-# address, the "screensync-latest" release:
+# The computer's half of screen sync (pc/): a Windows .exe and a macOS menu-bar app, built on every push that touches
+# it and put at fixed addresses, the "screensync-latest" release:
 #   https://github.com/carnold713/caseta-hack/releases/download/screensync-latest/CasetaScreenSync.exe
-name: Screen sync for Windows
+#   https://github.com/carnold713/caseta-hack/releases/download/screensync-latest/CasetaScreenSync-mac.zip
+# The Mac app is for Apple silicon. Neither is signed by a developer account, so Windows and macOS each ask once
+# before opening it (the README says how).
+name: Screen sync for Windows and Mac
 
 on:
   push:
@@ -59,11 +62,45 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+        run: bash pc/publish.sh dist/CasetaScreenSync.exe
+
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pc/requirements.txt
+
+      - name: Install
         run: |
-          notes="Built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}. Download CasetaScreenSync.exe on the PC and run it. Then, in the app, open the room and switch on PC screen."
-          if gh release view screensync-latest >/dev/null 2>&1; then
-            gh release upload screensync-latest dist/CasetaScreenSync.exe --clobber
-            gh release edit screensync-latest --notes "$notes" --prerelease
-          else
-            gh release create screensync-latest dist/CasetaScreenSync.exe --title "Caseta screen sync for Windows (latest)" --notes "$notes" --prerelease --target "$GITHUB_SHA"
-          fi
+          python -m pip install -r pc/requirements.txt
+          python -m pip install "pyinstaller>=6,<7"
+
+      - name: Tests
+        run: python pc/test_screensync.py
+
+      # A menu-bar app: no Dock icon (LSUIElement), signed ad hoc again after the plist changes, which Apple silicon
+      # needs before it will open it at all
+      - name: Build the app
+        run: |
+          pyinstaller --windowed --name CasetaScreenSync --osx-bundle-identifier app.caseta.screensync pc/screensync.py
+          plutil -insert LSUIElement -bool true dist/CasetaScreenSync.app/Contents/Info.plist
+          codesign --force --deep --sign - dist/CasetaScreenSync.app
+          ditto -c -k --keepParent dist/CasetaScreenSync.app CasetaScreenSync-mac.zip
+
+      - name: The app looks at the screen once
+        run: dist/CasetaScreenSync.app/Contents/MacOS/CasetaScreenSync --selftest
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screensync-mac
+          path: CasetaScreenSync-mac.zip
+
+      - name: Publish to the screensync-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash pc/publish.sh CasetaScreenSync-mac.zip

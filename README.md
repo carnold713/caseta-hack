@@ -325,11 +325,16 @@ A room's Hue colour lights can follow the colours on a Windows PC's screen, abou
 grid of colours to the connector over the home network; the connector streams them
 to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
 
-1. On the PC, download `CasetaScreenSync.exe` from the
-   [screensync-latest release](https://github.com/carnold713/caseta-hack/releases/download/screensync-latest/CasetaScreenSync.exe)
-   and run it. It sits in the tray (the icon is the screen's colour) and finds the
-   connector by itself; `--pi <address>` gives it the address if it cannot. Its menu
-   can start it with Windows.
+1. On a Windows PC, download `CasetaScreenSync.exe` from the
+   [screensync-latest release](https://github.com/carnold713/caseta-hack/releases/tag/screensync-latest)
+   and run it (Windows warns once: More info, Run anyway). On a Mac with Apple silicon,
+   download `CasetaScreenSync-mac.zip` from the same page, open it, move
+   CasetaScreenSync to Applications and open it; macOS refuses the first time, so open
+   System Settings, Privacy & Security, and choose Open Anyway. Then allow it under
+   Screen Recording there and open it again: without that, macOS shows it only the
+   desktop picture. It sits in the tray (the menu bar on a Mac), its icon the screen's
+   colour, and finds the connector by itself; `--pi <address>` gives it the address if
+   it cannot. Its menu can start it with Windows, or open it at login on a Mac.
 2. In the app, open the room and switch on **PC screen**. The first time, a Hue
    pairing from before this feature needs the bridge's button pressed once more (the
    row says so): streaming needs a second key that older pairings did not keep.

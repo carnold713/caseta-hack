@@ -1,4 +1,5 @@
-"""Caseta screen sync, the PC half: shows the colours on this PC's screen to the connector on the Raspberry Pi.
+"""Caseta screen sync, the computer's half: shows the colours on this PC's or Mac's screen to the connector on the
+Raspberry Pi.
 
 About thirty times a second it looks at the main screen, shrinks it to a 16 x 9 grid of colours (black bars above
 and below a film, or beside it, are left out), and sends the grid to the connector over the home network. The
@@ -6,15 +7,19 @@ connector works out each light's colour and streams it to the Hue bridge (agent/
 is chosen in the app, on the room's page.
 
 It finds the connector by itself (a broadcast on UDP 47700, which the connector answers), or takes its address
-with --pi. While it runs it sits in the tray: the icon is the colour of the screen, its menu says what the room is
-doing, and can pause, resume, start with Windows, or quit. Closing it, locking the PC or letting it sleep stops the
-frames, and a few seconds later the connector stops the sync and puts the lights back as they were.
+with --pi. While it runs it sits in the tray (on a Mac, the menu bar): the icon is the colour of the screen, its menu
+says what the room is doing, and can pause, resume, start with Windows (open at login, on a Mac), or quit. Closing
+it, locking the computer or letting it sleep stops the frames, and a few seconds later the connector stops the sync
+and puts the lights back as they were.
+
+On a Mac it asks for Screen Recording the first time (System Settings, Privacy & Security): without it macOS shows
+it the desktop picture and nothing else, so until it is allowed the menu says so instead of following.
 
     screensync.exe                 run in the tray
     screensync.exe --pi 192.168.1.20
     screensync.exe --selftest      look at the screen once, print what it saw, and exit
 
-Built into one .exe by .github/workflows/screensync.yml.
+Built into one .exe for Windows and a menu-bar .app for macOS by .github/workflows/screensync.yml.
 """
 from __future__ import annotations
 
@@ -44,37 +49,74 @@ LOG = logging.getLogger("screensync")
 
 
 # ---------- the screen ----------
+def _plain_grab():
+    import mss  # noqa: WPS433
+
+    return (getattr(mss, "MSS", None) or mss.mss)()
+
+
 class Screen:
-    """The main screen, through Windows' Desktop Duplication (dxcam) when it can, otherwise a plain grab (mss)."""
+    """The main screen: through Windows' Desktop Duplication (dxcam), or on a Mac through Quartz at the screen's
+    nominal resolution (a Retina screen's pixels are four times as many as a 16 x 9 grid needs), otherwise a plain
+    grab (mss)."""
 
     def __init__(self) -> None:
         self.kind = None
         self._cam = None
         self._mss = None
+        self._quartz = None
         self._last: Optional[np.ndarray] = None
-        try:
-            import dxcam  # noqa: WPS433  (Windows only)
+        if sys.platform == "darwin":
+            try:
+                import Quartz  # noqa: WPS433  (pyobjc, macOS only)
 
-            self._cam = dxcam.create(output_color="RGB")
-            self.kind = "dxcam"
-        except Exception as exc:  # noqa: BLE001
-            LOG.info("Desktop Duplication unavailable (%s), using a plain grab", exc)
-            import mss  # noqa: WPS433
+                self._quartz = Quartz
+                self.kind = "quartz"
+                return
+            except Exception as exc:  # noqa: BLE001
+                LOG.info("Quartz unavailable (%s), using a plain grab", exc)
+        else:
+            try:
+                import dxcam  # noqa: WPS433  (Windows only)
 
-            self._mss = mss.mss()
-            self.kind = "mss"
+                self._cam = dxcam.create(output_color="RGB")
+                self.kind = "dxcam"
+                return
+            except Exception as exc:  # noqa: BLE001
+                LOG.info("Desktop Duplication unavailable (%s), using a plain grab", exc)
+        self._mss = _plain_grab()
+        self.kind = "mss"
+
+    def _grab_quartz(self) -> Optional[np.ndarray]:
+        Q = self._quartz
+        img = Q.CGWindowListCreateImage(Q.CGDisplayBounds(Q.CGMainDisplayID()), Q.kCGWindowListOptionOnScreenOnly,
+                                        Q.kCGNullWindowID, Q.kCGWindowImageNominalResolution)
+        if img is None:
+            return None
+        w, h, bpr = Q.CGImageGetWidth(img), Q.CGImageGetHeight(img), Q.CGImageGetBytesPerRow(img)
+        data = Q.CGDataProviderCopyData(Q.CGImageGetDataProvider(img))
+        bgra = np.frombuffer(bytes(data), dtype=np.uint8).reshape(h, bpr // 4, 4)[:, :w]
+        return bgra[:, :, 2::-1]
 
     def grab(self) -> Optional[np.ndarray]:
         """The screen as an H x W x 3 RGB array. dxcam returns nothing when the screen has not changed since the
         last look, so the last picture stands in for it."""
+        if self._quartz is not None:
+            try:
+                f = self._grab_quartz()
+            except Exception as exc:  # noqa: BLE001  a macOS that no longer offers it: the plain grab instead
+                LOG.info("Quartz grab failed (%s), using a plain grab", exc)
+                self._quartz, self._mss, self.kind = None, _plain_grab(), "mss"
+                return self.grab()
+            if f is not None:
+                self._last = f
+            return self._last
         if self._cam is not None:
             try:
                 f = self._cam.grab()
             except Exception as exc:  # noqa: BLE001  a driver that will not duplicate: the plain grab instead
                 LOG.info("Desktop Duplication failed (%s), using a plain grab", exc)
-                import mss  # noqa: WPS433
-
-                self._cam, self._mss, self.kind = None, mss.mss(), "mss"
+                self._cam, self._mss, self.kind = None, _plain_grab(), "mss"
                 return self.grab()
             if f is not None:
                 self._last = f
@@ -192,7 +234,8 @@ class Sync:
         nxt = time.monotonic()
         while not self.stop.is_set():
             self.link.tick()
-            if not self.paused:
+            # (a Mac that has not allowed Screen Recording shows only the desktop picture: nothing is sent from it)
+            if not self.paused and screen_allowed():
                 try:
                     f = self.screen.grab()
                 except Exception as exc:  # noqa: BLE001  the secure desktop (locked, UAC) cannot be looked at
@@ -213,6 +256,8 @@ class Sync:
         self.resume_until = time.monotonic() + 1.0
 
     def status_line(self) -> str:
+        if not screen_allowed():
+            return "Allow Screen Recording in System Settings, then reopen"
         if self.paused:
             return "Paused"
         if not self.link.found:
@@ -229,6 +274,69 @@ class Sync:
         if state == "problem":
             return f"{room} · {s.get('why') or 'not following'}"
         return f"{room} · starting"
+
+
+# ---------- a Mac's Screen Recording permission ----------
+_allowed: Optional[bool] = None
+
+
+def screen_allowed() -> bool:
+    """Whether macOS lets this app see other windows (always true elsewhere). Asked once; macOS only tells an app
+    it was allowed after it is opened again, so the answer is kept for the run."""
+    global _allowed
+    if sys.platform != "darwin":
+        return True
+    if _allowed is None:
+        try:
+            import Quartz  # noqa: WPS433
+
+            _allowed = bool(Quartz.CGPreflightScreenCaptureAccess())
+            if not _allowed:
+                Quartz.CGRequestScreenCaptureAccess()  # the system's own prompt, the first time
+        except Exception:  # noqa: BLE001  an older macOS without the call asks by itself on the first grab
+            _allowed = True
+    return _allowed
+
+
+# ---------- open at login (macOS) ----------
+AGENT_PLIST = Path.home() / "Library" / "LaunchAgents" / "app.caseta.screensync.plist"
+
+
+def _app_bundle() -> Optional[str]:
+    exe = Path(sys.executable)
+    for p in exe.parents:
+        if p.suffix == ".app":
+            return str(p)
+    return None
+
+
+def opens_at_login() -> bool:
+    return AGENT_PLIST.exists()
+
+
+def set_open_at_login(on: bool) -> None:
+    if not on:
+        AGENT_PLIST.unlink(missing_ok=True)
+        return
+    app = _app_bundle()
+    args = ["/usr/bin/open", "-a", app] if app else [sys.executable]
+    from xml.sax.saxutils import escape  # noqa: WPS433
+
+    items = "".join(f"<string>{escape(a)}</string>" for a in args)
+    AGENT_PLIST.parent.mkdir(parents=True, exist_ok=True)
+    AGENT_PLIST.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        '<plist version="1.0"><dict><key>Label</key><string>app.caseta.screensync</string>'
+        f'<key>ProgramArguments</key><array>{items}</array><key>RunAtLoad</key><true/></dict></plist>\n')
+
+
+def starts_at_login() -> bool:
+    return opens_at_login() if sys.platform == "darwin" else starts_with_windows()
+
+
+def set_starts_at_login(on: bool) -> None:
+    (set_open_at_login if sys.platform == "darwin" else set_start_with_windows)(on)
 
 
 # ---------- start with Windows ----------
@@ -285,7 +393,7 @@ def tray(sync: Sync) -> None:
             sync.paused = True
 
     def toggle_start(icon, item):  # noqa: ANN001, ARG001
-        set_start_with_windows(not starts_with_windows())
+        set_starts_at_login(not starts_at_login())
 
     def quit_(icon, item):  # noqa: ANN001, ARG001
         sync.stop.set()
@@ -295,8 +403,8 @@ def tray(sync: Sync) -> None:
     menu = pystray.Menu(
         pystray.MenuItem(lambda item: sync.status_line(), None, enabled=False),
         pystray.MenuItem(lambda item: "Resume" if paused(item) else "Pause", toggle_pause, default=True),
-        pystray.MenuItem("Start with Windows", toggle_start, checked=lambda item: starts_with_windows(),
-                         visible=sys.platform == "win32"),
+        pystray.MenuItem("Open at login" if sys.platform == "darwin" else "Start with Windows", toggle_start,
+                         checked=lambda item: starts_at_login(), visible=sys.platform in ("win32", "darwin")),
         pystray.MenuItem("Quit", quit_),
     )
     icon = pystray.Icon(APP, picture(sync.colour), "Caseta screen sync", menu)
@@ -347,7 +455,8 @@ def main() -> int:
     args = ap.parse_args()
     if args.selftest:
         return selftest()
-    logdir = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / APP
+    logdir = (Path.home() / "Library" / "Logs" / APP if sys.platform == "darwin"
+              else Path(os.environ.get("LOCALAPPDATA") or Path.home()) / APP)
     logdir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                         handlers=[logging.FileHandler(logdir / "log.txt", encoding="utf-8")]
@@ -359,6 +468,7 @@ def main() -> int:
     except OSError:
         LOG.info("already running")
         return 0
+    screen_allowed()  # on a Mac, ask for Screen Recording now, while the app is in front
     sync = Sync(args.pi, max(5.0, min(60.0, args.fps)))
     LOG.info("screen sync started (%s, %.0f a second)", sync.screen.kind, sync.fps)
     if args.no_tray:

@@ -106,6 +106,7 @@ class FakeSync(P.Sync):
         self.link, self.paused = link, False
 
 
+P._allowed = True  # (on a Mac build machine, Screen Recording is not this test's business)
 s = FakeSync(link)
 check("the tray says what the room is doing", s.status_line(), "Office · following")
 s.paused = True
