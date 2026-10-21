@@ -195,7 +195,12 @@ class ScreenSync:
     def on_datagram(self, data: bytes, addr) -> None:  # noqa: ANN001
         now = time.monotonic()
         if data[:4] == QUERY:
+            # a PC looking for the connector has been seen, even before its first frame: a PC whose firewall
+            # keeps the answer out never sends one, and the app should still show it is there
+            if self._pc is None or now - self._frame_at >= IDLE_S:
+                self._pc, self._pc_seen = (addr[0], addr[1]), time.time()
             self._reply(addr)
+            self._announce()
             return
         fr = parse_frame(data)
         if fr is None:
@@ -249,7 +254,9 @@ class ScreenSync:
 
     def _announce(self) -> None:
         st = self.status()
-        key = json.dumps({k: v for k, v in st.items() if k not in ("pc", "fps")}, sort_keys=True)
+        # the PC's arrival counts as news (it is what puts the switch on the room's page); its address and the
+        # rate do not, or every frame would be a message
+        key = json.dumps({**{k: v for k, v in st.items() if k not in ("pc", "fps")}, "pc": bool(st["pc"])}, sort_keys=True)
         if key != self._last_status:
             self._last_status = key
             self.send({"type": "screen_sync", "screen_sync": st})

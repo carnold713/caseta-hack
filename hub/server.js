@@ -475,9 +475,13 @@ function handleAgentMessage(ws, msg) {
       if (agentInfo) { agentInfo.hue = msg.hue || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     // A room's Hue lights following a PC's screen (agent/screensync.py): what it is doing, for the room's page.
-    case 'screen_sync':
+    case 'screen_sync': {
+      // one line when what it is doing changes, so "it does not show up" can be read from here
+      const was = agentInfo && agentInfo.screen_sync, now = msg.screen_sync || {};
+      if (!was || was.state !== now.state || !!was.pc !== !!now.pc || was.why !== now.why) log(`screen sync: ${now.state}${now.room_name ? ` in ${now.room_name}` : ''}${now.pc ? `, PC at ${now.pc.address}` : ', no PC seen'}${now.why ? `, ${now.why}` : ''}`);
       if (agentInfo) { agentInfo.screen_sync = msg.screen_sync || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
+    }
     case 'nanoleaf':
       if (agentInfo) { agentInfo.nanoleaf = msg.nanoleaf || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;

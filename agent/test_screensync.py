@@ -229,6 +229,19 @@ async def main():
     finally:
         sys.modules["OpenSSL"] = real
 
+    # no room set yet, and a PC turns up: the app is told, since that is what puts the switch on the room's page
+    told = []
+    cfg3 = {"settings": {}}
+    s3 = S.ScreenSync(FakeHue(), room_lights=lambda r: [], config=lambda: cfg3, send=told.append, port=free_port(), stream_port=sport)
+    s3._announce()
+    first = len(told)
+    s3.on_datagram(S.QUERY, ("192.168.1.30", 50000))
+    check("a PC looking for the connector is news even with no room set",
+          [bool(m["screen_sync"]["pc"]) for m in told[first:]], [True])
+    s3.on_datagram(S.FRAME + bytes([0, 16, 9]) + bytes(432), ("192.168.1.30", 50000))
+    s3._announce()
+    check("and its frames after that are not", len(told), first + 1)
+
     # the pieces on their own
     check("a frame of the wrong size is not a frame", S.parse_frame(S.FRAME + bytes([0, 16, 9]) + b"x" * 10), None)
     w = S.weights(16, 9, -0.6, 0.0)
