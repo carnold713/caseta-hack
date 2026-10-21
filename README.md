@@ -337,6 +337,12 @@ to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
    uses one that already holds exactly them), with a light named "left" or "right"
    on that side.
 
+Nanoleaf panels in the room follow too, through the controller's own streaming mode,
+each panel taking the colour from its own part of the screen. **Light positions**, under
+the switch, shows the screen on a wall with a dot for each light: drag each one to where
+it really stands (outside the screen it takes the nearest edge's colour), and switch off
+any that should stay out of it. Changes apply while it is running.
+
 It stops a few seconds after the PC goes quiet (closed, locked, asleep) and puts the
 lights back as they were. Changing one of those lights from the app, a remote or a
 routine pauses it; switch it on again, or choose Resume in the tray. A remote's

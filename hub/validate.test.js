@@ -284,3 +284,9 @@ test('a remote can switch the PC screen on or off', () => {
   assert.deepStrictEqual(validateAction({ type: 'screen_sync', op: 'toggle' }, 'x'), { type: 'screen_sync', op: 'toggle' });
   bad(() => validateAction({ type: 'screen_sync', op: 'sideways' }, 'x'), 'an op it does not know');
 });
+
+test('where the PC screen lights stand: numbers kept inside the page, a light left out kept, junk dropped', () => {
+  const ss = validateConfig({ settings: { screen_sync: { room: 'r1', lights: {
+    hue_a: { x: -0.6, y: 0.1 }, nanoleaf_N1: { x: 9, y: -9, on: false }, bad: { x: 'left' }, 'no good': { x: 1, y: 1 } } } } }).settings.screen_sync;
+  assert.deepStrictEqual(ss, { room: 'r1', lights: { hue_a: { x: -0.6, y: 0.1 }, nanoleaf_N1: { x: 3, y: -3, on: false } } });
+});

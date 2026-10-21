@@ -43,7 +43,7 @@ from nanoleaf import Nanoleaf
 from screensync import ScreenSync
 from sun import solar_noon, sun_times
 
-VERSION = "0.28.0"
+VERSION = "0.29.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -244,7 +244,8 @@ class Agent:
         # A room's Hue colour lights following a PC's screen (screensync.py). It sits in front of the Hue backend:
         # a command for one of those lights stops the stream first, so the bridge hears it.
         self.sync = ScreenSync(self.hue, room_lights=lambda r: self.runner._resolve(f"a:{r}"),  # noqa: SLF001
-                               config=lambda: self.config, send=self.send, room_name=self._room_name, data_dir=DATA_DIR)
+                               config=lambda: self.config, send=self.send, room_name=self._room_name, data_dir=DATA_DIR,
+                               nanoleaf=self.nanoleaf)
         self.runner.screen_sync = self.sync.remote  # a remote's "PC screen on or off"
         self.runner.hue_set = self._level_set_bridge
         self.runner.hue_color = self._color_set

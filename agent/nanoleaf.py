@@ -164,6 +164,24 @@ class Nanoleaf:
             self._note(host, body, False, f"could not reach it: {exc}")
             raise RuntimeError(f"could not reach the Nanoleaf controller: {exc}") from exc
 
+    async def _put_effects(self, host: str, token: str, body: dict) -> Any:
+        """PUT /effects: choose an effect, or (screen sync, nanostream.py) ask for the streaming one. Returns the
+        controller's answer when it gives one (the streaming address, for the first Light Panels)."""
+        try:
+            async with self._sess().put(self._url(host, token, "effects"), json=body) as r:
+                if r.status >= 400:
+                    text = (await r.text())[:200]
+                    self._note(host, body, False, f"{r.status}: {text}")
+                    raise RuntimeError(f"the Nanoleaf controller said {r.status}: {text}")
+                self._note(host, body, True, f"{r.status}")
+                try:
+                    return await r.json(content_type=None)
+                except Exception:  # noqa: BLE001  most answers are empty
+                    return None
+        except aiohttp.ClientError as exc:
+            self._note(host, body, False, f"could not reach it: {exc}")
+            raise RuntimeError(f"could not reach the Nanoleaf controller: {exc}") from exc
+
     def _store(self, key: str, after: dict) -> dict:
         """Write a freshly-read device into self.devices WITHOUT rebinding the dict.
 

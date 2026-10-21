@@ -436,6 +436,8 @@ setInterval(() => {
     if (d.stuck) STUCK = new Set(d.stuck);
     if ('fan_fail' in d) { FAN_FAIL = !!d.fan_fail; console.log('fan fail', FAN_FAIL); }
     if (d.sync) { Object.assign(SYNC, d.sync); sendSync(); }
+    // {"area": {device id: area id}}: a device filed into another room, as the bridge would report it
+    if (d.area) { for (const [id, ar] of Object.entries(d.area)) if (inventory.devices[id]) inventory.devices[id].area = ar; send({ type: 'inventory', inventory }); sendSync(); }
   }
 }, 200);
 
@@ -449,7 +451,15 @@ function syncStatus() {
   const state = SYNC.state || (!room || SYNC.off ? 'off' : SYNC.paused ? 'paused' : 'syncing');
   return { state, room, room_name: room && inventory.areas[room] ? inventory.areas[room].name : null, lights: [], area: null, why: SYNC.why,
     pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000 } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key,
-    on: !!room && !SYNC.off && !SYNC.paused };
+    on: !!room && !SYNC.off && !SYNC.paused, placed: syncPlaced(room) };
+}
+// the room's lights that can follow, where the settings put them or where the connector would (screensync.placed)
+function syncPlaced(room) {
+  if (!room) return [];
+  const mine = ((((config || {}).settings || {}).screen_sync || {}).lights) || {};
+  const ids = Object.keys(inventory.devices).filter(id => inventory.devices[id].area === room && ((id.startsWith('hue_') && inventory.devices[id].color) || id.startsWith('nanoleaf_')));
+  return ids.map((id, k) => { const m = mine[id] || {}; const nano = id.startsWith('nanoleaf_');
+    return { id, kind: nano ? 'nanoleaf' : 'hue', name: inventory.devices[id].name, x: typeof m.x === 'number' ? m.x : (nano ? 1.6 : -0.6 + 1.2 * k / Math.max(1, ids.length - 1)), y: typeof m.y === 'number' ? m.y : 0, on: m.on !== false }; });
 }
 const sendSync = () => { if (ws.readyState === 1) send({ type: 'screen_sync', screen_sync: syncStatus() }); };
 const syncSet = on => { SYNC.off = !on; if (on) SYNC.paused = false; };

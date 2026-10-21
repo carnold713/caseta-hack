@@ -1,6 +1,7 @@
-// The room's Hue colour lights following the PC's screen (agent/screensync.py; the PC runs pc/screensync.py). One
-// row on the room's page, shown once the PC program has been seen, and only in a room with a Hue colour light. One
-// room follows at a time: switching it on here moves it from wherever it was.
+// The room's Hue colour lights and Nanoleaf panels following the PC's screen (agent/screensync.py; the PC runs
+// pc/screensync.py). One row on the room's page, shown once the PC program has been seen, and only in a room with
+// a light that can follow. One room follows at a time: switching it on here moves it from wherever it was. In the
+// room that follows, a second row opens the positions page (screenSheet, below).
 //
 //   on       this room follows (config.settings.screen_sync.room), switched on (the connector keeps on and off,
 //            so a remote's "PC screen on or off" and this switch are the same switch), and not paused
@@ -11,6 +12,9 @@
 
 const sync = c => ((c.S.agent && c.S.agent.info) || {}).screen_sync || null;
 const settingRoom = c => (((c.S.config || {}).settings || {}).screen_sync || {}).room || null;
+
+// A light that can follow the screen: a Hue colour light, or a Nanoleaf
+const canFollow = d => (String(d.device_id).startsWith('hue_') && !!d.color) || String(d.device_id).startsWith('nanoleaf_');
 
 const LINES = {
   syncing: 'Following',
@@ -23,7 +27,7 @@ export function syncRow(c, aid) {
   const s = sync(c);
   const mine = settingRoom(c) === aid;
   if (!mine && !(s && s.pc)) return '';
-  if (!c.H.roomLights(aid).some(d => String(d.device_id).startsWith('hue_') && d.color)) return '';
+  if (!c.H.roomLights(aid).some(canFollow)) return '';
   const { esc, icon } = c;
   const state = mine && s && s.room === aid ? s.state : (mine ? 'waiting' : 'off');
   const on = mine && (s && s.room === aid && 'on' in s ? !!s.on : state !== 'paused' && state !== 'off');
@@ -35,6 +39,8 @@ export function syncRow(c, aid) {
     <div class="row has-ic"><span class="row-ic">${icon('screen', 20, 1.7)}</span>
       <span class="row-txt"><span class="t">PC screen</span>${line && !needsKey ? `<span class="d">${esc(line)}</span>` : ''}</span>
       <button class="toggle" role="switch" aria-checked="${on}" data-act="sync-toggle" data-id="${esc(aid)}" aria-label="Follow the PC screen"></button></div>
+    ${mine ? `<button class="row has-ic" data-go="room/${esc(aid)}/screen"><span class="row-ic">${icon('grid', 20, 1.7)}</span>
+      <span class="row-txt"><span class="t">Light positions</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
     ${needsKey ? `<button class="row has-ic" data-act="sync-pair" ${busy ? 'aria-busy="true"' : ''}><span class="row-ic">${icon('bolt', 20, 1.7)}</span>
       <span class="row-txt"><span class="t">${busy ? 'Press the button on the Hue bridge' : 'Connect to the Hue bridge again'}</span></span></button>` : ''}
   </div>`;
@@ -62,5 +68,98 @@ export const syncActions = {
     try { await c.data.api('/api/hue', { method: 'POST', body: JSON.stringify({ op: 'pair', host }) }); }
     catch (e) { c.toast(e.message, { err: true }); }
     c.ui.syncPairing = false; c.render();
+  },
+};
+
+// ---------- the positions page (#room/<id>/screen) ----------
+// The screen drawn in the middle of a wall, and every light that can follow as a dot where it stands: drag one to
+// where it really is, and it takes its colour from that part of the screen (outside the screen, from the nearest
+// edge). The connector moves it as soon as the change is saved, so with the PC screen on the light changes under the
+// finger's last position. Below, each light can be left out. Positions are settings.screen_sync.lights, in screen
+// units: -1 to 1 is the screen's own width and height, and the page shows SPAN either way.
+const SPAN = 2.5;
+const pct = v => (((v + SPAN) / (2 * SPAN)) * 100).toFixed(2);
+const NANO_GLYPH = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/></svg>';
+function lightsHere(c, aid) {
+  const s = sync(c);
+  const mine = (((c.S.config.settings || {}).screen_sync || {}).lights) || {};
+  const placed = s && s.room === aid ? (s.placed || []) : [];
+  // what the page shows is the setting when there is one (a drag shows at once), the connector's default otherwise
+  return placed.map(p => {
+    const m = mine[p.id] || {};
+    return { ...p, x: typeof m.x === 'number' ? m.x : p.x, y: typeof m.y === 'number' ? m.y : p.y, on: m.on !== false };
+  });
+}
+export function screenSheet(c, r) {
+  const { esc, icon } = c;
+  const aid = r.id;
+  const list = lightsHere(c, aid);
+  const name = d => (c.data.dev(d.id) || {}).name || d.name;
+  const dots = list.map(d => `<button class="ss-dot ${d.on ? '' : 'out'} ${d.kind}" data-ssid="${esc(d.id)}" style="left:${pct(d.x)}%;top:${pct(d.y)}%" aria-label="${esc(name(d))}">
+      <span class="ss-disc">${d.kind === 'nanoleaf' ? NANO_GLYPH : icon('bulb', 20, 1.7)}</span><span class="ss-name">${esc(name(d))}</span></button>`).join('');
+  const rows = list.map(d => `<div class="row"><span class="row-txt"><span class="t">${esc(name(d))}</span><span class="d">${d.kind === 'nanoleaf' ? 'Nanoleaf' : 'Hue'}</span></span>
+      <button class="toggle" role="switch" aria-checked="${d.on}" data-act="ss-light" data-id="${esc(d.id)}" aria-label="${esc(name(d))} follows the screen"></button></div>`).join('');
+  const body = list.length
+    ? `<div class="ss">
+        <div class="ss-stage" data-drag data-aid="${esc(aid)}">
+          <div class="ss-screen" style="left:${pct(-1)}%;top:${pct(-1)}%;width:${(2 / (2 * SPAN)) * 100}%;height:${(2 / (2 * SPAN)) * 100}%"><span>Screen</span></div>
+          ${dots}
+        </div>
+        <div class="group ss-rows">${rows}</div>
+        ${Object.keys((((c.S.config.settings || {}).screen_sync || {}).lights) || {}).length ? '<div class="sheet-btns"><button class="pill ghost" data-act="ss-reset">Start over</button></div>' : ''}
+      </div>`
+    : `<p class="t-cap muted sheet-p">${sync(c) && sync(c).room === aid ? 'Nothing in this room can follow the screen.' : 'Waiting for the connector.'}</p>`;
+  return { over: c.data.areaName(aid), title: 'Light positions', body, after: (c2, r2, root) => wireStage(c2, root) };
+}
+function wireStage(c, root) {
+  const stage = root && root.querySelector('.ss-stage');
+  if (!stage) return;
+  const aid = stage.dataset.aid;
+  for (const dot of stage.querySelectorAll('.ss-dot')) {
+    let moved = false;
+    dot.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      dot.setPointerCapture(e.pointerId);
+      c.ui.dragging = true; moved = false;
+      dot.classList.add('held');
+    });
+    dot.addEventListener('pointermove', e => {
+      if (!dot.hasPointerCapture(e.pointerId)) return;
+      const b = stage.getBoundingClientRect();
+      const x = Math.max(-SPAN, Math.min(SPAN, ((e.clientX - b.left) / b.width) * 2 * SPAN - SPAN));
+      const y = Math.max(-SPAN, Math.min(SPAN, ((e.clientY - b.top) / b.height) * 2 * SPAN - SPAN));
+      dot.style.left = `${pct(x)}%`; dot.style.top = `${pct(y)}%`;
+      dot.dataset.x = x.toFixed(3); dot.dataset.y = y.toFixed(3);
+      moved = true;
+    });
+    const done = async e => {
+      if (!moved) { dot.classList.remove('held'); c.endDrag(); return; }
+      dot.classList.remove('held');
+      moved = false;
+      const ss = c.S.config.settings.screen_sync || (c.S.config.settings.screen_sync = { room: aid, lights: {} });
+      const lights = ss.lights || (ss.lights = {});
+      const id = dot.dataset.ssid;
+      lights[id] = { ...(lights[id] || {}), x: Number(dot.dataset.x), y: Number(dot.dataset.y) };
+      c.endDrag();
+      await c.save('', { quiet: true });
+    };
+    dot.addEventListener('pointerup', done);
+    dot.addEventListener('pointercancel', done);
+  }
+}
+export const screenActions = {
+  async 'ss-light'(c, el) {
+    const ss = c.S.config.settings.screen_sync || (c.S.config.settings.screen_sync = { room: null, lights: {} });
+    const lights = ss.lights || (ss.lights = {});
+    const id = el.dataset.id;
+    const one = { ...(lights[id] || {}) };
+    if (one.on === false) delete one.on; else one.on = false;
+    if (Object.keys(one).length) lights[id] = one; else delete lights[id];
+    await c.save('', { quiet: true });
+  },
+  async 'ss-reset'(c) {
+    const ss = c.S.config.settings.screen_sync || {};
+    ss.lights = {};
+    await c.save('', { quiet: true });
   },
 };

@@ -111,6 +111,32 @@ const fake = d => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSO
   r = await row();
   check('once paired the row is a plain switch again', r && !r.pair && r.on === 'true', r);
 
+  // the positions page: drag a light to where it stands, leave one out, start over
+  await go(rooms.with);
+  check('the room that follows has a way to its light positions', !!(await page.$('#screen [data-go$="/screen"]')), null);
+  await page.click('#screen [data-go$="/screen"]'); await wait(1200);
+  const dot = await C(() => { const d = document.querySelector('.ss-stage .ss-dot'); if (!d) return null; const b = d.querySelector('.ss-disc').getBoundingClientRect();
+    const s = document.querySelector('.ss-stage').getBoundingClientRect(); return { id: d.dataset.ssid, x: b.left + b.width / 2, y: b.top + b.height / 2, stage: { l: s.left, t: s.top, w: s.width, h: s.height } }; });
+  check('the page shows the screen and a dot for the colour light', !!dot && !!(await page.$('.ss-stage .ss-screen')), dot);
+  if (dot) {
+    // to two screen-widths' worth right of centre and a little up: x 2, y -0.5 in screen units (the page spans 2.5)
+    const to = { x: dot.stage.l + dot.stage.w * (2 + 2.5) / 5, y: dot.stage.t + dot.stage.h * (-0.5 + 2.5) / 5 };
+    await page.mouse.move(dot.x, dot.y); await page.mouse.down();
+    for (let i = 1; i <= 10; i++) { await page.mouse.move(dot.x + (to.x - dot.x) * i / 10, dot.y + (to.y - dot.y) * i / 10); await wait(16); }
+    await page.mouse.up(); await wait(1200);
+    const at = await C(id => ((window.__copper.S.config.settings.screen_sync || {}).lights || {})[id], dot.id);
+    check('dragged, it is kept where it was let go', !!at && Math.abs(at.x - 2) < 0.15 && Math.abs(at.y + 0.5) < 0.15, at);
+    check('the sheet stayed open through the drag', !!(await page.$('.ss-stage')), null);
+    await page.click(`[data-act="ss-light"][data-id="${dot.id}"]`); await wait(900);
+    const out = await C(id => ({ cfg: ((window.__copper.S.config.settings.screen_sync || {}).lights || {})[id], cls: document.querySelector(`.ss-dot[data-ssid="${id}"]`).className }), dot.id);
+    check('switched off below, it is left out and drawn dim', out.cfg && out.cfg.on === false && /\bout\b/.test(out.cls), out);
+    await page.click('[data-act="ss-reset"]'); await wait(900);
+    const reset = await C(() => (window.__copper.S.config.settings.screen_sync || {}).lights);
+    check('Start over forgets every position', reset && Object.keys(reset).length === 0, reset);
+  }
+  await C(() => { window.__copper.closeSheet && window.__copper.closeSheet(); }); await wait(500);
+  await go(rooms.with);
+
   const text = await C(() => document.querySelector('#screen').innerText);
   check('no dashes in what it says', !/[\u2013\u2014]/.test(text), null);
   // put the house back for the tests after this one

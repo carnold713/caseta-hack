@@ -295,6 +295,20 @@
 .room-grid { margin-top: 16px; padding-bottom: 8px; }
 /* the PC screen's row (screensync.js), between the scenes and the lights */
 .sync-rows { margin-top: 16px; }
+/* the PC screen's light positions (screensync.js screenSheet): the screen on a wall, a dot per light to drag */
+.ss-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 20px; background: var(--surface-2);
+  touch-action: none; user-select: none; -webkit-user-select: none; overflow: hidden; margin-bottom: 16px; }
+.ss-screen { position: absolute; border-radius: 6px; background: var(--surface-3); box-shadow: inset 0 0 0 2px var(--line);
+  display: flex; align-items: center; justify-content: center; }
+.ss-screen span { font-size: 13px; color: var(--text-3); }
+.ss-dot { position: absolute; transform: translate(-50%, -22px); display: flex; flex-direction: column; align-items: center;
+  gap: 4px; background: none; border: 0; padding: 0; color: var(--text-1); cursor: grab; touch-action: none; }
+.ss-disc { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--copper); color: var(--solid-ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .28); transition: transform var(--standard, .24s) var(--ease, ease); }
+.ss-dot.held .ss-disc { transform: scale(1.12); }
+.ss-dot.out .ss-disc { background: var(--surface-3); color: var(--text-3); box-shadow: none; }
+.ss-name { font-size: 12px; line-height: 1.2; max-width: 96px; text-align: center; color: var(--text-2); }
+.ss-dot.held { cursor: grabbing; z-index: 2; }
 /* M11: a tile on a room presses to the file's 0.97, held while the finger is down, and opens from there (lightopen.js). */
 .room-grid .tile:active { transform: scale(.97); }
 .room-empty { margin-top: 16px; }

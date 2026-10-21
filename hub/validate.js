@@ -184,7 +184,22 @@ function validateConfig(cfg) {
   out.settings.light_kinds = {};
   for (const [k, v] of Object.entries(s.light_kinds || {})) { const kid = KIND_DEF.normalize(v); if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && kid) { out.settings.light_kinds[k] = kid; if (!out.settings.roles[k]) out.settings.roles[k] = KIND_DEF.ROLES[kid]; } }
   // The room whose Hue colour lights follow the PC's screen (agent/screensync.py); null when none does.
-  out.settings.screen_sync = { room: /^[A-Za-z0-9_-]{1,64}$/.test((s.screen_sync || {}).room || '') ? s.screen_sync.room : null };
+  // Where each of its lights stands around the screen (the positions page): x and y in screen units, -1 to 1 being the
+  // screen's own edges and up to 3 either way outside it, and whether it follows at all.
+  {
+    const ss = s.screen_sync || {};
+    const room = /^[A-Za-z0-9_-]{1,64}$/.test(ss.room || '') ? ss.room : null;
+    const lights = {};
+    const at = v => (typeof v === 'number' && isFinite(v) ? Math.round(Math.max(-3, Math.min(3, v)) * 1000) / 1000 : null);
+    for (const [k, v] of Object.entries(ss.lights && typeof ss.lights === 'object' ? ss.lights : {}).slice(0, 60)) {
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(k) || !v || typeof v !== 'object') continue;
+      const one = {};
+      if (at(v.x) != null && at(v.y) != null) { one.x = at(v.x); one.y = at(v.y); }
+      if (v.on === false) one.on = false;
+      if (Object.keys(one).length) lights[k] = one;
+    }
+    out.settings.screen_sync = { room, lights };
+  }
   out.settings.night_look = ['auto', 'always', 'never'].includes(s.night_look) ? s.night_look : 'auto';
   // The light Nightstand's night light turns on (a device id); unset, the app picks a bedroom lamp.
   out.settings.night_light = /^[A-Za-z0-9_-]{1,64}$/.test(s.night_light || '') ? s.night_light : null;
