@@ -15,6 +15,11 @@ screen.
     edge. "on" false leaves a light out. A light with no position gets one: Hue lights spread across the screen in
     name order ("left" and "right" in a name honoured), a Nanoleaf beside it on the right.
   * A Nanoleaf's panels each take their own colour, from where they sit in the set's layout around its position.
+  * So do a gradient Hue light's sections (a Play gradient tube or lightstrip: one light, several colours along it).
+    They are laid out as the light's channels are in Hue's entertainment area when that area says where each one is
+    (one made in the Hue app knows a strip goes up, across and down a monitor), and otherwise in a straight line in
+    their own order. Either way the whole is stretched to the light's "span" (screen units, default the screen's
+    width; the positions page's handle) and can be turned round ("flip").
   * Hue streams to an entertainment area: a set of lights. One that already holds exactly the following Hue lights
     is used (one made for Hue Sync, say); otherwise one is made, named for the room. The colours come from the
     positions above, not from the area's own.
@@ -57,6 +62,7 @@ SATURATE = 1.3           # screens average towards grey; a little more colour re
 SPREAD = 0.15            # how far across the screen a light looks, as a share of its width (the bell's width)
 SPREAD_V = 0.3           # and up and down, as a share of its height: a bar behind a monitor sees most of it
 NANO_SIZE = 0.8          # how much of the screen a Nanoleaf set spans, in screen units (2 is the screen's width)
+GRADIENT_SPAN = 2.0      # and a gradient light's sections, the screen's width unless the positions page says
 NANO_EVERY = 2           # a Nanoleaf takes every second beat, 25 a second: it glides between them by itself
 REACH = 3.0              # how far outside the screen a light may stand, in screen units
 RETRY_S = 15.0           # after a start that failed, how long before trying again
@@ -228,7 +234,16 @@ class ScreenSync:
             if isinstance(p.get("x"), (int, float)) and isinstance(p.get("y"), (int, float)):
                 x = max(-REACH, min(REACH, float(p["x"])))
                 y = max(-REACH, min(REACH, float(p["y"])))
-            out.append({"id": d, "kind": kind, "name": name, "x": round(x, 3), "y": round(y, 3), "on": p.get("on") is not False})
+            one = {"id": d, "kind": kind, "name": name, "x": round(x, 3), "y": round(y, 3), "on": p.get("on") is not False}
+            segs = int((hue_devs.get(d) or {}).get("segments") or 1) if kind == "hue" else 1
+            if segs > 1 or kind == "nanoleaf":
+                default_span = NANO_SIZE if kind == "nanoleaf" else GRADIENT_SPAN
+                span = p.get("span")
+                one["span"] = round(float(span), 3) if isinstance(span, (int, float)) and 0.2 <= span <= 6 else default_span
+                one["flip"] = p.get("flip") is True
+            if segs > 1:
+                one["segments"] = segs
+            out.append(one)
         return out
 
     def _load_off(self) -> bool:
@@ -501,19 +516,25 @@ class ScreenSync:
 
     def _place_points(self, room: Optional[str], force: bool = False) -> None:
         """Where every channel and panel stands, from the positions page; the weights follow when one moves."""
-        where = {p["id"]: (p["x"], p["y"]) for p in self.placed(room)}
+        placed = {p["id"]: p for p in self.placed(room)}
         pts: Dict[tuple, Tuple[float, float]] = {}
         if self.area:
-            for ch, _x, _z in self.area["channels"]:
+            by_light: Dict[str, list] = {}
+            for ch, hx, hz in self.area["channels"]:
                 d = self._chan_light.get(ch)
-                if d in where:
-                    pts[("h", ch)] = where[d]
+                if d in placed:
+                    by_light.setdefault(d, []).append((ch, hx, hz, self.area["index"].get(ch, ch)))
+            for d, chans in by_light.items():
+                p = placed[d]
+                for ch, (dx, dy) in sections(chans, p.get("span", GRADIENT_SPAN), p.get("flip", False)).items():
+                    pts[("h", ch)] = (p["x"] + dx, p["y"] + dy)
         for d, ns in self._nanos.items():
-            if d not in where:
+            if d not in placed:
                 continue
-            x0, y0 = where[d]
+            p = placed[d]
+            size, flip = p.get("span", NANO_SIZE), p.get("flip", False)
             for pid, dx, dy in ns.panels:
-                pts[("n", d, pid)] = (x0 + dx * NANO_SIZE, y0 + dy * NANO_SIZE)
+                pts[("n", d, pid)] = (p["x"] + (-dx if flip else dx) * size, p["y"] + dy * size)
         if force or pts != self._points:
             self._points = pts
             self._wts_for = None
@@ -573,9 +594,15 @@ class ScreenSync:
             if not ent:
                 raise RuntimeError(f"{hue.devices[d].get('name') or d} cannot take part in Hue's streaming")
             x, y = where.get(d, (0.0, 0.0))
-            # Hue's own room coordinates, for the Hue app's picture of the area: x across, z up, y towards the screen
-            locations.append({"service": {"rid": ent, "rtype": "entertainment"},
-                              "positions": [{"x": max(-1.0, min(1.0, x / 2)), "y": 0.8, "z": max(-1.0, min(1.0, -y / 2))}]})
+            # Hue's own room coordinates, for the Hue app's picture of the area: x across, z up, y towards the screen.
+            # A gradient light is given its start, middle and end, so its sections lie along it there too.
+            hx, hz = max(-1.0, min(1.0, x / 2)), max(-1.0, min(1.0, -y / 2))
+            if int(hue.devices[d].get("segments") or 1) > 1:
+                half = GRADIENT_SPAN / 4
+                pos = [{"x": max(-1.0, min(1.0, hx + k * half)), "y": 0.8, "z": hz} for k in (-1, 0, 1)]
+            else:
+                pos = [{"x": hx, "y": 0.8, "z": hz}]
+            locations.append({"service": {"rid": ent, "rtype": "entertainment"}, "positions": pos})
         name = f"{self.room_name(room) or 'Room'} screen"[:32]
         made = await hue._post("/clip/v2/resource/entertainment_configuration", {  # noqa: SLF001
             "type": "entertainment_configuration", "metadata": {"name": name}, "configuration_type": "screen",
@@ -612,7 +639,7 @@ class ScreenSync:
 
 
 def _area(cfg: dict) -> dict:
-    chans, members = [], []
+    chans, members, index = [], [], {}
     for ch in cfg.get("channels") or []:
         pos = ch.get("position") or {}
         cid = int(ch.get("channel_id", 0))
@@ -621,8 +648,33 @@ def _area(cfg: dict) -> dict:
             rid = ((m.get("service") or {}).get("rid"))
             if rid:
                 members.append((cid, rid))
+                index[cid] = int(m.get("index", 0) or 0)
     return {"id": cfg["id"], "name": (cfg.get("metadata") or {}).get("name") or "Entertainment area", "channels": chans,
-            "members": members}
+            "members": members, "index": index}
+
+
+def sections(chans: List[tuple], span: float, flip: bool) -> Dict[int, Tuple[float, float]]:
+    """Where each channel of one light stands, as an offset from the light's own position: [(channel, hue x, hue z,
+    segment index)] in, {channel: (dx, dy)} out, spanning `span` screen units. A single channel stands on the light.
+    Several keep the shape Hue's area gives them when it gives one (scaled so the widest side is the span), and
+    otherwise lie in a line, left to right in segment order. Flipped, left and right change places."""
+    if len(chans) == 1:
+        return {chans[0][0]: (0.0, 0.0)}
+    xs, zs = [c[1] for c in chans], [c[2] for c in chans]
+    spread = max(max(xs) - min(xs), max(zs) - min(zs))
+    out: Dict[int, Tuple[float, float]] = {}
+    if spread > 0.05:
+        cx, cz = (max(xs) + min(xs)) / 2, (max(zs) + min(zs)) / 2
+        for ch, hx, hz, _i in chans:
+            dx, dy = (hx - cx) / spread * span, -(hz - cz) / spread * span
+            out[ch] = (-dx if flip else dx, dy)
+        return out
+    ordered = sorted(chans, key=lambda c: (c[3], c[0]))
+    n = len(ordered)
+    for k, c in enumerate(ordered):
+        t = k / (n - 1) - 0.5
+        out[c[0]] = ((-t if flip else t) * span, 0.0)
+    return out
 
 
 __all__ = ["ScreenSync", "PC_PORT", "parse_frame", "weights", "colour_of", "place"]

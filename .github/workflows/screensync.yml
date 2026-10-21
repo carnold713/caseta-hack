@@ -95,6 +95,19 @@ jobs:
       - name: The app looks at the screen once
         run: dist/CasetaScreenSync.app/Contents/MacOS/CasetaScreenSync --selftest
 
+      # The menu-bar app itself, left running for a while: the icon is redrawn every half second, which is where a
+      # change made off the main thread brings macOS down on it
+      - name: The app runs in the menu bar
+        run: |
+          dist/CasetaScreenSync.app/Contents/MacOS/CasetaScreenSync --pi 127.0.0.1 &
+          pid=$!
+          sleep 15
+          alive=0; kill -0 $pid 2>/dev/null && alive=1
+          kill $pid 2>/dev/null || true
+          cat ~/Library/Logs/CasetaScreenSync/log.txt || true
+          cat ~/Library/Logs/CasetaScreenSync/crash.txt 2>/dev/null || true
+          test $alive = 1
+
       - uses: actions/upload-artifact@v4
         with:
           name: screensync-mac

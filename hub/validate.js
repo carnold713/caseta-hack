@@ -196,6 +196,9 @@ function validateConfig(cfg) {
       const one = {};
       if (at(v.x) != null && at(v.y) != null) { one.x = at(v.x); one.y = at(v.y); }
       if (v.on === false) one.on = false;
+      // how long a gradient light or a Nanoleaf set is, in the same units, and whether it is turned round
+      if (typeof v.span === 'number' && isFinite(v.span)) one.span = Math.round(Math.max(0.2, Math.min(6, v.span)) * 1000) / 1000;
+      if (v.flip === true) one.flip = true;
       if (Object.keys(one).length) lights[k] = one;
     }
     out.settings.screen_sync = { room, lights };

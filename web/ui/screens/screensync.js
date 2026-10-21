@@ -77,8 +77,16 @@ export const syncActions = {
 // edge). The connector moves it as soon as the change is saved, so with the PC screen on the light changes under the
 // finger's last position. Below, each light can be left out. Positions are settings.screen_sync.lights, in screen
 // units: -1 to 1 is the screen's own width and height, and the page shows SPAN either way.
+// A gradient light (a Play gradient tube or lightstrip: several colours along one light) is drawn as a bar as long as
+// the part of the screen its sections take ("span", the screen's width to begin with); the handle at its right end
+// stretches it, and Flip turns it round when its colours come out the wrong way.
 const SPAN = 2.5;
 const pct = v => (((v + SPAN) / (2 * SPAN)) * 100).toFixed(2);
+// a gradient light's bar, kept inside the page so its handle can always be reached: left and width, as styles
+const barBox = (x, span) => {
+  const l = Math.max(-SPAN, x - span / 2), r = Math.min(SPAN, x + span / 2);
+  return `left:${pct(l)}%;width:${((Math.max(0.05, r - l)) / (2 * SPAN)) * 100}%`;
+};
 const NANO_GLYPH = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/></svg>';
 function lightsHere(c, aid) {
   const s = sync(c);
@@ -87,7 +95,8 @@ function lightsHere(c, aid) {
   // what the page shows is the setting when there is one (a drag shows at once), the connector's default otherwise
   return placed.map(p => {
     const m = mine[p.id] || {};
-    return { ...p, x: typeof m.x === 'number' ? m.x : p.x, y: typeof m.y === 'number' ? m.y : p.y, on: m.on !== false };
+    return { ...p, x: typeof m.x === 'number' ? m.x : p.x, y: typeof m.y === 'number' ? m.y : p.y, on: m.on !== false,
+      span: typeof m.span === 'number' ? m.span : p.span, flip: 'flip' in m ? m.flip === true : p.flip };
   });
 }
 export function screenSheet(c, r) {
@@ -95,15 +104,18 @@ export function screenSheet(c, r) {
   const aid = r.id;
   const list = lightsHere(c, aid);
   const name = d => (c.data.dev(d.id) || {}).name || d.name;
-  const dots = list.map(d => `<button class="ss-dot ${d.on ? '' : 'out'} ${d.kind}" data-ssid="${esc(d.id)}" style="left:${pct(d.x)}%;top:${pct(d.y)}%" aria-label="${esc(name(d))}">
+  const dots = list.map(d => `<button class="ss-dot ${d.on ? '' : 'out'} ${d.kind}" data-ssid="${esc(d.id)}" data-x0="${d.x}" style="left:${pct(d.x)}%;top:${pct(d.y)}%" aria-label="${esc(name(d))}">
       <span class="ss-disc">${d.kind === 'nanoleaf' ? NANO_GLYPH : icon('bulb', 20, 1.7)}</span><span class="ss-name">${esc(name(d))}</span></button>`).join('');
-  const rows = list.map(d => `<div class="row"><span class="row-txt"><span class="t">${esc(name(d))}</span><span class="d">${d.kind === 'nanoleaf' ? 'Nanoleaf' : 'Hue'}</span></span>
+  const bars = list.filter(d => d.segments > 1).map(d => `<div class="ss-span ${d.on ? '' : 'out'}" data-span="${esc(d.id)}" data-w="${d.span}" style="${barBox(d.x, d.span)};top:${pct(d.y)}%">
+      <i class="ss-end ${d.flip ? 'flip' : ''}"></i><b class="ss-len" data-sslen="${esc(d.id)}" aria-label="Length of ${esc(name(d))}"></b></div>`).join('');
+  const rows = list.map(d => `<div class="row"><span class="row-txt"><span class="t">${esc(name(d))}</span><span class="d">${d.kind === 'nanoleaf' ? 'Nanoleaf' : d.segments > 1 ? `Hue · ${d.segments} sections` : 'Hue'}</span></span>
+      ${d.segments > 1 ? `<button class="chip sm ${d.flip ? 'lead' : ''}" aria-pressed="${!!d.flip}" data-act="ss-flip" data-id="${esc(d.id)}">Flip</button>` : ''}
       <button class="toggle" role="switch" aria-checked="${d.on}" data-act="ss-light" data-id="${esc(d.id)}" aria-label="${esc(name(d))} follows the screen"></button></div>`).join('');
   const body = list.length
     ? `<div class="ss">
         <div class="ss-stage" data-drag data-aid="${esc(aid)}">
           <div class="ss-screen" style="left:${pct(-1)}%;top:${pct(-1)}%;width:${(2 / (2 * SPAN)) * 100}%;height:${(2 / (2 * SPAN)) * 100}%"><span>Screen</span></div>
-          ${dots}
+          ${bars}${dots}
         </div>
         <div class="group ss-rows">${rows}</div>
         ${Object.keys((((c.S.config.settings || {}).screen_sync || {}).lights) || {}).length ? '<div class="sheet-btns"><button class="pill ghost" data-act="ss-reset">Start over</button></div>' : ''}
@@ -115,8 +127,38 @@ function wireStage(c, root) {
   const stage = root && root.querySelector('.ss-stage');
   if (!stage) return;
   const aid = stage.dataset.aid;
+  const save = async (id, patch) => {
+    const ss = c.S.config.settings.screen_sync || (c.S.config.settings.screen_sync = { room: aid, lights: {} });
+    const lights = ss.lights || (ss.lights = {});
+    lights[id] = { ...(lights[id] || {}), ...patch };
+    c.endDrag();
+    await c.save('', { quiet: true });
+  };
+  const at = e => {
+    const b = stage.getBoundingClientRect();
+    return { x: Math.max(-SPAN, Math.min(SPAN, ((e.clientX - b.left) / b.width) * 2 * SPAN - SPAN)),
+      y: Math.max(-SPAN, Math.min(SPAN, ((e.clientY - b.top) / b.height) * 2 * SPAN - SPAN)) };
+  };
+  // a gradient light's length: its handle, pulled away from or towards the light's middle
+  for (const h of stage.querySelectorAll('.ss-len')) {
+    const id = h.dataset.sslen;
+    const bar = stage.querySelector(`.ss-span[data-span="${CSS.escape(id)}"]`);
+    const dot = stage.querySelector(`.ss-dot[data-ssid="${CSS.escape(id)}"]`);
+    let span = null;
+    h.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); h.setPointerCapture(e.pointerId); c.ui.dragging = true; span = null; });
+    h.addEventListener('pointermove', e => {
+      if (!h.hasPointerCapture(e.pointerId)) return;
+      const cx = Number(dot.dataset.x || dot.dataset.x0);
+      span = Math.max(0.4, Math.min(5, 2 * Math.abs(at(e).x - cx)));
+      bar.setAttribute('style', `${barBox(cx, span)};top:${bar.style.top}`);
+    });
+    const done = () => { if (span == null) { c.endDrag(); return; } const v = Math.round(span * 1000) / 1000; span = null; save(id, { span: v }); };
+    h.addEventListener('pointerup', done);
+    h.addEventListener('pointercancel', done);
+  }
   for (const dot of stage.querySelectorAll('.ss-dot')) {
     let moved = false;
+    const bar = stage.querySelector(`.ss-span[data-span="${CSS.escape(dot.dataset.ssid)}"]`);
     dot.addEventListener('pointerdown', e => {
       e.preventDefault(); e.stopPropagation();
       dot.setPointerCapture(e.pointerId);
@@ -125,10 +167,9 @@ function wireStage(c, root) {
     });
     dot.addEventListener('pointermove', e => {
       if (!dot.hasPointerCapture(e.pointerId)) return;
-      const b = stage.getBoundingClientRect();
-      const x = Math.max(-SPAN, Math.min(SPAN, ((e.clientX - b.left) / b.width) * 2 * SPAN - SPAN));
-      const y = Math.max(-SPAN, Math.min(SPAN, ((e.clientY - b.top) / b.height) * 2 * SPAN - SPAN));
+      const { x, y } = at(e);
       dot.style.left = `${pct(x)}%`; dot.style.top = `${pct(y)}%`;
+      if (bar) bar.setAttribute('style', `${barBox(x, Number(bar.dataset.w))};top:${pct(y)}%`);
       dot.dataset.x = x.toFixed(3); dot.dataset.y = y.toFixed(3);
       moved = true;
     });
@@ -136,12 +177,7 @@ function wireStage(c, root) {
       if (!moved) { dot.classList.remove('held'); c.endDrag(); return; }
       dot.classList.remove('held');
       moved = false;
-      const ss = c.S.config.settings.screen_sync || (c.S.config.settings.screen_sync = { room: aid, lights: {} });
-      const lights = ss.lights || (ss.lights = {});
-      const id = dot.dataset.ssid;
-      lights[id] = { ...(lights[id] || {}), x: Number(dot.dataset.x), y: Number(dot.dataset.y) };
-      c.endDrag();
-      await c.save('', { quiet: true });
+      await save(dot.dataset.ssid, { x: Number(dot.dataset.x), y: Number(dot.dataset.y) });
     };
     dot.addEventListener('pointerup', done);
     dot.addEventListener('pointercancel', done);
@@ -155,6 +191,15 @@ export const screenActions = {
     const one = { ...(lights[id] || {}) };
     if (one.on === false) delete one.on; else one.on = false;
     if (Object.keys(one).length) lights[id] = one; else delete lights[id];
+    await c.save('', { quiet: true });
+  },
+  async 'ss-flip'(c, el) {
+    const ss = c.S.config.settings.screen_sync || (c.S.config.settings.screen_sync = { room: null, lights: {} });
+    const lights = ss.lights || (ss.lights = {});
+    const id = el.dataset.id;
+    const now = el.getAttribute('aria-pressed') === 'true';
+    lights[id] = { ...(lights[id] || {}), flip: !now };
+    if (now) delete lights[id].flip;
     await c.save('', { quiet: true });
   },
   async 'ss-reset'(c) {

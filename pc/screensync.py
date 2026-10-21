@@ -374,6 +374,21 @@ def set_start_with_windows(on: bool) -> None:
 
 
 # ---------- the tray ----------
+def on_main(fn) -> None:  # noqa: ANN001
+    """Run `fn` where the tray may be touched. macOS lets only its main thread change the menu bar, and an icon
+    changed from any other thread takes the whole app down; Windows does not mind which thread it is."""
+    if sys.platform == "darwin":
+        try:
+            from PyObjCTools import AppHelper  # noqa: WPS433
+
+            AppHelper.callAfter(fn)
+            return
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("main thread: %s", exc)
+            return
+    fn()
+
+
 def tray(sync: Sync) -> None:
     import pystray  # noqa: WPS433
     from PIL import Image, ImageDraw  # noqa: WPS433
@@ -410,13 +425,17 @@ def tray(sync: Sync) -> None:
     icon = pystray.Icon(APP, picture(sync.colour), "Caseta screen sync", menu)
 
     def refresh() -> None:
-        last = None
-        while not sync.stop.is_set():
-            if sync.colour != last:
-                last = sync.colour
+        last = [None]
+
+        def update() -> None:
+            if sync.colour != last[0]:
+                last[0] = sync.colour
                 icon.icon = picture(sync.colour)
             icon.title = f"Caseta screen sync · {sync.status_line()}"
             icon.update_menu()
+
+        while not sync.stop.is_set():
+            on_main(update)
             time.sleep(0.5)
 
     threading.Thread(target=sync.run, daemon=True).start()
@@ -461,6 +480,12 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                         handlers=[logging.FileHandler(logdir / "log.txt", encoding="utf-8")]
                         + ([logging.StreamHandler()] if args.no_tray else []))
+    # a crash leaves its trace beside the log: Python's own errors in log.txt, a native crash in crash.txt
+    import faulthandler  # noqa: WPS433
+
+    faulthandler.enable(file=open(logdir / "crash.txt", "a", encoding="utf-8"))  # noqa: SIM115  (open for the run)
+    sys.excepthook = lambda t, v, tb: LOG.error("stopped by an error", exc_info=(t, v, tb))
+    threading.excepthook = lambda a: LOG.error("a thread stopped: %s", a.exc_value, exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
     # one copy at a time: a second one exits quietly
     lock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:

@@ -130,6 +130,25 @@ const fake = d => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSO
     await page.click(`[data-act="ss-light"][data-id="${dot.id}"]`); await wait(900);
     const out = await C(id => ({ cfg: ((window.__copper.S.config.settings.screen_sync || {}).lights || {})[id], cls: document.querySelector(`.ss-dot[data-ssid="${id}"]`).className }), dot.id);
     check('switched off below, it is left out and drawn dim', out.cfg && out.cfg.on === false && /\bout\b/.test(out.cls), out);
+    // the same light as a gradient one: a bar, stretched by its handle, and turned round by Flip
+    fake({ dev: { [dot.id]: { segments: 7 } } }); await wait(900);
+    await C(() => { window.__copper.render(); }); await wait(500);
+    const len = await C(id => { const h = document.querySelector(`.ss-len[data-sslen="${id}"]`); if (!h) return null; const b = h.getBoundingClientRect();
+      const s = document.querySelector('.ss-stage').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, stage: { l: s.left, w: s.width } }; }, dot.id);
+    check('a gradient light is drawn as a bar with a handle', !!len, len);
+    if (len) {
+      const cfgNow = await C(id => ((window.__copper.S.config.settings.screen_sync || {}).lights || {})[id] || {}, dot.id);
+      // its middle is where it was dragged (x 2): pull the handle to x 3.2 for a length of 2.4
+      const toX = len.stage.l + len.stage.w * (Math.min(2.5, (cfgNow.x || 0) + 1.2) + 2.5) / 5;
+      await page.mouse.move(len.x, len.y); await page.mouse.down();
+      for (let i = 1; i <= 8; i++) { await page.mouse.move(len.x + (toX - len.x) * i / 8, len.y); await wait(16); }
+      await page.mouse.up(); await wait(1000);
+      const after = await C(id => ((window.__copper.S.config.settings.screen_sync || {}).lights || {})[id], dot.id);
+      check('its handle sets how much of the screen it takes', !!after && typeof after.span === 'number' && after.span > 0.4 && after.span < 2.6, after);
+      await page.click(`[data-act="ss-flip"][data-id="${dot.id}"]`); await wait(900);
+      const flipped = await C(id => ((window.__copper.S.config.settings.screen_sync || {}).lights || {})[id], dot.id);
+      check('Flip turns it round', !!flipped && flipped.flip === true, flipped);
+    }
     await page.click('[data-act="ss-reset"]'); await wait(900);
     const reset = await C(() => (window.__copper.S.config.settings.screen_sync || {}).lights);
     check('Start over forgets every position', reset && Object.keys(reset).length === 0, reset);

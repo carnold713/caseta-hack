@@ -191,6 +191,65 @@ async def main():
     check("a Nanoleaf that refuses the stream is put back all the same", nl2.puts[-3:], [
         ("effects", {"select": "Northern Lights"}), ("state", {"brightness": {"value": 35}}), ("state", {"on": {"value": True}})])
 
+    # one gradient light (a Play gradient tube, seven sections): red on the left of the screen, blue on the right
+    class GradientHue(FakeHue):
+        def __init__(self):
+            super().__init__()
+            self.devices = {"hue_g": {"name": "Gradient tube", "zone": "light-g", "hue_owner": "dev-g", "color": {"xy": None}, "segments": 7}}
+
+        async def _get(self, path):
+            if path == "/clip/v2/resource/entertainment":
+                return {"data": [{"id": "ent-g", "owner": {"rid": "dev-g"}, "renderer": True}]}
+            if path.startswith("/clip/v2/resource/light/"):
+                return {"data": [{"id": "light-g", "on": {"on": True}, "dimming": {"brightness": 50.0}}]}
+            return await super()._get(path)
+
+        async def _post(self, path, body):
+            self.posts.append((path, body))
+            # the bridge gives a gradient light one channel per section; ours made in one place, so all at one point
+            chans = [{"channel_id": n, "position": {"x": 0, "y": 0.8, "z": 0}, "members": [{"service": {"rid": "ent-g"}, "index": n}]} for n in range(7)]
+            self.configs.append({"id": "12345678-0000-4000-8000-000000000002", "metadata": body["metadata"], "status": "inactive",
+                                 "channels": chans, "light_services": [{"rid": "light-g", "rtype": "light"}]})
+            return {"data": [{"rid": "12345678-0000-4000-8000-000000000002"}]}
+
+    out2 = open(os.path.join(os.environ["DATA_DIR"], "dtls2.out"), "wb")
+    sport2, pcport2 = free_port(), free_port()
+    srv2 = subprocess.Popen(["openssl", "s_server", "-dtls1_2", "-nocert", "-psk", PSK, "-psk_identity", "appid-123",
+                             "-cipher", "PSK-AES128-GCM-SHA256", "-accept", str(sport2), "-quiet"],
+                            stdin=subprocess.PIPE, stdout=out2, stderr=subprocess.DEVNULL)
+    await asyncio.sleep(0.6)
+    gh = GradientHue()
+    cfg3 = {"settings": {"screen_sync": {"room": "office", "lights": {}}}}
+    g = S.ScreenSync(gh, room_lights=lambda r: ["hue_g"], config=lambda: cfg3, send=lambda m: None, room_name=lambda r: "Office",
+                     port=pcport2, stream_port=sport2)
+    try:
+        check("a gradient light says it has sections, and spans the screen", {k: v for k, v in g.placed("office")[0].items() if k in ("segments", "span", "flip")},
+              {"segments": 7, "span": 2.0, "flip": False})
+        await g.start()
+        end = time.monotonic() + 1.5
+        while time.monotonic() < end:
+            pc.sendto(frame, ("127.0.0.1", pcport2))
+            await asyncio.sleep(1 / 30)
+        made = gh.posts[0][1]["locations"]["service_locations"][0]["positions"] if gh.posts else []
+        check("the area it makes gives the light its start, middle and end", len(made), 3)
+        out2.flush()
+        last = (frames_from(open(out2.name, "rb").read()) or [{}])[-1]
+        check("its first section is red and its last blue", (last.get(0, (0, 0, 0))[0] > 0.7, last.get(6, (0, 0, 0))[2] > 0.7), (True, True))
+        cfg3["settings"]["screen_sync"]["lights"]["hue_g"] = {"flip": True}
+        end = time.monotonic() + 1.0
+        while time.monotonic() < end:
+            pc.sendto(frame, ("127.0.0.1", pcport2))
+            await asyncio.sleep(1 / 30)
+        out2.flush()
+        last = (frames_from(open(out2.name, "rb").read()) or [{}])[-1]
+        check("flipped, the other way round", (last.get(0, (0, 0, 0))[2] > 0.7, last.get(6, (0, 0, 0))[0] > 0.7), (True, True))
+    finally:
+        await g.stop()
+        srv2.kill()
+    check("a strip the Hue app laid up, across and down keeps that shape",
+          S.sections([(0, -0.5, 0.0, 0), (1, -0.5, 0.5, 1), (2, 0.5, 0.5, 2), (3, 0.5, 0.0, 3)], 2.0, False),
+          {0: (-1.0, 0.5), 1: (-1.0, -0.5), 2: (1.0, -0.5), 3: (1.0, 0.5)})
+
     # the pieces
     check("a light outside the screen looks at its nearest edge", S.weights(16, 9, 2.5, 0) == S.weights(16, 9, 1.0, 0), True)
     import nanostream as N

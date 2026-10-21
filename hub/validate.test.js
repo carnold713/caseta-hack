@@ -290,3 +290,8 @@ test('where the PC screen lights stand: numbers kept inside the page, a light le
     hue_a: { x: -0.6, y: 0.1 }, nanoleaf_N1: { x: 9, y: -9, on: false }, bad: { x: 'left' }, 'no good': { x: 1, y: 1 } } } } }).settings.screen_sync;
   assert.deepStrictEqual(ss, { room: 'r1', lights: { hue_a: { x: -0.6, y: 0.1 }, nanoleaf_N1: { x: 3, y: -3, on: false } } });
 });
+
+test('a gradient light keeps its length and which way round it is', () => {
+  const ss = validateConfig({ settings: { screen_sync: { room: 'r1', lights: { hue_g: { span: 9, flip: true }, hue_h: { span: 'long', flip: 'yes' } } } } }).settings.screen_sync;
+  assert.deepStrictEqual(ss.lights, { hue_g: { span: 6, flip: true } });
+});

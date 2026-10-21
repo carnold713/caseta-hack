@@ -437,6 +437,8 @@ setInterval(() => {
     if ('fan_fail' in d) { FAN_FAIL = !!d.fan_fail; console.log('fan fail', FAN_FAIL); }
     if (d.sync) { Object.assign(SYNC, d.sync); sendSync(); }
     // {"area": {device id: area id}}: a device filed into another room, as the bridge would report it
+    // {"dev": {device id: {field: value}}}: a device the bridge describes differently (a gradient light's sections)
+    if (d.dev) { for (const [id, f] of Object.entries(d.dev)) if (inventory.devices[id]) Object.assign(inventory.devices[id], f); send({ type: 'inventory', inventory }); sendSync(); }
     if (d.area) { for (const [id, ar] of Object.entries(d.area)) if (inventory.devices[id]) inventory.devices[id].area = ar; send({ type: 'inventory', inventory }); sendSync(); }
   }
 }, 200);
@@ -459,7 +461,11 @@ function syncPlaced(room) {
   const mine = ((((config || {}).settings || {}).screen_sync || {}).lights) || {};
   const ids = Object.keys(inventory.devices).filter(id => inventory.devices[id].area === room && ((id.startsWith('hue_') && inventory.devices[id].color) || id.startsWith('nanoleaf_')));
   return ids.map((id, k) => { const m = mine[id] || {}; const nano = id.startsWith('nanoleaf_');
-    return { id, kind: nano ? 'nanoleaf' : 'hue', name: inventory.devices[id].name, x: typeof m.x === 'number' ? m.x : (nano ? 1.6 : -0.6 + 1.2 * k / Math.max(1, ids.length - 1)), y: typeof m.y === 'number' ? m.y : 0, on: m.on !== false }; });
+    const segs = inventory.devices[id].segments || 1;
+    const one = { id, kind: nano ? 'nanoleaf' : 'hue', name: inventory.devices[id].name, x: typeof m.x === 'number' ? m.x : (nano ? 1.6 : -0.6 + 1.2 * k / Math.max(1, ids.length - 1)), y: typeof m.y === 'number' ? m.y : 0, on: m.on !== false };
+    if (segs > 1 || nano) Object.assign(one, { span: typeof m.span === 'number' ? m.span : (nano ? 0.8 : 2), flip: m.flip === true });
+    if (segs > 1) one.segments = segs;
+    return one; });
 }
 const sendSync = () => { if (ws.readyState === 1) send({ type: 'screen_sync', screen_sync: syncStatus() }); };
 const syncSet = on => { SYNC.off = !on; if (on) SYNC.paused = false; };

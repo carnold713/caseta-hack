@@ -246,6 +246,9 @@ class Hue:
                 "type": "HueLight" if dimmable else "HueSwitch", "model": "Hue", "serial": lt["id"],
                 "zone": lt["id"], "area": device_room.get(owner), "current_state": int(round(bri)) if on else 0, "fan_speed": None,
                 "hue_owner": owner, "color": _color_of(lt.get("color")), "ct": _ct_of(lt.get("color_temperature")),
+                # a gradient light (a Play gradient tube or lightstrip) shows several colours along itself; screen
+                # sync gives each of its sections its own part of the screen
+                "segments": int((lt.get("gradient") or {}).get("points_capable") or 1),
                 # What the bridge itself last said, kept apart from current_state, which a command sets the moment
                 # the bridge accepts it. The event stream keeps these up to date; checking an off reads them when
                 # the bridge cannot be asked directly.

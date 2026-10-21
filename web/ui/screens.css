@@ -313,6 +313,15 @@
 .ss-dot.out .ss-disc { background: var(--surface-3); color: var(--text-3); box-shadow: none; }
 .ss-name { font-size: 12px; line-height: 1.2; max-width: 96px; text-align: center; color: var(--text-2); }
 .ss-dot.held { cursor: grabbing; z-index: 2; }
+/* a gradient light: a bar as long as the part of the screen its sections take, a handle at its right end, and a mark at
+   the end its first section takes its colour from */
+.ss-span { position: absolute; height: 8px; margin-top: -4px; border-radius: 4px; background: var(--copper); opacity: .55; }
+.ss-span.out { background: var(--surface-3); }
+.ss-end { position: absolute; left: -3px; top: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--copper); }
+.ss-end.flip { left: auto; right: -3px; }
+.ss-len { position: absolute; right: -14px; top: -14px; width: 36px; height: 36px; border-radius: 50%; touch-action: none; cursor: ew-resize; }
+.ss-len::after { content: ''; position: absolute; left: 10px; top: 10px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--text-1); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
 /* M11: a tile on a room presses to the file's 0.97, held while the finger is down, and opens from there (lightopen.js). */
 .room-grid .tile:active { transform: scale(.97); }
 .room-empty { margin-top: 16px; }
