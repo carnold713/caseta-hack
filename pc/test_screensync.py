@@ -63,18 +63,31 @@ srv.bind(("127.0.0.1", P.PORT))
 got = []
 
 
+done = threading.Event()
+
+
 def connector():
-    srv.settimeout(3)
-    try:
-        while True:
+    # Windows reports a closed socket, or an earlier send that found no one, as an error on the next read: any of
+    # them ends the pretend connector quietly
+    srv.settimeout(0.2)
+    while not done.is_set():
+        try:
             data, addr = srv.recvfrom(65536)
-            got.append(data[:4])
+        except socket.timeout:
+            continue
+        except OSError:
+            if done.is_set():
+                break
+            continue
+        got.append(data[:4])
+        try:
             srv.sendto(P.STATE + json.dumps({"state": "syncing", "room_name": "Office"}).encode(), addr)
-    except socket.timeout:
-        pass
+        except OSError:
+            pass
 
 
-threading.Thread(target=connector, daemon=True).start()
+th = threading.Thread(target=connector, daemon=True)
+th.start()
 link = P.Link("127.0.0.1")
 for _ in range(20):
     link.tick()
@@ -97,7 +110,10 @@ s = FakeSync(link)
 check("the tray says what the room is doing", s.status_line(), "Office · following")
 s.paused = True
 check("paused here says so", s.status_line(), "Paused")
+done.set()
+th.join(2)
 srv.close()
+link.sock.close()
 
 print("FAILED: " + ", ".join(FAILS) if FAILS else "ALL OK")
 raise SystemExit(1 if FAILS else 0)
