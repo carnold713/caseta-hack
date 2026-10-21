@@ -279,3 +279,8 @@ test('the room that follows the PC screen is an id or nobody', () => {
   assert.strictEqual(room(undefined), null);
   assert.strictEqual(room({ room: null }), null);
 });
+
+test('a remote can switch the PC screen on or off', () => {
+  assert.deepStrictEqual(validateAction({ type: 'screen_sync', op: 'toggle' }, 'x'), { type: 'screen_sync', op: 'toggle' });
+  bad(() => validateAction({ type: 'screen_sync', op: 'sideways' }, 'x'), 'an op it does not know');
+});

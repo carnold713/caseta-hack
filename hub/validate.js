@@ -3,7 +3,7 @@
 // is where a malformed document gets rejected.
 
 const GESTURES = new Set(['single', 'double', 'hold_start', 'hold_end', 'hold']);
-const ACTION_TYPES = new Set(['restore', 'level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer', 'cap', 'cycle_presets', 'color']);
+const ACTION_TYPES = new Set(['restore', 'level', 'step', 'raise', 'lower', 'stop', 'fan', 'scene', 'preset', 'delay', 'cycle', 'timer', 'cancel_timer', 'cap', 'cycle_presets', 'color', 'screen_sync']);
 const FAN_SPEEDS = new Set(['Off', 'Low', 'Medium', 'MediumHigh', 'High']);
 // The kinds of light and their roles, the same table the app loads (it works as a script and as a module).
 const KIND_DEF = require('../web/js/kinds.js');
@@ -119,6 +119,10 @@ function validateAction(a, where) {
       break;
     case 'cancel_timer':
       if (!isTarget(a.target)) fail(`${where}: cancel_timer needs a target`);
+      break;
+    // the PC screen on or off (agent/screensync.py); it has no lights of its own, the room is a setting
+    case 'screen_sync':
+      if (!['toggle', 'on', 'off'].includes(a.op)) fail(`${where}: screen_sync op must be toggle, on or off`);
       break;
   }
   return a;

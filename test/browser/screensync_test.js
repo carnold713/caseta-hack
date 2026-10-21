@@ -3,7 +3,9 @@
 //   no PC seen: no row anywhere; a PC seen: the row is on the page of a room with a Hue colour light, and not on one without
 //   switching it on makes this the room that follows; the line under it says what it is doing
 //   paused (a light changed by hand) reads as off, and switching it on resumes it in place
-//   switching it off stops it following; a pairing without the streaming key offers the Hue bridge's button again
+//   switching it off keeps the room, so a remote can switch it back on
+//   a remote's button can be set to "PC screen on or off", and a press of it switches the room's row
+//   a pairing without the streaming key offers the Hue bridge's button again
 const { chromium } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
@@ -60,8 +62,7 @@ const fake = d => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSO
   check('and the line says it is following', r.line === 'Following', r);
 
   // a light changed by hand pauses it
-  await page.evaluate(() => window.__copper.data.api('/api/screensync', { method: 'POST', body: JSON.stringify({ op: 'pause' }) }));
-  await wait(900);
+  fake({ sync: { paused: true } }); await wait(900);
   r = await row();
   check('paused reads as off, and says so', r.on === 'false' && r.line === 'Paused' && (await settingRoom()) === rooms.with, r);
   await page.click('#screen [data-act="sync-toggle"]'); await wait(1200);
@@ -70,7 +71,27 @@ const fake = d => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSO
 
   await page.click('#screen [data-act="sync-toggle"]'); await wait(1200);
   r = await row();
-  check('switched off, no room follows', r.on === 'false' && (await settingRoom()) === null, { r, room: await settingRoom() });
+  check('switched off, the room stays but it is off', r.on === 'false' && (await settingRoom()) === rooms.with && (await syncInfo()).state === 'off', { r, room: await settingRoom(), s: await syncInfo() });
+
+  // a remote's button: Press twice on the Kitchen Pico's top button, set to "PC screen on or off"
+  await C(() => { location.hash = 'remote/9/k0-double'; }); await wait(1400);
+  await page.click('[data-act="ways"]'); await wait(900);
+  const offered = await C(() => !!document.querySelector('[data-act="way"][data-r="screensync"]'));
+  check('More choices offers PC screen on or off', offered, null);
+  if (offered) { await page.click('[data-act="way"][data-r="screensync"]'); await wait(1200); }
+  const saved = await C(() => (window.__copper.S.config.bindings || []).find(b => b.device_id === '9' && b.button_number === 0 && b.gesture === 'double'));
+  check('the press is set to switch the PC screen', !!saved && JSON.stringify(saved.actions) === JSON.stringify([{ type: 'screen_sync', op: 'toggle' }]), saved);
+  const said = await C(() => window.__copper.REM.shortDescribe([{ type: 'screen_sync', op: 'toggle' }]));
+  check('and says so in words', said === 'PC screen on or off', said);
+  await C(() => { window.__copper.closeSheet && window.__copper.closeSheet(); });
+  await go(rooms.with);
+  fake({ press: { device_id: '9', button_number: 0, gesture: 'double' } }); await wait(1500);
+  r = await row();
+  check('a press of it switches the room on', r.on === 'true' && (await syncInfo()).state === 'syncing', { r, s: await syncInfo() });
+  fake({ press: { device_id: '9', button_number: 0, gesture: 'double' } }); await wait(1500);
+  r = await row();
+  check('and again, off', r.on === 'false' && (await syncInfo()).state === 'off', { r, s: await syncInfo() });
+  await C(async () => { const c = window.__copper; c.S.config.bindings = c.S.config.bindings.filter(b => !(b.device_id === '9' && b.button_number === 0 && b.gesture === 'double')); await c.data.saveConfig(); });
 
   // a problem is said in the connector's words
   await page.click('#screen [data-act="sync-toggle"]'); await wait(900);
@@ -93,8 +114,8 @@ const fake = d => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSO
   const text = await C(() => document.querySelector('#screen').innerText);
   check('no dashes in what it says', !/[\u2013\u2014]/.test(text), null);
   // put the house back for the tests after this one
-  await page.click('#screen [data-act="sync-toggle"]'); await wait(800);
-  fake({ sync: { pc: false } }); await wait(600);
+  await C(async () => { const c = window.__copper; c.S.config.settings.screen_sync = { room: null }; await c.data.saveConfig(); });
+  fake({ sync: { pc: false, off: false, paused: false } }); await wait(600);
   check('no errors', errors.length === 0, errors);
   await browser.close();
   console.log(bad ? `${bad} FAILED` : 'ALL PASS');

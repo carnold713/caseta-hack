@@ -2,9 +2,10 @@
 // row on the room's page, shown once the PC program has been seen, and only in a room with a Hue colour light. One
 // room follows at a time: switching it on here moves it from wherever it was.
 //
-//   on       this room follows (config.settings.screen_sync.room), and is not paused
-//   off      it does not; a light changed by hand while following pauses it, which reads as off here too, and
-//            switching it on again resumes it
+//   on       this room follows (config.settings.screen_sync.room), switched on (the connector keeps on and off,
+//            so a remote's "PC screen on or off" and this switch are the same switch), and not paused
+//   off      switched off here or from a remote; or paused by a hand on one of its lights, which reads as off too.
+//            Switching it on again resumes it. Off keeps the room, so a remote can switch it back on
 // The line under it says what is happening when that is not plain from the lights: waiting for the PC, or what is
 // in the way. The Hue bridge's button is the one fix a person can make from here, so that is a row of its own.
 
@@ -25,7 +26,7 @@ export function syncRow(c, aid) {
   if (!c.H.roomLights(aid).some(d => String(d.device_id).startsWith('hue_') && d.color)) return '';
   const { esc, icon } = c;
   const state = mine && s && s.room === aid ? s.state : (mine ? 'waiting' : 'off');
-  const on = mine && state !== 'paused';
+  const on = mine && (s && s.room === aid && 'on' in s ? !!s.on : state !== 'paused' && state !== 'off');
   const needsKey = mine && s && !s.stream_key;
   const why = String((s && s.why) || '');
   const line = state === 'problem' ? why.charAt(0).toUpperCase() + why.slice(1) : (on || state === 'paused' ? LINES[state] || '' : '');
@@ -42,16 +43,13 @@ export function syncRow(c, aid) {
 export const syncActions = {
   async 'sync-toggle'(c, el) {
     const aid = el.dataset.id;
-    const s = sync(c);
     const settings = c.S.config.settings;
     const mine = (settings.screen_sync || {}).room === aid;
-    if (mine && !(s && s.state === 'paused')) {
-      settings.screen_sync = { room: null };
-      await c.save('', { quiet: true });
-      return;
-    }
+    const on = el.getAttribute('aria-checked') === 'true';
+    // another room following moves here; this one keeps its room either way, on or off
     if (!mine) { settings.screen_sync = { room: aid }; await c.save('', { quiet: true }); }
-    try { await c.data.api('/api/screensync', { method: 'POST', body: JSON.stringify({ op: 'resume' }) }); }
+    el.setAttribute('aria-checked', String(!on));
+    try { await c.data.api('/api/screensync', { method: 'POST', body: JSON.stringify({ op: mine && on ? 'off' : 'on' }) }); }
     catch (e) { c.toast(e.message, { err: true }); }
     c.render();
   },

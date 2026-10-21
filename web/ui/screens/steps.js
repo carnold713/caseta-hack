@@ -20,6 +20,7 @@ export function stepCards(c, list) {
       case 'scene': case 'preset': { const items = [...data.presets().map(p => ['p:' + p.id, p.name]), ...data.lutronScenes().map(s => ['s:' + s.scene_id, s.name + ' (Lutron)'])]; f += field('Scene', sel(i, 'scene_ref', items, a.type === 'preset' ? 'p:' + a.preset_id : 's:' + a.scene_id)); break; }
       case 'timer': f += tgt(i, a) + field('After', sel(i, 'minutes', [5, 10, 15, 20, 30, 45, 60, 90, 120].map(m => [m, m + ' minutes']), a.minutes)) + field('Then set to', sel(i, 'level', [[0, 'Off'], [5, '5%'], [10, '10%'], [30, '30%']], a.level || 0)) + field('Fade', sel(i, 'fade', fadeOpts, a.fade ?? '')); break;
       case 'delay': f += field('Wait', sel(i, 'ms', [[250, 'A quarter second'], [500, 'Half a second'], [1000, '1 second'], [2000, '2 seconds'], [5000, '5 seconds'], [15000, '15 seconds'], [30000, '30 seconds']], a.ms)); break;
+      case 'screen_sync': f += field('PC screen', sel(i, 'op', [['toggle', 'On or off'], ['on', 'On'], ['off', 'Off']], a.op)); break;
       default: f += `<p class="t-cap muted">${esc(data.describe([a]))}</p>`;
     }
     return `<div class="st-card">${f}<button class="link blue" data-act="st-remove" data-i="${i}">Remove</button></div>`;

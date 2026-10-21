@@ -604,6 +604,7 @@
           case 'preset': return `Runs the ${targetName('p:' + a.preset_id)} scene`;
           case 'timer': return `Turns ${t} ${a.level ? 'to ' + a.level + '%' : 'off'} after ${a.minutes} min`;
           case 'cancel_timer': return `Cancels the timer on ${t}`;
+          case 'screen_sync': return a.op === 'on' ? 'Switches the PC screen on' : a.op === 'off' ? 'Switches the PC screen off' : 'Switches the PC screen on or off';
           case 'delay': return `waits ${a.ms >= 1000 ? (a.ms / 1000) + ' s' : a.ms + ' ms'}`;
           default: return a.type;
         }

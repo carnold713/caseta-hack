@@ -242,6 +242,28 @@ async def main():
     s3._announce()
     check("and its frames after that are not", len(told), first + 1)
 
+    # on and off: a remote's press toggles it, it outlives a restart, and with no room set a press does nothing
+    import pathlib
+    d = pathlib.Path(tempfile.mkdtemp(prefix="syncoff-"))
+    cfg4 = {"settings": {"screen_sync": {"room": "office"}}}
+    s4 = S.ScreenSync(FakeHue(), room_lights=lambda r: [], config=lambda: cfg4, send=lambda m: None, port=free_port(), data_dir=d)
+    check("on to start with", s4.is_on(), True)
+    await s4.remote("toggle")
+    check("a remote's press switches it off", (s4.is_on(), s4.state()), (False, "off"))
+    s5 = S.ScreenSync(FakeHue(), room_lights=lambda r: [], config=lambda: cfg4, send=lambda m: None, port=free_port(), data_dir=d)
+    check("off outlives a restart", s5.is_on(), False)
+    s5.on_datagram(S.FRAME + bytes([0, 16, 9]) + bytes(432), ("192.168.1.30", 50000))
+    check("and the PC coming back does not undo it", s5.state(), "off")
+    await s5.remote("toggle")
+    check("pressed again, on", s5.is_on(), True)
+    s5.pause()
+    await s5.remote("toggle")
+    check("a press ends a pause by hand too", (s5.is_on(), s5.paused), (True, False))
+    await s5.remote("off")
+    cfg4["settings"]["screen_sync"] = {"room": None}
+    await s5.remote("toggle")
+    check("with no room set a press changes nothing", s5.off, True)
+
     # the pieces on their own
     check("a frame of the wrong size is not a frame", S.parse_frame(S.FRAME + bytes([0, 16, 9]) + b"x" * 10), None)
     w = S.weights(16, 9, -0.6, 0.0)

@@ -187,6 +187,11 @@ ws.on('message', raw => {
       if (process.env.STUBBORN_REMOVE) { send({ type: 'result', id: m.id, ok: true, detail: { removed: { status: '204 NoContent' }, id, still_listed: true } }); send({ type: 'inventory', inventory }); return; }
       delete inventory.devices[id]; for (const b of Object.keys(inventory.buttons)) if (inventory.buttons[b].device_id === id) delete inventory.buttons[b]; send({ type: 'result', id: m.id, ok: true, detail: { removed: { status: '204 NoContent' }, id } }); send({ type: 'inventory', inventory }); return; }
     const a = m.action;
+    // a remote's "PC screen on or off", as ScreenSync.remote does it
+    if (a.type === 'screen_sync') {
+      if ((((config || {}).settings || {}).screen_sync || {}).room) syncSet(a.op === 'on' || (a.op === 'toggle' && (SYNC.off || SYNC.paused)));
+      send({ type: 'result', id: m.id, ok: true }); sendSync(); return;
+    }
     // LAG_MS simulates a slow bridge round trip: the result and the echo come back late, like the real thing
     const lag = a.type === 'level' || a.type === 'color' ? Number(process.env.LAG_MS || 0) : 0;
     // A fan does what the real connector's does (engine.py): a fan command sets its speed and is answered done, and a
@@ -437,16 +442,19 @@ setInterval(() => {
 // ----- Screen sync (agent/screensync.py), pretended. No PC has been seen until a test says so through fake-do.json
 // ({"sync": {"pc": true, "key": false, "state": "problem", "why": "..."}}), so no other page grows the row. The room in
 // the config follows unless paused; a pause or resume from the app is answered as the connector answers it.
-const SYNC = { pc: false, key: true, paused: false, state: null, why: null };
+// On and off is the connector's to keep, as it is there; {"sync": {"paused": true}} is a hand on one of the lights.
+const SYNC = { pc: false, key: true, paused: false, off: false, state: null, why: null };
 function syncStatus() {
   const room = (((config || {}).settings || {}).screen_sync || {}).room || null;
-  const state = SYNC.state || (!room ? 'off' : SYNC.paused ? 'paused' : 'syncing');
+  const state = SYNC.state || (!room || SYNC.off ? 'off' : SYNC.paused ? 'paused' : 'syncing');
   return { state, room, room_name: room && inventory.areas[room] ? inventory.areas[room].name : null, lights: [], area: null, why: SYNC.why,
-    pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000 } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key };
+    pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000 } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key,
+    on: !!room && !SYNC.off && !SYNC.paused };
 }
 const sendSync = () => { if (ws.readyState === 1) send({ type: 'screen_sync', screen_sync: syncStatus() }); };
+const syncSet = on => { SYNC.off = !on; if (on) SYNC.paused = false; };
 function syncCommand(m) {
-  SYNC.paused = m.action.type === 'screensync_pause';
+  syncSet(m.action.type !== 'screensync_off');
   send({ type: 'result', id: m.id, ok: true, detail: syncStatus() });
   sendSync();
 }

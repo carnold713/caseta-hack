@@ -178,10 +178,11 @@ app.post('/api/hue', requireAuth, async (req, res) => {
   try { res.json(await sendCommand(action, b.op === 'pair' ? 70000 : 25000)); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
-// Screen sync: pause or resume the room following the PC's screen. Which room follows is a setting in the config.
+// Screen sync: the PC screen on or off (the connector keeps which). Which room follows is a setting in the config.
+// "resume" is the old name for on.
 app.post('/api/screensync', requireAuth, async (req, res) => {
   const op = (req.body || {}).op;
-  if (!['pause', 'resume'].includes(op)) return res.status(400).json({ error: 'op must be pause or resume' });
+  if (!['on', 'off', 'resume'].includes(op)) return res.status(400).json({ error: 'op must be on or off' });
   try { res.json(await sendCommand({ type: `screensync_${op}` })); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });

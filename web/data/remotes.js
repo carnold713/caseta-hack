@@ -39,7 +39,7 @@
   const GESTURE_PAST = { single: 'pressed', double: 'pressed twice', hold: 'held', hold_start: 'held', hold_end: 'let go', press: 'pressed', release: 'let go' };
 
   // The steps a fine-tuned press can take, in the words the step editor shows.
-  const ACTION_LABELS = { level: 'Set brightness', step: 'Brighter or dimmer by', cycle: 'Step through levels', raise: 'Brighten while holding', lower: 'Dim while holding', stop: 'Stop brightening or dimming', fan: 'Set fan speed', scene: 'Run a scene', timer: 'Turn off after a while', cancel_timer: 'Cancel a timer', delay: 'Then wait' };
+  const ACTION_LABELS = { level: 'Set brightness', step: 'Brighter or dimmer by', cycle: 'Step through levels', raise: 'Brighten while holding', lower: 'Dim while holding', stop: 'Stop brightening or dimming', fan: 'Set fan speed', scene: 'Run a scene', timer: 'Turn off after a while', cancel_timer: 'Cancel a timer', screen_sync: 'PC screen on or off', delay: 'Then wait' };
 
   function create(D, H, opts = {}) {
     const S = D.S;
@@ -209,6 +209,8 @@
       // Walks through scenes you choose. On a remote with arrows it sets both: up goes forwards, down goes back.
       { id: 'scenecycle', t: 'Step through scenes…', any: true, scenes: true, pick: 'cycle' },
       { id: 'moodsfirst', t: 'Suggest scenes', d: x => `Makes five for ${x.room}`, any: true, moods: 'none', pick: 'moods' },
+      // The room following the PC's screen (settings.screen_sync), switched on or off: offered once it is set up.
+      { id: 'screensync', t: 'PC screen on or off', any: true, sync: true, mk: () => [{ type: 'screen_sync', op: 'toggle' }] },
       { id: 'fan_up', t: 'Fan: faster', fan: true, mk: T => [{ type: 'step', target: T, delta: 1 }] },
       { id: 'fan_down', t: 'Fan: slower', fan: true, mk: T => [{ type: 'step', target: T, delta: -1 }] },
     ];
@@ -233,6 +235,7 @@
         if (a.type === 'timer') return 'sleep';
         if (a.type === 'preset' || a.type === 'scene') return 'scene';
         if (a.type === 'cycle_presets') return 'scenecycle';
+        if (a.type === 'screen_sync') return 'screensync';
       }
       return 'custom';
     }
@@ -259,12 +262,14 @@
       const first = D.controllable()[0];
       return first ? `a:${D.devArea(first)}` : 'h:all';
     }
+    // Screen sync is set up: a room follows the PC, or the connector has seen the PC program.
+    const syncReady = () => !!((settings().screen_sync || {}).room || (((S.agent || {}).info || {}).screen_sync || {}).pc);
     // Does a way fit this press and these lights.
     function applies(r, g, T, x) {
       const ds = D.targetDevices(T).map(D.dev).filter(Boolean);
       const isFan = ds.length > 0 && ds.every(d => d.domain === 'fan');
       const moodsOk = !r.moods || (r.moods === 'none' ? (x.moods === 0 && x.dimmers > 0) : x.moods >= 1);
-      return (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any) && moodsOk && (!r.scenes || x.scenes >= 2);
+      return (!r.hold || g === 'hold') && (!r.fan || isFan) && (r.fan || !isFan || r.any) && moodsOk && (!r.scenes || x.scenes >= 2) && (!r.sync || syncReady());
     }
     // The five usual ways for a press (08's "Suggested"), the current one kept in view when it is not among them.
     const USUAL = { single: ['on', 'toggle', 'back', 'scene', 'goodnight'], double: ['full', 'night', 'alloff', 'scene', 'room'], hold: ['hold_up', 'hold_down', 'sleep', 'goodnight', 'alloff'], fan: ['fan_up', 'fan_down'] };
@@ -286,7 +291,7 @@
       return list;
     }
     // Every way, grouped, for "More choices".
-    const GROUPS = [['Brightness', ['on', 'toggle', 'back', 'off', 'full', 'half', 'night', 'movie', 'cycle', 'up', 'down', 'hold_up', 'hold_down']], ['Scenes', ['scene', 'scenecycle', 'moodsfirst']], ['Timers and going out', ['sleep', 'lightway', 'goodnight', 'leaving', 'alloff']], ['Fans', ['fan_up', 'fan_down']]];
+    const GROUPS = [['Brightness', ['on', 'toggle', 'back', 'off', 'full', 'half', 'night', 'movie', 'cycle', 'up', 'down', 'hold_up', 'hold_down']], ['Scenes', ['scene', 'scenecycle', 'moodsfirst']], ['Timers and going out', ['sleep', 'lightway', 'goodnight', 'leaving', 'alloff']], ['Fans', ['fan_up', 'fan_down']], ['PC screen', ['screensync']]];
     function allWays(pid, n, g, T) {
       const x = recipeCtx(pid);
       const hasFan = D.targetDevices(T).some(id => (D.dev(id) || {}).domain === 'fan');
@@ -469,6 +474,7 @@
         fan: { type: 'fan', target: fan || T, speed: 'High' },
         scene: ps[0] ? { type: 'preset', preset_id: ps[0].id } : { type: 'scene', scene_id: (ls[0] || {}).scene_id || '' },
         timer: { type: 'timer', target: T, minutes: 20, level: 0, fade: 5 }, cancel_timer: { type: 'cancel_timer', target: T }, delay: { type: 'delay', ms: 1000 },
+        screen_sync: { type: 'screen_sync', op: 'toggle' },
       })[type] || null;
     }
     // One field of one step changed: the value as a form gives it.

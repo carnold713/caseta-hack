@@ -182,6 +182,7 @@ class ActionRunner:
         # stay "hue_*" because this is still one callback slot per kind of action, the same shape as when
         # only Hue existed; only what agent.py hands them has changed.
         self.hue_set: Optional[Callable[[str, int, Optional[float]], Awaitable[None]]] = None
+        self.screen_sync: Optional[Callable[[str], Awaitable[None]]] = None  # agent.py: ScreenSync.remote
         self.hue_color: Optional[Callable[..., Awaitable[None]]] = None  # (device_id, kelvin=, hex=, fade_s=, level=)
         self.hue_scene: Optional[Callable[[str], Awaitable[None]]] = None  # Hue's own scenes only; Nanoleaf has none
         # (device_id, adopt) -> the level the lamp is really at, asked of its bridge, or None when that cannot be
@@ -675,6 +676,11 @@ class ActionRunner:
         bridge = self._bridge()
         if t == "delay":
             await asyncio.sleep(int(a.get("ms", 0)) / 1000)
+            return None
+        if t == "screen_sync":   # the PC screen on or off (screensync.py); no lights of its own to resolve
+            if self.screen_sync is None:
+                raise RuntimeError("screen sync is not available")
+            await self.screen_sync(str(a.get("op") or "toggle"))
             return None
         if bridge is None:
             raise RuntimeError("bridge not connected")

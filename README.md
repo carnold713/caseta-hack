@@ -339,7 +339,9 @@ to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
 
 It stops a few seconds after the PC goes quiet (closed, locked, asleep) and puts the
 lights back as they were. Changing one of those lights from the app, a remote or a
-routine pauses it; switch it on again, or choose Resume in the tray. The PC and the
+routine pauses it; switch it on again, or choose Resume in the tray. A remote's
+button can switch it on and off too: on the button's page, More choices, **PC screen
+on or off**. Switching it off keeps the room, and it stays off until switched on. The PC and the
 Pi need UDP port 47700 open between them.
 
 ### Updating the connector

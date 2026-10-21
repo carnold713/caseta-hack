@@ -17,6 +17,9 @@ would put the lights visibly behind the screen.
     from the app, a remote or a routine that touches one of them stops the stream first, and the sync stays paused
     (lights as that command left them) until it is resumed from the app or the PC, or the PC's frames stop and start
     again. Follow the day is automatic, not a person, and simply leaves those lights alone while they follow.
+  * On and off is a second thing, kept by the connector across restarts (DATA_DIR/screensync.json): the app's
+    switch and a remote's "PC screen on or off" set it. Off stops the stream and puts the lights back, and stays off
+    until something turns it on again; the PC coming back does not. The room setting says where, this says whether.
   * The PC finds the connector by broadcasting a query on PC_PORT; every answer, and an answer to every frame now
     and then, carries the sync's state, which the PC shows in its tray.
 """
@@ -27,6 +30,7 @@ import json
 import logging
 import math
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import huestream
@@ -131,7 +135,7 @@ class _PcPort(asyncio.DatagramProtocol):
 class ScreenSync:
     def __init__(self, hue: Any, room_lights: Callable[[str], List[str]], config: Callable[[], dict],
                  send: Callable[[dict], None], room_name: Callable[[str], Optional[str]] = lambda r: None,
-                 port: int = PC_PORT, stream_port: int = huestream.PORT) -> None:
+                 port: int = PC_PORT, stream_port: int = huestream.PORT, data_dir: Optional[Path] = None) -> None:
         self.hue = hue
         self.room_lights = room_lights
         self.config = config
@@ -139,7 +143,9 @@ class ScreenSync:
         self.room_name = room_name
         self.port = port
         self.stream_port = stream_port
-        self.paused = False
+        self.paused = False                      # a light changed by hand: until resumed, or the PC comes back
+        self._file = (data_dir / "screensync.json") if data_dir else None
+        self.off = self._load_off()              # switched off, from the app or a remote: until switched on
         self.streaming = False
         self.why: Optional[str] = None          # what is in the way, in words, for the app and the PC
         self.lights: List[str] = []              # hue_ ids following the screen while streaming
@@ -171,6 +177,39 @@ class ScreenSync:
         ss = ((self.config() or {}).get("settings") or {}).get("screen_sync") or {}
         r = ss.get("room")
         return str(r) if r else None
+
+    def _load_off(self) -> bool:
+        try:
+            return bool(json.loads(self._file.read_text()).get("off")) if self._file else False
+        except (OSError, ValueError):
+            return False
+
+    def set_on(self, on: bool) -> None:
+        """Switch the PC screen on or off (the app's switch, a remote). On also ends a pause by hand."""
+        self.off = not on
+        if on:
+            self.paused = False
+            self.why = None
+            self._retry_at = 0.0
+        if self._file:
+            try:
+                self._file.parent.mkdir(parents=True, exist_ok=True)
+                self._file.write_text(json.dumps({"off": self.off}))
+            except OSError as exc:
+                LOG.warning("screen sync: could not keep on or off: %s", exc)
+        LOG.info("screen sync switched %s", "on" if on else "off")
+
+    def is_on(self) -> bool:
+        """What a switch shows: a room set, not switched off, and not paused by a hand on a light."""
+        return bool(self.room()) and not self.off and not self.paused
+
+    async def remote(self, op: str) -> None:
+        """A remote's press: "on", "off" or "toggle"."""
+        if not self.room():
+            LOG.info("screen sync: a remote asked for %s, but no room follows the PC yet", op)
+            return
+        self.set_on(op == "on" or (op == "toggle" and not self.is_on()))
+        self._announce()
 
     # ----- the port the PC talks to -----
     async def start(self) -> None:
@@ -231,7 +270,7 @@ class ScreenSync:
     # ----- what the app and the PC are told -----
     def state(self) -> str:
         room = self.room()
-        if not room:
+        if not room or self.off:
             return "off"
         if self.streaming:
             return "syncing"
@@ -249,7 +288,7 @@ class ScreenSync:
             "state": self.state(), "room": room, "room_name": self.room_name(room) if room else None,
             "lights": list(self.lights), "area": (self.area or {}).get("name"), "why": self.why,
             "pc": {"address": self._pc[0], "seen_at": self._pc_seen} if self._pc else None,
-            "fps": round(self._fps, 1), "stream_key": bool(getattr(self.hue, "clientkey", None)),
+            "fps": round(self._fps, 1), "stream_key": bool(getattr(self.hue, "clientkey", None)), "on": self.is_on(),
         }
 
     def _announce(self) -> None:
@@ -283,9 +322,7 @@ class ScreenSync:
         self.paused = True
 
     def resume(self) -> None:
-        self.paused = False
-        self.why = None
-        self._retry_at = 0.0
+        self.set_on(True)
 
     # ----- the loop: start, stream, stop -----
     async def _run(self) -> None:
@@ -300,7 +337,7 @@ class ScreenSync:
                 now = time.monotonic()
                 room = self.room()
                 fresh = now - self._frame_at < IDLE_S
-                want = bool(room and fresh and not self.paused and getattr(self.hue, "paired", False))
+                want = bool(room and fresh and not self.paused and not self.off and getattr(self.hue, "paired", False))
                 if not room and self.why:
                     self.why = None
                 async with self._lock:
