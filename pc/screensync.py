@@ -278,24 +278,33 @@ class Sync:
 
 # ---------- a Mac's Screen Recording permission ----------
 _allowed: Optional[bool] = None
+_asked = False
+_checked_at = 0.0
 
 
 def screen_allowed() -> bool:
-    """Whether macOS lets this app see other windows (always true elsewhere). Asked once; macOS only tells an app
-    it was allowed after it is opened again, so the answer is kept for the run."""
-    global _allowed
-    if sys.platform != "darwin":
-        return True
-    if _allowed is None:
-        try:
-            import Quartz  # noqa: WPS433
+    """Whether macOS lets this app see other windows (always true elsewhere). The system's prompt is asked for once;
+    until it is allowed the answer is looked at again every few seconds, since a newer macOS says so without the
+    app being reopened. Once allowed it stays allowed for the run."""
+    global _allowed, _asked, _checked_at
+    if sys.platform != "darwin" or _allowed:
+        return True if sys.platform != "darwin" else bool(_allowed)
+    now = time.monotonic()
+    if _allowed is not None and now - _checked_at < 5:
+        return False
+    _checked_at = now
+    try:
+        import Quartz  # noqa: WPS433
 
-            _allowed = bool(Quartz.CGPreflightScreenCaptureAccess())
-            if not _allowed:
-                Quartz.CGRequestScreenCaptureAccess()  # the system's own prompt, the first time
-        except Exception:  # noqa: BLE001  an older macOS without the call asks by itself on the first grab
-            _allowed = True
-    return _allowed
+        _allowed = bool(Quartz.CGPreflightScreenCaptureAccess())
+        if not _allowed and not _asked:
+            _asked = True
+            Quartz.CGRequestScreenCaptureAccess()  # the system's own prompt, the first time
+        if _allowed:
+            LOG.info("Screen Recording is allowed")
+    except Exception:  # noqa: BLE001  an older macOS without the call asks by itself on the first grab
+        _allowed = True
+    return bool(_allowed)
 
 
 # ---------- open at login (macOS) ----------

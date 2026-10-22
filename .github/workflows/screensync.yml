@@ -83,13 +83,22 @@ jobs:
       - name: Tests
         run: python pc/test_screensync.py
 
-      # A menu-bar app: no Dock icon (LSUIElement), signed ad hoc again after the plist changes, which Apple silicon
-      # needs before it will open it at all
+      # the app's signing certificate, kept between builds so every update is the same app to macOS (pc/mac_sign.sh)
+      - name: The signing certificate (kept in the cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/caseta-mac-sign.p12
+          key: caseta-mac-sign-v1
+
+      # A menu-bar app: no Dock icon (LSUIElement), then signed (after the plist changes, which Apple silicon needs
+      # before it will open it at all) with the same identity every build
       - name: Build the app
+        env:
+          CASETA_MAC_P12_B64: ${{ secrets.CASETA_MAC_P12_B64 }}
         run: |
           pyinstaller --windowed --name CasetaScreenSync --osx-bundle-identifier app.caseta.screensync pc/screensync.py
           plutil -insert LSUIElement -bool true dist/CasetaScreenSync.app/Contents/Info.plist
-          codesign --force --deep --sign - dist/CasetaScreenSync.app
+          bash pc/mac_sign.sh dist/CasetaScreenSync.app
           ditto -c -k --keepParent dist/CasetaScreenSync.app CasetaScreenSync-mac.zip
 
       - name: The app looks at the screen once
