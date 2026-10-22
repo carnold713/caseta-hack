@@ -56,8 +56,11 @@ FLAG_RESUME = 0x01
 GRID_W, GRID_H = 16, 9
 LOST_S = 10.0           # no answer from the connector for this long: look for it again
 APP = "CasetaScreenSync"
-VERSION = "1.1"
-RATES = (12, 20, 30)    # how many times a second to look at the screen: Settings' choices
+VERSION = "1.2"
+# How many times a second to look at the screen: Settings' choices. The lights are sent 50 updates a second and show
+# about 25, so past 50 a faster look makes them no smoother; it only lets a change reach them a few milliseconds
+# sooner, for many times the work here (a full-screen game still follows its own setting).
+RATES = (12, 20, 30, 60, 120, 240)
 GAME_RATE = 6           # "gently", while a game fills the screen
 
 LOG = logging.getLogger("screensync")
@@ -570,7 +573,7 @@ input[type=text] { width: 150px; }
 <div class="card">
   <div class="row"><span class="t">Follow the screen</span><input type="checkbox" class="sw" id="follow"></div>
   <div class="row"><span class="t">Smoothness</span>
-    <select id="fps"><option value="12">12 a second</option><option value="20">20 a second</option><option value="30">30 a second</option></select></div>
+    <select id="fps"><option value="12">12 a second</option><option value="20">20 a second</option><option value="30">30 a second</option><option value="60">60 a second</option><option value="120">120 a second</option><option value="240">240 a second</option></select></div>
   <div class="row win"><span class="t">While a game is full screen</span>
     <select id="game"><option value="gentle">Follow gently</option><option value="full">Keep up</option><option value="pause">Pause</option></select></div>
 </div>
@@ -848,7 +851,7 @@ def main() -> int:
     screen_allowed()  # on a Mac, ask for Screen Recording now, while the app is in front
     run_quietly()
     settings = Settings()
-    sync = Sync(args.pi, max(5.0, min(60.0, args.fps or float(settings["fps"]))), settings)
+    sync = Sync(args.pi, max(5.0, min(240.0, args.fps or float(settings["fps"]))), settings)
     page = SettingsPage(sync)
     page.start()
     LOG.info("screen sync %s started (%s, %.0f a second, connector %s)", VERSION, sync.screen.kind, sync.fps,

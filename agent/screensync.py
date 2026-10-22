@@ -185,6 +185,8 @@ class ScreenSync:
         self._started = False                    # something was switched into streaming (to put back if a start fails)
         self._frame: Optional[Tuple[int, int, bytes]] = None
         self._frame_at = 0.0                     # monotonic
+        self._frame_n = 0                        # frames received; _step aims at the newest once per beat
+        self._aimed_n = -1
         self._session_from = 0.0                 # monotonic; when the PC's current run of frames began
         self._pc: Optional[Tuple[str, int]] = None
         self._pc_seen: Optional[float] = None    # wall clock, for the app
@@ -338,9 +340,10 @@ class ScreenSync:
             self._retry_at = 0.0
         self._pc, self._pc_seen = (addr[0], addr[1]), time.time()
         self._asking.pop(addr[0], None)  # it hears us: frames only come after an answer, or from an address typed in
+        # the colours are worked out on the stream's own beat (_step), not per frame: a computer may send far more
+        # frames than the 50 a second the lights are sent, and each would cost every light's sums again
         self._frame, self._frame_at = (w, h, rgb), now
-        if self.streaming:
-            self._aim(w, h, rgb)
+        self._frame_n += 1
         if now - self._replied_at >= REPLY_EVERY_S:
             self._reply(addr)
 
@@ -651,6 +654,9 @@ class ScreenSync:
         self._target = {k: colour_of(rgb, wt) for k, wt in self._wts.items()}
 
     def _step(self, dt: float) -> None:
+        if self._frame and self._aimed_n != self._frame_n:
+            self._aimed_n = self._frame_n
+            self._aim(*self._frame)
         if not self._target:
             return
         a = 1 - math.exp(-dt / SMOOTH_S)

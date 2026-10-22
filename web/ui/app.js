@@ -609,10 +609,27 @@ function onConn(conn) {
   // back from a real outage (not a blip inside the grace), said once
   if (conn === 'cleared') { clearTimeout(graceTimer); ctx.ui.hadBlip = true; if ($('#app').classList.contains('offline')) toast('Back in touch'); }
 }
+// A deploy reaches an app that was left open: the hub says which build it serves in every snapshot, and when that
+// changes the page reloads. Never under a hand: at once if the app is not being looked at or was opened a moment ago
+// (the socket comes back on resume, so that is when it hears), otherwise the next time it is left or opened.
+let build = null, newBuild = false, shownAt = performance.now();
+const reloadNow = () => { try { location.reload(); } catch (_) {} };
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) shownAt = performance.now();
+  if (newBuild) reloadNow();
+});
+function noteBuild(b) {
+  if (!b) return;
+  if (build === null) { build = b; return; }
+  if (b === build || newBuild) return;
+  newBuild = true;
+  if (document.hidden || performance.now() - shownAt < 5000) reloadNow();
+}
 function connect() {
   data.connectWS({
     message: (m, r) => {
       if (m.type === 'snapshot') {
+        noteBuild(m.build);
         // once, quietly, as the old app does: bring the five's old slow fades forward
         if (H.shortenSuggestedFades()) save('', { quiet: true });
       }

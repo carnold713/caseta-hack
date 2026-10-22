@@ -545,8 +545,11 @@ function keepMinutes(next, was) {
   for (const [k, v] of Object.entries(next)) if (v && sameTimer(was[k], v)) v.minutes = was[k].minutes;
   return next;
 }
+// Which build of the app this hub serves: its commit on Railway, else when it started. An app that sees it change
+// reloads itself (web/ui/app.js), so a phone that kept the app open across a deploy still gets it.
+const BUILD = process.env.RAILWAY_GIT_COMMIT_SHA || `start-${Date.now()}`;
 function snapshot() {
-  return { inventory, states, config, timers, sun, follow, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo, offline_since: agent ? null : agentOfflineSince }, add: addSession };
+  return { build: BUILD, inventory, states, config, timers, sun, follow, next_runs: nextRuns, activity: activity.slice(0, 50), agent: { online: !!agent, info: agentInfo, offline_since: agent ? null : agentOfflineSince }, add: addSession };
 }
 // Written only when it changes: a connector going away, or saying hello again.
 function agentOffline(since) {
