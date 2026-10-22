@@ -57,6 +57,36 @@ check("a black screen is black", bool((cells(P.grid(f)) == 0).all()), True)
 f = np.full((1017, 1333, 3), 77, dtype=np.uint8)
 check("an odd size still makes a full grid", len(P.grid(f)), 16 * 9 * 3)
 
+# a Mac's screen arrives as BGRA rows padded past the picture's width; only the pixels grid() looks at are kept,
+# and the grid made from them is the one made from the whole screen
+rng = np.random.default_rng(7)
+rgb = rng.integers(0, 256, (982, 1512, 3), dtype=np.uint8)
+rgb[:120] = 0
+bpr = 1536 * 4
+bgra = np.zeros((982, bpr), dtype=np.uint8)
+bgra[:, : 1512 * 4].reshape(982, 1512, 4)[:, :, :3] = rgb[:, :, ::-1]
+small = P.sample_bgra(bytearray(bgra.tobytes()), 1512, 982, bpr)
+check("a Mac screen keeps only a small sample", small.shape[0] < 200 and small.shape[1] < 400, True)
+check("the sample makes the same grid as the whole screen", P.grid(small) == P.grid(rgb), True)
+
+# macOS crash reports, summed up in one line for the log
+hdr = json.dumps({"app_name": "CasetaScreenSync", "bug_type": "309"})
+body = json.dumps({"procName": "CasetaScreenSync", "exception": {"type": "EXC_CRASH", "signal": "SIGABRT"},
+                   "asi": {"AppKit": ["NSWindow drag regions should only be invalidated on the Main Thread!"]},
+                   "faultingThread": 3, "usedImages": [{"name": "libsystem_kernel.dylib"}, {"name": "AppKit"}],
+                   "threads": [{}, {}, {}, {"frames": [{"imageIndex": 0, "symbol": "__pthread_kill"},
+                                                       {"imageIndex": 1, "symbol": "-[NSWindow setTitle:]"}]}]})
+line = P.crash_summary(hdr + "\n" + body) or ""
+check("a crash report says how it ended", line.startswith("EXC_CRASH SIGABRT"), True)
+check("and what the system said", "Main Thread" in line, True)
+check("and where", "thread 3: libsystem_kernel.dylib:__pthread_kill < AppKit:-[NSWindow setTitle:]" in line, True)
+jet = json.dumps({"bug_type": "298"}) + "\n" + json.dumps({"processes": [
+    {"name": "Safari", "rpages": 1000}, {"name": "CasetaScreenSync", "reason": "per-process-limit", "rpages": 65536}]})
+check("a memory stop names the app", P.crash_summary(jet), "macOS stopped it for memory (per-process-limit, 1024 MB)")
+other = json.dumps({"bug_type": "298"}) + "\n" + json.dumps({"processes": [{"name": "Safari", "reason": "highwater"}]})
+check("one about other apps is left out", P.crash_summary(other), None)
+check("another app's crash is left out", P.crash_summary(json.dumps({"app_name": "Mail"}) + "\n{}"), None)
+
 fr = P.frame_bytes(bytes(16 * 9 * 3), resume=True)
 check("a frame says what it is", (fr[:4], fr[4], fr[5], fr[6], len(fr)), (b"CSY1", 1, 16, 9, 7 + 432))
 

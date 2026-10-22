@@ -3,7 +3,7 @@
 numpy>=1.26,<3
 mss>=9,<11
 dxcam>=0.0.5; sys_platform == "win32"
-# Quartz: the Mac's screen grab at nominal resolution and its Screen Recording permission (pystray needs it too)
+# Quartz: the Mac's Screen Recording permission (pystray needs it too; the grab itself calls CoreGraphics directly)
 pyobjc-framework-Quartz>=10; sys_platform == "darwin"
 pystray>=0.19,<1
 Pillow>=10,<13

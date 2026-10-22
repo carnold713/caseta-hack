@@ -56,7 +56,7 @@ FLAG_RESUME = 0x01
 GRID_W, GRID_H = 16, 9
 LOST_S = 10.0           # no answer from the connector for this long: look for it again
 APP = "CasetaScreenSync"
-VERSION = "1.2"
+VERSION = "1.3"
 # How many times a second to look at the screen: Settings' choices. The lights are sent 50 updates a second and show
 # about 25, so past 50 a faster look makes them no smoother; it only lets a change reach them a few milliseconds
 # sooner, for many times the work here (a full-screen game still follows its own setting).
@@ -73,26 +73,100 @@ def _plain_grab():
     return (getattr(mss, "MSS", None) or mss.mss)()
 
 
+def _steps(H: int, W: int, w: int = GRID_W, h: int = GRID_H) -> Tuple[int, int]:
+    # about 10 x 10 pixels for every cell: plenty for an average, and quick at 4K
+    return max(1, H // (h * 10)), max(1, W // (w * 10))
+
+
+def sample_bgra(buf, w: int, h: int, bpr: int) -> np.ndarray:  # noqa: ANN001
+    """The pixels grid() looks at, as RGB, out of a BGRA screen `bpr` bytes a row: a copy small enough to keep
+    (a few hundred pixels across), so the screen itself can be let go at once."""
+    sy, sx = _steps(h, w)
+    rows = np.frombuffer(buf, dtype=np.uint8, count=h * bpr).reshape(h, bpr)
+    px = rows[::sy, : w * 4].reshape(-1, w, 4)[:, ::sx]
+    return np.ascontiguousarray(px[:, :, 2::-1])
+
+
+class _CoreGraphics:
+    """The Mac's screen through CoreGraphics itself, at the screen's nominal resolution (a Retina screen's pixels
+    are four times as many as a 16 x 9 grid needs). Called directly rather than through pyobjc, so each screen is
+    released the moment its pixels are sampled: nothing waits for an autorelease pool, and memory stays flat
+    however long it runs and however fast it looks."""
+
+    LIST_ON_SCREEN = 1
+    NULL_WINDOW = 0
+    IMAGE_OPTIONS = 1 | 2 | 16  # ignore window framing, opaque, nominal resolution
+
+    def __init__(self) -> None:
+        import ctypes.util  # noqa: WPS433
+
+        class CGPoint(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
+
+        class CGSize(ctypes.Structure):
+            _fields_ = [("width", ctypes.c_double), ("height", ctypes.c_double)]
+
+        class CGRect(ctypes.Structure):
+            _fields_ = [("origin", CGPoint), ("size", CGSize)]
+
+        def lib(name: str):  # noqa: ANN202
+            return ctypes.cdll.LoadLibrary(ctypes.util.find_library(name)
+                                           or f"/System/Library/Frameworks/{name}.framework/{name}")
+
+        cg, cf = lib("CoreGraphics"), lib("CoreFoundation")
+        vp, sz = ctypes.c_void_p, ctypes.c_size_t
+        cg.CGMainDisplayID.restype = ctypes.c_uint32
+        cg.CGDisplayBounds.argtypes, cg.CGDisplayBounds.restype = [ctypes.c_uint32], CGRect
+        cg.CGWindowListCreateImage.argtypes = [CGRect, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
+        cg.CGWindowListCreateImage.restype = vp
+        for fn in ("CGImageGetWidth", "CGImageGetHeight", "CGImageGetBytesPerRow", "CGImageGetBitsPerPixel"):
+            getattr(cg, fn).argtypes, getattr(cg, fn).restype = [vp], sz
+        cg.CGImageGetDataProvider.argtypes, cg.CGImageGetDataProvider.restype = [vp], vp
+        cg.CGDataProviderCopyData.argtypes, cg.CGDataProviderCopyData.restype = [vp], vp
+        cf.CFDataGetBytePtr.argtypes, cf.CFDataGetBytePtr.restype = [vp], vp
+        cf.CFDataGetLength.argtypes, cf.CFDataGetLength.restype = [vp], ctypes.c_long
+        cf.CFRelease.argtypes, cf.CFRelease.restype = [vp], None
+        self.cg, self.cf = cg, cf
+
+    def grab(self) -> Optional[np.ndarray]:
+        cg, cf = self.cg, self.cf
+        img = cg.CGWindowListCreateImage(cg.CGDisplayBounds(cg.CGMainDisplayID()), self.LIST_ON_SCREEN,
+                                         self.NULL_WINDOW, self.IMAGE_OPTIONS)
+        if not img:
+            return None  # asleep, locked, or no screen to look at
+        data = None
+        try:
+            w, h, bpr = cg.CGImageGetWidth(img), cg.CGImageGetHeight(img), cg.CGImageGetBytesPerRow(img)
+            if cg.CGImageGetBitsPerPixel(img) != 32 or not w or not h:
+                return None
+            data = cg.CGDataProviderCopyData(cg.CGImageGetDataProvider(img))
+            if not data or cf.CFDataGetLength(data) < h * bpr:
+                return None
+            buf = (ctypes.c_uint8 * (h * bpr)).from_address(cf.CFDataGetBytePtr(data))
+            return sample_bgra(buf, w, h, bpr)
+        finally:
+            if data:
+                cf.CFRelease(data)
+            cf.CFRelease(img)
+
+
 class Screen:
-    """The main screen: through Windows' Desktop Duplication (dxcam), or on a Mac through Quartz at the screen's
-    nominal resolution (a Retina screen's pixels are four times as many as a 16 x 9 grid needs), otherwise a plain
-    grab (mss)."""
+    """The main screen: through Windows' Desktop Duplication (dxcam), or on a Mac through CoreGraphics
+    (_CoreGraphics), otherwise a plain grab (mss)."""
 
     def __init__(self) -> None:
         self.kind = None
         self._cam = None
         self._mss = None
-        self._quartz = None
+        self._cgs = None
         self._last: Optional[np.ndarray] = None
         if sys.platform == "darwin":
             try:
-                import Quartz  # noqa: WPS433  (pyobjc, macOS only)
-
-                self._quartz = Quartz
-                self.kind = "quartz"
+                self._cgs = _CoreGraphics()
+                self.kind = "coregraphics"
                 return
             except Exception as exc:  # noqa: BLE001
-                LOG.info("Quartz unavailable (%s), using a plain grab", exc)
+                LOG.info("CoreGraphics unavailable (%s), using a plain grab", exc)
         else:
             try:
                 import dxcam  # noqa: WPS433  (Windows only)
@@ -105,32 +179,15 @@ class Screen:
         self._mss = _plain_grab()
         self.kind = "mss"
 
-    def _grab_quartz(self) -> Optional[np.ndarray]:
-        # Every grab makes Cocoa objects that are only freed when an autorelease pool drains. This runs on its own
-        # thread, which has no pool of its own, so without one here each screen (megabytes) was kept until macOS
-        # stopped the app for its memory.
-        import objc  # noqa: WPS433
-
-        Q = self._quartz
-        with objc.autorelease_pool():
-            img = Q.CGWindowListCreateImage(Q.CGDisplayBounds(Q.CGMainDisplayID()), Q.kCGWindowListOptionOnScreenOnly,
-                                            Q.kCGNullWindowID, Q.kCGWindowImageNominalResolution)
-            if img is None:
-                return None
-            w, h, bpr = Q.CGImageGetWidth(img), Q.CGImageGetHeight(img), Q.CGImageGetBytesPerRow(img)
-            data = Q.CGDataProviderCopyData(Q.CGImageGetDataProvider(img))
-            bgra = np.frombuffer(bytes(data), dtype=np.uint8).reshape(h, bpr // 4, 4)[:, :w]
-            return np.ascontiguousarray(bgra[:, :, 2::-1])
-
     def grab(self) -> Optional[np.ndarray]:
-        """The screen as an H x W x 3 RGB array. dxcam returns nothing when the screen has not changed since the
-        last look, so the last picture stands in for it."""
-        if self._quartz is not None:
+        """The screen as an H x W x 3 RGB array (on a Mac, only the pixels grid() looks at). dxcam returns nothing
+        when the screen has not changed since the last look, so the last picture stands in for it."""
+        if self._cgs is not None:
             try:
-                f = self._grab_quartz()
+                f = self._cgs.grab()
             except Exception as exc:  # noqa: BLE001  a macOS that no longer offers it: the plain grab instead
-                LOG.info("Quartz grab failed (%s), using a plain grab", exc)
-                self._quartz, self._mss, self.kind = None, _plain_grab(), "mss"
+                LOG.info("CoreGraphics grab failed (%s), using a plain grab", exc)
+                self._cgs, self._mss, self.kind = None, _plain_grab(), "mss"
                 return self.grab()
             if f is not None:
                 self._last = f
@@ -154,8 +211,7 @@ class Screen:
 def grid(frame: np.ndarray, w: int = GRID_W, h: int = GRID_H) -> bytes:
     """The screen shrunk to w x h colours, RGB bytes row by row, with black bars left out."""
     H, W = frame.shape[:2]
-    # look at about 10 x 10 pixels for every cell: plenty for an average, and quick at 4K
-    sy, sx = max(1, H // (h * 10)), max(1, W // (w * 10))
+    sy, sx = _steps(H, W, w, h)
     small = frame[::sy, ::sx, :3].astype(np.float32)
     small = _trim_bars(small)
     rows, cols = small.shape[0] // h * h, small.shape[1] // w * w
@@ -353,6 +409,7 @@ class Sync:
         self.colour = (40, 40, 40)
         self.gaming = False            # a game fills the screen (Windows), and Settings says to go gently or stop
         self.stop = threading.Event()
+        self.sent = 0
 
     def rate(self) -> float:
         g = game_in_front()
@@ -367,11 +424,22 @@ class Sync:
     def run(self) -> None:
         nxt = time.monotonic()
         rate, rate_at = float(self.fps), 0.0
+        found, noted_at, noted_sent = False, nxt, 0
         while not self.stop.is_set():
             now = time.monotonic()
             if now - rate_at > 2:  # what is in front is looked at every two seconds, not every frame
                 rate, rate_at = self.rate(), now
             self.link.tick()
+            # the log says when the connector stops answering and when it is back, and every ten minutes how it is
+            # going, so a run that ends without a word still shows what it was doing up to then
+            if self.link.found != found:
+                found = self.link.found
+                if found or self.link.addr:
+                    LOG.info("the connector %s", "is answering" if found else f"stopped answering ({self.link.addr[0]})")
+            if now - noted_at >= 600:
+                LOG.info("running: %d frames in %.0f min, %s a second, memory peak %s", self.sent - noted_sent,
+                         (now - noted_at) / 60, f"{rate:.0f}", memory_peak())
+                noted_at, noted_sent = now, self.sent
             # (a Mac that has not allowed Screen Recording shows only the desktop picture: nothing is sent from it)
             if rate > 0 and not self.paused and screen_allowed():
                 try:
@@ -384,6 +452,7 @@ class Sync:
                     a = np.frombuffer(cells, dtype=np.uint8).reshape(-1, 3).mean(axis=0)
                     self.colour = tuple(int(v) for v in a)
                     self.link.send(frame_bytes(cells, resume=time.monotonic() < self.resume_until))
+                    self.sent += 1
             nxt += 1 / (rate or 2)
             time.sleep(max(0.0, nxt - time.monotonic()))
             if time.monotonic() - nxt > 1:
@@ -422,6 +491,88 @@ class Sync:
         if not s.get("app_url") or not s.get("room"):
             return None
         return f"{s['app_url']}#room/{s['room']}/screen"
+
+
+# ---------- what the log keeps ----------
+def peak_mb() -> Optional[float]:
+    """The most memory this run has held, in MB (a Mac or Linux; None on Windows)."""
+    try:
+        import resource  # noqa: WPS433
+
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return peak / (1 << 20 if sys.platform == "darwin" else 1 << 10)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def memory_peak() -> str:
+    mb = peak_mb()
+    return "unknown" if mb is None else f"{mb:.0f} MB"
+
+
+def crash_summary(text: str, app: str = APP) -> Optional[str]:
+    """One line from a macOS crash report (.ips): how the app ended and where. A JetsamEvent report (macOS
+    stopping apps for memory) counts only when it names this app. None when it is not about this app."""
+    head, _, body = text.partition("\n")
+    try:
+        h, b = json.loads(head), json.loads(body)
+    except ValueError:
+        return None
+    if h.get("bug_type") == "298" or "processes" in b:  # a JetsamEvent
+        for proc in b.get("processes") or []:
+            if proc.get("name") == app and proc.get("reason"):
+                return f"macOS stopped it for memory ({proc['reason']}, {proc.get('rpages', 0) * 16 // 1024} MB)"
+        return None
+    if h.get("app_name") != app and b.get("procName") != app:
+        return None
+    exc = b.get("exception") or {}
+    parts = [" ".join(str(exc[k]) for k in ("type", "signal") if exc.get(k))]
+    term = b.get("termination") or {}
+    if term.get("indicator"):
+        parts.append(str(term["indicator"]))
+    for v in (b.get("asi") or {}).values():
+        parts.append(" ".join(map(str, v)) if isinstance(v, list) else str(v))
+    images = [i.get("name", "?") for i in b.get("usedImages") or []]
+    threads = b.get("threads") or []
+    n = b.get("faultingThread", 0)
+    if 0 <= n < len(threads):
+        frames = []
+        for fr in (threads[n].get("frames") or [])[:8]:
+            i = fr.get("imageIndex", -1)
+            frames.append(f"{images[i] if 0 <= i < len(images) else '?'}:{fr.get('symbol', '?')}")
+        parts.append("thread %d%s: %s" % (n, f" ({threads[n]['name']})" if threads[n].get("name") else "",
+                                          " < ".join(frames)))
+    return " · ".join(p for p in parts if p)
+
+
+def report_earlier_crashes(logdir: Path) -> None:
+    """Puts what macOS recorded about this app's earlier crashes into the log, once each, so the log alone says
+    how a run ended."""
+    seen_file = logdir / "reports_seen.txt"
+    try:
+        seen = set(seen_file.read_text().split())
+    except OSError:
+        seen = set()
+    new = []
+    for d in (Path.home() / "Library" / "Logs" / "DiagnosticReports", Path("/Library/Logs/DiagnosticReports")):
+        try:
+            files = [f for f in d.iterdir() if f.suffix == ".ips" and f.name.startswith((APP, "JetsamEvent"))
+                     and time.time() - f.stat().st_mtime < 7 * 86400 and f.name not in seen]
+        except OSError:
+            continue
+        for f in sorted(files, key=lambda f: f.stat().st_mtime):
+            new.append(f.name)
+            try:
+                line = crash_summary(f.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                continue
+            if line:
+                LOG.info("an earlier run ended (%s): %s", f.name, line)
+    if new:
+        try:
+            seen_file.write_text("\n".join(sorted(seen | set(new))))
+        except OSError:
+            pass
 
 
 # ---------- a Mac's Screen Recording permission ----------
@@ -814,9 +965,17 @@ def selftest() -> int:
     cells = grid(f)
     t = (time.perf_counter() - t0) * 1000
     a = np.frombuffer(cells, dtype=np.uint8).reshape(-1, 3).mean(axis=0)
-    print(json.dumps({"capture": s.kind, "screen": list(f.shape), "grid": [GRID_W, GRID_H],
-                      "average": [int(v) for v in a], "ms": round(t, 1)}), file=out, flush=True)
-    return 0
+    # then 300 more looks, as a few seconds of following would: memory has to stay where it was
+    before, t1 = peak_mb(), time.perf_counter()
+    for _ in range(300):
+        grid(s.grab())
+    after, each = peak_mb(), (time.perf_counter() - t1) / 300 * 1000
+    grew = None if before is None or after is None else round(after - before, 1)
+    print(json.dumps({"capture": s.kind, "sample": list(f.shape), "grid": [GRID_W, GRID_H],
+                      "average": [int(v) for v in a], "ms": round(t, 1), "ms_each": round(each, 2),
+                      "memory_mb": None if after is None else round(after), "memory_grew_mb": grew}),
+          file=out, flush=True)
+    return 1 if grew is not None and grew > 100 else 0
 
 
 def main() -> int:
@@ -838,7 +997,14 @@ def main() -> int:
     # a crash leaves its trace beside the log: Python's own errors in log.txt, a native crash in crash.txt
     import faulthandler  # noqa: WPS433
 
-    faulthandler.enable(file=open(logdir / "crash.txt", "a", encoding="utf-8"))  # noqa: SIM115  (open for the run)
+    crash = open(logdir / "crash.txt", "a", encoding="utf-8")  # noqa: SIM115  (open for the run)
+    crash.write(f"\n{time.strftime('%Y-%m-%d %H:%M:%S')} screen sync {VERSION} started\n")
+    crash.flush()
+    faulthandler.enable(file=crash)
+    if hasattr(faulthandler, "register"):
+        import signal  # noqa: WPS433
+
+        faulthandler.register(signal.SIGTERM, file=crash, chain=True)  # told to stop by the system: say where it was
     sys.excepthook = lambda t, v, tb: LOG.error("stopped by an error", exc_info=(t, v, tb))
     threading.excepthook = lambda a: LOG.error("a thread stopped: %s", a.exc_value, exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
     # one copy at a time: a second one exits quietly
@@ -848,6 +1014,8 @@ def main() -> int:
     except OSError:
         LOG.info("already running")
         return 0
+    if sys.platform == "darwin":
+        report_earlier_crashes(logdir)
     screen_allowed()  # on a Mac, ask for Screen Recording now, while the app is in front
     run_quietly()
     settings = Settings()
@@ -863,6 +1031,7 @@ def main() -> int:
             pass
         return 0
     tray(sync, page, open_now=args.settings)
+    LOG.info("quit")
     return 0
 
 
