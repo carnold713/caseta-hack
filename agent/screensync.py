@@ -33,7 +33,9 @@ screen.
     switch and a remote's "PC screen on or off" set it. Off stops the stream and puts the lights back, and stays off
     until something turns it on again; the PC coming back does not. The room setting says where, this says whether.
   * The PC finds the connector by broadcasting a query on PC_PORT; every answer, and an answer to every frame now
-    and then, carries the sync's state, which the PC shows in its tray.
+    and then, carries the sync's state, which the PC shows in its tray. A query carries the computer's name and
+    system. A computer that keeps asking and never sends a frame is not hearing the answers (a firewall, or a Mac's
+    Local Network permission): the app is told so, with this Pi's address to type into the computer's settings.
 """
 from __future__ import annotations
 
@@ -41,6 +43,7 @@ import asyncio
 import json
 import logging
 import math
+import socket
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -155,7 +158,7 @@ class ScreenSync:
     def __init__(self, hue: Any, room_lights: Callable[[str], List[str]], config: Callable[[], dict],
                  send: Callable[[dict], None], room_name: Callable[[str], Optional[str]] = lambda r: None,
                  port: int = PC_PORT, stream_port: int = huestream.PORT, data_dir: Optional[Path] = None,
-                 nanoleaf: Any = None, nano_port: Optional[int] = None) -> None:
+                 nanoleaf: Any = None, nano_port: Optional[int] = None, app_url: Optional[str] = None) -> None:
         self.hue = hue
         self.nanoleaf = nanoleaf
         self.room_lights = room_lights
@@ -165,6 +168,8 @@ class ScreenSync:
         self.port = port
         self.stream_port = stream_port
         self.nano_port = nano_port
+        self.app_url = app_url                   # the app's own address, for the computer's "Light positions"
+        self._asking: Dict[str, dict] = {}       # computer address -> {"name", "os", "since", "n"}: queries, no frames
         self.paused = False                      # a light changed by hand: until resumed, or the PC comes back
         self._file = (data_dir / "screensync.json") if data_dir else None
         self.off = self._load_off()              # switched off, from the app or a remote: until switched on
@@ -304,6 +309,14 @@ class ScreenSync:
         if data[:4] == QUERY:
             # a PC looking for the connector has been seen, even before its first frame: a PC whose firewall
             # keeps the answer out never sends one, and the app should still show it is there
+            info = {}
+            try:
+                info = json.loads(data[4:].decode() or "{}") if len(data) > 4 else {}
+            except ValueError:
+                pass
+            ask = self._asking.setdefault(addr[0], {"since": now, "n": 0})
+            ask.update({k: str(info[k])[:40] for k in ("name", "os") if info.get(k)})
+            ask["n"] += 1
             if self._pc is None or now - self._frame_at >= IDLE_S:
                 self._pc, self._pc_seen = (addr[0], addr[1]), time.time()
             self._reply(addr)
@@ -324,6 +337,7 @@ class ScreenSync:
             self.paused = False
             self._retry_at = 0.0
         self._pc, self._pc_seen = (addr[0], addr[1]), time.time()
+        self._asking.pop(addr[0], None)  # it hears us: frames only come after an answer, or from an address typed in
         self._frame, self._frame_at = (w, h, rgb), now
         if self.streaming:
             self._aim(w, h, rgb)
@@ -355,16 +369,31 @@ class ScreenSync:
         return {
             "state": self.state(), "room": room, "room_name": self.room_name(room) if room else None,
             "lights": list(self.lights), "area": (self.area or {}).get("name"), "why": self.why,
-            "pc": {"address": self._pc[0], "seen_at": self._pc_seen} if self._pc else None,
+            "pc": self._pc_info(),
+            "app_url": self.app_url,
             "fps": round(self._fps, 1), "stream_key": bool(getattr(self.hue, "clientkey", None)), "on": self.is_on(),
             "placed": self.placed(room),
         }
+
+    def _pc_info(self) -> Optional[Dict[str, Any]]:
+        if not self._pc:
+            return None
+        ask = self._asking.get(self._pc[0]) or {}
+        # three queries over ten seconds and not one frame: our answers are not reaching it
+        deaf = ask.get("n", 0) >= 3 and time.monotonic() - ask.get("since", 0) >= 10
+        out: Dict[str, Any] = {"address": self._pc[0], "seen_at": self._pc_seen, "name": ask.get("name"),
+                               "os": ask.get("os"), "hears": not deaf}
+        if deaf:
+            out["pi_address"] = lan_address(self._pc[0])
+        return out
 
     def _announce(self) -> None:
         st = self.status()
         # the PC's arrival counts as news (it is what puts the switch on the room's page); its address and the
         # rate do not, or every frame would be a message
-        key = json.dumps({**{k: v for k, v in st.items() if k not in ("pc", "fps")}, "pc": bool(st["pc"])}, sort_keys=True)
+        pc = st["pc"] or {}
+        key = json.dumps({**{k: v for k, v in st.items() if k not in ("pc", "fps")}, "pc": bool(st["pc"]),
+                          "hears": pc.get("hears")}, sort_keys=True)
         if key != self._last_status:
             self._last_status = key
             self.send({"type": "screen_sync", "screen_sync": st})
@@ -636,6 +665,16 @@ class ScreenSync:
         if self._nanos and self._beat % NANO_EVERY == 0:
             for d, ns in self._nanos.items():
                 ns.send([(k[2], _enc(c[0]), _enc(c[1]), _enc(c[2])) for k, c in self._shown.items() if k[0] == "n" and k[1] == d])
+
+
+def lan_address(towards: str) -> Optional[str]:
+    """This Pi's address on the network that reaches `towards` (nothing is sent)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect((towards, 9))
+            return s.getsockname()[0]
+    except OSError:
+        return None
 
 
 def _area(cfg: dict) -> dict:

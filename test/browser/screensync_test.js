@@ -93,6 +93,14 @@ const fake = d => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSO
   check('and again, off', r.on === 'false' && (await syncInfo()).state === 'off', { r, s: await syncInfo() });
   await C(async () => { const c = window.__copper; c.S.config.bindings = c.S.config.bindings.filter(b => !(b.device_id === '9' && b.button_number === 0 && b.gesture === 'double')); await c.data.saveConfig(); });
 
+  // a computer that keeps looking and never hears the Pi: the line says what to type in where
+  await page.click('#screen [data-act="sync-toggle"]'); await wait(900);
+  fake({ sync: { deaf: true } }); await wait(900);
+  r = await row();
+  check('a computer that cannot hear the Pi is named, with the address to type in', /Studio Mac can't hear the Pi/.test(r.line) && /192\.168\.1\.20/.test(r.line), r);
+  fake({ sync: { deaf: false } }); await wait(600);
+  await page.click('#screen [data-act="sync-toggle"]'); await wait(900);
+
   // a problem is said in the connector's words
   await page.click('#screen [data-act="sync-toggle"]'); await wait(900);
   fake({ sync: { state: 'problem', why: 'this room has no Hue colour lights' } }); await wait(900);

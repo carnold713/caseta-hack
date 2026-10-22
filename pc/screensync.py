@@ -6,11 +6,20 @@ and below a film, or beside it, are left out), and sends the grid to the connect
 connector works out each light's colour and streams it to the Hue bridge (agent/screensync.py). Which room follows
 is chosen in the app, on the room's page.
 
-It finds the connector by itself (a broadcast on UDP 47700, which the connector answers), or takes its address
-with --pi. While it runs it sits in the tray (on a Mac, the menu bar): the icon is the colour of the screen, its menu
-says what the room is doing, and can pause, resume, start with Windows (open at login, on a Mac), or quit. Closing
-it, locking the computer or letting it sleep stops the frames, and a few seconds later the connector stops the sync
-and puts the lights back as they were.
+It finds the connector by itself (a broadcast on UDP 47700, which the connector answers), or is given its address
+in its settings (or --pi). Once it knows the address it keeps it, and sends there even when no answer comes back:
+a firewall that keeps the answers out (a Mac's, often) then costs the status line, not the lights.
+
+While it runs it sits in the tray (on a Mac, the menu bar), still: nothing on it moves, so it costs nothing while a
+game is running. Its menu says what the room is doing and opens Settings, a small window of its own (a page served
+here on 127.0.0.1, shown in an app window): pause, how smoothly to follow, what to do while a game fills the screen,
+the connector's address, starting at login, and Light positions, which opens the app's own positions page for the
+room. Closing it, locking the computer or letting it sleep stops the frames, and a few seconds later the connector
+stops the sync and puts the lights back as they were.
+
+It stays out of a game's way: it runs below normal priority, looks at the screen 20 times a second by default (the
+lights show about 25 changes a second at most, and the connector smooths between frames), and while a game fills the
+screen it looks more gently still, or not at all, as Settings says (Windows).
 
 On a Mac it asks for Screen Recording the first time (System Settings, Privacy & Security): without it macOS shows
 it the desktop picture and nothing else, so until it is allowed the menu says so instead of following.
@@ -18,15 +27,18 @@ it the desktop picture and nothing else, so until it is allowed the menu says so
     screensync.exe                 run in the tray
     screensync.exe --pi 192.168.1.20
     screensync.exe --selftest      look at the screen once, print what it saw, and exit
+    screensync.exe --settings      run, and open Settings at once
 
 Built into one .exe for Windows and a menu-bar .app for macOS by .github/workflows/screensync.yml.
 """
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import logging
 import os
+import secrets
 import socket
 import sys
 import threading
@@ -44,6 +56,9 @@ FLAG_RESUME = 0x01
 GRID_W, GRID_H = 16, 9
 LOST_S = 10.0           # no answer from the connector for this long: look for it again
 APP = "CasetaScreenSync"
+VERSION = "1.1"
+RATES = (12, 20, 30)    # how many times a second to look at the screen: Settings' choices
+GAME_RATE = 6           # "gently", while a game fills the screen
 
 LOG = logging.getLogger("screensync")
 
@@ -88,15 +103,21 @@ class Screen:
         self.kind = "mss"
 
     def _grab_quartz(self) -> Optional[np.ndarray]:
+        # Every grab makes Cocoa objects that are only freed when an autorelease pool drains. This runs on its own
+        # thread, which has no pool of its own, so without one here each screen (megabytes) was kept until macOS
+        # stopped the app for its memory.
+        import objc  # noqa: WPS433
+
         Q = self._quartz
-        img = Q.CGWindowListCreateImage(Q.CGDisplayBounds(Q.CGMainDisplayID()), Q.kCGWindowListOptionOnScreenOnly,
-                                        Q.kCGNullWindowID, Q.kCGWindowImageNominalResolution)
-        if img is None:
-            return None
-        w, h, bpr = Q.CGImageGetWidth(img), Q.CGImageGetHeight(img), Q.CGImageGetBytesPerRow(img)
-        data = Q.CGDataProviderCopyData(Q.CGImageGetDataProvider(img))
-        bgra = np.frombuffer(bytes(data), dtype=np.uint8).reshape(h, bpr // 4, 4)[:, :w]
-        return bgra[:, :, 2::-1]
+        with objc.autorelease_pool():
+            img = Q.CGWindowListCreateImage(Q.CGDisplayBounds(Q.CGMainDisplayID()), Q.kCGWindowListOptionOnScreenOnly,
+                                            Q.kCGNullWindowID, Q.kCGWindowImageNominalResolution)
+            if img is None:
+                return None
+            w, h, bpr = Q.CGImageGetWidth(img), Q.CGImageGetHeight(img), Q.CGImageGetBytesPerRow(img)
+            data = Q.CGDataProviderCopyData(Q.CGImageGetDataProvider(img))
+            bgra = np.frombuffer(bytes(data), dtype=np.uint8).reshape(h, bpr // 4, 4)[:, :w]
+            return np.ascontiguousarray(bgra[:, :, 2::-1])
 
     def grab(self) -> Optional[np.ndarray]:
         """The screen as an H x W x 3 RGB array. dxcam returns nothing when the screen has not changed since the
@@ -162,19 +183,70 @@ def frame_bytes(cells: bytes, resume: bool = False, w: int = GRID_W, h: int = GR
     return FRAME + bytes([FLAG_RESUME if resume else 0, w, h]) + cells
 
 
-# ---------- the connector ----------
-class Link:
-    """The UDP conversation with the connector: find it, send frames, read what it says back."""
+# ---------- settings, kept between runs ----------
+def config_dir() -> Path:
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP
+    return Path(os.environ.get("APPDATA") or Path.home()) / APP
 
-    def __init__(self, pi: Optional[str] = None) -> None:
+
+class Settings:
+    """settings.json: {"pi": address typed in or None, "last_pi": the address last found, "fps": 12|20|30,
+    "game": "gentle"|"full"|"pause"}."""
+    DEFAULTS = {"pi": None, "last_pi": None, "fps": 20, "game": "gentle"}
+
+    def __init__(self, path: Optional[Path] = None) -> None:
+        self.path = path or config_dir() / "settings.json"
+        self.data = dict(self.DEFAULTS)
+        try:
+            self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            pass
+
+    def __getitem__(self, k: str):  # noqa: ANN204
+        return self.data.get(k, self.DEFAULTS.get(k))
+
+    def update(self, **kw) -> None:  # noqa: ANN003
+        self.data.update(kw)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(json.dumps(self.data), encoding="utf-8")
+        except OSError as exc:
+            LOG.warning("could not keep the settings: %s", exc)
+
+
+# ---------- the connector ----------
+def who_am_i() -> dict:
+    return {"name": socket.gethostname().split(".")[0][:40], "os": "mac" if sys.platform == "darwin" else
+            "windows" if sys.platform == "win32" else sys.platform, "v": VERSION}
+
+
+class Link:
+    """The UDP conversation with the connector: find it, send frames, read what it says back.
+
+    The address is the one typed into Settings, else the one last found (kept between runs), else none until an
+    answer to a broadcast names it. Frames go to it whether or not answers are coming back."""
+
+    def __init__(self, pi: Optional[str] = None, last: Optional[str] = None,
+                 on_found=None) -> None:  # noqa: ANN001
         self.fixed = pi
-        self.addr: Optional[Tuple[str, int]] = (pi, PORT) if pi else None
+        self.on_found = on_found
+        start = pi or last
+        self.addr: Optional[Tuple[str, int]] = (start, PORT) if start else None
         self.state: dict = {}
         self.heard_at = 0.0
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.sock.settimeout(0.0)
         self.sock.bind(("0.0.0.0", 0))
+        self._asked_at = 0.0
+        self._query = QUERY + json.dumps(who_am_i()).encode()
+
+    def set_fixed(self, pi: Optional[str]) -> None:
+        self.fixed = pi or None
+        if self.fixed:
+            self.addr = (self.fixed, PORT)
+        self.heard_at = 0.0
         self._asked_at = 0.0
 
     def tick(self) -> None:
@@ -191,17 +263,20 @@ class Link:
                     self.state = json.loads(data[4:].decode())
                 except ValueError:
                     continue
+                if self.fixed and addr[0] != self.fixed:
+                    continue  # another connector answering a broadcast: the one typed in is the one
                 if self.addr is None or self.addr[0] != addr[0]:
                     LOG.info("found the connector at %s", addr[0])
+                    if self.on_found:
+                        self.on_found(addr[0])
                 self.addr, self.heard_at = (addr[0], PORT), time.monotonic()
         now = time.monotonic()
         if now - self.heard_at > LOST_S and now - self._asked_at > 2:
             self._asked_at = now
             if not self.fixed:
-                self.addr = None
-            self._send(QUERY, ("255.255.255.255", PORT))
-            if self.fixed:
-                self._send(QUERY, (self.fixed, PORT))
+                self._send(self._query, ("255.255.255.255", PORT))
+            if self.addr:
+                self._send(self._query, self.addr)
 
     def send(self, data: bytes) -> None:
         if self.addr:
@@ -218,24 +293,84 @@ class Link:
         return self.addr is not None and time.monotonic() - self.heard_at < LOST_S
 
 
+# ---------- a game filling the screen (Windows) ----------
+def game_in_front() -> bool:
+    """Whether the window in front covers its whole monitor and is not the desktop: a game, or a film full screen."""
+    if sys.platform != "win32":
+        return False
+    try:
+        from ctypes import wintypes  # noqa: WPS433
+
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return False
+        cls = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(hwnd, cls, 64)
+        if cls.value in ("Progman", "WorkerW", "Shell_TrayWnd", "Windows.UI.Core.CoreWindow"):
+            return False
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT),
+                        ("dwFlags", wintypes.DWORD)]
+
+        r = wintypes.RECT()
+        user32.GetWindowRect(hwnd, ctypes.byref(r))
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(MONITORINFO)
+        user32.GetMonitorInfoW(user32.MonitorFromWindow(hwnd, 2), ctypes.byref(mi))
+        m = mi.rcMonitor
+        return r.left <= m.left and r.top <= m.top and r.right >= m.right and r.bottom >= m.bottom
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def run_quietly() -> None:
+    """Below normal priority, so a game always comes first."""
+    try:
+        if sys.platform == "win32":
+            k = ctypes.windll.kernel32
+            k.SetPriorityClass(k.GetCurrentProcess(), 0x00004000)  # BELOW_NORMAL_PRIORITY_CLASS
+        else:
+            os.nice(10)
+    except Exception as exc:  # noqa: BLE001
+        LOG.debug("priority: %s", exc)
+
+
 # ---------- the loop ----------
 class Sync:
-    def __init__(self, pi: Optional[str], fps: float) -> None:
-        self.link = Link(pi)
+    def __init__(self, pi: Optional[str], fps: float, settings: Optional[Settings] = None) -> None:
+        self.settings = settings or Settings(Path(os.devnull))
+        self.link = Link(pi or self.settings["pi"], self.settings["last_pi"],
+                         on_found=lambda a: self.settings.update(last_pi=a))
         self.screen = Screen()
         self.fps = fps
         self.paused = False            # paused here, from the tray: no frames, so the connector stops
         self.resume_until = 0.0        # asking the connector to resume its own pause, for a moment
         self.colour = (40, 40, 40)
+        self.gaming = False            # a game fills the screen (Windows), and Settings says to go gently or stop
         self.stop = threading.Event()
 
+    def rate(self) -> float:
+        g = game_in_front()
+        mode = self.settings["game"]
+        self.gaming = g and mode in ("gentle", "pause")
+        if g and mode == "pause":
+            return 0.0
+        if g and mode == "gentle":
+            return float(GAME_RATE)
+        return float(self.fps)
+
     def run(self) -> None:
-        period = 1 / self.fps
         nxt = time.monotonic()
+        rate, rate_at = float(self.fps), 0.0
         while not self.stop.is_set():
+            now = time.monotonic()
+            if now - rate_at > 2:  # what is in front is looked at every two seconds, not every frame
+                rate, rate_at = self.rate(), now
             self.link.tick()
             # (a Mac that has not allowed Screen Recording shows only the desktop picture: nothing is sent from it)
-            if not self.paused and screen_allowed():
+            if rate > 0 and not self.paused and screen_allowed():
                 try:
                     f = self.screen.grab()
                 except Exception as exc:  # noqa: BLE001  the secure desktop (locked, UAC) cannot be looked at
@@ -246,7 +381,7 @@ class Sync:
                     a = np.frombuffer(cells, dtype=np.uint8).reshape(-1, 3).mean(axis=0)
                     self.colour = tuple(int(v) for v in a)
                     self.link.send(frame_bytes(cells, resume=time.monotonic() < self.resume_until))
-            nxt += period
+            nxt += 1 / (rate or 2)
             time.sleep(max(0.0, nxt - time.monotonic()))
             if time.monotonic() - nxt > 1:
                 nxt = time.monotonic()  # the PC slept: start the beat again rather than catch up
@@ -257,10 +392,14 @@ class Sync:
 
     def status_line(self) -> str:
         if not screen_allowed():
-            return "Allow Screen Recording in System Settings, then reopen"
+            return "Allow Screen Recording in System Settings"
         if self.paused:
             return "Paused"
+        if self.gaming and self.settings["game"] == "pause":
+            return "Paused while a game is full screen"
         if not self.link.found:
+            if self.link.addr:
+                return f"Sending to {self.link.addr[0]}, no answer yet"
             return "Looking for the connector"
         s = self.link.state or {}
         room = s.get("room_name") or "No room"
@@ -268,12 +407,18 @@ class Sync:
         if state == "off":
             return "Choose a room in the app"
         if state == "syncing":
-            return f"{room} · following"
+            return f"{room} · following" + (" gently" if self.gaming else "")
         if state == "paused":
             return f"{room} · paused"
         if state == "problem":
             return f"{room} · {s.get('why') or 'not following'}"
         return f"{room} · starting"
+
+    def positions_url(self) -> Optional[str]:
+        s = self.link.state or {}
+        if not s.get("app_url") or not s.get("room"):
+            return None
+        return f"{s['app_url']}#room/{s['room']}/screen"
 
 
 # ---------- a Mac's Screen Recording permission ----------
@@ -294,12 +439,14 @@ def screen_allowed() -> bool:
         return False
     _checked_at = now
     try:
+        import objc  # noqa: WPS433
         import Quartz  # noqa: WPS433
 
-        _allowed = bool(Quartz.CGPreflightScreenCaptureAccess())
-        if not _allowed and not _asked:
-            _asked = True
-            Quartz.CGRequestScreenCaptureAccess()  # the system's own prompt, the first time
+        with objc.autorelease_pool():  # (asked from the capture thread too, which has no pool of its own)
+            _allowed = bool(Quartz.CGPreflightScreenCaptureAccess())
+            if not _allowed and not _asked:
+                _asked = True
+                Quartz.CGRequestScreenCaptureAccess()  # the system's own prompt, the first time
         if _allowed:
             LOG.info("Screen Recording is allowed")
     except Exception:  # noqa: BLE001  an older macOS without the call asks by itself on the first grab
@@ -382,6 +529,196 @@ def set_start_with_windows(on: bool) -> None:
                 pass
 
 
+# ---------- Settings: a small window, a page served on 127.0.0.1 ----------
+# A page rather than a native window: the tray owns the main thread (on a Mac it has to), and two toolkits cannot
+# share it. The address carries a random token made for the run, so nothing but this program's own window can change
+# a setting.
+PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Caseta screen sync</title>
+<style>
+:root { color-scheme: dark; --bg:#101719; --card:#182225; --inset:#202C2F; --line:#2A3639; --ink:#EEF2EF; --ink2:#93A09D;
+  --tide:#2FA59C; --amber:#F4A53C; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font: 15px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { padding: 20px 16px 24px; max-width: 460px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+#state { color: var(--ink2); margin: 0 0 18px; min-height: 21px; }
+.card { background: var(--card); border-radius: 18px; margin-bottom: 12px; overflow: hidden; }
+.row { display:flex; align-items:center; gap:12px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row .t { flex:1; }
+.row .d { display:block; color: var(--ink2); font-size: 13px; }
+button.big { width:100%; border:0; border-radius: 999px; padding: 14px; font: inherit; font-weight: 500;
+  background: var(--amber); color: #2B1A0B; cursor: pointer; margin-bottom: 12px; }
+button.big:disabled { background: var(--inset); color: var(--ink2); cursor: default; }
+button.ghost { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 999px;
+  padding: 8px 14px; font: inherit; cursor: pointer; }
+select, input[type=text] { background: var(--inset); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 10px; font: inherit; }
+input[type=text] { width: 150px; }
+.sw { appearance:none; width:46px; height:28px; border-radius:14px; background:var(--inset); position:relative;
+  cursor:pointer; flex:none; margin:0; }
+.sw::after { content:""; position:absolute; left:3px; top:3px; width:22px; height:22px; border-radius:50%;
+  background: var(--ink2); transition: transform .2s; }
+.sw:checked { background: var(--tide); }
+.sw:checked::after { transform: translateX(18px); background: #fff; }
+.hide { display:none; }
+</style></head><body><main>
+<h1>Screen sync</h1>
+<p id="state"></p>
+<button class="big" id="positions" disabled>Light positions</button>
+<div class="card">
+  <div class="row"><span class="t">Follow the screen</span><input type="checkbox" class="sw" id="follow"></div>
+  <div class="row"><span class="t">Smoothness</span>
+    <select id="fps"><option value="12">12 a second</option><option value="20">20 a second</option><option value="30">30 a second</option></select></div>
+  <div class="row win"><span class="t">While a game is full screen</span>
+    <select id="game"><option value="gentle">Follow gently</option><option value="full">Keep up</option><option value="pause">Pause</option></select></div>
+</div>
+<div class="card">
+  <div class="row"><span class="t">Pi's address<span class="d" id="found"></span></span>
+    <input type="text" id="pi" placeholder="Find it" spellcheck="false" autocomplete="off"></div>
+  <div class="row"><span class="t" id="loginlabel">Open at login</span><input type="checkbox" class="sw" id="login"></div>
+</div>
+<script>
+const base = location.pathname.replace(/[^/]*$/, '');
+const $ = id => document.getElementById(id);
+const post = (path, body) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }).then(r => r.json()).then(show);
+let editing = false;
+function show(s) {
+  $('state').textContent = s.status;
+  $('positions').disabled = !s.positions;
+  $('follow').checked = !s.paused;
+  $('fps').value = String(s.fps);
+  $('game').value = s.game;
+  if (!editing) $('pi').value = s.pi || '';
+  $('found').textContent = s.pi ? '' : (s.found ? 'Found at ' + s.found : 'Leave empty to find it');
+  $('login').checked = s.login;
+  $('loginlabel').textContent = s.os === 'mac' ? 'Open at login' : 'Start with Windows';
+  for (const el of document.querySelectorAll('.win')) el.classList.toggle('hide', s.os !== 'windows');
+}
+const load = () => fetch(base + 'state').then(r => r.json()).then(show).catch(() => {});
+$('positions').onclick = () => post('positions');
+$('follow').onchange = e => post('set', { paused: !e.target.checked });
+$('fps').onchange = e => post('set', { fps: Number(e.target.value) });
+$('game').onchange = e => post('set', { game: e.target.value });
+$('login').onchange = e => post('set', { login: e.target.checked });
+$('pi').onfocus = () => { editing = true; };
+$('pi').onchange = e => { editing = false; post('set', { pi: e.target.value.trim() }); };
+load(); setInterval(load, 2000);
+</script></main></body></html>"""
+
+
+class SettingsPage:
+    def __init__(self, sync: Sync) -> None:
+        self.sync = sync
+        self.token = secrets.token_urlsafe(12)
+        self.url: Optional[str] = None
+
+    def state(self) -> dict:
+        s = self.sync
+        return {"status": s.status_line(), "paused": s.paused, "fps": int(s.fps), "game": s.settings["game"],
+                "pi": s.settings["pi"], "found": s.link.addr[0] if s.link.addr else None, "login": starts_at_login(),
+                "os": who_am_i()["os"], "positions": bool(s.positions_url())}
+
+    def change(self, body: dict) -> None:
+        s = self.sync
+        if "paused" in body:
+            if body["paused"]:
+                s.paused = True
+            else:
+                s.resume_room()
+        if body.get("fps") in RATES:
+            s.fps = float(body["fps"])
+            s.settings.update(fps=int(body["fps"]))
+        if body.get("game") in ("gentle", "full", "pause"):
+            s.settings.update(game=body["game"])
+        if "pi" in body:
+            pi = str(body["pi"] or "").strip()
+            if pi and not all(c.isalnum() or c in ".-:" for c in pi):
+                pi = ""
+            s.settings.update(pi=pi or None)
+            s.link.set_fixed(pi or None)
+        if "login" in body:
+            set_starts_at_login(bool(body["login"]))
+
+    def start(self) -> str:
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: WPS433
+
+        page = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *a) -> None:  # noqa: ANN002
+                pass
+
+            def _send(self, code: int, body: bytes, ctype: str) -> None:
+                self.send_response(code)
+                self.send_header("content-type", ctype)
+                self.send_header("cache-control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def _path(self) -> Optional[str]:
+                pre = f"/{page.token}/"
+                return self.path[len(pre):] if self.path.startswith(pre) else None
+
+            def do_GET(self) -> None:  # noqa: N802
+                p = self._path()
+                if p == "":
+                    self._send(200, PAGE.encode(), "text/html; charset=utf-8")
+                elif p == "state":
+                    self._send(200, json.dumps(page.state()).encode(), "application/json")
+                else:
+                    self._send(404, b"", "text/plain")
+
+            def do_POST(self) -> None:  # noqa: N802
+                p = self._path()
+                n = int(self.headers.get("content-length") or 0)
+                try:
+                    body = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
+                except ValueError:
+                    body = {}
+                if p == "set":
+                    page.change(body)
+                elif p == "positions":
+                    url = page.sync.positions_url()
+                    if url:
+                        open_window(url, (420, 860))
+                else:
+                    self._send(404, b"", "text/plain")
+                    return
+                self._send(200, json.dumps(page.state()).encode(), "application/json")
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{srv.server_address[1]}/{self.token}/"
+        return self.url
+
+
+def open_window(url: str, size: Tuple[int, int] = (400, 620)) -> None:
+    """A page in a small window of its own where a browser can do that (Edge on Windows, Chrome or Edge on a Mac),
+    otherwise in the default browser."""
+    import subprocess  # noqa: WPS433
+    import webbrowser  # noqa: WPS433
+
+    args = [f"--app={url}", f"--window-size={size[0]},{size[1]}"]
+    try:
+        if sys.platform == "win32":
+            for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"), os.environ.get("LOCALAPPDATA")):
+                for exe in (Path(base or "") / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+                            Path(base or "") / "Google" / "Chrome" / "Application" / "chrome.exe"):
+                    if base and exe.exists():
+                        subprocess.Popen([str(exe), *args])  # noqa: S603
+                        return
+        elif sys.platform == "darwin":
+            for app in ("Google Chrome", "Microsoft Edge", "Brave Browser"):
+                if Path(f"/Applications/{app}.app").exists():
+                    subprocess.Popen(["/usr/bin/open", "-na", app, "--args", *args])  # noqa: S603
+                    return
+    except Exception as exc:  # noqa: BLE001
+        LOG.info("app window: %s", exc)
+    webbrowser.open(url)
+
+
 # ---------- the tray ----------
 def on_main(fn) -> None:  # noqa: ANN001
     """Run `fn` where the tray may be touched. macOS lets only its main thread change the menu bar, and an icon
@@ -398,26 +735,30 @@ def on_main(fn) -> None:  # noqa: ANN001
     fn()
 
 
-def tray(sync: Sync) -> None:
+def tray(sync: Sync, page: SettingsPage, open_now: bool = False) -> None:
     import pystray  # noqa: WPS433
     from PIL import Image, ImageDraw  # noqa: WPS433
 
-    def picture(rgb) -> "Image.Image":
-        img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        d = ImageDraw.Draw(img)
-        d.rounded_rectangle((4, 12, 60, 46), radius=6, fill=tuple(rgb) + (255,), outline=(238, 242, 239, 255), width=3)
-        d.rectangle((26, 46, 38, 54), fill=(238, 242, 239, 255))
-        d.rectangle((18, 54, 46, 58), fill=(238, 242, 239, 255))
-        return img
+    # One still picture: a monitor. Nothing on the tray changes but the menu's words, and those only when they do.
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((4, 12, 60, 46), radius=6, outline=(238, 242, 239, 255), width=4)
+    d.rectangle((26, 46, 38, 54), fill=(238, 242, 239, 255))
+    d.rectangle((18, 54, 46, 58), fill=(238, 242, 239, 255))
+
+    def settings(icon, item):  # noqa: ANN001, ARG001
+        open_window(page.url or "")
+
+    def positions(icon, item):  # noqa: ANN001, ARG001
+        url = sync.positions_url()
+        if url:
+            open_window(url, (420, 860))
 
     def toggle_pause(icon, item):  # noqa: ANN001, ARG001
         if sync.paused or (sync.link.state or {}).get("state") == "paused":
             sync.resume_room()
         else:
             sync.paused = True
-
-    def toggle_start(icon, item):  # noqa: ANN001, ARG001
-        set_starts_at_login(not starts_at_login())
 
     def quit_(icon, item):  # noqa: ANN001, ARG001
         sync.stop.set()
@@ -426,29 +767,30 @@ def tray(sync: Sync) -> None:
     paused = lambda item: sync.paused or (sync.link.state or {}).get("state") == "paused"  # noqa: E731
     menu = pystray.Menu(
         pystray.MenuItem(lambda item: sync.status_line(), None, enabled=False),
-        pystray.MenuItem(lambda item: "Resume" if paused(item) else "Pause", toggle_pause, default=True),
-        pystray.MenuItem("Open at login" if sys.platform == "darwin" else "Start with Windows", toggle_start,
-                         checked=lambda item: starts_at_login(), visible=sys.platform in ("win32", "darwin")),
+        pystray.MenuItem("Settings", settings, default=True),
+        pystray.MenuItem("Light positions", positions, enabled=lambda item: bool(sync.positions_url())),
+        pystray.MenuItem(lambda item: "Resume" if paused(item) else "Pause", toggle_pause),
         pystray.MenuItem("Quit", quit_),
     )
-    icon = pystray.Icon(APP, picture(sync.colour), "Caseta screen sync", menu)
+    icon = pystray.Icon(APP, img, "Caseta screen sync", menu)
 
     def refresh() -> None:
-        last = [None]
-
-        def update() -> None:
-            if sync.colour != last[0]:
-                last[0] = sync.colour
-                icon.icon = picture(sync.colour)
-            icon.title = f"Caseta screen sync · {sync.status_line()}"
-            icon.update_menu()
-
+        last = None
         while not sync.stop.is_set():
-            on_main(update)
-            time.sleep(0.5)
+            line = sync.status_line()
+            if line != last:
+                last = line
+
+                def update(line=line) -> None:  # noqa: ANN001
+                    icon.title = f"Caseta screen sync · {line}"
+                    icon.update_menu()
+                on_main(update)
+            time.sleep(2)
 
     threading.Thread(target=sync.run, daemon=True).start()
     threading.Thread(target=refresh, daemon=True).start()
+    if open_now:
+        threading.Timer(1.0, lambda: open_window(page.url or "")).start()
     icon.run()
 
 
@@ -477,7 +819,8 @@ def selftest() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(prog="screensync", description="Shows this PC's screen colours to the Caseta connector.")
     ap.add_argument("--pi", help="the connector's address, when it cannot be found by itself")
-    ap.add_argument("--fps", type=float, default=30.0, help="how many times a second to look at the screen (default 30)")
+    ap.add_argument("--fps", type=float, help="how many times a second to look at the screen (Settings' choice, else 20)")
+    ap.add_argument("--settings", action="store_true", help="open Settings once it is running")
     ap.add_argument("--no-tray", action="store_true", help="run without the tray icon (stop with Ctrl+C)")
     ap.add_argument("--selftest", action="store_true", help="look at the screen once, print what it saw, and exit")
     args = ap.parse_args()
@@ -503,15 +846,20 @@ def main() -> int:
         LOG.info("already running")
         return 0
     screen_allowed()  # on a Mac, ask for Screen Recording now, while the app is in front
-    sync = Sync(args.pi, max(5.0, min(60.0, args.fps)))
-    LOG.info("screen sync started (%s, %.0f a second)", sync.screen.kind, sync.fps)
+    run_quietly()
+    settings = Settings()
+    sync = Sync(args.pi, max(5.0, min(60.0, args.fps or float(settings["fps"]))), settings)
+    page = SettingsPage(sync)
+    page.start()
+    LOG.info("screen sync %s started (%s, %.0f a second, connector %s)", VERSION, sync.screen.kind, sync.fps,
+             sync.link.addr[0] if sync.link.addr else "to be found")
     if args.no_tray:
         try:
             sync.run()
         except KeyboardInterrupt:
             pass
         return 0
-    tray(sync)
+    tray(sync, page, open_now=args.settings)
     return 0
 
 

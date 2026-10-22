@@ -479,7 +479,8 @@ function handleAgentMessage(ws, msg) {
     case 'screen_sync': {
       // one line when what it is doing changes, so "it does not show up" can be read from here
       const was = agentInfo && agentInfo.screen_sync, now = msg.screen_sync || {};
-      if (!was || was.state !== now.state || !!was.pc !== !!now.pc || was.why !== now.why) log(`screen sync: ${now.state}${now.room_name ? ` in ${now.room_name}` : ''}${now.pc ? `, PC at ${now.pc.address}` : ', no PC seen'}${now.why ? `, ${now.why}` : ''}`);
+      const deaf = x => !!(x && x.pc && x.pc.hears === false);
+      if (!was || was.state !== now.state || !!was.pc !== !!now.pc || was.why !== now.why || deaf(was) !== deaf(now)) log(`screen sync: ${now.state}${now.room_name ? ` in ${now.room_name}` : ''}${now.pc ? `, ${now.pc.name || 'PC'} at ${now.pc.address}${deaf(now) ? ', not hearing the Pi' : ''}` : ', no PC seen'}${now.why ? `, ${now.why}` : ''}`);
       if (agentInfo) { agentInfo.screen_sync = msg.screen_sync || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     }

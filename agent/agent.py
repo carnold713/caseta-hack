@@ -43,7 +43,7 @@ from nanoleaf import Nanoleaf
 from screensync import ScreenSync
 from sun import solar_noon, sun_times
 
-VERSION = "0.30.0"
+VERSION = "0.31.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -245,7 +245,7 @@ class Agent:
         # a command for one of those lights stops the stream first, so the bridge hears it.
         self.sync = ScreenSync(self.hue, room_lights=lambda r: self.runner._resolve(f"a:{r}"),  # noqa: SLF001
                                config=lambda: self.config, send=self.send, room_name=self._room_name, data_dir=DATA_DIR,
-                               nanoleaf=self.nanoleaf)
+                               nanoleaf=self.nanoleaf, app_url=_app_url(HUB_URL))
         self.runner.screen_sync = self.sync.remote  # a remote's "PC screen on or off"
         self.runner.hue_set = self._level_set_bridge
         self.runner.hue_color = self._color_set
@@ -1569,6 +1569,16 @@ class Agent:
         self._merge_nanoleaf(send=False)
         self.send({"type": "inventory", "inventory": self.inventory()})
         self.send({"type": "state", "states": self.all_states()})
+
+
+def _app_url(hub_url: str) -> Optional[str]:
+    """The app's own address from the hub's socket address: wss://host/ws/agent?token=... -> https://host/."""
+    from urllib.parse import urlsplit  # noqa: WPS433
+
+    u = urlsplit(hub_url or "")
+    if not u.netloc:
+        return None
+    return f"{'http' if u.scheme == 'ws' else 'https'}://{u.netloc}/"
 
 
 def _domain(t: Optional[str]) -> str:

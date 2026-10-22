@@ -98,6 +98,8 @@ jobs:
         run: |
           pyinstaller --windowed --name CasetaScreenSync --osx-bundle-identifier app.caseta.screensync pc/screensync.py
           plutil -insert LSUIElement -bool true dist/CasetaScreenSync.app/Contents/Info.plist
+          # macOS asks before an app talks to the home network, and says this when it does
+          plutil -insert NSLocalNetworkUsageDescription -string "Caseta Screen Sync sends your screen's colours to the Caseta connector on your home network." dist/CasetaScreenSync.app/Contents/Info.plist
           bash pc/mac_sign.sh dist/CasetaScreenSync.app
           ditto -c -k --keepParent dist/CasetaScreenSync.app CasetaScreenSync-mac.zip
 

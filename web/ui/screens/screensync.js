@@ -33,7 +33,12 @@ export function syncRow(c, aid) {
   const on = mine && (s && s.room === aid && 'on' in s ? !!s.on : state !== 'paused' && state !== 'off');
   const needsKey = mine && s && !s.stream_key;
   const why = String((s && s.why) || '');
-  const line = state === 'problem' ? why.charAt(0).toUpperCase() + why.slice(1) : (on || state === 'paused' ? LINES[state] || '' : '');
+  // a computer that keeps looking for the Pi and never hears it back: the one thing to do is type the Pi's address in
+  const pc = (s && s.pc) || {};
+  const deaf = mine && pc.hears === false && pc.pi_address && state !== 'syncing';
+  const who = pc.name || (pc.os === 'mac' ? 'The Mac' : 'The computer');
+  const line = deaf ? `${who} can't hear the Pi. In its settings, set the Pi's address to ${pc.pi_address}`
+    : state === 'problem' ? why.charAt(0).toUpperCase() + why.slice(1) : (on || state === 'paused' ? LINES[state] || '' : '');
   const busy = c.ui.syncPairing;
   return `<div class="group sync-rows">
     <div class="row has-ic"><span class="row-ic">${icon('screen', 20, 1.7)}</span>

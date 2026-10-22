@@ -2,6 +2,9 @@
 Run: python pc/test_screensync.py"""
 import json
 import os
+import pathlib
+import tempfile
+import urllib.request
 import socket
 import sys
 import threading
@@ -102,8 +105,9 @@ check("it heard the query and then a frame", got[:2], [b"CSQ1", b"CSY1"])
 
 
 class FakeSync(P.Sync):
-    def __init__(self, link):  # no screen needed
-        self.link, self.paused = link, False
+    def __init__(self, link, settings=None):  # no screen needed
+        self.link, self.paused, self.gaming, self.fps = link, False, False, 20.0
+        self.settings = settings or P.Settings(pathlib.Path(tempfile.mkdtemp()) / "s.json")
 
 
 P._allowed = True  # (on a Mac build machine, Screen Recording is not this test's business)
@@ -115,6 +119,56 @@ done.set()
 th.join(2)
 srv.close()
 link.sock.close()
+
+# the query says who is asking
+got.clear()
+srv2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+srv2.bind(("127.0.0.1", 0))
+srv2.settimeout(2)
+port2 = srv2.getsockname()[1]
+P.PORT, old_port = port2, P.PORT
+quiet = P.Link(None, last="127.0.0.1")
+check("a remembered address is used before any answer", quiet.addr, ("127.0.0.1", port2))
+quiet.tick()
+data, _ = srv2.recvfrom(65536)
+info = json.loads(data[4:].decode())
+check("the query says who is asking", (data[:4], sorted(info)), (b"CSQ1", ["name", "os", "v"]))
+# no answer ever comes back (a firewall): frames still go to the address it has
+quiet.send(P.frame_bytes(bytes(432)))
+data, _ = srv2.recvfrom(65536)
+check("with no answer, frames still go to the address it has", data[:4], b"CSY1")
+fs = FakeSync(quiet)
+check("and the menu says it is sending without an answer", fs.status_line(), "Sending to 127.0.0.1, no answer yet")
+P.PORT = old_port
+srv2.close()
+
+# settings are kept between runs
+sp = pathlib.Path(tempfile.mkdtemp()) / "settings.json"
+st = P.Settings(sp)
+check("settings start from their defaults", (st["fps"], st["game"], st["pi"]), (20, "gentle", None))
+st.update(fps=12, pi="192.168.1.20")
+check("and are kept", (P.Settings(sp)["fps"], P.Settings(sp)["pi"]), (12, "192.168.1.20"))
+
+# the Settings window's page: its state, a change, and nothing without the token
+fs = FakeSync(P.Link("127.0.0.1"), P.Settings(pathlib.Path(tempfile.mkdtemp()) / "s.json"))
+fs.link.state = {"state": "syncing", "room_name": "Office", "room": "r1", "app_url": "https://hub.example/"}
+fs.link.heard_at = time.monotonic()
+page = P.SettingsPage(fs)
+url = page.start()
+st = json.loads(urllib.request.urlopen(url + "state").read())
+check("the page says what the room is doing", st["status"], "Office · following")
+check("and offers Light positions", (st["positions"], fs.positions_url()), (True, "https://hub.example/#room/r1/screen"))
+req = urllib.request.Request(url + "set", data=json.dumps({"fps": 12, "game": "pause", "pi": "10.0.0.5"}).encode(), method="POST")
+st = json.loads(urllib.request.urlopen(req).read())
+check("a change from the page is kept and used", (st["fps"], st["game"], st["pi"], fs.link.addr), (12, "pause", "10.0.0.5", ("10.0.0.5", P.PORT)))
+html = urllib.request.urlopen(url).read().decode()
+check("the page is there", "Light positions" in html and "\u2014" not in html and "\u2013" not in html, True)
+try:
+    urllib.request.urlopen(url.replace(page.token, "guess") + "state")
+    blocked = False
+except Exception:  # noqa: BLE001
+    blocked = True
+check("without the run's token, nothing", blocked, True)
 
 print("FAILED: " + ", ".join(FAILS) if FAILS else "ALL OK")
 raise SystemExit(1 if FAILS else 0)

@@ -333,8 +333,12 @@ to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
    System Settings, Privacy & Security, and choose Open Anyway. Then allow it under
    Screen Recording there and open it again: without that, macOS shows it only the
    desktop picture. It sits in the tray (the menu bar on a Mac), its icon the screen's
-   colour, and finds the connector by itself; `--pi <address>` gives it the address if
-   it cannot. Its menu can start it with Windows, or open it at login on a Mac.
+   colour, and finds the connector by itself. Its menu opens **Settings**, a small window
+   with Light positions (the app's positions page, in a window of its own), pause,
+   smoothness, what to do while a game is full screen (Windows), the Pi's address, and
+   starting at login. If the room says the computer can't hear the Pi (a firewall, or a
+   Mac's Local Network permission keeping the answers out), type the address it shows
+   into Settings: frames then go there whether answers come back or not.
 2. In the app, open the room and switch on **PC screen**. The first time, a Hue
    pairing from before this feature needs the bridge's button pressed once more (the
    row says so): streaming needs a second key that older pairings did not keep.

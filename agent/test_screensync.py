@@ -238,9 +238,16 @@ async def main():
     s3.on_datagram(S.QUERY, ("192.168.1.30", 50000))
     check("a PC looking for the connector is news even with no room set",
           [bool(m["screen_sync"]["pc"]) for m in told[first:]], [True])
+    # it keeps asking and never sends a frame: it is not hearing the answers, and the app is told who and where
+    for _ in range(3):
+        s3.on_datagram(S.QUERY + b'{"name": "Collins-MacBook", "os": "mac"}', ("192.168.1.30", 50000))
+    s3._asking["192.168.1.30"]["since"] -= 11
+    pc = s3.status()["pc"]
+    check("a computer that keeps asking and sends nothing is not hearing the Pi", (pc["hears"], pc["name"], pc["os"], bool(pc.get("pi_address"))),
+          (False, "Collins-MacBook", "mac", True))
     s3.on_datagram(S.FRAME + bytes([0, 16, 9]) + bytes(432), ("192.168.1.30", 50000))
     s3._announce()
-    check("and its frames after that are not", len(told), first + 1)
+    check("its first frame shows it hears after all", s3.status()["pc"]["hears"], True)
 
     # on and off: a remote's press toggles it, it outlives a restart, and with no room set a press does nothing
     import pathlib

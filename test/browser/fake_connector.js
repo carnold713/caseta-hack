@@ -447,12 +447,12 @@ setInterval(() => {
 // ({"sync": {"pc": true, "key": false, "state": "problem", "why": "..."}}), so no other page grows the row. The room in
 // the config follows unless paused; a pause or resume from the app is answered as the connector answers it.
 // On and off is the connector's to keep, as it is there; {"sync": {"paused": true}} is a hand on one of the lights.
-const SYNC = { pc: false, key: true, paused: false, off: false, state: null, why: null };
+const SYNC = { pc: false, key: true, paused: false, off: false, state: null, why: null, deaf: false };
 function syncStatus() {
   const room = (((config || {}).settings || {}).screen_sync || {}).room || null;
-  const state = SYNC.state || (!room || SYNC.off ? 'off' : SYNC.paused ? 'paused' : 'syncing');
+  const state = SYNC.state || (!room || SYNC.off ? 'off' : SYNC.paused ? 'paused' : SYNC.deaf ? 'waiting' : 'syncing');
   return { state, room, room_name: room && inventory.areas[room] ? inventory.areas[room].name : null, lights: [], area: null, why: SYNC.why,
-    pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000 } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key,
+    pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000, name: 'Studio Mac', os: 'mac', hears: !SYNC.deaf, ...(SYNC.deaf ? { pi_address: '192.168.1.20' } : {}) } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key,
     on: !!room && !SYNC.off && !SYNC.paused, placed: syncPlaced(room) };
 }
 // the room's lights that can follow, where the settings put them or where the connector would (screensync.placed)
