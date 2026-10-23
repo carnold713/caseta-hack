@@ -12,6 +12,8 @@ const BY_FIXTURE = {
   // the kinds the Caseta set draws no picture of get the nearest one it does
   mirror: 'light-wall-sconce', panels: 'light-tape-light', porch: 'light-porch-lantern', path: 'light-porch-lantern',
   flood: 'light-downlight', landscape: 'light-downlight', step: 'light-puck-lights',
+  // the shapes Hue makes that no lamp in the set is (drawn here in the set's own line)
+  bars: 'light-light-bars', slim: 'light-slim-lamp', tube: 'light-light-tube', strip: 'light-tv-backlight',
 };
 const LAMP_BY_PLACE = { desk: 'light-desk-lamp', table: 'light-table-lamp', floor: 'light-floor-lamp', bed: 'light-bedside-lamp' };
 

@@ -110,6 +110,28 @@ test("a light's kind sets its role, and picking it again clears both", () => {
   assert.equal(e.setKind('2', 'not-a-kind'), null);
 });
 
+test("a Hue light is the kind its product makes it, and stays cleared when cleared", () => {
+  const { d, h, e } = setup();
+  const inv = inventory();
+  inv.areas.a3 = { id: 'a3', name: 'Office' };
+  inv.devices.h1 = { device_id: 'h1', name: 'Desk left', domain: 'light', area: 'a3', color: true, product: { name: 'Hue Play light bar', form: 'play-bar' } };
+  inv.devices.h2 = { device_id: 'h2', name: 'By the TV', domain: 'light', area: 'a1', color: true, product: { name: 'Hue Play light bar', form: 'play-bar' } };
+  inv.devices.h3 = { device_id: 'h3', name: 'Corner', domain: 'light', area: 'a1', color: true, product: { name: 'Hue Gradient Signe floor lamp', form: 'signe-floor' } };
+  inv.devices.h4 = { device_id: 'h4', name: 'Bulb', domain: 'light', area: 'a1', color: true, product: { name: 'Hue A19 bulb', form: 'bulb' } };
+  d.apply({ type: 'inventory', inventory: inv });
+  assert.equal(h.lightKind('h1'), 'desk-bars', 'Play bars in an office stand on the desk');
+  assert.equal(h.lightKind('h2'), 'tv-bars', 'and in a living room by the TV');
+  assert.equal(h.lightKind('h3'), 'floor-slim');
+  assert.equal(h.lightRole('h3'), KIND_DEF.ROLES['floor-slim'], 'the kind it is given carries its role');
+  assert.equal(h.lightKind('h4'), null, 'a bulb could be in anything');
+  assert.equal(e.setKind('h1', 'desk-lamp'), 'desk-lamp', 'a kind picked by hand wins');
+  assert.equal(h.lightKind('h1'), 'desk-lamp');
+  assert.equal(e.setKind('h3', 'floor-slim'), null, 'picking the given kind again clears it');
+  assert.equal(h.lightKind('h3'), null, 'and it stays cleared, whatever the product says');
+  assert.equal(d.S.config.settings.light_kinds.h3, 'none');
+  assert.equal(e.setKind('h3', 'floor-lamp'), 'floor-lamp', 'and can be given another');
+});
+
 test('a deleted room takes its pin on Home with it', () => {
   const { d, e } = setup({}, { favorites: ['a:a1', 'd:1', 'a:a2'] });
   d.S.config.settings.rooms = [{ id: 'a1', name: 'Living room', device_ids: [] }, { id: 'a2', name: 'Kitchen', device_ids: [] }];

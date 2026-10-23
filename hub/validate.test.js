@@ -168,6 +168,10 @@ test('a light kind carries its role, and a role already set is left alone', () =
   assert.strictEqual(kept.settings.roles.d1, 'accent', 'a role the person set is not overwritten by the kind');
   assert.deepStrictEqual(validateConfig({ settings: { roles: { d1: 'disco' } } }).settings.roles, {}, 'an unknown role is dropped');
   assert.deepStrictEqual(validateConfig({ settings: { light_kinds: { d1: 'not-a-kind' } } }).settings.light_kinds, {});
+  const cleared = validateConfig({ settings: { light_kinds: { d1: 'none' } } }).settings;
+  assert.strictEqual(cleared.light_kinds.d1, 'none', 'a kind cleared by hand on a light its product would give one stays cleared');
+  assert.strictEqual(cleared.roles.d1, undefined);
+  assert.strictEqual(validateConfig({ settings: { light_kinds: { d1: 'tv-strip' } } }).settings.light_kinds.d1, 'tv-strip');
 });
 
 test('a device belongs to one room, and the first room wins', () => {

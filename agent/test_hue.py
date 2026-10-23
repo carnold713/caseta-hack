@@ -45,6 +45,12 @@ def make_app(state):
             # cannot be re-read, and re-reading is the whole point of the resync test
             state["light_reads"] += 1
             return web.json_response({"data": list(state["lights"].values())})
+        if kind == "device":
+            # what each light is: a Play light bar the catalogue knows, and a lamp too new for it that the
+            # bridge's own archetype still names
+            return web.json_response({"data": [
+                {"id": DEV1, "type": "device", "product_data": {"model_id": "LCT024", "product_name": "Hue play", "product_archetype": "hue_play"}},
+                {"id": DEV3, "type": "device", "product_data": {"model_id": "NEW001", "product_name": "Hue go", "product_archetype": "hue_go"}}]})
         if kind == "scene":
             return web.json_response({"data": [{"id": SCENE, "type": "scene", "metadata": {"name": "Focus"}, "group": {"rid": ROOM, "rtype": "room"}}]})
         return web.json_response({"data": []})
@@ -231,6 +237,9 @@ async def main():
         assert d["type"] == "HueLight" and d["area"] == hid(ROOM) and d["current_state"] == 42 and d["zone"] == LIGHT and d["name"] == "Desk lamp", d
         assert hue.devices[hid(SWITCH)]["type"] == "HueSwitch" and hue.devices[hid(SWITCH)]["current_state"] == 0
         assert hue.areas[hid(ROOM)]["name"] == "Office" and not hue.scenes, "Hue scenes stay out"
+        assert d["product"] == {"name": "Hue Play light bar", "form": "play-bar", "model": "LCT024"}, d["product"]
+        assert hue.devices[hid(COLOR)]["product"] == {"name": "Hue go", "form": "go", "model": "NEW001"}, hue.devices[hid(COLOR)]["product"]
+        assert hue.devices[hid(SWITCH)]["product"]["form"] is None, "a light with no device says nothing of what it is"
         # a plain dimmer has neither colour nor tunable white; the colour lamp reports its gamut, range and mode
         assert d["color"] is None and d["ct"] is None and d["color_mode"] is None and color_state(d) is None
         c = hue.devices[hid(COLOR)]

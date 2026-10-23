@@ -139,7 +139,10 @@ const BY_KIND = {
   'window-pendant': 'winpendant', 'window-spots': 'winspots', 'window-string': 'winstring', 'floor-lamp': 'floor',
   'floor-reading': 'floor', 'floor-uplight': 'torch', 'floor-torchiere': 'torch', 'bed-lamp': 'table', 'bed-headboard': 'bed',
   'bed-reading': 'bed', 'bed-tape': 'underbed', 'outside-porch': 'lantern', 'outside-path': 'bollard', 'outside-flood': 'lantern',
-  'outside-string': 'string', 'outside-landscape': 'bollard', 'outside-step': 'bollard',
+  'outside-string': 'string', 'outside-landscape': 'bollard', 'outside-step': 'bollard', 'outside-tape': 'cove',
+  // the shapes Hue makes: a pair of light bars, a slim stick of a lamp, a tube lying along a surface, a TV's backlight
+  'desk-bars': 'bars', 'tv-bars': 'bars', 'desk-slim': 'slimtable', 'table-slim': 'slimtable', 'floor-slim': 'slim',
+  'tv-tube': 'tube', 'tv-strip': 'tv',
 };
 const BY_PLACE = { desk: 'desk', table: 'table', cabinet: 'cabinet', shelf: 'shelf' };
 function drawingOfKind(k) {
@@ -149,6 +152,7 @@ function drawingOfKind(k) {
 // a light nobody has given a kind: its name usually says
 const BY_NAME = [
   [/nanoleaf|aurora|light ?panels?|\bcanvas\b|hexagons?|\bshapes\b/, 'panels'],
+  [/\bplay\b|light ?bars?/, 'bars'], [/signe|\bslim\b/, 'slim'], [/\btube\b/, 'tube'], [/\btv\b|backlight|behind the screen/, 'tv'],
   [/fan/, 'fan'], [/chandelier/, 'chand'], [/pendant|island/, 'pendant'], [/mirror|vanity/, 'mirror'], [/picture|art light/, 'picture'],
   [/sconce/, 'sconce'], [/track/, 'track'], [/spot/, 'spots'],
   [/\bcans?\b|recess|downlight|pot ?light/, 'down'], [/floor|torch|\barc\b/, 'floor'], [/uplight/, 'uplight'], [/desk|task/, 'desk'],
@@ -181,7 +185,9 @@ export function panelShape(model, name) {
 // `win` is the room's window, which each scene with a window offers as one slot of its own; `panel` is a stretch of
 // clear wall wide enough for a set of light panels, which otherwise take a sconce's place, drawn smaller.
 const CEIL = ['pendant', 'flush', 'chand', 'down', 'fan', 'track', 'spots'];
-const WALL = ['sconce', 'picture', 'uplight', 'mirror', 'panels', 'walltrack'];
+const WALL = ['sconce', 'picture', 'uplight', 'mirror', 'panels', 'walltrack', 'tv'];
+// what stands on whatever it is put on, drawn to suit it (a slim lamp on the floor is a tall one)
+const STANDING = ['bars', 'slim', 'slimtable', 'tube'];
 const WIN = ['wintrack', 'winspots', 'wintape', 'winpendant', 'winstring'];
 const PREFER = {
   pendant: ['ceil'], flush: ['ceil'], chand: ['ceil'], down: ['ceil'], fan: ['ceil'], track: ['ceil'], spots: ['ceil'],
@@ -194,8 +200,11 @@ const PREFER = {
   cabinet: ['strip:cabinet', 'strip:shelf', 'strip', 'wall', 'ceil'], shelf: ['strip:shelf', 'strip:cabinet', 'strip', 'wall', 'ceil'],
   cove: ['strip:cove', 'strip', 'ceil'], underbed: ['strip:underbed', 'strip', 'table', 'ceil'], bed: ['bed', 'table', 'wall', 'ceil'],
   lantern: ['door', 'wall', 'ceil'], bollard: ['ground', 'floor', 'table', 'wall'], string: ['string', 'ceil'],
+  bars: ['desk', 'table', 'floor', 'wall', 'ceil'], slim: ['floor', 'table', 'wall', 'ceil'],
+  slimtable: ['desk', 'table', 'floor', 'wall', 'ceil'], tube: ['table', 'desk', 'floor', 'wall', 'ceil'], tv: ['wall', 'ceil'],
 };
 function drawingAt(sort, want) {
+  if (STANDING.includes(want) && ['floor', 'table', 'desk', 'ground'].includes(sort)) return want;
   // a light kept from its own place still looks like itself where it can: a window's track on the ceiling is a track
   if (sort === 'ceil') return CEIL.includes(want) ? want : { walltrack: 'track', wintrack: 'track', winspots: 'spots', winpendant: 'pendant' }[want] || 'pendant';
   if (sort === 'wall') return WALL.includes(want) ? want : 'sconce';
@@ -221,7 +230,7 @@ export const DEPTH = 5.5;   // scene units of depth for each unit of floor on sc
 const SPILL = {
   pendant: [1, 16], winpendant: [1, 6], flush: [1, 18], chand: [0, 16], fan: [1, 18], down: [3, 3], table: [4, 6],
   floor: [4, 10], torch: [2, 10], desk: [1, 6], bed: [1, 4], lantern: [0, 3], bollard: [0, 12], sconce: [4, 1],
-  uplight: [2, 1], panels: [0, 0.5],
+  uplight: [2, 1], panels: [0, 0.5], bars: [0, 4], slim: [0, 10], slimtable: [0, 5], tube: [2, 5], tv: [0, 0.5],
 };
 // The marker the page reads a lamp's light from: no size, so nothing is drawn, but its opacity is the lamp's strength
 // and its colour the lamp's, and both move on the dimmer (and wait for a scene's ring, room.js) as every other lit
@@ -607,6 +616,57 @@ const DRAW = {
       x: (x1 + x2) / 2, y: y + (up ? -6 : 6), r: Math.max(80, w * 0.7),
       body: `<rect x="${x1}" y="${y - 1.5}" width="${w}" height="3" rx="1.5" fill="#3A3431"/><rect class="rl" x="${x1}" y="${y - 1.5}" width="${w}" height="3" rx="1.5" fill="currentColor" style="color:${L.core};opacity:${n(L.I * 1000) / 1000}"/>`,
     };
+  },
+  // Hue's Play light bars: two slim bars on little feet, each washing the wall behind it with its light
+  bars(K, s, L, q) {
+    const { layers } = K;
+    const tall = s.sort === 'floor' || s.sort === 'ground' ? 46 : 32;
+    const x = s.x, y = s.y, xs = [x - 14, x + 14];
+    let body = '';
+    for (const bx of xs) {
+      const bar = rr(bx - 3, y - tall, 6, tall - 3, 3);
+      layers.pool.push(`<path class="rl" d="${ell(bx, y - tall * 0.6, 22, tall * 1.1).d}" fill="url(#${q}f)" ${op(L.I * 0.9)}/>`);
+      body += `<rect x="${bx - 4}" y="${y - 3}" width="8" height="3" rx="1.5" fill="#34302D"/><path d="${bar.d}" fill="${K.G('char', 'v')}"/>`
+        + `<path class="rl" d="${bar.d}" fill="currentColor" style="color:${L.core};opacity:${n(L.I * 850) / 1000}"/>`;
+    }
+    layers.pool.push(`<circle class="rl" cx="${x}" cy="${y - tall / 2}" r="80" fill="url(#${q}g)" ${op(L.I * 0.55)}/>`);
+    return { x, y: y - tall / 2, r: 90, body, emit: xs.map(bx => [bx, y - tall / 2]) };
+  },
+  // a slim lamp (a Signe): one thin lit stick on a small foot, tall on the floor and short on a table or a desk
+  slim(K, s, L, q) {
+    const { layers } = K;
+    const standing = s.sort === 'floor' || s.sort === 'ground';
+    const tall = standing ? 140 : 54, x = s.x, y = s.y, top = y - tall;
+    const stick = rr(x - 2.5, top, 5, tall - 6, 2.5);
+    layers.pool.push(`<path class="rl" d="${ell(x, top + tall * 0.45, 26, tall * 0.62).d}" fill="url(#${q}f)" ${op(L.I * 0.9)}/>`);
+    layers.pool.push(`<circle class="rl" cx="${x}" cy="${n(top + tall * 0.4)}" r="${standing ? 100 : 70}" fill="url(#${q}g)" ${op(L.I * 0.55)}/>`);
+    return {
+      x, y: top + tall * 0.4, r: standing ? 120 : 80, emit: [[x, top + tall * 0.25], [x, top + tall * 0.7]],
+      body: `<path d="${ell(x, y - 2, standing ? 11 : 8, 2.6).d}" fill="#34302D"/><path d="M${x} ${y - 3}V${y - 7}" stroke="${LINE}" stroke-width="1.6"/>`
+        + `<path d="${stick.d}" fill="${K.G('char', 'v')}"/><path class="rl" d="${stick.d}" fill="currentColor" style="color:${L.core};opacity:${n(L.I * 900) / 1000}"/>`,
+    };
+  },
+  slimtable(K, s, L, q) { return DRAW.slim(K, s, L, q); },
+  // a light tube lying along a table or a TV stand, its light thrown up the wall
+  tube(K, s, L, q) {
+    const { layers } = K;
+    const x = s.x, y = s.y, w = 64;
+    const t = rr(x - w / 2, y - 8, w, 5, 2.5);
+    layers.pool.push(`<path class="rl" d="${ell(x, y - 30, w * 0.75, 34).d}" fill="url(#${q}f)" ${op(L.I * 0.85)}/>`);
+    return {
+      x, y: y - 6, r: 90, emit: [[x - w / 3, y - 6], [x + w / 3, y - 6]],
+      body: `<path d="M${x - w / 2 + 6} ${y}V${y - 3}M${x + w / 2 - 6} ${y}V${y - 3}" stroke="${LINE}" stroke-width="1.6"/><path d="${t.d}" fill="${K.G('char', 'v')}"/>`
+        + `<path class="rl" d="${t.d}" fill="currentColor" style="color:${L.core};opacity:${n(L.I * 1000) / 1000}"/>`,
+    };
+  },
+  // a TV on the wall with a lightstrip behind it: the screen dark, the wall around it lit
+  tv(K, s, L, q) {
+    const { layers } = K;
+    const x = s.x, y = s.y, w = 78, h = 44;
+    const scr = rr(x - w / 2, y - h / 2, w, h, 3);
+    layers.pool.push(`<path class="rl" d="${rr(x - w / 2 - 16, y - h / 2 - 14, w + 32, h + 28, 18).d}" fill="url(#${q}f)" ${op(L.I)}/>`);
+    layers.pool.push(`<circle class="rl" cx="${x}" cy="${y}" r="96" fill="url(#${q}g)" ${op(L.I * 0.5)}/>`);
+    return { x, y, r: 100, body: `<path d="${scr.d}" fill="#141211"/><path d="${scr.d}" fill="none" stroke="${LINE}" stroke-width="1.4"/>` };
   },
   bed(K, s, L, q) {
     const { layers } = K;

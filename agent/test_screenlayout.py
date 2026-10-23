@@ -225,6 +225,11 @@ async def main():
     try:
         check("a gradient light says it has sections, and spans the screen", {k: v for k, v in g.placed("office")[0].items() if k in ("segments", "span", "flip")},
               {"segments": 7, "span": 2.0, "flip": False})
+        # a gradient Signe in the same place stands up: shorter, and up the screen
+        gh.devices["hue_g"]["product"] = {"name": "Hue Gradient Signe floor lamp (black)", "form": "signe-floor"}
+        check("a standing gradient lamp says so, and spans most of the screen's height",
+              {k: v for k, v in g.placed("office")[0].items() if k in ("upright", "span")}, {"upright": True, "span": 1.2})
+        del gh.devices["hue_g"]["product"]
         await g.start()
         end = time.monotonic() + 1.5
         while time.monotonic() < end:
@@ -249,6 +254,13 @@ async def main():
     check("a strip the Hue app laid up, across and down keeps that shape",
           S.sections([(0, -0.5, 0.0, 0), (1, -0.5, 0.5, 1), (2, 0.5, 0.5, 2), (3, 0.5, 0.0, 3)], 2.0, False),
           {0: (-1.0, 0.5), 1: (-1.0, -0.5), 2: (1.0, -0.5), 3: (1.0, 0.5)})
+    # a gradient Signe stands up: its sections run up the screen from its foot (lower on the page is larger y),
+    # whatever shape the area gives them, and flipped its top is its foot
+    up = S.sections([(4, -0.5, 0.0, 0), (5, 0.0, 0.0, 1), (6, 0.5, 0.0, 2)], 1.2, False, True)
+    check("a standing lamp's sections run from its foot up", {k: (round(x, 3), round(y, 3)) for k, (x, y) in up.items()},
+          {4: (0.0, 0.6), 5: (0.0, 0.0), 6: (0.0, -0.6)})
+    down = S.sections([(4, -0.5, 0.0, 0), (5, 0.0, 0.0, 1), (6, 0.5, 0.0, 2)], 1.2, True, True)
+    check("flipped, its top is its foot", (round(down[4][1], 3), round(down[6][1], 3)), (-0.6, 0.6))
 
     # the pieces
     check("a light outside the screen looks at its nearest edge", S.weights(16, 9, 2.5, 0) == S.weights(16, 9, 1.0, 0), True)

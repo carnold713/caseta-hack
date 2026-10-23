@@ -322,6 +322,11 @@
 .ss-len { position: absolute; right: -14px; top: -14px; width: 36px; height: 36px; border-radius: 50%; touch-action: none; cursor: ew-resize; }
 .ss-len::after { content: ''; position: absolute; left: 10px; top: 10px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--text-1); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+/* a lamp that stands up (a gradient Signe): the bar runs up the screen, its first section at its foot, the handle on top */
+.ss-span.up { height: auto; width: 8px; margin: 0 0 0 -4px; }
+.ss-span.up .ss-end { top: auto; bottom: -3px; }
+.ss-span.up .ss-end.flip { left: -3px; right: auto; top: -3px; bottom: auto; }
+.ss-span.up .ss-len { right: auto; left: -14px; top: -14px; cursor: ns-resize; }
 /* M11: a tile on a room presses to the file's 0.97, held while the finger is down, and opens from there (lightopen.js). */
 .room-grid .tile:active { transform: scale(.97); }
 .room-empty { margin-top: 16px; }

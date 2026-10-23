@@ -107,7 +107,7 @@ function kindFootHTML(id, step2) {
 }
 // The sort walk (docs/ux-progressive.md 3.3): the kind sheet for each untagged dimmable light in turn, one toast at the end.
 let SORT = null;
-function untaggedLights() { const kinds = S.config.settings.light_kinds || {}; return controllable().filter(d => d.domain === 'light' && !kinds[d.device_id]).map(d => d.device_id); }
+function untaggedLights() { const kinds = S.config.settings.light_kinds || {}; return controllable().filter(d => d.domain === 'light' && !kinds[d.device_id] && !lightKind(d.device_id)).map(d => d.device_id); }
 function openSortWalk() {
   const list = untaggedLights(); if (!list.length) return;
   SORT = { list, prev: JSON.stringify(S.config), done: 0 };

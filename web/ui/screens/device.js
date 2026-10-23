@@ -69,6 +69,7 @@ function paintLight(page, v) {
 // its top half, so it rests on the name by its blades rather than by the empty half under them]
 const HERO = {
   'light-floor-lamp': [88, 88], 'light-torchiere': [88, 88], 'light-arc-lamp': [88, 88], 'light-tree-lamp': [88, 88],
+  'light-slim-lamp': [88, 88],
   'light-pendant': [80, 80, true], 'light-chandelier': [80, 80, true],
   'light-ceiling-fan': [80, 80, false, 0.5], 'lutron-rollershades': [88, 88], 'light-tape-light': [120, 16],
 };
@@ -86,7 +87,8 @@ function heroGeo(art) {
   return { w, h, lift, top, y, style: `--art-w:${w}px;--art-h:${h}px;--art-top:${top}px;--lift:${lift}px;--lamp-y:${Math.round(y)}px` };
 }
 for (const n of [...Object.keys(HERO), 'light-table-lamp', 'light-desk-lamp', 'light-bedside-lamp', 'light-reading-lamp', 'light-wall-sconce',
-  'light-downlight', 'light-track-light', 'light-puck-lights', 'light-porch-lantern', 'lutron-lamps', 'lutron-dimmer']) loadArt(n);
+  'light-downlight', 'light-track-light', 'light-puck-lights', 'light-porch-lantern', 'lutron-lamps', 'lutron-dimmer',
+  'light-light-bars', 'light-light-tube', 'light-tv-backlight']) loadArt(n);
 // A strip or a cove is a bar of light, drawn in the house's icon line: its body and the points of light along it.
 // Anything else is its own drawing, inline so its line keeps the house's weight at this size (art.js).
 function heroArt(c, art) {

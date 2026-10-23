@@ -43,7 +43,7 @@ from nanoleaf import Nanoleaf
 from screensync import ScreenSync
 from sun import solar_noon, sun_times
 
-VERSION = "0.32.0"
+VERSION = "0.33.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -738,6 +738,11 @@ class Agent:
                 "area": d.get("area"),
                 "domain": _domain(d.get("type")),
             }
+            if d.get("product"):
+                # what a Hue light is (hue_products.py): its product's name stands as its model, and its form is
+                # what the app makes its kind from
+                devices[did]["product"] = d["product"]
+                devices[did]["model"] = d["product"].get("name") or d.get("model")
             if d.get("color") or d.get("ct"):
                 # what the lamp can do, in the app's units: the mirek range becomes kelvin, widest first.
                 # Only Hue and Nanoleaf devices ever set "color"/"ct" on their dict at all, so the dict's own

@@ -144,13 +144,26 @@ Pico bindings from its cached config.
   per cent apart, and anything that moves the lights in between puts the
   loop back on whichever scene now fits.
 - **Kinds of light:** each light can say where it is and what it is,
-  two questions in one sheet: Ceiling, Wall, Window, Desk, Table, Floor,
-  Under a cabinet, Shelf or cove, Bed or Outside, then the fixture for
-  that place (a desk lamp or a desk tape light, a ceiling track light or
-  a window track light, a pendant, a chandelier, puck lights, a porch
-  light, 46 in all). The kind picks the light's icon and its part in the
-  room's suggested scenes. The table is one file, `web/js/kinds.js`, shared by the
-  app and the hub.
+  two questions in one sheet: Ceiling, Wall, Window, Desk, Around the TV,
+  Table, Floor, Under a cabinet, Shelf or cove, Bed or Outside, then the
+  fixture for that place (a desk lamp or desk light bars, a ceiling track
+  light or a window track light, a slim floor lamp, a TV lightstrip, a
+  pendant, puck lights, a porch light, 55 in all). The kind picks the
+  light's icon, its drawing in the room's picture and its part in the
+  room's suggested scenes. The table is one file, `web/js/kinds.js`, shared
+  by the app and the hub.
+- **Hue lights know what they are:** the connector reads each Hue light's
+  product from the bridge and looks it up in a catalogue of every Hue model
+  (`agent/hue_products.json`, 942 of them, rebuilt by
+  `scripts/hue_products.py`): a Play light bar, a gradient Signe, a Play
+  gradient lightstrip, a light tube, a Go, a bulb. A new one arrives with
+  its kind already set (Play bars in an office stand on the desk, in a
+  living room by the TV; a bulb could be in anything, so it waits to be
+  told), and its product shows on its About sheet. A kind picked by hand
+  always wins, and one cleared by hand stays cleared. A light type set in
+  the Hue app counts too: a bulb set to "floor shade" there is a floor
+  lamp here. A standing gradient lamp follows the PC screen up a column
+  of it, foot to top.
 - **Automations:** things the home does by itself. Three guided setups
   (Welcome lights before sunset, a Wake-up light that rises slowly before
   the alarm, Goodnight and Leaving buttons) and a from-scratch editor:

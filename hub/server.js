@@ -522,6 +522,12 @@ function handleAgentMessage(ws, msg) {
 }
 
 function setInventory(inv) {
+  // what a Hue light is, said once when the connector first says it (a new light, or a product newly read)
+  const before = inventory.devices || {};
+  for (const [id, d] of Object.entries(inv.devices || {})) {
+    const p = d && d.product, was = before[id] && before[id].product;
+    if (p && p.name && (!was || was.name !== p.name || was.form !== p.form)) console.log(`[hub] ${d.name} is a ${p.name}${p.form ? ` (${p.form})` : ''}`);
+  }
   inventory = {
     devices: inv.devices || {},
     buttons: inv.buttons || {},

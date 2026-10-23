@@ -50,6 +50,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import huestream
 import nanostream
+from hue_products import UPRIGHT
 
 LOG = logging.getLogger("screensync")
 
@@ -66,6 +67,7 @@ SPREAD = 0.15            # how far across the screen a light looks, as a share o
 SPREAD_V = 0.3           # and up and down, as a share of its height: a bar behind a monitor sees most of it
 NANO_SIZE = 0.8          # how much of the screen a Nanoleaf set spans, in screen units (2 is the screen's width)
 GRADIENT_SPAN = 2.0      # and a gradient light's sections, the screen's width unless the positions page says
+UPRIGHT_SPAN = 1.2       # a standing one's (a gradient Signe), up its height: most of the screen's
 NANO_EVERY = 2           # a Nanoleaf takes every second beat, 25 a second: it glides between them by itself
 REACH = 3.0              # how far outside the screen a light may stand, in screen units
 RETRY_S = 15.0           # after a start that failed, how long before trying again
@@ -243,13 +245,17 @@ class ScreenSync:
                 y = max(-REACH, min(REACH, float(p["y"])))
             one = {"id": d, "kind": kind, "name": name, "x": round(x, 3), "y": round(y, 3), "on": p.get("on") is not False}
             segs = int((hue_devs.get(d) or {}).get("segments") or 1) if kind == "hue" else 1
+            # a gradient lamp that stands up (hue_products.py) lays its sections up the screen, foot to top
+            upright = segs > 1 and ((hue_devs.get(d) or {}).get("product") or {}).get("form") in UPRIGHT
             if segs > 1 or kind == "nanoleaf":
-                default_span = NANO_SIZE if kind == "nanoleaf" else GRADIENT_SPAN
+                default_span = NANO_SIZE if kind == "nanoleaf" else UPRIGHT_SPAN if upright else GRADIENT_SPAN
                 span = p.get("span")
                 one["span"] = round(float(span), 3) if isinstance(span, (int, float)) and 0.2 <= span <= 6 else default_span
                 one["flip"] = p.get("flip") is True
             if segs > 1:
                 one["segments"] = segs
+            if upright:
+                one["upright"] = True
             out.append(one)
         return out
 
@@ -558,7 +564,8 @@ class ScreenSync:
                     by_light.setdefault(d, []).append((ch, hx, hz, self.area["index"].get(ch, ch)))
             for d, chans in by_light.items():
                 p = placed[d]
-                for ch, (dx, dy) in sections(chans, p.get("span", GRADIENT_SPAN), p.get("flip", False)).items():
+                for ch, (dx, dy) in sections(chans, p.get("span", GRADIENT_SPAN), p.get("flip", False),
+                                             p.get("upright", False)).items():
                     pts[("h", ch)] = (p["x"] + dx, p["y"] + dy)
         for d, ns in self._nanos.items():
             if d not in placed:
@@ -629,7 +636,10 @@ class ScreenSync:
             # Hue's own room coordinates, for the Hue app's picture of the area: x across, z up, y towards the screen.
             # A gradient light is given its start, middle and end, so its sections lie along it there too.
             hx, hz = max(-1.0, min(1.0, x / 2)), max(-1.0, min(1.0, -y / 2))
-            if int(hue.devices[d].get("segments") or 1) > 1:
+            if int(hue.devices[d].get("segments") or 1) > 1 and (hue.devices[d].get("product") or {}).get("form") in UPRIGHT:
+                half = UPRIGHT_SPAN / 4  # a standing lamp's run from its foot up
+                pos = [{"x": hx, "y": 0.8, "z": max(-1.0, min(1.0, hz + k * half))} for k in (-1, 0, 1)]
+            elif int(hue.devices[d].get("segments") or 1) > 1:
                 half = GRADIENT_SPAN / 4
                 pos = [{"x": max(-1.0, min(1.0, hx + k * half)), "y": 0.8, "z": hz} for k in (-1, 0, 1)]
             else:
@@ -698,13 +708,18 @@ def _area(cfg: dict) -> dict:
             "members": members, "index": index}
 
 
-def sections(chans: List[tuple], span: float, flip: bool) -> Dict[int, Tuple[float, float]]:
+def sections(chans: List[tuple], span: float, flip: bool, upright: bool = False) -> Dict[int, Tuple[float, float]]:
     """Where each channel of one light stands, as an offset from the light's own position: [(channel, hue x, hue z,
     segment index)] in, {channel: (dx, dy)} out, spanning `span` screen units. A single channel stands on the light.
     Several keep the shape Hue's area gives them when it gives one (scaled so the widest side is the span), and
-    otherwise lie in a line, left to right in segment order. Flipped, left and right change places."""
+    otherwise lie in a line, left to right in segment order. Flipped, left and right change places. An upright lamp
+    (a gradient Signe) is a line up the screen from its foot, whatever the area says: flipped, its top is its foot."""
     if len(chans) == 1:
         return {chans[0][0]: (0.0, 0.0)}
+    if upright:
+        ordered = sorted(chans, key=lambda c: (c[3], c[0]))
+        n = len(ordered)
+        return {c[0]: (0.0, (-1 if flip else 1) * (0.5 - k / (n - 1)) * span) for k, c in enumerate(ordered)}
     xs, zs = [c[1] for c in chans], [c[2] for c in chans]
     spread = max(max(xs) - min(xs), max(zs) - min(zs))
     out: Dict[int, Tuple[float, float]] = {}

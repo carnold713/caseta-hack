@@ -10,7 +10,7 @@ const ROLES = [
   ['decor', 'Decorative', 'Low in every scene'],
 ];
 // The places, in the file's words.
-const PLACE_WORD = { ceiling: 'Ceiling', wall: 'Wall', window: 'Window', desk: 'Desk', table: 'Table', floor: 'Floor', cabinet: 'Under cabinet', shelf: 'Shelf / cove', bed: 'Bed', outside: 'Outside' };
+const PLACE_WORD = { ceiling: 'Ceiling', wall: 'Wall', window: 'Window', desk: 'Desk', tv: 'TV', table: 'Table', floor: 'Floor', cabinet: 'Under cabinet', shelf: 'Shelf / cove', bed: 'Bed', outside: 'Outside' };
 const noun = d => (d.domain === 'fan' ? 'fan' : d.domain === 'cover' ? 'shade' : 'light');
 
 export function about(c, r) {
@@ -43,6 +43,7 @@ export function about(c, r) {
   body += `<div class="group about-rows">
     <button class="row" data-act="about-name"><span class="row-txt"><span class="t">Name</span></span><span class="row-val nm-cut">${esc(d.name)}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
     <button class="row" data-act="about-move"><span class="row-txt"><span class="t">Move to room</span></span><span class="row-val nm-cut">${esc(c.data.devAreaName(d) || 'No room')}</span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>
+    ${d.product && d.product.name ? `<div class="row"><span class="row-txt"><span class="t">Product</span></span><span class="row-val nm-cut">${esc(d.product.name)}</span></div>` : ''}
     <div class="row"><span class="row-txt"><span class="t">Hide from the app</span></span><button class="toggle" role="switch" aria-checked="${hiddenNow}" data-act="about-hide" aria-label="Hide from the app"></button></div>
     ${c.EDIT.canRemove(id) ? `<button class="row" data-act="about-remove"><span class="row-txt"><span class="t">Remove from home</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>` : ''}
   </div>

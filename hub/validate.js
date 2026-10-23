@@ -182,7 +182,13 @@ function validateConfig(cfg) {
   // The kind of lamp: a place and a fixture (`desk-lamp`, `ceiling-track`), from the table the app uses too
   // (web/js/kinds.js). The role comes from it. The nine old one-word ids are accepted and written back as the new id.
   out.settings.light_kinds = {};
-  for (const [k, v] of Object.entries(s.light_kinds || {})) { const kid = KIND_DEF.normalize(v); if (/^[A-Za-z0-9_-]{1,64}$/.test(k) && kid) { out.settings.light_kinds[k] = kid; if (!out.settings.roles[k]) out.settings.roles[k] = KIND_DEF.ROLES[kid]; } }
+  // 'none' is a kind cleared by hand on a light whose product would otherwise give it one (web/data/home.js lightKind).
+  for (const [k, v] of Object.entries(s.light_kinds || {})) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(k)) continue;
+    if (v === 'none') { out.settings.light_kinds[k] = 'none'; continue; }
+    const kid = KIND_DEF.normalize(v);
+    if (kid) { out.settings.light_kinds[k] = kid; if (!out.settings.roles[k]) out.settings.roles[k] = KIND_DEF.ROLES[kid]; }
+  }
   // The room whose Hue colour lights follow the PC's screen (agent/screensync.py); null when none does.
   // Where each of its lights stands around the screen (the positions page): x and y in screen units, -1 to 1 being the
   // screen's own edges and up to 3 either way outside it, and whether it follows at all.

@@ -84,7 +84,8 @@ export const syncActions = {
 // units: -1 to 1 is the screen's own width and height, and the page shows SPAN either way.
 // A gradient light (a Play gradient tube or lightstrip: several colours along one light) is drawn as a bar as long as
 // the part of the screen its sections take ("span", the screen's width to begin with); the handle at its right end
-// stretches it, and Flip turns it round when its colours come out the wrong way.
+// stretches it, and Flip turns it round when its colours come out the wrong way. One that stands up (a gradient Signe)
+// is an upright bar, from its foot to its top, with the handle on top.
 const SPAN = 2.5;
 const pct = v => (((v + SPAN) / (2 * SPAN)) * 100).toFixed(2);
 // a gradient light's bar, kept inside the page so its handle can always be reached: left and width, as styles
@@ -92,6 +93,12 @@ const barBox = (x, span) => {
   const l = Math.max(-SPAN, x - span / 2), r = Math.min(SPAN, x + span / 2);
   return `left:${pct(l)}%;width:${((Math.max(0.05, r - l)) / (2 * SPAN)) * 100}%`;
 };
+// and a standing one's: top and height
+const colBox = (y, span) => {
+  const t = Math.max(-SPAN, y - span / 2), b = Math.min(SPAN, y + span / 2);
+  return `top:${pct(t)}%;height:${((Math.max(0.05, b - t)) / (2 * SPAN)) * 100}%`;
+};
+const boxOf = (up, x, y, span) => (up ? `${colBox(y, span)};left:${pct(x)}%` : `${barBox(x, span)};top:${pct(y)}%`);
 const NANO_GLYPH = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/></svg>';
 function lightsHere(c, aid) {
   const s = sync(c);
@@ -109,9 +116,9 @@ export function screenSheet(c, r) {
   const aid = r.id;
   const list = lightsHere(c, aid);
   const name = d => (c.data.dev(d.id) || {}).name || d.name;
-  const dots = list.map(d => `<button class="ss-dot ${d.on ? '' : 'out'} ${d.kind}" data-ssid="${esc(d.id)}" data-x0="${d.x}" style="left:${pct(d.x)}%;top:${pct(d.y)}%" aria-label="${esc(name(d))}">
+  const dots = list.map(d => `<button class="ss-dot ${d.on ? '' : 'out'} ${d.kind}" data-ssid="${esc(d.id)}" data-x0="${d.x}" data-y0="${d.y}" style="left:${pct(d.x)}%;top:${pct(d.y)}%" aria-label="${esc(name(d))}">
       <span class="ss-disc">${d.kind === 'nanoleaf' ? NANO_GLYPH : icon('bulb', 20, 1.7)}</span><span class="ss-name">${esc(name(d))}</span></button>`).join('');
-  const bars = list.filter(d => d.segments > 1).map(d => `<div class="ss-span ${d.on ? '' : 'out'}" data-span="${esc(d.id)}" data-w="${d.span}" style="${barBox(d.x, d.span)};top:${pct(d.y)}%">
+  const bars = list.filter(d => d.segments > 1).map(d => `<div class="ss-span ${d.on ? '' : 'out'} ${d.upright ? 'up' : ''}" data-span="${esc(d.id)}" data-w="${d.span}" style="${boxOf(d.upright, d.x, d.y, d.span)}">
       <i class="ss-end ${d.flip ? 'flip' : ''}"></i><b class="ss-len" data-sslen="${esc(d.id)}" aria-label="Length of ${esc(name(d))}"></b></div>`).join('');
   const rows = list.map(d => `<div class="row"><span class="row-txt"><span class="t">${esc(name(d))}</span><span class="d">${d.kind === 'nanoleaf' ? 'Nanoleaf' : d.segments > 1 ? `Hue · ${d.segments} sections` : 'Hue'}</span></span>
       ${d.segments > 1 ? `<button class="chip sm ${d.flip ? 'lead' : ''}" aria-pressed="${!!d.flip}" data-act="ss-flip" data-id="${esc(d.id)}">Flip</button>` : ''}
@@ -149,13 +156,15 @@ function wireStage(c, root) {
     const id = h.dataset.sslen;
     const bar = stage.querySelector(`.ss-span[data-span="${CSS.escape(id)}"]`);
     const dot = stage.querySelector(`.ss-dot[data-ssid="${CSS.escape(id)}"]`);
+    const up = bar.classList.contains('up');
     let span = null;
     h.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); h.setPointerCapture(e.pointerId); c.ui.dragging = true; span = null; });
     h.addEventListener('pointermove', e => {
       if (!h.hasPointerCapture(e.pointerId)) return;
-      const cx = Number(dot.dataset.x || dot.dataset.x0);
-      span = Math.max(0.4, Math.min(5, 2 * Math.abs(at(e).x - cx)));
-      bar.setAttribute('style', `${barBox(cx, span)};top:${bar.style.top}`);
+      const cx = Number(dot.dataset.x || dot.dataset.x0), cy = Number(dot.dataset.y || dot.dataset.y0);
+      const p = at(e);
+      span = Math.max(0.4, Math.min(5, 2 * Math.abs(up ? p.y - cy : p.x - cx)));
+      bar.setAttribute('style', boxOf(up, cx, cy, span));
     });
     const done = () => { if (span == null) { c.endDrag(); return; } const v = Math.round(span * 1000) / 1000; span = null; save(id, { span: v }); };
     h.addEventListener('pointerup', done);
@@ -174,7 +183,7 @@ function wireStage(c, root) {
       if (!dot.hasPointerCapture(e.pointerId)) return;
       const { x, y } = at(e);
       dot.style.left = `${pct(x)}%`; dot.style.top = `${pct(y)}%`;
-      if (bar) bar.setAttribute('style', `${barBox(x, Number(bar.dataset.w))};top:${pct(y)}%`);
+      if (bar) bar.setAttribute('style', boxOf(bar.classList.contains('up'), x, y, Number(bar.dataset.w)));
       dot.dataset.x = x.toFixed(3); dot.dataset.y = y.toFixed(3);
       moved = true;
     });

@@ -32,7 +32,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check((await page.$eval('[data-act="ld-kind"] .val', el => el.textContent.trim())) === 'Not set', 'More sheet: Kind reads "Not set" before a pick');
   await page.click('[data-act="ld-kind"]'); await page.waitForTimeout(500);
   check((await title()) === 'Where is this light?', 'step 1 asks where');
-  check((await page.$$('[data-act="kind-place"]')).length === 10, 'step 1 lists ten places');
+  check((await page.$$('[data-act="kind-place"]')).length === 11, 'step 1 lists eleven places');
   const h1 = await h();
   await page.screenshot({ path: 's13-kind-1-where.png' });
   // 2. a place, then only its fixtures with the role as the second line
@@ -41,7 +41,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   const h2 = await h();
   check(h1 === h2, `sheet keeps one height across the steps (${h1} vs ${h2})`);
   const rows = await page.$$eval('[data-act="kind-pick"]', els => els.map(e => e.dataset.k));
-  check(rows.join(',') === 'desk-lamp,desk-tape,desk-task,desk-monitor', 'step 2 lists the desk fixtures only: ' + rows.join(','));
+  check(rows.join(',') === 'desk-lamp,desk-tape,desk-task,desk-monitor,desk-bars,desk-slim', 'step 2 lists the desk fixtures only: ' + rows.join(','));
   check((await page.$eval('[data-act="kind-pick"][data-k="desk-tape"] .d', el => el.textContent.trim())) === 'Lamps · for atmosphere', 'a fixture row carries its role');
   check(!!(await page.$('[data-act="sheet-back"]')), 'step 2 has a back arrow');
   await page.screenshot({ path: 's13-kind-2-what.png' });

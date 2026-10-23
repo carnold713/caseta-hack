@@ -28,6 +28,7 @@ import aiohttp
 
 from color import (GAMUT_C, color_state, gamut_from_hue, hex_to_xy, kelvin_to_hex, kelvin_to_mirek,
                    mirek_to_kelvin, xy_from_hue, xy_to_hex)
+from hue_products import product_of
 
 __all__ = ["Hue", "color_state", "hid"]   # color_state lives in color.py now; re-exported for its old callers
 
@@ -220,6 +221,12 @@ class Hue:
     async def load(self) -> None:
         lights = (await self._get("/clip/v2/resource/light")).get("data", [])
         rooms = (await self._get("/clip/v2/resource/room")).get("data", [])
+        # each light's device says which product it is (hue_products.py): a light without one is just a light
+        try:
+            hw = {d["id"]: d for d in (await self._get("/clip/v2/resource/device")).get("data", []) if d.get("id")}
+        except Exception as exc:  # noqa: BLE001
+            LOG.info("hue: products unknown (%s)", exc)
+            hw = {}
         # Hue's own scenes are deliberately not imported: scenes in this app are made here, and they
         # can hold Hue lights beside Caseta ones. recall_scene stays for anything that still references one.
         scenes: list = []
@@ -241,6 +248,7 @@ class Hue:
             dimmable = "dimming" in lt
             on = bool((lt.get("on") or {}).get("on"))
             bri = float((lt.get("dimming") or {}).get("brightness", 100 if on else 0))
+            pd = (hw.get(owner) or {}).get("product_data") or {}
             devices[did] = {
                 "device_id": did, "name": (lt.get("metadata") or {}).get("name") or "Hue light", "device_name": (lt.get("metadata") or {}).get("name") or "Hue light",
                 "type": "HueLight" if dimmable else "HueSwitch", "model": "Hue", "serial": lt["id"],
@@ -249,6 +257,8 @@ class Hue:
                 # a gradient light (a Play gradient tube or lightstrip) shows several colours along itself; screen
                 # sync gives each of its sections its own part of the screen
                 "segments": int((lt.get("gradient") or {}).get("points_capable") or 1),
+                "product": product_of(pd.get("model_id"), pd.get("product_name"), pd.get("product_archetype"),
+                                      (lt.get("metadata") or {}).get("archetype")),
                 # What the bridge itself last said, kept apart from current_state, which a command sets the moment
                 # the bridge accepts it. The event stream keeps these up to date; checking an off reads them when
                 # the bridge cannot be asked directly.

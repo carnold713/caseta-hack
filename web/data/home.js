@@ -51,7 +51,16 @@
     const tsplit = t => (typeof t === 'string' && t.includes('|') ? t.split('|') : t);
 
     // ---------- a light's kind and role ----------
-    function lightKind(id) { const K = kinds(); return K ? K.normalize(((S.config && S.config.settings.light_kinds) || {})[id]) : null; }
+    // The kind someone picked, else the one its maker's product makes it (kinds.js suggest: a Hue Play light bar is
+    // light bars), else none. 'none' is a kind cleared by hand, which stays cleared whatever the product says.
+    function lightKind(id) {
+      const K = kinds(); if (!K) return null;
+      const set = ((S.config && S.config.settings.light_kinds) || {})[id];
+      if (set === 'none') return null;
+      const k = K.normalize(set); if (k) return k;
+      const d = D.dev(id);
+      return d && d.product && K.suggest ? K.suggest(d.product, D.devAreaName(d)) : null;
+    }
     function lightRole(id) { const r = ((S.config && S.config.settings.roles) || {})[id]; if (r) return r; const k = lightKind(id); const K = kinds(); return k && K ? K.ROLES[k] : null; }
     function kindLabel(k) { const K = kinds(); if (!K) return null; const x = K.KINDS[K.normalize(k)]; return x ? x.label : null; }
 

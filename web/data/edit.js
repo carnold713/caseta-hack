@@ -202,7 +202,12 @@
     function setKind(id, k) {
       const K = kinds(); if (!K || !K.ROLES[k]) return null;
       const s = settings(); s.light_kinds = s.light_kinds || {}; s.roles = s.roles || {};
-      if (H.lightKind(id) === k) { delete s.light_kinds[id]; delete s.roles[id]; return null; }
+      if (H.lightKind(id) === k) {
+        // picked again: cleared, and a light whose product would give it that kind back is marked as cleared instead
+        delete s.light_kinds[id]; delete s.roles[id];
+        if (H.lightKind(id)) s.light_kinds[id] = 'none';
+        return null;
+      }
       s.light_kinds[id] = k; s.roles[id] = K.ROLES[k];
       return k;
     }
