@@ -447,12 +447,16 @@ setInterval(() => {
 // ({"sync": {"pc": true, "key": false, "state": "problem", "why": "..."}}), so no other page grows the row. The room in
 // the config follows unless paused; a pause or resume from the app is answered as the connector answers it.
 // On and off is the connector's to keep, as it is there; {"sync": {"paused": true}} is a hand on one of the lights.
-const SYNC = { pc: false, key: true, paused: false, off: false, state: null, why: null, deaf: false };
+const SYNC = { pc: false, key: true, paused: false, off: false, state: null, why: null, deaf: false, displays: false };
 function syncStatus() {
   const room = (((config || {}).settings || {}).screen_sync || {}).room || null;
   const state = SYNC.state || (!room || SYNC.off ? 'off' : SYNC.paused ? 'paused' : SYNC.deaf ? 'waiting' : 'syncing');
+  // {"sync": {"displays": true}}: a Mac with two displays, which follows the one picked in the app at once
+  const want = (((config || {}).settings || {}).screen_sync || {}).display;
+  const displays = SYNC.displays ? { displays: [{ id: '1', name: 'Built-in display · 1512 x 982', main: true }, { id: '2', name: 'Display 1 · 2560 x 1440', main: false }],
+    display: want && want.id ? want.id : null } : {};
   return { state, room, room_name: room && inventory.areas[room] ? inventory.areas[room].name : null, lights: [], area: null, why: SYNC.why,
-    pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000, name: 'Studio Mac', os: 'mac', hears: !SYNC.deaf, ...(SYNC.deaf ? { pi_address: '192.168.1.20' } : {}) } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key,
+    pc: SYNC.pc ? { address: '192.168.1.30', seen_at: Date.now() / 1000, name: 'Studio Mac', os: 'mac', hears: !SYNC.deaf, ...(SYNC.deaf ? { pi_address: '192.168.1.20' } : {}), ...displays } : null, fps: state === 'syncing' ? 50 : 0, stream_key: SYNC.key,
     on: !!room && !SYNC.off && !SYNC.paused, placed: syncPlaced(room) };
 }
 // the room's lights that can follow, where the settings put them or where the connector would (screensync.placed)
@@ -465,6 +469,7 @@ function syncPlaced(room) {
     const one = { id, kind: nano ? 'nanoleaf' : 'hue', name: inventory.devices[id].name, x: typeof m.x === 'number' ? m.x : (nano ? 1.6 : -0.6 + 1.2 * k / Math.max(1, ids.length - 1)), y: typeof m.y === 'number' ? m.y : 0, on: m.on !== false };
     if (segs > 1 || nano) Object.assign(one, { span: typeof m.span === 'number' ? m.span : (nano ? 0.8 : 2), flip: m.flip === true });
     if (segs > 1) one.segments = segs;
+    if (segs > 1 && inventory.devices[id].upright) Object.assign(one, { upright: true, span: typeof m.span === 'number' ? m.span : 1.2 });
     return one; });
 }
 const sendSync = () => { if (ws.readyState === 1) send({ type: 'screen_sync', screen_sync: syncStatus() }); };

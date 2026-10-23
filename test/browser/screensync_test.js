@@ -157,6 +157,23 @@ const fake = d => fs.writeFileSync(path.join(process.cwd(), 'fake-do.json'), JSO
       const flipped = await C(id => ((window.__copper.S.config.settings.screen_sync || {}).lights || {})[id], dot.id);
       check('Flip turns it round', !!flipped && flipped.flip === true, flipped);
     }
+    // the same light standing up (a gradient Signe): an upright bar, its handle on top
+    fake({ dev: { [dot.id]: { upright: true } } }); await wait(900);
+    await C(() => { window.__copper.render(); }); await wait(500);
+    const up = await C(id => { const b = document.querySelector(`.ss-span[data-span="${id}"]`); if (!b) return null; const r = b.getBoundingClientRect(); return { up: b.classList.contains('up'), w: r.width, h: r.height }; }, dot.id);
+    check('a standing gradient lamp is an upright bar', !!up && up.up && up.h > up.w * 3, up);
+    fake({ dev: { [dot.id]: { upright: false } } }); await wait(600);
+    // a computer with two displays: the page offers both, and the one picked goes to it
+    fake({ sync: { displays: true } }); await wait(900);
+    await C(() => { window.__copper.render(); }); await wait(500);
+    const chips = await C(() => [...document.querySelectorAll('[data-act="ss-display"]')].map(b => ({ id: b.dataset.id, on: b.getAttribute('aria-pressed') })));
+    check('a computer with two displays is offered both, following the main one', chips.length === 2 && chips[0].on === 'true' && chips[1].on === 'false', chips);
+    if (chips.length === 2) {
+      await page.click('[data-act="ss-display"][data-id="2"]'); await wait(1200);
+      const picked = await C(() => ({ cfg: (window.__copper.S.config.settings.screen_sync || {}).display, on: document.querySelector('[data-act="ss-display"][data-id="2"]').getAttribute('aria-pressed') }));
+      check('the display picked is kept for that computer, and shown as followed', !!picked.cfg && picked.cfg.id === '2' && picked.cfg.pc === 'Studio Mac' && picked.on === 'true', picked);
+    }
+    fake({ sync: { displays: false } }); await wait(600);
     await page.click('[data-act="ss-reset"]'); await wait(900);
     const reset = await C(() => (window.__copper.S.config.settings.screen_sync || {}).lights);
     check('Start over forgets every position', reset && Object.keys(reset).length === 0, reset);

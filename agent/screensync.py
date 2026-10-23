@@ -172,7 +172,8 @@ class ScreenSync:
         self.stream_port = stream_port
         self.nano_port = nano_port
         self.app_url = app_url                   # the app's own address, for the computer's "Light positions"
-        self._asking: Dict[str, dict] = {}       # computer address -> {"name", "os", "since", "n"}: queries, no frames
+        self._asking: Dict[str, dict] = {}       # computer address -> {"since", "n"}: queries, no frames
+        self._about: Dict[str, dict] = {}        # computer address -> what it says of itself: name, os, displays
         self.paused = False                      # a light changed by hand: until resumed, or the PC comes back
         self._file = (data_dir / "screensync.json") if data_dir else None
         self.off = self._load_off()              # switched off, from the app or a remote: until switched on
@@ -324,8 +325,8 @@ class ScreenSync:
             except ValueError:
                 pass
             ask = self._asking.setdefault(addr[0], {"since": now, "n": 0})
-            ask.update({k: str(info[k])[:40] for k in ("name", "os") if info.get(k)})
             ask["n"] += 1
+            self._about[addr[0]] = about_pc(info) or self._about.get(addr[0], {})
             if self._pc is None or now - self._frame_at >= IDLE_S:
                 self._pc, self._pc_seen = (addr[0], addr[1]), time.time()
             self._reply(addr)
@@ -357,7 +358,13 @@ class ScreenSync:
     def _reply(self, addr) -> None:  # noqa: ANN001
         self._replied_at = time.monotonic()
         if self._port and self._port.transport:
-            self._port.transport.sendto(STATE + json.dumps(self.status()).encode(), addr)
+            st = self.status()
+            # the display picked in the app, for the computer to follow (it goes by "at": the newer choice wins,
+            # the app's or its own Settings')
+            want = self._settings().get("display")
+            if isinstance(want, dict):
+                st["want_display"] = want
+            self._port.transport.sendto(STATE + json.dumps(st).encode(), addr)
 
     # ----- what the app and the PC are told -----
     def state(self) -> str:
@@ -389,10 +396,14 @@ class ScreenSync:
         if not self._pc:
             return None
         ask = self._asking.get(self._pc[0]) or {}
+        about = self._about.get(self._pc[0]) or {}
         # three queries over ten seconds and not one frame: our answers are not reaching it
         deaf = ask.get("n", 0) >= 3 and time.monotonic() - ask.get("since", 0) >= 10
-        out: Dict[str, Any] = {"address": self._pc[0], "seen_at": self._pc_seen, "name": ask.get("name"),
-                               "os": ask.get("os"), "hears": not deaf}
+        out: Dict[str, Any] = {"address": self._pc[0], "seen_at": self._pc_seen, "name": about.get("name"),
+                               "os": about.get("os"), "hears": not deaf}
+        if about.get("displays"):
+            # which of its displays it is following, for the app to offer the others (settings.screen_sync.display)
+            out["displays"], out["display"] = about["displays"], about.get("display")
         if deaf:
             out["pi_address"] = lan_address(self._pc[0])
         return out
@@ -403,7 +414,8 @@ class ScreenSync:
         # rate do not, or every frame would be a message
         pc = st["pc"] or {}
         key = json.dumps({**{k: v for k, v in st.items() if k not in ("pc", "fps")}, "pc": bool(st["pc"]),
-                          "hears": pc.get("hears")}, sort_keys=True)
+                          "hears": pc.get("hears"), "name": pc.get("name"), "displays": pc.get("displays"),
+                          "display": pc.get("display")}, sort_keys=True)
         if key != self._last_status:
             self._last_status = key
             self.send({"type": "screen_sync", "screen_sync": st})
@@ -710,6 +722,17 @@ class ScreenSync:
         if self._nanos and self._beat % NANO_EVERY == 0:
             for d, ns in self._nanos.items():
                 ns.send([(k[2], _enc(c[0]), _enc(c[1]), _enc(c[2])) for k, c in self._shown.items() if k[0] == "n" and k[1] == d])
+
+
+def about_pc(info: dict) -> dict:
+    """What a computer's query says of it, kept short: {name, os, displays: [{id, name, main}], display}."""
+    out: Dict[str, Any] = {k: str(info[k])[:40] for k in ("name", "os") if info.get(k)}
+    ds = info.get("displays")
+    if isinstance(ds, list):
+        out["displays"] = [{"id": str(d.get("id"))[:32], "name": str(d.get("name") or "Display")[:60], "main": d.get("main") is True}
+                           for d in ds[:8] if isinstance(d, dict) and d.get("id") is not None]
+        out["display"] = str(info["display"])[:32] if info.get("display") else None
+    return out
 
 
 def lan_address(towards: str) -> Optional[str]:

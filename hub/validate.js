@@ -208,6 +208,12 @@ function validateConfig(cfg) {
       if (Object.keys(one).length) lights[k] = one;
     }
     out.settings.screen_sync = { room, lights };
+    // the display picked in the app for one computer to follow: its id there, the computer's name, and when, since
+    // the newer choice wins between the app and the computer's own Settings (agent/screensync.py, pc/screensync.py)
+    const d = ss.display;
+    if (d && typeof d === 'object' && /^[A-Za-z0-9._-]{1,32}$/.test(String(d.id || '')) && typeof d.at === 'number' && isFinite(d.at)) {
+      out.settings.screen_sync.display = { id: String(d.id), at: Math.round(d.at), ...(typeof d.pc === 'string' && d.pc ? { pc: d.pc.slice(0, 40) } : {}) };
+    }
   }
   out.settings.night_look = ['auto', 'always', 'never'].includes(s.night_look) ? s.night_look : 'auto';
   // The light Nightstand's night light turns on (a device id); unset, the app picks a bedroom lamp.

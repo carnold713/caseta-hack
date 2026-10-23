@@ -134,10 +134,25 @@ link.tick()
 check("it heard the query and then a frame", got[:2], [b"CSQ1", b"CSY1"])
 
 
+class FakeScreen:
+    """Two displays, the main one first, as Screen.displays() gives them."""
+    def __init__(self):
+        self.display, self.used = None, []
+
+    def displays(self):
+        return [{"id": "1", "name": "Built-in display · 1512 x 982", "main": True},
+                {"id": "2", "name": "Display 1 · 2560 x 1440", "main": False}]
+
+    def use(self, d):
+        self.used.append(d)
+        self.display = d
+
+
 class FakeSync(P.Sync):
     def __init__(self, link, settings=None):  # no screen needed
         self.link, self.paused, self.gaming, self.fps = link, False, False, 20.0
         self.settings = settings or P.Settings(pathlib.Path(tempfile.mkdtemp()) / "s.json")
+        self.screen = FakeScreen()
 
 
 P._allowed = True  # (on a Mac build machine, Screen Recording is not this test's business)
@@ -163,6 +178,11 @@ quiet.tick()
 data, _ = srv2.recvfrom(65536)
 info = json.loads(data[4:].decode())
 check("the query says who is asking", (data[:4], sorted(info)), (b"CSQ1", ["name", "os", "v"]))
+quiet.about = lambda: {"displays": FakeScreen().displays(), "display": None}
+quiet._asked_at = 0.0
+quiet.tick()
+data, _ = srv2.recvfrom(65536)
+check("and which displays it has", [d["id"] for d in json.loads(data[4:].decode())["displays"]], ["1", "2"])
 # no answer ever comes back (a firewall): frames still go to the address it has
 quiet.send(P.frame_bytes(bytes(432)))
 data, _ = srv2.recvfrom(65536)
@@ -191,6 +211,22 @@ check("and offers Light positions", (st["positions"], fs.positions_url()), (True
 req = urllib.request.Request(url + "set", data=json.dumps({"fps": 12, "game": "pause", "pi": "10.0.0.5"}).encode(), method="POST")
 st = json.loads(urllib.request.urlopen(req).read())
 check("a change from the page is kept and used", (st["fps"], st["game"], st["pi"], fs.link.addr), (12, "pause", "10.0.0.5", ("10.0.0.5", P.PORT)))
+check("the page offers the displays, following the main one", ([d["id"] for d in st["displays"]], st["display"]), (["1", "2"], ""))
+req = urllib.request.Request(url + "set", data=json.dumps({"display": "2"}).encode(), method="POST")
+st = json.loads(urllib.request.urlopen(req).read())
+check("a display picked on the page is followed and kept", (st["display"], fs.settings["display"]), ("2", "2"))
+req = urllib.request.Request(url + "set", data=json.dumps({"display": "9"}).encode(), method="POST")
+check("one that is not there is not", json.loads(urllib.request.urlopen(req).read())["display"], "2")
+# the display picked in the app: followed when it is newer than the last one picked here, and only by its computer
+fs.link.state = {"want_display": {"id": "1", "at": 1, "pc": P.who_am_i()["name"]}}
+fs._from_app()
+check("an older choice from the app does not undo a newer one made here", fs.screen.display, "2")
+fs.link.state = {"want_display": {"id": "1", "at": fs.settings["display_at"] + 1000, "pc": "another-computer"}}
+fs._from_app()
+check("nor does one made for another computer", fs.screen.display, "2")
+fs.link.state = {"want_display": {"id": "1", "at": fs.settings["display_at"] + 1000, "pc": P.who_am_i()["name"]}}
+fs._from_app()
+check("a newer one for this computer is followed", (fs.screen.display, fs.settings["display"]), ("1", "1"))
 html = urllib.request.urlopen(url).read().decode()
 check("the page is there", "Light positions" in html and "\u2014" not in html and "\u2013" not in html, True)
 try:

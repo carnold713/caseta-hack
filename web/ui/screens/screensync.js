@@ -123,8 +123,18 @@ export function screenSheet(c, r) {
   const rows = list.map(d => `<div class="row"><span class="row-txt"><span class="t">${esc(name(d))}</span><span class="d">${d.kind === 'nanoleaf' ? 'Nanoleaf' : d.segments > 1 ? `Hue · ${d.segments} sections` : 'Hue'}</span></span>
       ${d.segments > 1 ? `<button class="chip sm ${d.flip ? 'lead' : ''}" aria-pressed="${!!d.flip}" data-act="ss-flip" data-id="${esc(d.id)}">Flip</button>` : ''}
       <button class="toggle" role="switch" aria-checked="${d.on}" data-act="ss-light" data-id="${esc(d.id)}" aria-label="${esc(name(d))} follows the screen"></button></div>`).join('');
+  // A computer with more than one display: which one the lights follow. The choice goes to the computer through the
+  // connector (settings.screen_sync.display, with when it was made, since the newer choice wins between here and the
+  // computer's own Settings), so until the computer says it has switched, the one picked here is the one shown.
+  const s = sync(c), pc = (s && s.room === aid && s.pc) || {};
+  const ds = Array.isArray(pc.displays) ? pc.displays : [];
+  const asked = ((c.S.config.settings || {}).screen_sync || {}).display;
+  const mine = asked && (!asked.pc || asked.pc === pc.name) && ds.some(d => d.id === asked.id) && Date.now() - asked.at < 30000 ? asked.id : null;
+  const showing = mine || pc.display || (ds.find(d => d.main) || ds[0] || {}).id;
+  const displays = ds.length > 1 ? `<div class="t-over sec-s">Display${pc.name ? ` on ${esc(pc.name)}` : ''}</div>
+      <div class="chip-wrap ss-displays">${ds.map(d => `<button class="chip sm" data-act="ss-display" data-id="${esc(d.id)}" data-pc="${esc(pc.name || '')}" aria-pressed="${d.id === showing}">${esc(d.name)}</button>`).join('')}</div>` : '';
   const body = list.length
-    ? `<div class="ss">
+    ? `<div class="ss">${displays}
         <div class="ss-stage" data-drag data-aid="${esc(aid)}">
           <div class="ss-screen" style="left:${pct(-1)}%;top:${pct(-1)}%;width:${(2 / (2 * SPAN)) * 100}%;height:${(2 / (2 * SPAN)) * 100}%"><span>Screen</span></div>
           ${bars}${dots}
@@ -214,6 +224,11 @@ export const screenActions = {
     const now = el.getAttribute('aria-pressed') === 'true';
     lights[id] = { ...(lights[id] || {}), flip: !now };
     if (now) delete lights[id].flip;
+    await c.save('', { quiet: true });
+  },
+  async 'ss-display'(c, el) {
+    const ss = c.S.config.settings.screen_sync || (c.S.config.settings.screen_sync = { room: null, lights: {} });
+    ss.display = { id: el.dataset.id, at: Date.now(), ...(el.dataset.pc ? { pc: el.dataset.pc } : {}) };
     await c.save('', { quiet: true });
   },
   async 'ss-reset'(c) {

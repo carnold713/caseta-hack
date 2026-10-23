@@ -11,6 +11,7 @@ key, so the stream is checked against an implementation that is not ours. It che
 Needs pyOpenSSL and the openssl command; says so and passes without them. Run: python test_screensync.py
 """
 import asyncio
+import json
 import os
 import shutil
 import socket
@@ -248,6 +249,21 @@ async def main():
     s3.on_datagram(S.FRAME + bytes([0, 16, 9]) + bytes(432), ("192.168.1.30", 50000))
     s3._announce()
     check("its first frame shows it hears after all", s3.status()["pc"]["hears"], True)
+    check("and who it is is not forgotten once its frames come", s3.status()["pc"]["name"], "Collins-MacBook")
+    # it says which displays it has and which it follows: the app is told, to offer the others
+    s3.on_datagram(S.QUERY + json.dumps({"name": "Collins-MacBook", "os": "mac", "display": "2", "displays": [
+        {"id": "1", "name": "Built-in display · 1512 x 982", "main": True}, {"id": "2", "name": "Display 1 · 2560 x 1440"}]}).encode(),
+        ("192.168.1.30", 50000))
+    pc = told[-1]["screen_sync"]["pc"]
+    check("the app hears which displays it has and which it follows", ([d["id"] for d in pc["displays"]], pc["display"]), (["1", "2"], "2"))
+    # and the display picked in the app goes back to it with every answer
+    cfg3["settings"]["screen_sync"] = {"display": {"id": "1", "at": 5, "pc": "Collins-MacBook"}}
+    sent = []
+    s3._port = type("P", (), {"transport": type("T", (), {"sendto": lambda self, data, addr: sent.append(data)})()})()
+    s3._reply(("192.168.1.30", 50000))
+    check("the computer is told the display picked in the app", json.loads(sent[-1][4:].decode()).get("want_display"),
+          {"id": "1", "at": 5, "pc": "Collins-MacBook"})
+    s3._port = None
 
     # on and off: a remote's press toggles it, it outlives a restart, and with no room set a press does nothing
     import pathlib

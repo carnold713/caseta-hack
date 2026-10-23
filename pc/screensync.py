@@ -44,7 +44,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -55,8 +55,9 @@ STATE = b"CSS1"
 FLAG_RESUME = 0x01
 GRID_W, GRID_H = 16, 9
 LOST_S = 10.0           # no answer from the connector for this long: look for it again
+TELL_S = 10.0           # and how often, while it answers, this computer says which displays it has
 APP = "CasetaScreenSync"
-VERSION = "1.3"
+VERSION = "1.4"
 # How many times a second to look at the screen: Settings' choices. The lights are sent 50 updates a second and show
 # about 25, so past 50 a faster look makes them no smoother; it only lets a change reach them a few milliseconds
 # sooner, for many times the work here (a full-screen game still follows its own setting).
@@ -116,6 +117,9 @@ class _CoreGraphics:
         cg, cf = lib("CoreGraphics"), lib("CoreFoundation")
         vp, sz = ctypes.c_void_p, ctypes.c_size_t
         cg.CGMainDisplayID.restype = ctypes.c_uint32
+        cg.CGGetActiveDisplayList.argtypes = [ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+        cg.CGGetActiveDisplayList.restype = ctypes.c_int32
+        cg.CGDisplayIsBuiltin.argtypes, cg.CGDisplayIsBuiltin.restype = [ctypes.c_uint32], ctypes.c_uint32
         cg.CGDisplayBounds.argtypes, cg.CGDisplayBounds.restype = [ctypes.c_uint32], CGRect
         cg.CGWindowListCreateImage.argtypes = [CGRect, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
         cg.CGWindowListCreateImage.restype = vp
@@ -127,11 +131,30 @@ class _CoreGraphics:
         cf.CFDataGetLength.argtypes, cf.CFDataGetLength.restype = [vp], ctypes.c_long
         cf.CFRelease.argtypes, cf.CFRelease.restype = [vp], None
         self.cg, self.cf = cg, cf
+        self.display: Optional[int] = None  # None: the main display, the one with the menu bar
+
+    def displays(self) -> List[dict]:
+        """The displays in use: [{id, name, main}], the main one first."""
+        cg = self.cg
+        ids, n = (ctypes.c_uint32 * 16)(), ctypes.c_uint32(0)
+        if cg.CGGetActiveDisplayList(16, ids, ctypes.byref(n)) != 0:
+            return []
+        main = cg.CGMainDisplayID()
+        out, k = [], 0
+        for did in sorted(ids[: n.value], key=lambda d: d != main):
+            b = cg.CGDisplayBounds(did)
+            if cg.CGDisplayIsBuiltin(did):
+                label = "Built-in display"
+            else:
+                k += 1
+                label = f"Display {k}"
+            out.append({"id": str(did), "name": f"{label} · {int(b.size.width)} x {int(b.size.height)}", "main": did == main})
+        return out
 
     def grab(self) -> Optional[np.ndarray]:
         cg, cf = self.cg, self.cf
-        img = cg.CGWindowListCreateImage(cg.CGDisplayBounds(cg.CGMainDisplayID()), self.LIST_ON_SCREEN,
-                                         self.NULL_WINDOW, self.IMAGE_OPTIONS)
+        did = self.display if self.display is not None else cg.CGMainDisplayID()
+        img = cg.CGWindowListCreateImage(cg.CGDisplayBounds(did), self.LIST_ON_SCREEN, self.NULL_WINDOW, self.IMAGE_OPTIONS)
         if not img:
             return None  # asleep, locked, or no screen to look at
         data = None
@@ -150,16 +173,33 @@ class _CoreGraphics:
             cf.CFRelease(img)
 
 
-class Screen:
-    """The main screen: through Windows' Desktop Duplication (dxcam), or on a Mac through CoreGraphics
-    (_CoreGraphics), otherwise a plain grab (mss)."""
+def _dxcam_outputs() -> List[dict]:
+    """Windows' displays as Desktop Duplication numbers them: [{device, output, w, h, main}]."""
+    import re  # noqa: WPS433
 
-    def __init__(self) -> None:
+    import dxcam  # noqa: WPS433
+
+    out = []
+    for m in re.finditer(r"Device\[(\d+)\] Output\[(\d+)\]: Res:\((\d+), (\d+)\).*?Primary:(True|False)", dxcam.output_info()):
+        out.append({"device": int(m.group(1)), "output": int(m.group(2)), "w": int(m.group(3)), "h": int(m.group(4)),
+                    "main": m.group(5) == "True"})
+    return out
+
+
+class Screen:
+    """One display: through Windows' Desktop Duplication (dxcam), or on a Mac through CoreGraphics (_CoreGraphics),
+    otherwise a plain grab (mss). Which one is `display` (an id from displays(); None is the main display), chosen
+    in Settings or in the app; a display that has gone (unplugged) falls back to the main one."""
+
+    def __init__(self, display: Optional[str] = None) -> None:
         self.kind = None
         self._cam = None
         self._mss = None
         self._cgs = None
         self._last: Optional[np.ndarray] = None
+        self.display: Optional[str] = None
+        self._want: Optional[str] = display
+        self._pending = True  # the display asked for is looked up on the first grab
         if sys.platform == "darwin":
             try:
                 self._cgs = _CoreGraphics()
@@ -179,9 +219,56 @@ class Screen:
         self._mss = _plain_grab()
         self.kind = "mss"
 
+    def displays(self) -> List[dict]:
+        """[{id, name, main}] for every display, the main one first. Never raises: an empty list says it cannot tell."""
+        try:
+            if self._cgs is not None:
+                return self._cgs.displays()
+            if self._cam is not None:
+                outs = sorted(_dxcam_outputs(), key=lambda o: not o["main"])
+                return [{"id": f"d{o['device']}.{o['output']}", "main": o["main"],
+                         "name": f"Display {k + 1} · {o['w']} x {o['h']}"} for k, o in enumerate(outs)]
+            mons = self._mss.monitors[1:]
+            return [{"id": f"m{k + 1}", "main": k == 0, "name": f"Display {k + 1} · {m['width']} x {m['height']}"}
+                    for k, m in enumerate(mons)]
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("displays: %s", exc)
+            return []
+
+    def use(self, display: Optional[str]) -> None:
+        """Look at this display from the next grab on (called from any thread; the capture thread switches)."""
+        self._want, self._pending = display or None, True
+
+    def _switch(self) -> None:
+        want, self._pending = self._want, False
+        ids = {d["id"]: d for d in self.displays()}
+        pick = want if want in ids else None
+        if want and not pick:
+            LOG.info("display %s is not there, following the main one", want)
+        self._last = None
+        if self._cgs is not None:
+            self._cgs.display = int(pick) if pick else None
+        elif self._cam is not None and pick != self.display:
+            import dxcam  # noqa: WPS433
+
+            dev, out = (int(v) for v in pick[1:].split(".")) if pick else (0, None)
+            try:
+                self._cam.release()
+            except Exception:  # noqa: BLE001
+                pass
+            self._cam = dxcam.create(device_idx=dev, output_idx=out, output_color="RGB")
+        self.display = pick
+        LOG.info("following %s", ids[pick]["name"] if pick else "the main display")
+
     def grab(self) -> Optional[np.ndarray]:
         """The screen as an H x W x 3 RGB array (on a Mac, only the pixels grid() looks at). dxcam returns nothing
         when the screen has not changed since the last look, so the last picture stands in for it."""
+        if self._pending:
+            try:
+                self._switch()
+            except Exception as exc:  # noqa: BLE001
+                self._pending = False
+                LOG.info("could not switch display (%s)", exc)
         if self._cgs is not None:
             try:
                 f = self._cgs.grab()
@@ -202,7 +289,9 @@ class Screen:
             if f is not None:
                 self._last = f
             return self._last
-        mon = self._mss.monitors[1]
+        mons = self._mss.monitors
+        k = int(self.display[1:]) if self.display and self.display.startswith("m") else 1
+        mon = mons[k] if 0 < k < len(mons) else mons[1]
         shot = np.asarray(self._mss.grab(mon))  # BGRA
         self._last = shot[:, :, 2::-1]
         return self._last
@@ -250,9 +339,10 @@ def config_dir() -> Path:
 
 
 class Settings:
-    """settings.json: {"pi": address typed in or None, "last_pi": the address last found, "fps": 12|20|30,
-    "game": "gentle"|"full"|"pause"}."""
-    DEFAULTS = {"pi": None, "last_pi": None, "fps": 20, "game": "gentle"}
+    """settings.json: {"pi": address typed in or None, "last_pi": the address last found, "fps": one of RATES,
+    "game": "gentle"|"full"|"pause", "display": the display followed (None: the main one), "display_at": when it
+    was picked, in ms, here or in the app}."""
+    DEFAULTS = {"pi": None, "last_pi": None, "fps": 20, "game": "gentle", "display": None, "display_at": 0}
 
     def __init__(self, path: Optional[Path] = None) -> None:
         self.path = path or config_dir() / "settings.json"
@@ -287,9 +377,10 @@ class Link:
     answer to a broadcast names it. Frames go to it whether or not answers are coming back."""
 
     def __init__(self, pi: Optional[str] = None, last: Optional[str] = None,
-                 on_found=None) -> None:  # noqa: ANN001
+                 on_found=None, about=None) -> None:  # noqa: ANN001
         self.fixed = pi
         self.on_found = on_found
+        self.about = about  # what else the query says of this computer (its displays), asked each time it is sent
         start = pi or last
         self.addr: Optional[Tuple[str, int]] = (start, PORT) if start else None
         self.state: dict = {}
@@ -299,7 +390,16 @@ class Link:
         self.sock.settimeout(0.0)
         self.sock.bind(("0.0.0.0", 0))
         self._asked_at = 0.0
-        self._query = QUERY + json.dumps(who_am_i()).encode()
+        self._told_at = time.monotonic()  # the first query says it all; again TELL_S after that
+
+    def _query(self) -> bytes:
+        me = who_am_i()
+        if self.about:
+            try:
+                me.update(self.about())
+            except Exception as exc:  # noqa: BLE001
+                LOG.debug("about: %s", exc)
+        return QUERY + json.dumps(me).encode()
 
     def set_fixed(self, pi: Optional[str]) -> None:
         self.fixed = pi or None
@@ -332,10 +432,15 @@ class Link:
         now = time.monotonic()
         if now - self.heard_at > LOST_S and now - self._asked_at > 2:
             self._asked_at = now
+            q = self._query()
             if not self.fixed:
-                self._send(self._query, ("255.255.255.255", PORT))
+                self._send(q, ("255.255.255.255", PORT))
             if self.addr:
-                self._send(self._query, self.addr)
+                self._send(q, self.addr)
+        elif self.addr and now - self._told_at > TELL_S:
+            # found: every so often it says again who it is and which displays it has, for the app's picker
+            self._told_at = now
+            self._send(self._query(), self.addr)
 
     def send(self, data: bytes) -> None:
         if self.addr:
@@ -400,9 +505,10 @@ def run_quietly() -> None:
 class Sync:
     def __init__(self, pi: Optional[str], fps: float, settings: Optional[Settings] = None) -> None:
         self.settings = settings or Settings(Path(os.devnull))
+        self.screen = Screen(self.settings["display"])
         self.link = Link(pi or self.settings["pi"], self.settings["last_pi"],
-                         on_found=lambda a: self.settings.update(last_pi=a))
-        self.screen = Screen()
+                         on_found=lambda a: self.settings.update(last_pi=a),
+                         about=lambda: {"displays": self.screen.displays(), "display": self.screen.display})
         self.fps = fps
         self.paused = False            # paused here, from the tray: no frames, so the connector stops
         self.resume_until = 0.0        # asking the connector to resume its own pause, for a moment
@@ -410,6 +516,23 @@ class Sync:
         self.gaming = False            # a game fills the screen (Windows), and Settings says to go gently or stop
         self.stop = threading.Event()
         self.sent = 0
+
+    def set_display(self, display: Optional[str], at: Optional[float] = None) -> None:
+        """Follow this display (None: the main one), picked here or in the app at `at` (ms)."""
+        self.screen.use(display)
+        self.settings.update(display=display or None, display_at=int(at if at is not None else time.time() * 1000))
+        self.link._told_at = 0.0  # noqa: SLF001  (the app hears of it on the next pass)
+
+    def _from_app(self) -> None:
+        # the display picked for this computer in the app, when that choice is newer than the last one made here
+        want = (self.link.state or {}).get("want_display")
+        if not isinstance(want, dict) or not isinstance(want.get("at"), (int, float)):
+            return
+        if want.get("pc") and want["pc"] != who_am_i()["name"]:
+            return
+        if want["at"] > (self.settings["display_at"] or 0):
+            LOG.info("the app picked display %s", want.get("id"))
+            self.set_display(str(want.get("id") or "") or None, want["at"])
 
     def rate(self) -> float:
         g = game_in_front()
@@ -430,6 +553,7 @@ class Sync:
             if now - rate_at > 2:  # what is in front is looked at every two seconds, not every frame
                 rate, rate_at = self.rate(), now
             self.link.tick()
+            self._from_app()
             # the log says when the connector stops answering and when it is back, and every ten minutes how it is
             # going, so a run that ends without a word still shows what it was doing up to then
             if self.link.found != found:
@@ -723,6 +847,7 @@ input[type=text] { width: 150px; }
 <button class="big" id="positions" disabled>Light positions</button>
 <div class="card">
   <div class="row"><span class="t">Follow the screen</span><input type="checkbox" class="sw" id="follow"></div>
+  <div class="row hide" id="displayrow"><span class="t">Display</span><select id="display"></select></div>
   <div class="row"><span class="t">Smoothness</span>
     <select id="fps"><option value="12">12 a second</option><option value="20">20 a second</option><option value="30">30 a second</option><option value="60">60 a second</option><option value="120">120 a second</option><option value="240">240 a second</option></select></div>
   <div class="row win"><span class="t">While a game is full screen</span>
@@ -743,6 +868,14 @@ function show(s) {
   $('positions').disabled = !s.positions;
   $('follow').checked = !s.paused;
   $('fps').value = String(s.fps);
+  const ds = s.displays || [];
+  $('displayrow').classList.toggle('hide', ds.length < 2);
+  const opts = ds.map(d => d.id + '|' + d.name).join('\n');
+  if ($('display').dataset.opts !== opts) {
+    $('display').dataset.opts = opts;
+    $('display').replaceChildren(...ds.map(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.name + (d.main ? ' (main)' : ''); return o; }));
+  }
+  $('display').value = s.display || (ds.find(d => d.main) || ds[0] || {}).id || '';
   $('game').value = s.game;
   if (!editing) $('pi').value = s.pi || '';
   $('found').textContent = s.pi ? '' : (s.found ? 'Found at ' + s.found : 'Leave empty to find it');
@@ -755,6 +888,7 @@ $('positions').onclick = () => post('positions');
 $('follow').onchange = e => post('set', { paused: !e.target.checked });
 $('fps').onchange = e => post('set', { fps: Number(e.target.value) });
 $('game').onchange = e => post('set', { game: e.target.value });
+$('display').onchange = e => post('set', { display: e.target.value });
 $('login').onchange = e => post('set', { login: e.target.checked });
 $('pi').onfocus = () => { editing = true; };
 $('pi').onchange = e => { editing = false; post('set', { pi: e.target.value.trim() }); };
@@ -772,7 +906,8 @@ class SettingsPage:
         s = self.sync
         return {"status": s.status_line(), "paused": s.paused, "fps": int(s.fps), "game": s.settings["game"],
                 "pi": s.settings["pi"], "found": s.link.addr[0] if s.link.addr else None, "login": starts_at_login(),
-                "os": who_am_i()["os"], "positions": bool(s.positions_url())}
+                "os": who_am_i()["os"], "positions": bool(s.positions_url()),
+                "displays": s.screen.displays(), "display": s.screen.display or ""}
 
     def change(self, body: dict) -> None:
         s = self.sync
@@ -786,6 +921,10 @@ class SettingsPage:
             s.settings.update(fps=int(body["fps"]))
         if body.get("game") in ("gentle", "full", "pause"):
             s.settings.update(game=body["game"])
+        if "display" in body:
+            d = str(body["display"] or "")
+            if not d or d in {x["id"] for x in s.screen.displays()}:
+                s.set_display(d or None)
         if "pi" in body:
             pi = str(body["pi"] or "").strip()
             if pi and not all(c.isalnum() or c in ".-:" for c in pi):
@@ -971,7 +1110,7 @@ def selftest() -> int:
         grid(s.grab())
     after, each = peak_mb(), (time.perf_counter() - t1) / 300 * 1000
     grew = None if before is None or after is None else round(after - before, 1)
-    print(json.dumps({"capture": s.kind, "sample": list(f.shape), "grid": [GRID_W, GRID_H],
+    print(json.dumps({"capture": s.kind, "displays": s.displays(), "sample": list(f.shape), "grid": [GRID_W, GRID_H],
                       "average": [int(v) for v in a], "ms": round(t, 1), "ms_each": round(each, 2),
                       "memory_mb": None if after is None else round(after), "memory_grew_mb": grew}),
           file=out, flush=True)

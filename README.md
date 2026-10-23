@@ -348,8 +348,8 @@ to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
    desktop picture. It sits in the tray (the menu bar on a Mac), its icon the screen's
    colour, and finds the connector by itself. Its menu opens **Settings**, a small window
    with Light positions (the app's positions page, in a window of its own), pause,
-   smoothness, what to do while a game is full screen (Windows), the Pi's address, and
-   starting at login. If the room says the computer can't hear the Pi (a firewall, or a
+   which display to follow when there is more than one, smoothness, what to do while a
+   game is full screen (Windows), the Pi's address, and starting at login. If the room says the computer can't hear the Pi (a firewall, or a
    Mac's Local Network permission keeping the answers out), type the address it shows
    into Settings: frames then go there whether answers come back or not.
 2. In the app, open the room and switch on **PC screen**. The first time, a Hue
@@ -365,8 +365,11 @@ the switch, shows the screen on a wall with a dot for each light: drag each one 
 it really stands (outside the screen it takes the nearest edge's colour), and switch off
 any that should stay out of it. A gradient light (a Play gradient tube or lightstrip)
 is a bar there: each of its sections takes its own part of the screen, the handle at its
-end sets how much, and Flip turns it round if its colours come out mirrored. Changes
-apply while it is running.
+end sets how much, and Flip turns it round if its colours come out mirrored. One that
+stands up (a gradient Signe or Play table lamp) is an upright bar, foot to top. A
+computer with more than one display offers them at the top of the page too: the one
+picked there is the one it follows, and the newer choice wins between the app and the
+computer's own Settings. Changes apply while it is running.
 
 It stops a few seconds after the PC goes quiet (closed, locked, asleep) and puts the
 lights back as they were. Changing one of those lights from the app, a remote or a

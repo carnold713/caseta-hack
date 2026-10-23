@@ -299,3 +299,11 @@ test('a gradient light keeps its length and which way round it is', () => {
   const ss = validateConfig({ settings: { screen_sync: { room: 'r1', lights: { hue_g: { span: 9, flip: true }, hue_h: { span: 'long', flip: 'yes' } } } } }).settings.screen_sync;
   assert.deepStrictEqual(ss.lights, { hue_g: { span: 6, flip: true } });
 });
+
+test('the display picked in the app for a computer to follow is kept, and anything else about it is not', () => {
+  const ok = validateConfig({ settings: { screen_sync: { room: 'a1', display: { id: '69733378', at: 1761264000000, pc: 'Collins-MacBook' } } } });
+  assert.deepStrictEqual(ok.settings.screen_sync.display, { id: '69733378', at: 1761264000000, pc: 'Collins-MacBook' });
+  assert.strictEqual(validateConfig({ settings: { screen_sync: { room: 'a1', display: { id: 'd0.1', at: 5 } } } }).settings.screen_sync.display.id, 'd0.1');
+  assert.strictEqual(validateConfig({ settings: { screen_sync: { room: 'a1', display: { id: '<b>', at: 5 } } } }).settings.screen_sync.display, undefined);
+  assert.strictEqual(validateConfig({ settings: { screen_sync: { room: 'a1', display: { id: 'm1' } } } }).settings.screen_sync.display, undefined);
+});
