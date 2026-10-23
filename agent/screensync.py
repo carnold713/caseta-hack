@@ -634,14 +634,15 @@ class ScreenSync:
                 raise RuntimeError(f"{hue.devices[d].get('name') or d} cannot take part in Hue's streaming")
             x, y = where.get(d, (0.0, 0.0))
             # Hue's own room coordinates, for the Hue app's picture of the area: x across, z up, y towards the screen.
-            # A gradient light is given its start, middle and end, so its sections lie along it there too.
+            # A gradient light is given its start and its end, so its sections lie along it there too (the bridge takes
+            # no more than two positions for one light, and refuses the whole area with a 400 for a third).
             hx, hz = max(-1.0, min(1.0, x / 2)), max(-1.0, min(1.0, -y / 2))
             if int(hue.devices[d].get("segments") or 1) > 1 and (hue.devices[d].get("product") or {}).get("form") in UPRIGHT:
                 half = UPRIGHT_SPAN / 4  # a standing lamp's run from its foot up
-                pos = [{"x": hx, "y": 0.8, "z": max(-1.0, min(1.0, hz + k * half))} for k in (-1, 0, 1)]
+                pos = [{"x": hx, "y": 0.8, "z": max(-1.0, min(1.0, hz + k * half))} for k in (-1, 1)]
             elif int(hue.devices[d].get("segments") or 1) > 1:
                 half = GRADIENT_SPAN / 4
-                pos = [{"x": max(-1.0, min(1.0, hx + k * half)), "y": 0.8, "z": hz} for k in (-1, 0, 1)]
+                pos = [{"x": max(-1.0, min(1.0, hx + k * half)), "y": 0.8, "z": hz} for k in (-1, 1)]
             else:
                 pos = [{"x": hx, "y": 0.8, "z": hz}]
             locations.append({"service": {"rid": ent, "rtype": "entertainment"}, "positions": pos})

@@ -236,7 +236,7 @@ async def main():
             pc.sendto(frame, ("127.0.0.1", pcport2))
             await asyncio.sleep(1 / 30)
         made = gh.posts[0][1]["locations"]["service_locations"][0]["positions"] if gh.posts else []
-        check("the area it makes gives the light its start, middle and end", len(made), 3)
+        check("the area it makes gives the light its start and its end, all a bridge takes", len(made), 2)
         out2.flush()
         last = (frames_from(open(out2.name, "rb").read()) or [{}])[-1]
         check("its first section is red and its last blue", (last.get(0, (0, 0, 0))[0] > 0.7, last.get(6, (0, 0, 0))[2] > 0.7), (True, True))
