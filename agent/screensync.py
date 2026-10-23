@@ -67,6 +67,7 @@ SPREAD = 0.15            # how far across the screen a light looks, as a share o
 SPREAD_V = 0.3           # and up and down, as a share of its height: a bar behind a monitor sees most of it
 NANO_SIZE = 0.8          # how much of the screen a Nanoleaf set spans, in screen units (2 is the screen's width)
 GRADIENT_SPAN = 2.0      # and a gradient light's sections, the screen's width unless the positions page says
+BEAT_S = 30.0            # how often a running sync says how it is going, for the hub's log
 UPRIGHT_SPAN = 1.2       # a standing one's (a gradient Signe), up its height: most of the screen's
 NANO_EVERY = 2           # a Nanoleaf takes every second beat, 25 a second: it glides between them by itself
 REACH = 3.0              # how far outside the screen a light may stand, in screen units
@@ -440,6 +441,7 @@ class ScreenSync:
         count_from, counted = time.monotonic(), 0
         beat = time.monotonic()
         looked = 0.0  # when the room's lights and the app were last looked at: five times a second is plenty
+        told_at, told_n = time.monotonic(), self._frame_n
         while True:
             try:
                 # on a beat, so the time each pass takes does not slow the stream down
@@ -480,6 +482,10 @@ class ScreenSync:
                 if look:
                     looked = now
                     self._announce()
+                if now - told_at >= BEAT_S:
+                    if self.streaming:
+                        self._tell((self._frame_n - told_n) / (now - told_at))
+                    told_at, told_n = now, self._frame_n
             except asyncio.CancelledError:
                 return
             except Exception as exc:  # noqa: BLE001
@@ -488,6 +494,28 @@ class ScreenSync:
                 async with self._lock:
                     await self._end(restore=True)
                 self._retry_at = time.monotonic() + RETRY_S
+
+    def _tell(self, pc_fps: float) -> None:
+        """Every half minute while streaming, what is going on in numbers, for the hub's log: the frames coming in,
+        the screen's average colour, what each light is being sent, and how much of the area found its lights. A
+        sync that says it is following while the lights do not move can be read from that."""
+        screen = None
+        if self._frame:
+            rgb = self._frame[2]
+            n = max(1, len(rgb) // 3)
+            screen = "#%02x%02x%02x" % tuple(sum(rgb[i::3]) // n for i in range(3))
+        per_light: Dict[str, str] = {}
+        for k, c in self._shown.items():
+            d = self._chan_light.get(k[1]) if k[0] == "h" else k[1]
+            if d and d not in per_light:
+                per_light[d] = "#%02x%02x%02x" % tuple(int(round(_enc(v) * 255)) for v in c)
+        names = {d: str(((getattr(self.hue, "devices", {}) or {}).get(d) or {}).get("name") or d) for d in per_light}
+        beat = {"pc_fps": round(pc_fps, 1), "sent_fps": round(self._fps, 1), "screen": screen,
+                "channels": len((self.area or {}).get("channels") or []), "matched": len(self._chan_light),
+                "points": len(self._points), "lights": {names[d]: v for d, v in per_light.items()},
+                "dtls": bool(self._dtls is not None and getattr(self._dtls, "connected", True))}
+        LOG.info("screen sync: %s", beat)
+        self.send({"type": "screen_sync_beat", "beat": beat})
 
     async def _begin(self, room: str) -> None:
         placed = [p for p in self.placed(room) if p["on"]]

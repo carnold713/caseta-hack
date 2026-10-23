@@ -484,6 +484,10 @@ function handleAgentMessage(ws, msg) {
       if (agentInfo) { agentInfo.screen_sync = msg.screen_sync || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     }
+    // every half minute while a sync runs: frames in, the screen's colour, what each light is sent (screensync.py _tell)
+    case 'screen_sync_beat':
+      log(`screen sync running: ${JSON.stringify(msg.beat || {}).slice(0, 600)}`);
+      break;
     case 'nanoleaf':
       if (agentInfo) { agentInfo.nanoleaf = msg.nanoleaf || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;

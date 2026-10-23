@@ -220,7 +220,8 @@ async def main():
     await asyncio.sleep(0.6)
     gh = GradientHue()
     cfg3 = {"settings": {"screen_sync": {"room": "office", "lights": {}}}}
-    g = S.ScreenSync(gh, room_lights=lambda r: ["hue_g"], config=lambda: cfg3, send=lambda m: None, room_name=lambda r: "Office",
+    said = []
+    g = S.ScreenSync(gh, room_lights=lambda r: ["hue_g"], config=lambda: cfg3, send=said.append, room_name=lambda r: "Office",
                      port=pcport2, stream_port=sport2)
     try:
         check("a gradient light says it has sections, and spans the screen", {k: v for k, v in g.placed("office")[0].items() if k in ("segments", "span", "flip")},
@@ -237,6 +238,11 @@ async def main():
             await asyncio.sleep(1 / 30)
         made = gh.posts[0][1]["locations"]["service_locations"][0]["positions"] if gh.posts else []
         check("the area it makes gives the light its start and its end, all a bridge takes", len(made), 2)
+        g._tell(30.0)
+        beat = next((m["beat"] for m in said if m.get("type") == "screen_sync_beat"), {})
+        check("a running sync says how it is going: every channel found its light, and what the light is sent",
+              (beat.get("pc_fps"), beat.get("channels"), beat.get("matched"), list(beat.get("lights", {})), str(beat.get("screen", ""))[:1]),
+              (30.0, 7, 7, ["Gradient tube"], "#"))
         out2.flush()
         last = (frames_from(open(out2.name, "rb").read()) or [{}])[-1]
         check("its first section is red and its last blue", (last.get(0, (0, 0, 0))[0] > 0.7, last.get(6, (0, 0, 0))[2] > 0.7), (True, True))
