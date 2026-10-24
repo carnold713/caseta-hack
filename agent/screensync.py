@@ -522,7 +522,9 @@ class ScreenSync:
             if d and d not in per_light:
                 per_light[d] = "#%02x%02x%02x" % tuple(int(round(_enc(v) * 255)) for v in c)
         names = {d: str(((getattr(self.hue, "devices", {}) or {}).get(d) or {}).get("name") or d) for d in per_light}
+        pc = self._about.get(self._pc[0]) if self._pc else None
         beat = {"pc_fps": round(pc_fps, 1), "sent_fps": round(self._fps, 1), "screen": screen,
+                "pc": {k: (pc or {}).get(k) for k in ("name", "v", "capture")},
                 "channels": len((self.area or {}).get("channels") or []), "matched": len(self._chan_light),
                 "points": len(self._points), "lights": {names[d]: v for d, v in per_light.items()},
                 "dtls": bool(self._dtls is not None and getattr(self._dtls, "connected", True))}
@@ -726,7 +728,9 @@ class ScreenSync:
 
 def about_pc(info: dict) -> dict:
     """What a computer's query says of it, kept short: {name, os, displays: [{id, name, main}], display}."""
-    out: Dict[str, Any] = {k: str(info[k])[:40] for k in ("name", "os") if info.get(k)}
+    out: Dict[str, Any] = {k: str(info[k])[:40] for k in ("name", "os", "v") if info.get(k)}
+    if info.get("capture"):
+        out["capture"] = str(info["capture"])[:80]  # how it is looking at its screen, and what it last saw
     ds = info.get("displays")
     if isinstance(ds, list):
         out["displays"] = [{"id": str(d.get("id"))[:32], "name": str(d.get("name") or "Display")[:60], "main": d.get("main") is True}

@@ -234,7 +234,7 @@ class Capture {
   void close() {
     if (dup_ && held_) dup_->ReleaseFrame();
     held_ = false;
-    staging_.Reset(); srv_.Reset(); mip_.Reset(); dup_.Reset(); ctx_.Reset(); dev_.Reset();
+    whole_.Reset(); staging_.Reset(); srv_.Reset(); mip_.Reset(); dup_.Reset(); ctx_.Reset(); dev_.Reset();
     w_ = h_ = 0;
   }
   bool is_open() const { return dup_ != nullptr; }
@@ -250,34 +250,90 @@ class Capture {
     if (FAILED(hr)) { close(); return -1; }
     held_ = true;
     int got = 0;
+    // The frame is held until its pixels have been read back: the copies are only queued until then, and the screen's
+    // surface is Windows' again the moment it is released, so a card that runs them later would read what is no
+    // longer the screen (black, on a real card; the test machine's software one never showed it)
     if (info.LastPresentTime.QuadPart != 0 || !w_) {  // a mouse move alone changes nothing the lights show
       ComPtr<ID3D11Texture2D> tex;
       if (SUCCEEDED(res.As(&tex)) && prepare(tex.Get())) {
         ctx_->CopySubresourceRegion(mip_.Get(), 0, 0, 0, 0, tex.Get(), 0, nullptr);
-        got = 1;
+        got = read(cells) ? 1 : 0;
+        // A shrunk picture that comes back black while the whole one is not: this card's mips are no good for the
+        // screen, so it is read whole from now on (looked at again every half minute while the picture stays black)
+        if (got && gpu && core::brightest(cells) < 8 && mono() - checked_at_ > 30) {
+          checked_at_ = mono();
+          core::Cells whole{};
+          if (read_whole(whole) && core::brightest(whole) >= 8) {
+            logf("the graphics card's shrunk picture came back black; reading the screen whole instead");
+            use_whole();
+            cells = whole;
+          }
+        }
+        if (got && !described_) {
+          described_ = true;
+          long long sum[3] = {0, 0, 0};
+          for (int i = 0; i < core::CELLS; i++) sum[i % 3] += cells[i];
+          logf("first look: %s, %d x %d of %u x %u (format %d), average %lld %lld %lld", gpu ? "shrunk by the card" : "read whole", sw, sh,
+               w_, h_, int(fmt_), sum[0] / 144, sum[1] / 144, sum[2] / 144);
+        }
       }
     }
     dup_->ReleaseFrame();
     held_ = false;
-    if (!got) return 0;
-    if (gpu) ctx_->GenerateMips(srv_.Get());
-    ctx_->CopySubresourceRegion(staging_.Get(), 0, 0, 0, 0, mip_.Get(), level_, nullptr);
-    D3D11_MAPPED_SUBRESOURCE m;
-    if (FAILED(ctx_->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &m))) return 0;
-    cells = core::grid(static_cast<const uint8_t*>(m.pData), sw, sh, int(m.RowPitch));
-    ctx_->Unmap(staging_.Get(), 0);
-    return 1;
+    return got;
+  }
+  std::string describe() const {
+    return std::string(gpu ? "shrunk " : "whole ") + std::to_string(sw) + "x" + std::to_string(sh) + " of " + std::to_string(w_) + "x" +
+           std::to_string(h_);
   }
 
  private:
   ComPtr<ID3D11Device> dev_;
   ComPtr<ID3D11DeviceContext> ctx_;
   ComPtr<IDXGIOutputDuplication> dup_;
-  ComPtr<ID3D11Texture2D> mip_, staging_;
+  ComPtr<ID3D11Texture2D> mip_, staging_, whole_;
   ComPtr<ID3D11ShaderResourceView> srv_;
   UINT w_ = 0, h_ = 0, level_ = 0;
-  bool held_ = false;
+  DXGI_FORMAT fmt_ = DXGI_FORMAT_UNKNOWN;
+  bool held_ = false, described_ = false;
+  double checked_at_ = -1e9;
   std::string last_logged_;
+
+  // the level read back (the screen shrunk, or the screen whole), into cells; Map waits for the queued copies
+  bool read(core::Cells& cells) {
+    if (gpu) ctx_->GenerateMips(srv_.Get());
+    ctx_->CopySubresourceRegion(staging_.Get(), 0, 0, 0, 0, mip_.Get(), level_, nullptr);
+    D3D11_MAPPED_SUBRESOURCE m;
+    if (FAILED(ctx_->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &m))) return false;
+    cells = core::grid(static_cast<const uint8_t*>(m.pData), sw, sh, int(m.RowPitch));
+    ctx_->Unmap(staging_.Get(), 0);
+    return true;
+  }
+  bool make_whole() {
+    if (whole_) return true;
+    D3D11_TEXTURE2D_DESC sd{};
+    sd.Width = w_; sd.Height = h_; sd.MipLevels = 1; sd.ArraySize = 1; sd.Format = fmt_;
+    sd.SampleDesc.Count = 1; sd.Usage = D3D11_USAGE_STAGING; sd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    return SUCCEEDED(dev_->CreateTexture2D(&sd, nullptr, &whole_));
+  }
+  bool read_whole(core::Cells& cells) {
+    if (!make_whole()) return false;
+    ctx_->CopySubresourceRegion(whole_.Get(), 0, 0, 0, 0, mip_.Get(), 0, nullptr);
+    D3D11_MAPPED_SUBRESOURCE m;
+    if (FAILED(ctx_->Map(whole_.Get(), 0, D3D11_MAP_READ, 0, &m))) return false;
+    cells = core::grid(static_cast<const uint8_t*>(m.pData), int(w_), int(h_), int(m.RowPitch));
+    ctx_->Unmap(whole_.Get(), 0);
+    return true;
+  }
+  void use_whole() {
+    gpu = false;
+    level_ = 0;
+    staging_ = whole_;
+    sw = int(w_);
+    sh = int(h_);
+    whole_by_choice_ = true;
+  }
+  bool whole_by_choice_ = false;  // kept for the life of the app: a card whose mips came back black once does again
 
   // A texture the screen's size with every mip level, which the card fills by averaging down; the level read back is
   // the smallest still at least 160 x 90, about 10 x 10 pixels a cell. A card that cannot make mips for the screen's
@@ -286,14 +342,14 @@ class Capture {
     D3D11_TEXTURE2D_DESC d;
     tex->GetDesc(&d);
     if (mip_ && d.Width == w_ && d.Height == h_) return true;
-    mip_.Reset(); srv_.Reset(); staging_.Reset();
-    w_ = d.Width; h_ = d.Height; level_ = 0; gpu = false;
+    mip_.Reset(); srv_.Reset(); staging_.Reset(); whole_.Reset();
+    w_ = d.Width; h_ = d.Height; level_ = 0; gpu = false; fmt_ = d.Format; described_ = false;
     D3D11_TEXTURE2D_DESC md{};
     md.Width = d.Width; md.Height = d.Height; md.MipLevels = 0; md.ArraySize = 1; md.Format = d.Format;
     md.SampleDesc.Count = 1; md.Usage = D3D11_USAGE_DEFAULT;
     md.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET; md.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
     UINT support = 0;
-    if (SUCCEEDED(dev_->CheckFormatSupport(d.Format, &support)) && (support & D3D11_FORMAT_SUPPORT_MIP_AUTOGEN) &&
+    if (!whole_by_choice_ && SUCCEEDED(dev_->CheckFormatSupport(d.Format, &support)) && (support & D3D11_FORMAT_SUPPORT_MIP_AUTOGEN) &&
         SUCCEEDED(dev_->CreateTexture2D(&md, nullptr, &mip_)) && SUCCEEDED(dev_->CreateShaderResourceView(mip_.Get(), nullptr, &srv_))) {
       gpu = true;
       while ((w_ >> (level_ + 1)) >= 160 && (h_ >> (level_ + 1)) >= 90) level_++;
@@ -506,6 +562,12 @@ class Sync {
       about.o["v"] = Json::of(std::string(VERSION));
       about.o["displays"] = displays_json(shown());
       about.o["display"] = display.empty() ? Json() : Json::of(display);
+      // how it is looking, and what it last saw, for the connector's log: "the lights stay dark" can be read from there
+      char seen[8];
+      long long avg[3] = {0, 0, 0};
+      for (int i = 0; i < core::CELLS; i++) avg[i % 3] += last[i];
+      snprintf(seen, sizeof seen, "#%02x%02x%02x", int(avg[0] / 144), int(avg[1] / 144), int(avg[2] / 144));
+      about.o["capture"] = Json::of(cap.is_open() ? cap.describe() + ", saw " + seen : std::string("not looking"));
       link.tick(about.dump());
       // the display picked in the app, when that choice is newer than the last one made here
       std::string id;

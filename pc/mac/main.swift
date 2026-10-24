@@ -372,6 +372,14 @@ final class Sync {
             }
             var about: [String: Any] = ["name": me, "os": "mac", "v": version, "displays": displaysJSON(displays)]
             about["display"] = orNull(capture.display)
+            // how it is looking, and what it last saw, for the connector's log
+            if let c = last {
+                var sum = [0, 0, 0]
+                for i in 0..<c.count { sum[i % 3] += Int(c[i]) }
+                about["capture"] = String(format: "screencapturekit 160 across, saw #%02x%02x%02x", sum[0] / 144, sum[1] / 144, sum[2] / 144)
+            } else {
+                about["capture"] = capture.running ? "screencapturekit, nothing seen yet" : "not looking"
+            }
             link.tick(about: about)
             let st = link.last
             if let w = Core.wantedDisplay(st, me: me, pickedAt: settings.num("display_at", 0)) {
