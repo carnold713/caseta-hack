@@ -666,7 +666,7 @@ static void serve_one(SOCKET c) {
       body.assign(reinterpret_cast<const char*>(SETTINGS_HTML), SETTINGS_HTML_LEN);
     } else if (method == "GET" && path == "state") {
       code = 200; type = "application/json"; body = settings_state().dump();
-    } else if (method == "POST" && (path == "set" || path == "positions")) {
+    } else if ((method == "GET" || method == "POST") && (path == "set" || path == "positions")) {
       if (path == "set") settings_change(Json::parse(core::query_value(target, "b")));
       else open_positions();
       code = 200; type = "application/json"; body = settings_state().dump();

@@ -48,8 +48,9 @@ input[type=text] { width: 150px; }
 <script>
 const base = location.pathname.replace(/[^/]*$/, '');
 const $ = id => document.getElementById(id);
-// a change goes as ?b=<json>: the Mac's window and the Windows app's small server both read it there
-const post = (path, body) => fetch(base + path + '?b=' + encodeURIComponent(JSON.stringify(body || {})), { method: 'POST' }).then(r => r.json()).then(show);
+// a change goes as ?b=<json> on a plain request: the Mac's window (whose web view hands an app only its plain requests)
+// and the Windows app's small server both read it there
+const post = (path, body) => fetch(base + path + '?b=' + encodeURIComponent(JSON.stringify(body || {}))).then(r => r.json()).then(show);
 let editing = false;
 function show(s) {
   $('state').textContent = s.status;
