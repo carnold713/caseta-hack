@@ -127,6 +127,7 @@ int main() {
   q.o["at"] = Json::of(1761264000000.0);
   check("what it says of itself is JSON", q.dump(), std::string(R"({"at":1761264000000,"name":"DESK \"1\"","v":"2.0"})"));
   check("and reads back", Json::parse(q.dump())["name"].str(), std::string("DESK \"1\""));
+  check("a time with a fraction of a millisecond reads back as itself", Json::parse(Json::of(1792810123456.789).dump()).n, 1792810123456.789);
   check("a change from the Settings page", query_value("/tok/set?b=%7B%22fps%22%3A12%7D", "b"), std::string("{\"fps\":12}"));
   check("and nothing when there is none", query_value("/tok/state", "b"), std::string(""));
 

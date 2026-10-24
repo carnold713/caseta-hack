@@ -77,7 +77,7 @@
 using Microsoft::WRL::ComPtr;
 using core::Json;
 
-static const char* VERSION = "2.4";
+static const char* VERSION = "2.5";
 static const wchar_t* APP = L"CasetaScreenSync";
 
 // ---------- small things ----------
