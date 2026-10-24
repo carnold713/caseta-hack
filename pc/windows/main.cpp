@@ -77,7 +77,7 @@
 using Microsoft::WRL::ComPtr;
 using core::Json;
 
-static const char* VERSION = "2.5";
+static const char* VERSION = "2.6";
 static const wchar_t* APP = L"CasetaScreenSync";
 
 // ---------- small things ----------
@@ -854,7 +854,7 @@ static void open_window(const std::string& url, int w, int h) {
 }
 static void open_positions() {
   const std::string url = core::positions_url(g_sync.link.last());
-  if (!url.empty()) open_window(url, 420, 860);
+  if (!url.empty()) open_window(url, 1100, 760);
 }
 
 // ---------- Settings: pc/settings.html, served on 127.0.0.1 with a token made for the run ----------

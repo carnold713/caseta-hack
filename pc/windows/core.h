@@ -372,7 +372,7 @@ inline std::string status_line(bool paused, bool gaming_paused, bool gaming, boo
 inline std::string positions_url(const Json& st) {
   const std::string app = st["app_url"].str(), room = st["room"].str();
   if (app.empty() || room.empty()) return "";
-  return app + "#room/" + room + "/screen";
+  return app + "#screen/" + room;
 }
 
 // The display picked in the app (the connector's "want_display"), when it is meant for this computer and is newer

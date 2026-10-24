@@ -60,7 +60,7 @@ check("the menu says what the room is doing", Core.statusLine(allowed: true, pau
 check("and when the screen is black", Core.statusLine(allowed: true, paused: false, black: true, found: true, address: nil, state: st).contains("protected video"), true)
 check("and when Screen Recording is not allowed", Core.statusLine(allowed: false, paused: false, black: false, found: true, address: nil, state: st), "Allow Screen Recording in System Settings")
 check("with no answer, where it is sending", Core.statusLine(allowed: true, paused: false, black: false, found: false, address: "192.168.1.92", state: [:]), "Sending to 192.168.1.92, no answer yet")
-check("the positions page", Core.positionsURL(st)?.absoluteString, "https://hub.example/#room/r1/screen")
+check("the positions page", Core.positionsURL(st)?.absoluteString, "https://hub.example/#screen/r1")
 check("a display picked in the app for another computer is not this one's", Core.wantedDisplay(st, me: "Other", pickedAt: 0) == nil, true)
 check("one for this computer, newer than the last pick here, is", Core.wantedDisplay(st, me: "Collins-MacBook", pickedAt: 5)?.id, "2")
 check("an older one is not", Core.wantedDisplay(st, me: "Collins-MacBook", pickedAt: 1761264000001) == nil, true)

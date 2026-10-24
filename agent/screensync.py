@@ -73,6 +73,8 @@ NANO_EVERY = 2           # a Nanoleaf takes every second beat, 25 a second: it g
 REACH = 3.0              # how far outside the screen a light may stand, in screen units
 RETRY_S = 15.0           # after a start that failed, how long before trying again
 REPLY_EVERY_S = 0.5      # how often a frame is answered with the state
+LIVE_EVERY_S = 0.35      # while the positions page watches: how often it is shown the screen and every light's colour
+WATCH_S = 12.0           # and for how long one request to watch lasts (the page asks again while it is open)
 
 # sRGB <-> linear light, so averages are taken the way light adds up
 _LIN = [((i / 255) / 12.92) if i <= 10 else (((i / 255) + 0.055) / 1.055) ** 2.4 for i in range(256)]
@@ -108,6 +110,52 @@ def weights(w: int, h: int, x: float, y: float) -> List[float]:
             out.append(math.exp(-((u - cu) ** 2) / (2 * SPREAD ** 2)) * math.exp(-((v - cv) ** 2) / (2 * SPREAD_V ** 2)))
     s = sum(out) or 1.0
     return [k / s for k in out]
+
+
+def zone_weights(w: int, h: int, rect: Tuple[float, float, float, float]) -> List[float]:
+    """How much each cell of a w x h grid counts towards a light that looks at a zone of the screen: (x0, y0, x1, y1)
+    in screen units, -1 to 1 either way. Every cell the zone covers counts as much as it is covered, evenly."""
+    x0, y0, x1, y1 = rect
+    u0, u1 = (max(-1.0, min(x0, x1)) + 1) / 2, (min(1.0, max(x0, x1)) + 1) / 2
+    v0, v1 = (max(-1.0, min(y0, y1)) + 1) / 2, (min(1.0, max(y0, y1)) + 1) / 2
+    out = []
+    for j in range(h):
+        oy = max(0.0, min(v1, (j + 1) / h) - max(v0, j / h))
+        for i in range(w):
+            out.append(max(0.0, min(u1, (i + 1) / w) - max(u0, i / w)) * oy)
+    s = sum(out)
+    if s <= 0:  # a zone too thin to cover a cell: its middle, as a point
+        return weights(w, h, (x0 + x1) / 2, (y0 + y1) / 2)
+    return [k / s for k in out]
+
+
+def region_weights(w: int, h: int, region: tuple) -> List[float]:
+    """A point (x, y), looked at around it as weights() does, or a zone (x0, y0, x1, y1), looked at evenly."""
+    return zone_weights(w, h, region) if len(region) == 4 else weights(w, h, region[0], region[1])
+
+
+def split_zone(rect: Tuple[float, float, float, float], n: int, upright: bool, flip: bool) -> List[Tuple[float, float, float, float]]:
+    """A zone cut into n equal parts for a light's n sections, in the sections' order: left to right, or for a light
+    standing up (or a zone taller than it is wide on the screen), from its foot to its top. Flipped, the other way."""
+    x0, y0, x1, y1 = rect
+    tall = upright or (y1 - y0) * 9 > (x1 - x0) * 16
+    parts = []
+    for k in range(n):
+        a, b = k / n, (k + 1) / n
+        if tall:
+            parts.append((x0, y1 - b * (y1 - y0), x1, y1 - a * (y1 - y0)))
+        else:
+            parts.append((x0 + a * (x1 - x0), y0, x0 + b * (x1 - x0), y1))
+    return parts[::-1] if flip else parts
+
+
+def zone_of(v: Any) -> Optional[Tuple[float, float, float, float]]:
+    """A zone as the positions page keeps it ({x0, y0, x1, y1}, on the screen), or None for one that is not one."""
+    if not isinstance(v, dict) or not all(isinstance(v.get(k), (int, float)) for k in ("x0", "y0", "x1", "y1")):
+        return None
+    x0, x1 = sorted(max(-1.0, min(1.0, float(v[k]))) for k in ("x0", "x1"))
+    y0, y1 = sorted(max(-1.0, min(1.0, float(v[k]))) for k in ("y0", "y1"))
+    return (x0, y0, x1, y1) if x1 - x0 >= 0.04 and y1 - y0 >= 0.04 else None
 
 
 def colour_of(rgb: bytes, wts: List[float]) -> Tuple[float, float, float]:
@@ -183,7 +231,7 @@ class ScreenSync:
         self.area: Optional[dict] = None         # the Hue entertainment area: {"id", "name", "channels": [...]}
         self._chan_light: Dict[int, str] = {}    # Hue channel -> the light it belongs to
         self._nanos: Dict[str, nanostream.NanoStream] = {}
-        self._points: Dict[tuple, Tuple[float, float]] = {}  # ("h", channel) or ("n", device, panel) -> (x, y)
+        self._points: Dict[tuple, tuple] = {}    # ("h", channel) or ("n", device, panel) -> (x, y), or a zone (x0, y0, x1, y1)
         self._members: Optional[str] = None      # what is following and where, to notice a change on the page
         self._room_streaming: Optional[str] = None
         self._started = False                    # something was switched into streaming (to put back if a start fails)
@@ -200,6 +248,9 @@ class ScreenSync:
         self._dtls: Optional[huestream.DtlsPsk] = None
         self._snapshot: Dict[str, dict] = {}
         self._wts: Dict[tuple, List[float]] = {}
+        self._gains: Dict[str, float] = {}       # each light's brightness from the positions page (1 as the screen is)
+        self._watch_until = 0.0                  # the positions page is watching until then (monotonic)
+        self._live_at = 0.0
         self._wts_for: Optional[Tuple[int, int]] = None
         self._target: Dict[tuple, Tuple[float, float, float]] = {}
         self._shown: Dict[tuple, Tuple[float, float, float]] = {}
@@ -258,6 +309,13 @@ class ScreenSync:
                 one["segments"] = segs
             if upright:
                 one["upright"] = True
+            # how bright it is shown, against the screen (1 is as the screen is), and the zone of the screen it looks at
+            gain = p.get("gain")
+            if isinstance(gain, (int, float)) and abs(gain - 1) > 1e-3:
+                one["gain"] = round(max(0.1, min(2.0, float(gain))), 3)
+            zone = zone_of(p.get("zone"))
+            if zone:
+                one["zone"] = dict(zip(("x0", "y0", "x1", "y1"), (round(v, 4) for v in zone)))
             out.append(one)
         return out
 
@@ -494,6 +552,9 @@ class ScreenSync:
                 if look:
                     looked = now
                     self._announce()
+                if now < self._watch_until and now - self._live_at >= LIVE_EVERY_S:
+                    self._live_at = now
+                    self.send({"type": "screen_sync_live", "live": self._live()})
                 if now - told_at >= BEAT_S:
                     if self.streaming:
                         self._tell((self._frame_n - told_n) / (now - told_at))
@@ -606,6 +667,12 @@ class ScreenSync:
                     by_light.setdefault(d, []).append((ch, hx, hz, self.area["index"].get(ch, ch)))
             for d, chans in by_light.items():
                 p = placed[d]
+                zone = zone_of(p.get("zone"))
+                if zone:  # a zone chosen on the positions page: the light's sections share it out, in their order
+                    ordered = sorted(chans, key=lambda c: (c[3], c[0]))
+                    for c, part in zip(ordered, split_zone(zone, len(ordered), p.get("upright", False), p.get("flip", False))):
+                        pts[("h", c[0])] = part
+                    continue
                 for ch, (dx, dy) in sections(chans, p.get("span", GRADIENT_SPAN), p.get("flip", False),
                                              p.get("upright", False)).items():
                     pts[("h", ch)] = (p["x"] + dx, p["y"] + dy)
@@ -614,8 +681,16 @@ class ScreenSync:
                 continue
             p = placed[d]
             size, flip = p.get("span", NANO_SIZE), p.get("flip", False)
+            zone = zone_of(p.get("zone"))
             for pid, dx, dy in ns.panels:
-                pts[("n", d, pid)] = (p["x"] + (-dx if flip else dx) * size, p["y"] + dy * size)
+                if zone:  # each panel looks at its own part of the zone, where it sits in the set
+                    zx0, zy0, zx1, zy1 = zone
+                    cx, cy = (zx0 + zx1) / 2 + (-dx if flip else dx) * (zx1 - zx0), (zy0 + zy1) / 2 + dy * (zy1 - zy0)
+                    hw, hh = (zx1 - zx0) / 6, (zy1 - zy0) / 6
+                    pts[("n", d, pid)] = (cx - hw, cy - hh, cx + hw, cy + hh)
+                else:
+                    pts[("n", d, pid)] = (p["x"] + (-dx if flip else dx) * size, p["y"] + dy * size)
+        self._gains = {d: float(p.get("gain") or 1.0) for d, p in placed.items()}
         if force or pts != self._points:
             self._points = pts
             self._wts_for = None
@@ -702,7 +777,7 @@ class ScreenSync:
         if not self._points:
             return
         if self._wts_for != (w, h):
-            self._wts = {k: weights(w, h, x, y) for k, (x, y) in self._points.items()}
+            self._wts = {k: region_weights(w, h, reg) for k, reg in self._points.items()}
             self._wts_for = (w, h)
         self._target = {k: colour_of(rgb, wt) for k, wt in self._wts.items()}
 
@@ -718,12 +793,41 @@ class ScreenSync:
             self._shown[k] = tuple(s[i] + (t[i] - s[i]) * a for i in range(3))
         self._beat += 1
         if self._dtls is not None and self.area is not None:
-            out = [(k[1], _enc(c[0]), _enc(c[1]), _enc(c[2])) for k, c in self._shown.items() if k[0] == "h"]
+            out = [(k[1], *self._sent(k, c)) for k, c in self._shown.items() if k[0] == "h"]
             self._seq = (self._seq + 1) & 0xFF
             self._dtls.send(huestream.message(self.area["id"], self._seq, out))
         if self._nanos and self._beat % NANO_EVERY == 0:
             for d, ns in self._nanos.items():
-                ns.send([(k[2], _enc(c[0]), _enc(c[1]), _enc(c[2])) for k, c in self._shown.items() if k[0] == "n" and k[1] == d])
+                ns.send([(k[2], *self._sent(k, c)) for k, c in self._shown.items() if k[0] == "n" and k[1] == d])
+
+    def _sent(self, k: tuple, c: Tuple[float, float, float]) -> Tuple[float, float, float]:
+        """What a channel or panel is sent: its colour, at its light's brightness from the positions page"""
+        d = self._chan_light.get(k[1]) if k[0] == "h" else k[1]
+        g = self._gains.get(d, 1.0) if d else 1.0
+        return _enc(c[0] * g), _enc(c[1] * g), _enc(c[2] * g)
+
+    # ----- the positions page, watching -----
+    def watch(self) -> None:
+        """The positions page is open: show it the screen and every light's colour for a while."""
+        self._watch_until = time.monotonic() + WATCH_S
+
+    def _live(self) -> Dict[str, Any]:
+        """What the screen looks like (the computer's grid, as hex) and what each light is being sent, section by
+        section in their order, for the positions page."""
+        grid = None
+        if self._frame and time.monotonic() - self._frame_at < IDLE_S:
+            w, h, rgb = self._frame
+            grid = {"w": w, "h": h, "rgb": rgb.hex()}
+        per: Dict[str, list] = {}
+        if self.streaming:
+            index = (self.area or {}).get("index") or {}
+            for k, c in list(self._shown.items()):
+                d = self._chan_light.get(k[1]) if k[0] == "h" else k[1]
+                if d:
+                    r, g, b = self._sent(k, c)
+                    order = (index.get(k[1], 0), k[1]) if k[0] == "h" else (0, str(k[2]))
+                    per.setdefault(d, []).append((order, "%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))))
+        return {"grid": grid, "lights": {d: [h for _o, h in sorted(v)] for d, v in per.items()}, "state": self.state()}
 
 
 def about_pc(info: dict) -> dict:

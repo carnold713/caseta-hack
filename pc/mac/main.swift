@@ -21,7 +21,7 @@ import Darwin
 import ScreenCaptureKit
 import WebKit
 
-let version = "2.1"
+let version = "2.2"
 let appName = "CasetaScreenSync"
 let home = FileManager.default.homeDirectoryForCurrentUser
 let logDir = home.appendingPathComponent("Library/Logs/\(appName)")

@@ -182,7 +182,8 @@ app.post('/api/hue', requireAuth, async (req, res) => {
 // "resume" is the old name for on.
 app.post('/api/screensync', requireAuth, async (req, res) => {
   const op = (req.body || {}).op;
-  if (!['on', 'off', 'resume'].includes(op)) return res.status(400).json({ error: 'op must be on or off' });
+  // "watch": the positions page is open, so the connector shows it the screen and the lights for a while
+  if (!['on', 'off', 'resume', 'watch'].includes(op)) return res.status(400).json({ error: 'op must be on or off' });
   try { res.json(await sendCommand({ type: `screensync_${op}` })); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
@@ -484,6 +485,10 @@ function handleAgentMessage(ws, msg) {
       if (agentInfo) { agentInfo.screen_sync = msg.screen_sync || null; broadcast({ type: 'agent', online: true, info: agentInfo }); }
       break;
     }
+    // while the positions page watches: the screen's grid and every light's colour, for the page alone (not logged)
+    case 'screen_sync_live':
+      broadcast({ type: 'screen_sync_live', live: msg.live || {} });
+      break;
     // every half minute while a sync runs: frames in, the screen's colour, what each light is sent (screensync.py _tell)
     case 'screen_sync_beat':
       log(`screen sync running: ${JSON.stringify(msg.beat || {}).slice(0, 600)}`);

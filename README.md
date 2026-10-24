@@ -361,11 +361,28 @@ to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
 
 Nanoleaf panels in the room follow too, through the controller's own streaming mode,
 each panel taking the colour from its own part of the screen. **Light positions**, under
-the switch, shows the screen on a wall with a dot for each light: drag each one to where
-it really stands (outside the screen it takes the nearest edge's colour), and switch off
-any that should stay out of it. A gradient light (a Play gradient tube or lightstrip)
-is a bar there: each of its sections takes its own part of the screen, the handle at its
-end sets how much, and Flip turns it round if its colours come out mirrored. One that
+the switch (or in the computer's tray menu, where it opens in a wide window of its own),
+is a page of its own showing the screen on a wall, live: while it is open the connector
+sends it what the computer is showing and the colour each light is being sent, so every
+light's dot is drawn in its own colour. Drag each one to where it really stands (outside
+the screen it takes the nearest edge's colour); everything snaps to the screen's own
+16 x 9 grid, carried on past its edges, unless **Snap to grid** is off, and a line shows
+when a light lines up with another or with the screen's middle or edge. Tap a light to
+select it: the part of the screen that drives it stays lit and the rest dims. Under the
+stage, the selected light has:
+
+- **Brightness**, 10 to 200%, for a light that comes out too bright or too dim beside
+  the others.
+- **Part of the screen**: Where it stands (the default), or a zone of its own: the left
+  or right edge, the top, the bottom, the middle or the whole screen. A zone is drawn on
+  the stage; drag it or pull its corners to choose exactly what the light follows. A
+  gradient light's sections share its zone, left to right, or foot to top for one that
+  stands.
+- A switch to leave it out, **Reset this light**, and **Start over** for the room.
+
+A gradient light (a Play gradient tube or lightstrip) is a bar in its sections' colours:
+each section takes its own part of the screen, the handle at its end sets how much, and
+**Sections run the other way** turns it round if its colours come out mirrored. One that
 stands up (a gradient Signe or Play table lamp) is an upright bar, foot to top. A
 computer with more than one display offers them at the top of the page too: the one
 picked there is the one it follows, and the newer choice wins between the app and the

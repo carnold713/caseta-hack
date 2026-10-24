@@ -112,7 +112,7 @@ int main() {
   check("the menu says what the room is doing", status_line(false, false, false, false, true, "", st), std::string("Collin Office \xc2\xb7 following"));
   check("and when the screen is black", status_line(false, false, false, true, true, "", st).find("protected video") != std::string::npos, true);
   check("with no answer, where it is sending", status_line(false, false, false, false, false, "192.168.1.92", Json()), std::string("Sending to 192.168.1.92, no answer yet"));
-  check("the positions page", positions_url(st), std::string("https://hub.example/#room/r1/screen"));
+  check("the positions page", positions_url(st), std::string("https://hub.example/#screen/r1"));
   std::string id; double at = 0;
   check("a display picked in the app for another computer is not this one's", wanted_display(st, "OTHER", 0, id, at), false);
   check("one for this computer, newer than the last pick here, is", wanted_display(st, "DESK", 5, id, at) && id == "d0.1" && at == 1761264000000.0, true);

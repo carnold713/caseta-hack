@@ -307,3 +307,14 @@ test('the display picked in the app for a computer to follow is kept, and anythi
   assert.strictEqual(validateConfig({ settings: { screen_sync: { room: 'a1', display: { id: '<b>', at: 5 } } } }).settings.screen_sync.display, undefined);
   assert.strictEqual(validateConfig({ settings: { screen_sync: { room: 'a1', display: { id: 'm1' } } } }).settings.screen_sync.display, undefined);
 });
+
+test("a light's brightness and its zone of the screen are kept, within bounds", () => {
+  const ss = validateConfig({ settings: { screen_sync: { room: 'a1', lights: {
+    h1: { x: 0, y: 0, gain: 1.5, zone: { x0: 0.5, y0: -2, x1: -0.25, y1: 0.3 } },
+    h2: { gain: 9, zone: { x0: 0, y0: 0, x1: 0.01, y1: 0.5 } },
+    h3: { gain: 1, zone: 'left' },
+  } } } }).settings.screen_sync.lights;
+  assert.deepStrictEqual(ss.h1, { x: 0, y: 0, gain: 1.5, zone: { x0: -0.25, y0: -1, x1: 0.5, y1: 0.3 } });
+  assert.deepStrictEqual(ss.h2, { gain: 2 }, 'a brightness past the top is the top, and a zone too small to look at is none');
+  assert.strictEqual(ss.h3, undefined, 'as the screen is, and no zone: nothing to keep');
+});

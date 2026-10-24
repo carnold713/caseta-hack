@@ -470,11 +470,37 @@ function syncPlaced(room) {
     if (segs > 1 || nano) Object.assign(one, { span: typeof m.span === 'number' ? m.span : (nano ? 0.8 : 2), flip: m.flip === true });
     if (segs > 1) one.segments = segs;
     if (segs > 1 && inventory.devices[id].upright) Object.assign(one, { upright: true, span: typeof m.span === 'number' ? m.span : 1.2 });
+    if (typeof m.gain === 'number' && m.gain !== 1) one.gain = m.gain;
+    if (m.zone) one.zone = m.zone;
     return one; });
 }
 const sendSync = () => { if (ws.readyState === 1) send({ type: 'screen_sync', screen_sync: syncStatus() }); };
 const syncSet = on => { SYNC.off = !on; if (on) SYNC.paused = false; };
+// The positions page watching: for a while it is shown a screen (a slow sweep of colour, warm on the left and cool on
+// the right) and each light's colour, as the connector would send them (screensync.py _live)
+let watchUntil = 0;
+setInterval(() => {
+  if (Date.now() > watchUntil || ws.readyState !== 1) return;
+  const t = Date.now() / 4000;
+  let rgb = '';
+  for (let j = 0; j < 9; j++) for (let i = 0; i < 16; i++) {
+    const r = Math.round(127 + 127 * Math.cos(t + i / 5)), g = Math.round(90 + 60 * Math.sin(t + j / 3)), b = Math.round(127 - 127 * Math.cos(t + i / 5));
+    rgb += [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+  const room = (((config || {}).settings || {}).screen_sync || {}).room || null;
+  const lights = {};
+  for (const p of syncPlaced(room)) {
+    const n = p.segments || 1;
+    lights[p.id] = Array.from({ length: n }, (_, k) => rgb.substr(((4 * 16) + Math.round(((p.x + 1) / 2) * 15 + (n > 1 ? k - n / 2 : 0)) % 16) * 6, 6));
+  }
+  send({ type: 'screen_sync_live', live: { grid: SYNC.pc ? { w: 16, h: 9, rgb } : null, lights, state: syncStatus().state } });
+}, 350);
 function syncCommand(m) {
+  if (m.action.type === 'screensync_watch') {
+    watchUntil = Date.now() + 12000;
+    send({ type: 'result', id: m.id, ok: true, detail: { watching: true } });
+    return;
+  }
   syncSet(m.action.type !== 'screensync_off');
   send({ type: 'result', id: m.id, ok: true, detail: syncStatus() });
   sendSync();

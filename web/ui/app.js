@@ -20,6 +20,7 @@ import * as roomScreen from '/ui/screens/room.js';
 import * as deviceScreen from '/ui/screens/device.js';
 import * as soonScreen from '/ui/screens/soon.js';
 import * as scenesScreen from '/ui/screens/scenes.js';
+import * as screenEditScreen from '/ui/screens/screenedit.js';
 import * as remotesScreen from '/ui/screens/remotes.js';
 import * as remoteScreen from '/ui/screens/remote.js';
 import * as timingScreen from '/ui/screens/timing.js';
@@ -272,9 +273,9 @@ const SCREENS = {
   home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen, scenes: scenesScreen,
   remotes: remotesScreen, remote: remoteScreen, timing: timingScreen,
   routines: routinesScreen, routine: routineScreen, setup: guidedScreen, activity: activityScreen,
-  settings: settingsScreen, add: addScreen, nightstand: nightstandScreen, widgets: widgetsScreen,
+  settings: settingsScreen, add: addScreen, nightstand: nightstandScreen, widgets: widgetsScreen, screen: screenEditScreen,
 };
-const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'settings', add: 'settings', widgets: 'settings', activity: 'home' };
+const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', screen: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'settings', add: 'settings', widgets: 'settings', activity: 'home' };
 const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines'], ['settings', 'gear', 'Settings']];
 // A screen draws the pages under it that it declares (screen.subs); any other sub page is not built yet.
 function screenFor(r) {
@@ -635,6 +636,8 @@ function connect() {
       }
       if (m.type === 'toast') toast(m.msg, { err: m.level === 'error' });
       if (m.type === 'button' || m.type === 'gesture') onLive(m);
+      // the positions page, watching: the screen and the lights' colours, painted in place rather than redrawn
+      if (m.type === 'screen_sync_live') { ctx.ui.syncLive = m.live || null; const sc = screenFor(route()); if (sc.onLive) sc.onLive(ctx, route()); }
       if (m.type === 'add_state' || m.type === 'add_heard' || m.type === 'add_log') onAdd(m);
       if (r.conn) onConn(r.conn);
       // 20 · Beyond the app: a shortcut runs once the home is loaded; the lock screen hears about every timer

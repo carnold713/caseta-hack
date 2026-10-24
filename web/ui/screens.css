@@ -295,38 +295,79 @@
 .room-grid { margin-top: 16px; padding-bottom: 8px; }
 /* the PC screen's row (screensync.js), between the scenes and the lights */
 .sync-rows { margin-top: 16px; }
-/* the PC screen's light positions (screensync.js screenSheet): the screen on a wall, a dot per light to drag */
-.ss { padding: 0 var(--gutter); }
-.ss > .group { margin: 0 0 16px; }
-.ss > .sheet-btns { padding: 0 0 8px; }
-.ss-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 20px; background: var(--bg);
-  box-shadow: inset 0 0 0 1px var(--line); touch-action: none; user-select: none; -webkit-user-select: none;
-  overflow: hidden; margin-bottom: 16px; }
-.ss-screen { position: absolute; border-radius: 6px; background: var(--surface-3); box-shadow: inset 0 0 0 2px var(--line);
-  display: flex; align-items: center; justify-content: center; }
-.ss-screen span { font-size: 13px; color: var(--text-3); }
-.ss-dot { position: absolute; transform: translate(-50%, -22px); display: flex; flex-direction: column; align-items: center;
-  gap: 4px; background: none; border: 0; padding: 0; color: var(--text-1); cursor: grab; touch-action: none; }
-.ss-disc { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  background: var(--copper); color: var(--solid-ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .28); transition: transform var(--standard, .24s) var(--ease, ease); }
-.ss-dot.held .ss-disc { transform: scale(1.12); }
-.ss-dot.out .ss-disc { background: var(--surface-3); color: var(--text-3); box-shadow: none; }
-.ss-name { font-size: 12px; line-height: 1.2; max-width: 96px; text-align: center; color: var(--text-2); }
-.ss-dot.held { cursor: grabbing; z-index: 2; }
-/* a gradient light: a bar as long as the part of the screen its sections take, a handle at its right end, and a mark at
-   the end its first section takes its colour from */
-.ss-span { position: absolute; height: 8px; margin-top: -4px; border-radius: 4px; background: var(--copper); opacity: .55; }
-.ss-span.out { background: var(--surface-3); }
-.ss-end { position: absolute; left: -3px; top: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--copper); }
-.ss-end.flip { left: auto; right: -3px; }
-.ss-len { position: absolute; right: -14px; top: -14px; width: 36px; height: 36px; border-radius: 50%; touch-action: none; cursor: ew-resize; }
-.ss-len::after { content: ''; position: absolute; left: 10px; top: 10px; width: 16px; height: 16px; border-radius: 50%;
+/* Light positions (screenedit.js): a page of its own. The stage is the screen on a wall, live, on the screen's own
+   grid; beside it on anything wide, under it on a phone, the selected light's inspector and the list of lights. */
+.screen:has(> .se-page) { max-width: 1240px; }
+.se-page { padding-bottom: 40px; }
+.se-over { margin: -4px var(--gutter) 16px; }
+.se-empty { margin: 24px var(--gutter) 0; }
+.se-wrap { display: grid; gap: 20px; padding: 0 var(--gutter); }
+@media (min-width: 820px) { .se-wrap { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; } }
+.se-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.se-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 16px; background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line); touch-action: none; user-select: none; -webkit-user-select: none; overflow: hidden; }
+.se-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.se-lines path { fill: none; vector-effect: non-scaling-stroke; }
+.se-lines .mi { stroke: var(--line); stroke-width: 1; opacity: .35; }
+.se-lines .ma { stroke: var(--line); stroke-width: 1; opacity: .9; }
+.se-stage:not(.snap) .se-lines .mi { opacity: 0; }
+.se-screen { position: absolute; border-radius: 4px; background: var(--surface-3); box-shadow: 0 0 0 2px var(--text-3); overflow: hidden; }
+.se-screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.se-mask { pointer-events: none; }
+.se-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-3); }
+.se-guide { position: absolute; pointer-events: none; background: var(--copper); opacity: .8; }
+.se-guide.v { top: 0; bottom: 0; width: 1px; }
+.se-guide.h { left: 0; right: 0; height: 1px; }
+/* a light: a disc in the colour it is being sent, its name under it */
+.se-dot { position: absolute; transform: translate(-50%, -14px); display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: 0; padding: 0; color: var(--text-1); cursor: grab; touch-action: none; z-index: 3; }
+.se-disc { width: 28px; height: 28px; border-radius: 50%; background: var(--copper); box-shadow: 0 0 0 2px var(--bg), 0 4px 12px rgba(0, 0, 0, .35);
+  transition: transform var(--standard, .24s) var(--ease, ease); }
+.se-dot.sel .se-disc { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text-1), 0 4px 12px rgba(0, 0, 0, .35); }
+.se-dot.held .se-disc { transform: scale(1.12); }
+.se-dot.held { cursor: grabbing; z-index: 4; }
+.se-dot.out .se-disc { background: var(--surface-3); box-shadow: none; }
+.se-name { font-size: 11px; line-height: 1.2; max-width: 90px; text-align: center; color: var(--text-2); text-shadow: 0 1px 2px var(--bg); }
+/* a gradient light: a bar of its sections' colours, as long as the part of the screen they take; the handle at its end
+   stretches it, the mark is where its first section is */
+.se-bar { position: absolute; height: 10px; margin-top: -5px; z-index: 2; }
+.se-bar.up { width: 10px; margin: 0 0 0 -5px; }
+.se-fill { position: absolute; inset: 0; border-radius: 5px; background: var(--copper); opacity: .9; }
+.se-bar.out .se-fill { background: var(--surface-3); }
+.se-end { position: absolute; left: -3px; top: -2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-1); }
+.se-end.flip { left: auto; right: -3px; }
+.se-bar.up .se-end { left: -2px; top: auto; bottom: -3px; }
+.se-bar.up .se-end.flip { top: -3px; bottom: auto; }
+.se-len { position: absolute; right: -16px; top: -13px; width: 36px; height: 36px; border-radius: 50%; touch-action: none; cursor: ew-resize; }
+.se-len::after { content: ''; position: absolute; left: 11px; top: 11px; width: 14px; height: 14px; border-radius: 50%;
   background: var(--text-1); box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
-/* a lamp that stands up (a gradient Signe): the bar runs up the screen, its first section at its foot, the handle on top */
-.ss-span.up { height: auto; width: 8px; margin: 0 0 0 -4px; }
-.ss-span.up .ss-end { top: auto; bottom: -3px; }
-.ss-span.up .ss-end.flip { left: -3px; right: auto; top: -3px; bottom: auto; }
-.ss-span.up .ss-len { right: auto; left: -14px; top: -14px; cursor: ns-resize; }
+.se-bar.up .se-len { right: auto; left: -13px; top: -16px; cursor: ns-resize; }
+/* a zone set by hand: a rectangle on the screen, its corners pulled on the selected light's */
+.se-zone { position: absolute; border: 1.5px dashed var(--text-2); border-radius: 3px; z-index: 1; pointer-events: none; }
+.se-zone.sel { border: 2px solid var(--text-1); pointer-events: auto; cursor: move; touch-action: none; }
+.se-zone.out { opacity: .4; }
+.se-zl { position: absolute; left: 4px; top: 2px; font-size: 10px; color: var(--text-1); text-shadow: 0 1px 2px #000; white-space: nowrap; }
+.se-h { position: absolute; width: 28px; height: 28px; touch-action: none; }
+.se-h::after { content: ''; position: absolute; left: 9px; top: 9px; width: 10px; height: 10px; border-radius: 2px; background: var(--text-1); box-shadow: 0 1px 4px #000; }
+.se-h.nw { left: -14px; top: -14px; cursor: nwse-resize; }
+.se-h.ne { right: -14px; top: -14px; cursor: nesw-resize; }
+.se-h.sw { left: -14px; bottom: -14px; cursor: nesw-resize; }
+.se-h.se { right: -14px; bottom: -14px; cursor: nwse-resize; }
+.se-hint { margin: 10px 0 0; }
+/* the inspector: the selected light, its colours now, how bright, which part of the screen */
+.se-insp { background: var(--surface-1); border-radius: 20px; padding: 16px; margin-bottom: 16px; }
+.se-ihead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.se-iname { margin: 0 0 2px; }
+.se-sws { display: flex; gap: 3px; margin: 14px 0 6px; height: 18px; }
+.se-sws i { flex: 1; border-radius: 4px; background: var(--surface-3); }
+.se-gain { margin: 12px 0 4px; }
+.se-gain .tm-range { margin-top: 10px; }
+.se-insp .chip-wrap { padding: 0; }
+.se-zhint { margin: 10px 0 4px; }
+.se-irow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.se-list { margin: 0 0 16px; }
+.se-row.sel .t { color: var(--text-1); font-weight: 600; }
+.se-sw1 { flex: none; width: 22px; height: 22px; border-radius: 50%; margin-right: 12px; background: var(--surface-3); }
 /* M11: a tile on a room presses to the file's 0.97, held while the finger is down, and opens from there (lightopen.js). */
 .room-grid .tile:active { transform: scale(.97); }
 .room-empty { margin-top: 16px; }
@@ -1402,6 +1443,3 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .wgp-dim em { flex: none; font-style: normal; font-size: 13px; color: var(--wg-sub); }
 .wgp.compact .wgp-dim b { font-size: 13px; }
 .wgp-dim .wgp-pwr { width: 40px; height: 40px; margin-left: 2px; }
-/* which display a computer with more than one follows, above the stage */
-.ss > .t-over { margin: 0 0 8px; }
-.ss .ss-displays { padding: 0; margin: 0 0 16px; }

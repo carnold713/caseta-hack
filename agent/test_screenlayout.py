@@ -238,6 +238,19 @@ async def main():
             await asyncio.sleep(1 / 30)
         made = gh.posts[0][1]["locations"]["service_locations"][0]["positions"] if gh.posts else []
         check("the area it makes gives the light its start and its end, all a bridge takes", len(made), 2)
+        # what the positions page is shown while it watches: the screen's grid, and each light's sections' colours
+        live = g._live()
+        check("the positions page is shown the screen and every section's colour",
+              (live["grid"]["w"], live["grid"]["h"], len(live["grid"]["rgb"]), len(live["lights"].get("hue_g", [])), live["state"]),
+              (16, 9, 864, 7, "syncing"))
+        first = live["lights"]["hue_g"][0]
+        # a light turned down on the page is sent darker
+        cfg3["settings"]["screen_sync"]["lights"] = {"hue_g": {"gain": 0.25}}
+        g._place_points("office")
+        dim = g._live()["lights"]["hue_g"][0]
+        check("a light at a quarter brightness is sent darker", int(dim[0:2], 16) < int(first[0:2], 16), True)
+        cfg3["settings"]["screen_sync"]["lights"] = {}
+        g._place_points("office")
         g._tell(30.0)
         beat = next((m["beat"] for m in said if m.get("type") == "screen_sync_beat"), {})
         check("a running sync says how it is going: every channel found its light, and what the light is sent",
@@ -269,6 +282,19 @@ async def main():
     check("flipped, its top is its foot", (round(down[4][1], 3), round(down[6][1], 3)), (-0.6, 0.6))
 
     # the pieces
+    # a zone of the screen: each cell it covers counts as much as it is covered, and nothing outside it counts
+    zw = S.zone_weights(16, 9, (-1.0, -1.0, 0.0, 1.0))
+    check("a zone over the left half looks only at the left half",
+          (round(sum(zw[j * 16 + i] for j in range(9) for i in range(8)), 6), max(zw[j * 16 + i] for j in range(9) for i in range(8, 16))), (1.0, 0.0))
+    half_cell = S.zone_weights(16, 9, (-1.0, -1.0, -1.0 + 1 / 16, 1.0))
+    check("a zone half a cell wide still looks at that cell", round(sum(half_cell[j * 16] for j in range(9)), 6), 1.0)
+    check("a zone cut for three sections, left to right", S.split_zone((-1.0, -0.5, 0.5, 0.5), 3, False, False),
+          [(-1.0, -0.5, -0.5, 0.5), (-0.5, -0.5, 0.0, 0.5), (0.0, -0.5, 0.5, 0.5)])
+    check("and for a lamp standing up, from its foot", S.split_zone((0.5, -1.0, 1.0, 1.0), 2, True, False),
+          [(0.5, 0.0, 1.0, 1.0), (0.5, -1.0, 1.0, 0.0)])
+    check("flipped, the other way", S.split_zone((-1.0, -0.5, 0.5, 0.5), 3, False, True)[0], (0.0, -0.5, 0.5, 0.5))
+    check("a zone from the page is kept to the screen", S.zone_of({"x0": 0.5, "y0": -2, "x1": -0.25, "y1": 0.3}), (-0.25, -1.0, 0.5, 0.3))
+    check("and one too small to look at is none", S.zone_of({"x0": 0.1, "y0": 0.1, "x1": 0.11, "y1": 0.5}), None)
     check("a light outside the screen looks at its nearest edge", S.weights(16, 9, 2.5, 0) == S.weights(16, 9, 1.0, 0), True)
     import nanostream as N
     offs = N.layout_offsets({"panelLayout": {"layout": {"positionData": [{"panelId": 1, "x": 0, "y": 0}, {"panelId": 2, "x": 0, "y": 100}]}}})

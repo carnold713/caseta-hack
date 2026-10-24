@@ -5,7 +5,7 @@
 // across the page at the wave token (60 ms per 100 px). Each tile, and the photograph's light, crossfades when the
 // ring reaches it or when its light's state arrives, whichever is later, so a slow bridge shows as a tile catching up
 // and never as a lie. The count settles last, and the toast offers Put back.
-import { syncRow, syncActions, screenSheet, screenActions } from '/ui/screens/screensync.js';
+import { syncRow, syncActions } from '/ui/screens/screensync.js';
 import { ahead } from '/ui/look.js';
 import { tile, roomPicture, pinButton } from '/ui/screens/parts.js';
 import { roomPower } from '/ui/screens/rooms.js';
@@ -22,7 +22,8 @@ import { wireOnOff } from '/ui/onoffdrag.js';
 export const sheets = setupSheets;
 export function sheetFor(c, r) {
   if (!r.sub) return null;
-  if (r.sub === 'screen') return { spec: screenSheet(c, r), parent: `room/${r.id}` };
+  // the positions page is a page of its own now (#screen/<id>); an older link (the computer's menu) is sent there
+  if (r.sub === 'screen') { queueMicrotask(() => location.replace(`#screen/${encodeURIComponent(r.id)}`)); return null; }
   const m = /^scene\/(.+)$/.exec(r.sub);
   if (m) {
     const p = c.data.presets().find(x => x.id === m[1]);
@@ -480,7 +481,6 @@ export const actions = {
   ...setupActions,
   ...sheetActs,
   ...syncActions,
-  ...screenActions,
   'room-on'(c, el) { roomPower(c, el.dataset.id, true); },
   'room-off'(c, el) { roomPower(c, el.dataset.id, false); },
   // a scene chip: one tap runs it, with Put back; hold it to change it, as a scene tile does on All scenes

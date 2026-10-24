@@ -110,7 +110,7 @@ enum Core {
     // The app's positions page for the room that follows, when the connector has said where the app is
     static func positionsURL(_ st: [String: Any]) -> URL? {
         guard let app = st["app_url"] as? String, !app.isEmpty, let room = st["room"] as? String, !room.isEmpty else { return nil }
-        return URL(string: "\(app)#room/\(room)/screen")
+        return URL(string: "\(app)#screen/\(room)")
     }
 
     // The display picked in the app (the connector's "want_display"), when it is meant for this computer and newer

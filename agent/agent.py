@@ -43,7 +43,7 @@ from nanoleaf import Nanoleaf
 from screensync import ScreenSync
 from sun import solar_noon, sun_times
 
-VERSION = "0.33.4"
+VERSION = "0.34.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -1337,6 +1337,9 @@ class Agent:
                 elif kind == "hue_pair":
                     detail = await self.hue.pair(str(action.get("host") or ""))
                     self.send({"type": "hue", "hue": self.hue.info()})
+                elif kind == "screensync_watch":
+                    self.sync.watch()  # the positions page is open: it is shown the screen and the lights, live
+                    detail = {"watching": True}
                 elif kind in ("screensync_on", "screensync_off", "screensync_resume"):
                     self.sync.set_on(kind != "screensync_off")
                     detail = self.sync.status()

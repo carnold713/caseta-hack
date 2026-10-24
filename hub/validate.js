@@ -205,6 +205,14 @@ function validateConfig(cfg) {
       // how long a gradient light or a Nanoleaf set is, in the same units, and whether it is turned round
       if (typeof v.span === 'number' && isFinite(v.span)) one.span = Math.round(Math.max(0.2, Math.min(6, v.span)) * 1000) / 1000;
       if (v.flip === true) one.flip = true;
+      // how bright it is shown (1 as the screen is), and the zone of the screen it looks at, on the screen itself
+      if (typeof v.gain === 'number' && isFinite(v.gain) && Math.abs(v.gain - 1) > 1e-3) one.gain = Math.round(Math.max(0.1, Math.min(2, v.gain)) * 1000) / 1000;
+      const z = v.zone;
+      if (z && typeof z === 'object' && ['x0', 'y0', 'x1', 'y1'].every(k => typeof z[k] === 'number' && isFinite(z[k]))) {
+        const c = k => Math.round(Math.max(-1, Math.min(1, z[k])) * 10000) / 10000;
+        const [x0, x1] = [c('x0'), c('x1')].sort((a, b) => a - b), [y0, y1] = [c('y0'), c('y1')].sort((a, b) => a - b);
+        if (x1 - x0 >= 0.04 && y1 - y0 >= 0.04) one.zone = { x0, y0, x1, y1 };
+      }
       if (Object.keys(one).length) lights[k] = one;
     }
     out.settings.screen_sync = { room, lights };
