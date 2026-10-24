@@ -30,7 +30,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <d3d11.h>
-#include <dxgi1_2.h>
+#include <dxgi1_6.h>
 #include <mstcpip.h>
 #include <psapi.h>
 #include <shellapi.h>
@@ -57,7 +57,7 @@
 using Microsoft::WRL::ComPtr;
 using core::Json;
 
-static const char* VERSION = "2.1";
+static const char* VERSION = "2.2";
 static const wchar_t* APP = L"CasetaScreenSync";
 
 // ---------- small things ----------
@@ -207,6 +207,8 @@ class Capture {
  public:
   std::string display;  // the one being looked at ("" until opened)
   bool gpu = false;     // shrunk by the card (false: read back whole, the slow way, on a card that cannot)
+  bool hdr = false;     // the screen is in HDR
+  bool newer = false;   // duplicated the newer way (a picture asked for in 8 bits)
   int sw = 0, sh = 0;   // the size read back
 
   bool open(const std::string& want) {
@@ -226,7 +228,18 @@ class Capture {
     // the card's time goes to the game first: this work waits behind everything else
     ComPtr<IDXGIDevice> dd;
     if (SUCCEEDED(dev_.As(&dd))) dd->SetGPUThreadPriority(-7);
-    if (FAILED(o1->DuplicateOutput(dev_.Get(), &dup_))) { close(); return false; }
+    // An HDR screen: asked for as an ordinary 8-bit picture, which Windows makes from it (the older way of asking
+    // gives some cards' HDR screens back black). The older way stays for a Windows without the newer one.
+    hdr = false;
+    ComPtr<IDXGIOutput6> o6;
+    if (SUCCEEDED(o.As(&o6))) {
+      DXGI_OUTPUT_DESC1 d1;
+      if (SUCCEEDED(o6->GetDesc1(&d1))) hdr = d1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+    }
+    ComPtr<IDXGIOutput5> o5;
+    const DXGI_FORMAT want8[] = {DXGI_FORMAT_B8G8R8A8_UNORM};
+    newer = SUCCEEDED(o.As(&o5)) && SUCCEEDED(o5->DuplicateOutput1(dev_.Get(), 0, 1, want8, &dup_));
+    if (!newer && FAILED(o1->DuplicateOutput(dev_.Get(), &dup_))) { close(); return false; }
     display = pick->id;
     if (display != last_logged_) { logf("following %s", pick->name.c_str()); last_logged_ = display; }
     return true;
@@ -284,7 +297,7 @@ class Capture {
   }
   std::string describe() const {
     return std::string(gpu ? "shrunk " : "whole ") + std::to_string(sw) + "x" + std::to_string(sh) + " of " + std::to_string(w_) + "x" +
-           std::to_string(h_);
+           std::to_string(h_) + (hdr ? " hdr" : "") + (newer ? "" : " (older way)") + " fmt " + std::to_string(int(fmt_));
   }
 
  private:
