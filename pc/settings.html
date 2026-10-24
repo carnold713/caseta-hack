@@ -1,0 +1,84 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Caseta screen sync</title>
+<style>
+:root { color-scheme: dark; --bg:#101719; --card:#182225; --inset:#202C2F; --line:#2A3639; --ink:#EEF2EF; --ink2:#93A09D;
+  --tide:#2FA59C; --amber:#F4A53C; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font: 15px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { padding: 20px 16px 24px; max-width: 460px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+#state { color: var(--ink2); margin: 0 0 18px; min-height: 21px; }
+.card { background: var(--card); border-radius: 18px; margin-bottom: 12px; overflow: hidden; }
+.row { display:flex; align-items:center; gap:12px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row .t { flex:1; }
+.row .d { display:block; color: var(--ink2); font-size: 13px; }
+button.big { width:100%; border:0; border-radius: 999px; padding: 14px; font: inherit; font-weight: 500;
+  background: var(--amber); color: #2B1A0B; cursor: pointer; margin-bottom: 12px; }
+button.big:disabled { background: var(--inset); color: var(--ink2); cursor: default; }
+button.ghost { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 999px;
+  padding: 8px 14px; font: inherit; cursor: pointer; }
+select, input[type=text] { background: var(--inset); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 10px; font: inherit; }
+input[type=text] { width: 150px; }
+.sw { appearance:none; width:46px; height:28px; border-radius:14px; background:var(--inset); position:relative;
+  cursor:pointer; flex:none; margin:0; }
+.sw::after { content:""; position:absolute; left:3px; top:3px; width:22px; height:22px; border-radius:50%;
+  background: var(--ink2); transition: transform .2s; }
+.sw:checked { background: var(--tide); }
+.sw:checked::after { transform: translateX(18px); background: #fff; }
+.hide { display:none; }
+</style></head><body><main>
+<h1>Screen sync</h1>
+<p id="state"></p>
+<button class="big" id="positions" disabled>Light positions</button>
+<div class="card">
+  <div class="row"><span class="t">Follow the screen</span><input type="checkbox" class="sw" id="follow"></div>
+  <div class="row hide" id="displayrow"><span class="t">Display</span><select id="display"></select></div>
+  <div class="row"><span class="t">Smoothness</span>
+    <select id="fps"><option value="12">12 a second</option><option value="20">20 a second</option><option value="30">30 a second</option><option value="60">60 a second</option><option value="120">120 a second</option><option value="240">240 a second</option></select></div>
+  <div class="row win"><span class="t">While a game is full screen</span>
+    <select id="game"><option value="gentle">Follow gently</option><option value="full">Keep up</option><option value="pause">Pause</option></select></div>
+</div>
+<div class="card">
+  <div class="row"><span class="t">Pi's address<span class="d" id="found"></span></span>
+    <input type="text" id="pi" placeholder="Find it" spellcheck="false" autocomplete="off"></div>
+  <div class="row"><span class="t" id="loginlabel">Open at login</span><input type="checkbox" class="sw" id="login"></div>
+</div>
+<script>
+const base = location.pathname.replace(/[^/]*$/, '');
+const $ = id => document.getElementById(id);
+// a change goes as ?b=<json>: the Mac's window and the Windows app's small server both read it there
+const post = (path, body) => fetch(base + path + '?b=' + encodeURIComponent(JSON.stringify(body || {})), { method: 'POST' }).then(r => r.json()).then(show);
+let editing = false;
+function show(s) {
+  $('state').textContent = s.status;
+  $('positions').disabled = !s.positions;
+  $('follow').checked = !s.paused;
+  $('fps').value = String(s.fps);
+  const ds = s.displays || [];
+  $('displayrow').classList.toggle('hide', ds.length < 2);
+  const opts = ds.map(d => d.id + '|' + d.name).join(';');
+  if ($('display').dataset.opts !== opts) {
+    $('display').dataset.opts = opts;
+    $('display').replaceChildren(...ds.map(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.name + (d.main ? ' (main)' : ''); return o; }));
+  }
+  $('display').value = s.display || (ds.find(d => d.main) || ds[0] || {}).id || '';
+  $('game').value = s.game;
+  if (!editing) $('pi').value = s.pi || '';
+  $('found').textContent = s.pi ? '' : (s.found ? 'Found at ' + s.found : 'Leave empty to find it');
+  $('login').checked = s.login;
+  $('loginlabel').textContent = s.os === 'mac' ? 'Open at login' : 'Start with Windows';
+  for (const el of document.querySelectorAll('.win')) el.classList.toggle('hide', s.os !== 'windows');
+}
+const load = () => fetch(base + 'state').then(r => r.json()).then(show).catch(() => {});
+$('positions').onclick = () => post('positions');
+$('follow').onchange = e => post('set', { paused: !e.target.checked });
+$('fps').onchange = e => post('set', { fps: Number(e.target.value) });
+$('game').onchange = e => post('set', { game: e.target.value });
+$('display').onchange = e => post('set', { display: e.target.value });
+$('login').onchange = e => post('set', { login: e.target.checked });
+$('pi').onfocus = () => { editing = true; };
+$('pi').onchange = e => { editing = false; post('set', { pi: e.target.value.trim() }); };
+load(); setInterval(load, 2000);
+</script></main></body></html>

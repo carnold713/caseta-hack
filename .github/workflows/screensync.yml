@@ -26,32 +26,45 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: pc/requirements.txt
-
-      - name: Install
-        run: |
-          python -m pip install -r pc/requirements.txt
-          python -m pip install "pyinstaller>=6,<7"
+      # the compiler from Visual Studio, on the PATH for the steps below
+      - uses: ilammy/msvc-dev-cmd@v1
 
       - name: Tests
-        env:
-          PYTHONIOENCODING: utf-8
-        run: python pc/test_screensync.py
+        shell: cmd
+        run: |
+          cl /nologo /O2 /EHsc /std:c++17 /W3 /utf-8 /Fe:test_core.exe pc\windows\test_core.cpp || exit /b 1
+          test_core.exe
 
+      # native: Desktop Duplication shrunk by the graphics card, a Win32 tray icon, no runtime to carry
       - name: Build the .exe
-        run: pyinstaller --onefile --noconsole --name CasetaScreenSync --collect-all dxcam pc/screensync.py
+        shell: cmd
+        run: |
+          python pc\windows\embed_page.py pc\settings.html pc\windows\page.h || exit /b 1
+          mkdir dist
+          cl /nologo /O2 /GL /MT /EHsc /std:c++17 /W3 /utf-8 /DUNICODE /D_UNICODE /Fe:dist\CasetaScreenSync.exe pc\windows\main.cpp /link /LTCG /SUBSYSTEM:WINDOWS d3d11.lib dxgi.lib ws2_32.lib psapi.lib shell32.lib user32.lib gdi32.lib advapi32.lib || exit /b 1
+          dir dist
 
-      # The runner has a desktop to look at; this proves the .exe starts, imports everything and can grab the screen
-      - name: The .exe looks at the screen once
+      # The runner has a desktop to look at; this proves the .exe starts, finds the displays, can grab the screen
+      # through the graphics card, and what that costs
+      - name: The .exe looks at the screen
         shell: pwsh
         run: |
           $p = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--selftest' -RedirectStandardOutput selftest.txt -Wait -PassThru -NoNewWindow
           Get-Content selftest.txt, selftest.json -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { exit 1 }
+
+      # The tray app itself, left running for a while, with how much memory and processor it used
+      - name: The .exe runs in the tray
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--pi','127.0.0.1' -PassThru
+          Start-Sleep -Seconds 20
+          $p.Refresh()
+          $alive = -not $p.HasExited
+          if ($alive) { "memory {0:N1} MB, processor {1:N2} s in 20 s" -f ($p.WorkingSet64 / 1MB), $p.TotalProcessorTime.TotalSeconds }
+          Stop-Process -Id $p.Id -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA\CasetaScreenSync\log.txt" -ErrorAction SilentlyContinue
+          if (-not $alive) { exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:
