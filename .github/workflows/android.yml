@@ -5,7 +5,8 @@
 # Signing. Android only installs an update over an app signed with the same key. If the repository has the secrets
 # CASETA_KEYSTORE_B64 (the keystore, base64), CASETA_KEYSTORE_PASSWORD, CASETA_KEY_ALIAS and CASETA_KEY_PASSWORD,
 # they sign it. Without them, one key is made on the first run and kept in the Actions cache, which holds it as long
-# as a build runs at least once a week; if it is ever lost, the next APK needs the old app uninstalled first.
+# as it is used at least once a week (android-key.yml looks at it every few days so that it always is); if it is ever
+# lost, the next APK needs the old app uninstalled first, and its release notes say so.
 name: Android APK
 
 on:
@@ -84,6 +85,9 @@ jobs:
         if: ${{ env.CASETA_KEYSTORE == '' }}
         run: |
           if [ ! -f "$HOME/caseta-sideload.jks" ]; then
+            # a new key: the app on a phone cannot be updated by this one, so the release says to uninstall it first
+            echo "NEW_KEY=1" >> "$GITHUB_ENV"
+            echo "::warning::A new signing key was made: phones need the old app uninstalled before this one installs"
             keytool -genkeypair -v -keystore "$HOME/caseta-sideload.jks" -alias caseta -keyalg RSA -keysize 2048 \
               -validity 10000 -storepass caseta-sideload -keypass caseta-sideload -dname "CN=Caseta, O=Home"
           fi
@@ -112,6 +116,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           notes="Built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}, version 1.${{ github.run_number }}. Open this page on the phone and tap caseta.apk to install or update."
+          if [ -n "$NEW_KEY" ]; then
+            notes="$notes This build is signed with a new key: if Android says App not installed, uninstall Caseta first, then install this one."
+          fi
           if gh release view android-latest >/dev/null 2>&1; then
             gh release upload android-latest caseta.apk --clobber
             gh release edit android-latest --notes "$notes" --prerelease

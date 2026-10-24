@@ -1,0 +1,27 @@
+# The Android app's signing key lives in the Actions cache (android.yml), and GitHub drops a cache nobody has used for
+# seven days. Android only installs an update signed with the same key, so a lost key means uninstalling the app (and
+# its widgets and sign-in) on every phone. This looks at the key every few days, which is what keeps it.
+name: Android signing key kept
+
+on:
+  schedule:
+    - cron: '23 7 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look at the key
+        id: key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/caseta-sideload.jks
+          key: caseta-sideload-key-v1
+      - name: Say so if it is gone
+        if: ${{ steps.key.outputs.cache-hit != 'true' }}
+        run: |
+          echo "::warning::The Android signing key is not in the cache: the next APK will need the old app uninstalled first"
