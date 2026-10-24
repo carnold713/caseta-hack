@@ -228,6 +228,16 @@ fs.link.state = {"want_display": {"id": "1", "at": fs.settings["display_at"] + 1
 fs._from_app()
 check("a newer one for this computer is followed", (fs.screen.display, fs.settings["display"]), ("1", "1"))
 html = urllib.request.urlopen(url).read().decode()
+# its script has to run at all: a stray line break in a string once left the whole window blank
+import re as _re
+import shutil as _sh
+import subprocess as _sp
+script = _re.search(r"<script>(.*)</script>", html, _re.S).group(1)
+if _sh.which("node"):
+    js = pathlib.Path(tempfile.mkdtemp()) / "page.js"
+    js.write_text(script, encoding="utf-8")
+    r = _sp.run(["node", "--check", str(js)], capture_output=True, text=True)
+    check("the page's script parses", (r.returncode, r.stderr.strip()[:200]), (0, ""))
 check("the page is there", "Light positions" in html and "\u2014" not in html and "\u2013" not in html, True)
 try:
     urllib.request.urlopen(url.replace(page.token, "guess") + "state")

@@ -57,7 +57,7 @@ GRID_W, GRID_H = 16, 9
 LOST_S = 10.0           # no answer from the connector for this long: look for it again
 TELL_S = 10.0           # and how often, while it answers, this computer says which displays it has
 APP = "CasetaScreenSync"
-VERSION = "1.4"
+VERSION = "1.5"
 # How many times a second to look at the screen: Settings' choices. The lights are sent 50 updates a second and show
 # about 25, so past 50 a faster look makes them no smoother; it only lets a change reach them a few milliseconds
 # sooner, for many times the work here (a full-screen game still follows its own setting).
@@ -870,7 +870,7 @@ function show(s) {
   $('fps').value = String(s.fps);
   const ds = s.displays || [];
   $('displayrow').classList.toggle('hide', ds.length < 2);
-  const opts = ds.map(d => d.id + '|' + d.name).join('\n');
+  const opts = ds.map(d => d.id + '|' + d.name).join(';');
   if ($('display').dataset.opts !== opts) {
     $('display').dataset.opts = opts;
     $('display').replaceChildren(...ds.map(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.name + (d.main ? ' (main)' : ''); return o; }));
@@ -1057,10 +1057,30 @@ def tray(sync: Sync, page: SettingsPage, open_now: bool = False) -> None:
         sync.stop.set()
         icon.stop()
 
+    # The displays, looked up every two seconds off the main thread (refresh, below) so the menu never waits on them:
+    # with more than one, a Display submenu picks which the lights follow.
+    shown: List[dict] = []
+
+    def following() -> Optional[str]:
+        ids = [x["id"] for x in shown]
+        want = sync.settings["display"]
+        return want if want in ids else next((x["id"] for x in shown if x["main"]), ids[0] if ids else None)
+
+    def pick(did: str):  # noqa: ANN202
+        def go(icon, item) -> None:  # noqa: ANN001, ARG001
+            sync.set_display(did)
+            icon.update_menu()
+        return go
+
+    def display_items():  # noqa: ANN202
+        return [pystray.MenuItem(x["name"], pick(x["id"]), checked=lambda item, i=x["id"]: following() == i, radio=True)
+                for x in shown]
+
     paused = lambda item: sync.paused or (sync.link.state or {}).get("state") == "paused"  # noqa: E731
     menu = pystray.Menu(
         pystray.MenuItem(lambda item: sync.status_line(), None, enabled=False),
         pystray.MenuItem("Settings", settings, default=True),
+        pystray.MenuItem("Display", pystray.Menu(display_items), visible=lambda item: len(shown) > 1),
         pystray.MenuItem("Light positions", positions, enabled=lambda item: bool(sync.positions_url())),
         pystray.MenuItem(lambda item: "Resume" if paused(item) else "Pause", toggle_pause),
         pystray.MenuItem("Quit", quit_),
@@ -1070,11 +1090,13 @@ def tray(sync: Sync, page: SettingsPage, open_now: bool = False) -> None:
     def refresh() -> None:
         last = None
         while not sync.stop.is_set():
-            line = sync.status_line()
+            ds = sync.screen.displays()
+            line = (sync.status_line(), json.dumps(ds), sync.settings["display"])
             if line != last:
                 last = line
+                shown[:] = ds
 
-                def update(line=line) -> None:  # noqa: ANN001
+                def update(line=line[0]) -> None:  # noqa: ANN001
                     icon.title = f"Caseta screen sync · {line}"
                     icon.update_menu()
                 on_main(update)
