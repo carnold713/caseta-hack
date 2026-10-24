@@ -1,6 +1,6 @@
 """Screen sync: a room's Hue colour lights and Nanoleaf panels follow the colours on a PC's screen.
 
-The PC program (pc/screensync.py) looks at its screen about thirty times a second, shrinks it to a small grid of
+The PC program (pc/windows, pc/mac) looks at its screen up to the rate its Settings say, shrinks it to a small grid of
 colours and sends the grid here over the home network (UDP, port PC_PORT). The connector works out each light's
 colour from the part of the screen nearest where that light stands, smooths it, and streams it to the Hue bridge in
 its streaming mode (huestream.py) fifty times a second, and to each Nanoleaf controller in its own (nanostream.py),

@@ -1,5 +1,5 @@
 // The room's Hue colour lights and Nanoleaf panels following the PC's screen (agent/screensync.py; the PC runs
-// pc/screensync.py). One row on the room's page, shown once the PC program has been seen, and only in a room with
+// pc/windows, pc/mac). One row on the room's page, shown once the PC program has been seen, and only in a room with
 // a light that can follow. One room follows at a time: switching it on here moves it from wherever it was. In the
 // room that follows, a second row opens the positions page (screenSheet, below).
 //

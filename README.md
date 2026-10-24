@@ -333,20 +333,20 @@ are set on Railway, which win.
 
 ### 4. PC screen (optional)
 
-A room's Hue colour lights can follow the colours on a Windows PC's screen, about
-25 changes a second (Hue's own limit). The PC looks at its screen and sends a small
+A room's Hue colour lights can follow the colours on a Windows PC's or a Mac's screen,
+about 25 changes a second (Hue's own limit). The PC looks at its screen and sends a small
 grid of colours to the connector over the home network; the connector streams them
 to the Hue bridge in its Entertainment mode. Nothing goes through the hub.
 
 1. On a Windows PC, download `CasetaScreenSync.exe` from the
    [screensync-latest release](https://github.com/carnold713/caseta-hack/releases/tag/screensync-latest)
-   and run it (Windows warns once: More info, Run anyway). On a Mac with Apple silicon,
-   download `CasetaScreenSync-mac.zip` from the same page, open it, move
+   and run it (Windows warns once: More info, Run anyway). On a Mac (Apple silicon or
+   Intel, macOS 13 or later), download `CasetaScreenSync-mac.zip` from the same page, open it, move
    CasetaScreenSync to Applications and open it; macOS refuses the first time, so open
    System Settings, Privacy & Security, and choose Open Anyway. Then allow it under
    Screen Recording there and open it again: without that, macOS shows it only the
-   desktop picture. It sits in the tray (the menu bar on a Mac), its icon the screen's
-   colour, and finds the connector by itself. Its menu opens **Settings**, a small window
+   desktop picture. It sits in the tray (the menu bar on a Mac), a still icon, and finds
+   the connector by itself. Its menu opens **Settings**, a small window
    with Light positions (the app's positions page, in a window of its own), pause,
    which display to follow when there is more than one, smoothness, what to do while a
    game is full screen (Windows), the Pi's address, and starting at login. If the room says the computer can't hear the Pi (a firewall, or a
@@ -371,10 +371,14 @@ computer with more than one display offers them at the top of the page too: the 
 picked there is the one it follows, and the newer choice wins between the app and the
 computer's own Settings. Changes apply while it is running.
 
-It keeps out of the way: while the room is not following (off or paused in the app) it
-glances at the screen once a second, only so the Pi knows it is there, and while
-nothing on the screen moves it looks four times a second, back to full speed on the
-first change. Protected video (Netflix, Disney+, Apple TV in a browser) is blacked out
+It keeps out of the way. Both apps are native: the graphics card or chip shrinks the
+screen before the app reads it (a few kilobytes a look), and a picture comes only when
+the screen has changed; on CI machines each ran in about 23 to 29 MB of memory and a
+fraction of a second of processor time a minute. While the room is not following (off
+or paused in the app) it glances at the screen once a second, only so the Pi knows it
+is there, and while nothing on the screen moves it looks four times a second, back to
+full speed on the first change. On Windows it runs below normal priority, in Windows'
+efficiency mode, with the graphics card's lowest priority for its work. Protected video (Netflix, Disney+, Apple TV in a browser) is blacked out
 of every screen capture by the system itself, and the menu says so when the screen
 looks black. In Chrome or Edge, turning off "Use graphics acceleration when
 available" lets it be read, at a lower picture quality; Safari cannot.
@@ -571,7 +575,10 @@ agent/color.py    CIE xy <-> hex with gamut clamping, kelvin <-> mirek, hue/sat 
 agent/daylight.py Follow the day: the anchor table, the sun-anchored curve, mireds, and each lamp's own limits
 agent/screensync.py  a room's Hue colour lights following a PC's screen: the PC's frames in, the colours worked out,
                   start, pause, stop and putting the lights back; huestream.py is the DTLS stream to the Hue bridge
-pc/screensync.py  the PC half (Windows tray program, built into an .exe by .github/workflows/screensync.yml)
+pc/windows/       the PC half for Windows: a native tray program (C++, Desktop Duplication shrunk by the graphics
+                  card); core.h is the grid, the pacing and the JSON, tested by test_core.cpp anywhere
+pc/mac/           the same for the Mac: a native menu-bar app (Swift, ScreenCaptureKit at 160 x 90); Core.swift
+                  and tests/. Both show pc/settings.html as Settings; .github/workflows/screensync.yml builds them
 agent/sun.py      sunrise, sunset and solar noon for a date and a place (NOAA, no network)
 agent/pair.py     one-time certificate pairing; find_bridge.py finds the bridge over mDNS
 scripts/          install.sh (served filled-in by the hub), make-icons.js
