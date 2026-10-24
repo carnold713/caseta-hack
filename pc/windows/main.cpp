@@ -691,6 +691,7 @@ static bool start_settings_server() {
   static const char* hex = "0123456789abcdef";
   for (int i = 0; i < 24; i++) g_token += hex[rd() & 15];
   g_settings_url = "http://127.0.0.1:" + std::to_string(ntohs(a.sin_port)) + "/" + g_token + "/";
+  logf("settings at %s", g_settings_url.c_str());
   std::thread([s] {
     for (;;) {
       SOCKET c = accept(s, nullptr, nullptr);

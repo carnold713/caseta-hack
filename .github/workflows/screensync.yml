@@ -61,14 +61,22 @@ jobs:
         shell: pwsh
         run: |
           $p = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--pi','127.0.0.1' -PassThru
-          Start-Sleep -Seconds 20
+          Start-Sleep -Seconds 5
+          # its Settings page answers, and a change from it is kept
+          $url = (Select-String -Path "$env:LOCALAPPDATA\CasetaScreenSync\log.txt" -Pattern 'settings at (\S+)').Matches[0].Groups[1].Value
+          $page = (Invoke-WebRequest -UseBasicParsing $url).Content
+          $set = Invoke-RestMethod -Method Post ($url + 'set?b=' + [uri]::EscapeDataString('{"fps":30,"game":"pause"}'))
+          $kept = Get-Content "$env:APPDATA\CasetaScreenSync\settings.json" -Raw
+          $settingsOk = $page.Contains('Light positions') -and $set.fps -eq 30 -and $set.game -eq 'pause' -and $set.os -eq 'windows' -and $kept.Contains('"fps":30')
+          "::notice title=Windows settings page::page $($page.Length) bytes, after a change: fps $($set.fps), game $($set.game), status '$($set.status)'; kept: $kept"
+          Start-Sleep -Seconds 15
           $p.Refresh()
           $alive = -not $p.HasExited
           $cost = if ($alive) { "memory {0:N1} MB, processor {1:N2} s in 20 s" -f ($p.WorkingSet64 / 1MB), $p.TotalProcessorTime.TotalSeconds } else { "it stopped" }
           Stop-Process -Id $p.Id -ErrorAction SilentlyContinue
           $log = (Get-Content "$env:LOCALAPPDATA\CasetaScreenSync\log.txt" -ErrorAction SilentlyContinue) -join ' | '
           "::notice title=Windows tray run::$cost | $log"
-          if (-not $alive) { exit 1 }
+          if (-not $alive -or -not $settingsOk) { exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:

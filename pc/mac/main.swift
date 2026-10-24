@@ -611,6 +611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
 // ---------- --selftest: look at the screen once, say what it saw and what it cost ----------
 func selftest() -> Int32 {
+    _ = NSApplication.shared  // (the Settings page's web view wants an application around it)
     let cap = Capture()
     let t0 = mono()
     cap.start(display: nil, fps: 30)
@@ -623,6 +624,34 @@ func selftest() -> Int32 {
         for i in 0..<c.count { s[i % 3] += Int(c[i]) }
         out["average"] = s.map { $0 / (c.count / 3) }
     }
+    // the Settings page, as its window shows it: it loads, says what is going on, and a change made from it is kept
+    let handler = AppDelegate()
+    let cfg = WKWebViewConfiguration()
+    cfg.setURLSchemeHandler(handler, forURLScheme: "caseta")
+    let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 620), configuration: cfg)
+    web.load(URLRequest(url: URL(string: "caseta://app/")!))
+    var page: Any = "no answer"
+    func js(_ code: String, _ done: @escaping (Any?) -> Void) { web.evaluateJavaScript(code) { r, e in done(r ?? e.map { "\($0)" }) } }
+    let t1 = mono()
+    var stage = 0
+    while mono() - t1 < 10 && stage < 3 {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        if stage == 0 && mono() - t1 > 2 {
+            stage = 1
+            js("post('set', { fps: 30 }); 'sent'") { _ in stage = 2 }
+        } else if stage == 2 {
+            stage = 3
+            let t2 = mono()
+            while mono() - t2 < 1.5 { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+            var got: Any? = nil
+            js("JSON.stringify({ status: document.getElementById('state').textContent, fps: document.getElementById('fps').value, mac: document.querySelector('.win').classList.contains('hide') })") { r in got = r }
+            let t3 = mono()
+            while got == nil && mono() - t3 < 3 { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+            page = got ?? "no answer"
+        }
+    }
+    out["settings_page"] = page
+    out["settings_kept_fps"] = settings.num("fps", 0)
     if let d = try? JSONSerialization.data(withJSONObject: out, options: .sortedKeys) { print(String(decoding: d, as: UTF8.self)) }
     return 0
 }
