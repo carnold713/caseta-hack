@@ -2,7 +2,8 @@
 # it and put at fixed addresses, the "screensync-latest" release:
 #   https://github.com/carnold713/caseta-hack/releases/download/screensync-latest/CasetaScreenSync.exe
 #   https://github.com/carnold713/caseta-hack/releases/download/screensync-latest/CasetaScreenSync-mac.zip
-# The Mac app is for Apple silicon. Neither is signed by a developer account, so Windows and macOS each ask once
+# Both are native: a Win32 program (pc/windows) and a Swift app (pc/mac, for Apple silicon and Intel Macs), sharing
+# the Settings page (pc/settings.html). Neither is signed by a developer account, so Windows and macOS each ask once
 # before opening it (the README says how).
 name: Screen sync for Windows and Mac
 
@@ -50,7 +51,9 @@ jobs:
         shell: pwsh
         run: |
           $p = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--selftest' -RedirectStandardOutput selftest.txt -Wait -PassThru -NoNewWindow
-          Get-Content selftest.txt, selftest.json -ErrorAction SilentlyContinue
+          $out = (Get-Content selftest.txt, selftest.json -ErrorAction SilentlyContinue) -join ' '
+          $out
+          "::notice title=Windows selftest::$out"
           if ($p.ExitCode -ne 0) { exit 1 }
 
       # The tray app itself, left running for a while, with how much memory and processor it used
@@ -61,9 +64,10 @@ jobs:
           Start-Sleep -Seconds 20
           $p.Refresh()
           $alive = -not $p.HasExited
-          if ($alive) { "memory {0:N1} MB, processor {1:N2} s in 20 s" -f ($p.WorkingSet64 / 1MB), $p.TotalProcessorTime.TotalSeconds }
+          $cost = if ($alive) { "memory {0:N1} MB, processor {1:N2} s in 20 s" -f ($p.WorkingSet64 / 1MB), $p.TotalProcessorTime.TotalSeconds } else { "it stopped" }
           Stop-Process -Id $p.Id -ErrorAction SilentlyContinue
-          Get-Content "$env:LOCALAPPDATA\CasetaScreenSync\log.txt" -ErrorAction SilentlyContinue
+          $log = (Get-Content "$env:LOCALAPPDATA\CasetaScreenSync\log.txt" -ErrorAction SilentlyContinue) -join ' | '
+          "::notice title=Windows tray run::$cost | $log"
           if (-not $alive) { exit 1 }
 
       - uses: actions/upload-artifact@v4
@@ -82,19 +86,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: pc/requirements.txt
-
-      - name: Install
-        run: |
-          python -m pip install -r pc/requirements.txt
-          python -m pip install "pyinstaller>=6,<7"
-
       - name: Tests
-        run: python pc/test_screensync.py
+        run: |
+          swiftc -O -swift-version 5 pc/mac/Core.swift pc/mac/tests/main.swift -o coretests
+          ./coretests
 
       # the app's signing certificate, kept between builds so every update is the same app to macOS (pc/mac_sign.sh)
       - name: The signing certificate (kept in the cache)
@@ -103,33 +98,59 @@ jobs:
           path: ~/caseta-mac-sign.p12
           key: caseta-mac-sign-v1
 
-      # A menu-bar app: no Dock icon (LSUIElement), then signed (after the plist changes, which Apple silicon needs
-      # before it will open it at all) with the same identity every build
+      # native: ScreenCaptureKit shrunk by the graphics chip, a menu-bar item, nothing else to carry. One app for Apple
+      # silicon and Intel Macs, with the identifier the earlier app had, so macOS keeps its Screen Recording permission.
       - name: Build the app
         env:
           CASETA_MAC_P12_B64: ${{ secrets.CASETA_MAC_P12_B64 }}
         run: |
-          pyinstaller --windowed --name CasetaScreenSync --osx-bundle-identifier app.caseta.screensync pc/screensync.py
-          plutil -insert LSUIElement -bool true dist/CasetaScreenSync.app/Contents/Info.plist
-          # macOS asks before an app talks to the home network, and says this when it does
-          plutil -insert NSLocalNetworkUsageDescription -string "Caseta Screen Sync sends your screen's colours to the Caseta connector on your home network." dist/CasetaScreenSync.app/Contents/Info.plist
-          bash pc/mac_sign.sh dist/CasetaScreenSync.app
-          ditto -c -k --keepParent dist/CasetaScreenSync.app CasetaScreenSync-mac.zip
+          set -e
+          APP=dist/CasetaScreenSync.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          for arch in arm64 x86_64; do
+            swiftc -O -swift-version 5 -target $arch-apple-macos13.0 pc/mac/Core.swift pc/mac/main.swift -o build-$arch
+          done
+          lipo -create build-arm64 build-x86_64 -output "$APP/Contents/MacOS/CasetaScreenSync"
+          cp pc/settings.html "$APP/Contents/Resources/"
+          cat > "$APP/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleIdentifier</key><string>app.caseta.screensync</string>
+            <key>CFBundleName</key><string>CasetaScreenSync</string>
+            <key>CFBundleDisplayName</key><string>Caseta Screen Sync</string>
+            <key>CFBundleExecutable</key><string>CasetaScreenSync</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>2.0</string>
+            <key>CFBundleVersion</key><string>2.0</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
+            <key>LSUIElement</key><true/>
+            <key>NSHighResolutionCapable</key><true/>
+            <key>NSLocalNetworkUsageDescription</key><string>Caseta Screen Sync sends your screen's colours to the Caseta connector on your home network.</string>
+          </dict></plist>
+          PLIST
+          plutil -lint "$APP/Contents/Info.plist"
+          bash pc/mac_sign.sh "$APP"
+          ditto -c -k --keepParent "$APP" CasetaScreenSync-mac.zip
+          ls -la "$APP/Contents/MacOS" CasetaScreenSync-mac.zip
 
-      - name: The app looks at the screen once
-        run: dist/CasetaScreenSync.app/Contents/MacOS/CasetaScreenSync --selftest
+      - name: The app looks at the screen
+        run: |
+          out=$(dist/CasetaScreenSync.app/Contents/MacOS/CasetaScreenSync --selftest)
+          echo "$out"
+          echo "::notice title=Mac selftest::$out"
 
-      # The menu-bar app itself, left running for a while: the icon is redrawn every half second, which is where a
-      # change made off the main thread brings macOS down on it
+      # The menu-bar app itself, left running for a while, with how much memory and processor it used
       - name: The app runs in the menu bar
         run: |
           dist/CasetaScreenSync.app/Contents/MacOS/CasetaScreenSync --pi 127.0.0.1 &
           pid=$!
-          sleep 15
+          sleep 20
           alive=0; kill -0 $pid 2>/dev/null && alive=1
+          cost=$(ps -o rss=,time= -p $pid | awk '{printf "memory %.1f MB, processor %s in 20 s", $1/1024, $2}')
           kill $pid 2>/dev/null || true
-          cat ~/Library/Logs/CasetaScreenSync/log.txt || true
-          cat ~/Library/Logs/CasetaScreenSync/crash.txt 2>/dev/null || true
+          log=$(tr '\n' '|' < ~/Library/Logs/CasetaScreenSync/log.txt 2>/dev/null || true)
+          echo "::notice title=Mac menu-bar run::alive $alive, $cost | $log"
           test $alive = 1
 
       - uses: actions/upload-artifact@v4
