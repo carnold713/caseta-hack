@@ -53,6 +53,23 @@
 #include "core.h"
 #include "page.h"
 
+// Windows Graphics Capture, for an HDR screen: Windows makes an ordinary 8-bit picture of it, which Desktop
+// Duplication does not do reliably on every card (some hand an HDR screen back black). Built with Visual Studio's
+// compiler, whose Windows headers carry it; a build without them uses Desktop Duplication for every screen.
+#if defined(_MSC_VER)
+#define CASETA_WGC 1
+#include <windows.graphics.capture.interop.h>
+#include <windows.graphics.directx.direct3d11.interop.h>
+#include <winrt/base.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Graphics.Capture.h>
+#include <winrt/Windows.Graphics.DirectX.h>
+#include <winrt/Windows.Graphics.DirectX.Direct3D11.h>
+#pragma comment(lib, "windowsapp.lib")
+#else
+#define CASETA_WGC 0
+#endif
+
 #ifndef SIO_UDP_CONNRESET
 #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
 #endif
@@ -60,7 +77,7 @@
 using Microsoft::WRL::ComPtr;
 using core::Json;
 
-static const char* VERSION = "2.3";
+static const char* VERSION = "2.4";
 static const wchar_t* APP = L"CasetaScreenSync";
 
 // ---------- small things ----------
@@ -231,6 +248,77 @@ static float sdr_white_scale(const wchar_t* gdi_name) {
   return 1 / 2.5f;
 }
 
+static bool g_force_wgc = false;  // --wgc: Windows Graphics Capture for every screen (how CI tries it on a plain one)
+
+#if CASETA_WGC
+// One screen through Windows Graphics Capture, asked for in 8 bits: frames come when the screen changes, as with
+// Desktop Duplication, and only the newest one is kept
+class WgcSource {
+ public:
+  bool open(ID3D11Device* dev, HMONITOR mon) {
+    namespace cap = winrt::Windows::Graphics::Capture;
+    try {
+      if (!cap::GraphicsCaptureSession::IsSupported()) return false;
+      auto interop = winrt::get_activation_factory<cap::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
+      winrt::check_hresult(interop->CreateForMonitor(mon, winrt::guid_of<cap::GraphicsCaptureItem>(), winrt::put_abi(item_)));
+      ComPtr<IDXGIDevice> dxgi;
+      winrt::check_hresult(dev->QueryInterface(IID_PPV_ARGS(&dxgi)));
+      winrt::com_ptr<::IInspectable> insp;
+      winrt::check_hresult(CreateDirect3D11DeviceFromDXGIDevice(dxgi.Get(), insp.put()));
+      device_ = insp.as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
+      pool_ = cap::Direct3D11CaptureFramePool::CreateFreeThreaded(device_, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2,
+                                                                  item_.Size());
+      session_ = pool_.CreateCaptureSession(item_);
+      try { session_.IsCursorCaptureEnabled(false); } catch (...) {}
+      // no yellow frame around the screen, where Windows lets an app say so (Windows 11)
+      try {
+        cap::GraphicsCaptureAccess::RequestAccessAsync(cap::GraphicsCaptureAccessKind::Borderless).get();
+        session_.IsBorderRequired(false);
+      } catch (...) {}
+      session_.StartCapture();
+      return true;
+    } catch (...) {
+      close();
+      return false;
+    }
+  }
+  // the newest frame's texture, held until done(); nothing when the screen has not changed
+  ComPtr<ID3D11Texture2D> next() {
+    try {
+      for (auto f = pool_.TryGetNextFrame(); f; f = pool_.TryGetNextFrame()) {
+        if (frame_) frame_.Close();
+        frame_ = f;
+      }
+      if (!frame_) return nullptr;
+      auto access = frame_.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
+      ComPtr<ID3D11Texture2D> t;
+      winrt::check_hresult(access->GetInterface(IID_PPV_ARGS(&t)));
+      return t;
+    } catch (...) {
+      return nullptr;
+    }
+  }
+  void done() {
+    try { if (frame_) frame_.Close(); } catch (...) {}
+    frame_ = nullptr;
+  }
+  void close() {
+    done();
+    try { if (session_) session_.Close(); } catch (...) {}
+    try { if (pool_) pool_.Close(); } catch (...) {}
+    session_ = nullptr; pool_ = nullptr; item_ = nullptr; device_ = nullptr;
+  }
+  ~WgcSource() { close(); }
+
+ private:
+  winrt::Windows::Graphics::Capture::GraphicsCaptureItem item_{nullptr};
+  winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice device_{nullptr};
+  winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool pool_{nullptr};
+  winrt::Windows::Graphics::Capture::GraphicsCaptureSession session_{nullptr};
+  winrt::Windows::Graphics::Capture::Direct3D11CaptureFrame frame_{nullptr};
+};
+#endif
+
 // ---------- the screen: Desktop Duplication, shrunk by the graphics card ----------
 class Capture {
  public:
@@ -267,6 +355,19 @@ class Capture {
       DXGI_OUTPUT_DESC1 d1;
       if (SUCCEEDED(o6->GetDesc1(&d1))) hdr = d1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
     }
+#if CASETA_WGC
+    wgc_.reset();
+    if (hdr || g_force_wgc) {
+      wgc_ = std::make_unique<WgcSource>();
+      if (wgc_->open(dev_.Get(), od.Monitor)) {
+        display = pick->id;
+        if (display != last_logged_) { logf("following %s (Windows Graphics Capture)", pick->name.c_str()); last_logged_ = display; }
+        return true;
+      }
+      wgc_.reset();
+      logf("Windows Graphics Capture would not start; Desktop Duplication instead");
+    }
+#endif
     ComPtr<IDXGIOutput5> o5;
     const DXGI_FORMAT want8[] = {DXGI_FORMAT_B8G8R8A8_UNORM};
     newer = SUCCEEDED(o.As(&o5)) && SUCCEEDED(o5->DuplicateOutput1(dev_.Get(), 0, 1, want8, &dup_));
@@ -278,14 +379,37 @@ class Capture {
   void close() {
     if (dup_ && held_) dup_->ReleaseFrame();
     held_ = false;
+#if CASETA_WGC
+    wgc_.reset();
+#endif
     whole_.Reset(); staging_.Reset(); srv_.Reset(); mip_.Reset(); dup_.Reset(); ctx_.Reset(); dev_.Reset();
     w_ = h_ = 0;
   }
-  bool is_open() const { return dup_ != nullptr; }
+  bool is_open() const {
+#if CASETA_WGC
+    if (wgc_) return true;
+#endif
+    return dup_ != nullptr;
+  }
 
   // 1: a new picture (in `cells`); 0: nothing on the screen has changed; -1: it cannot be looked at now (the secure
   // desktop, a full-screen game holding the screen, a change of display mode), so it is opened again later
   int look(core::Cells& cells, UINT wait_ms = 0) {
+#if CASETA_WGC
+    if (wgc_) {
+      ComPtr<ID3D11Texture2D> tex = wgc_->next();
+      for (UINT waited = 0; !tex && waited < wait_ms; waited += 10) { Sleep(10); tex = wgc_->next(); }
+      if (!tex) return 0;
+      int got = 0;
+      if (prepare(tex.Get())) {
+        ctx_->CopySubresourceRegion(mip_.Get(), 0, 0, 0, 0, tex.Get(), 0, nullptr);
+        got = read(cells) ? 1 : 0;
+        describe_first(got, cells);
+      }
+      wgc_->done();
+      return got;
+    }
+#endif
     if (!dup_) return -1;
     DXGI_OUTDUPL_FRAME_INFO info;
     ComPtr<IDXGIResource> res;
@@ -313,23 +437,31 @@ class Capture {
             cells = whole;
           }
         }
-        if (got && !described_) {
-          described_ = true;
-          long long sum[3] = {0, 0, 0};
-          for (int i = 0; i < core::CELLS; i++) sum[i % 3] += cells[i];
-          logf("first look: %s, %d x %d of %u x %u (format %d), average %lld %lld %lld", gpu ? "shrunk by the card" : "read whole", sw, sh,
-               w_, h_, int(fmt_), sum[0] / 144, sum[1] / 144, sum[2] / 144);
-        }
+        describe_first(got, cells);
       }
     }
     dup_->ReleaseFrame();
     held_ = false;
     return got;
   }
+  void describe_first(int got, const core::Cells& cells) {
+    if (!got || described_) return;
+    described_ = true;
+    long long sum[3] = {0, 0, 0};
+    for (int i = 0; i < core::CELLS; i++) sum[i % 3] += cells[i];
+    logf("first look: %s, %d x %d of %u x %u (format %d), average %lld %lld %lld", gpu ? "shrunk by the card" : "read whole", sw, sh, w_, h_,
+         int(fmt_), sum[0] / 144, sum[1] / 144, sum[2] / 144);
+  }
   std::string describe() const {
     return std::string(gpu ? "shrunk " : "whole ") + std::to_string(sw) + "x" + std::to_string(sh) + " of " + std::to_string(w_) + "x" +
-           std::to_string(h_) + (hdr ? " hdr, white " + std::to_string(int(80 / white_ + 0.5f)) + " nits" : "") + (newer ? "" : " (older way)") +
-           " fmt " + std::to_string(int(fmt_));
+           std::to_string(h_) + (hdr ? " hdr, white " + std::to_string(int(80 / white_ + 0.5f)) + " nits" : "") + via() + " fmt " +
+           std::to_string(int(fmt_));
+  }
+  std::string via() const {
+#if CASETA_WGC
+    if (wgc_) return " wgc";
+#endif
+    return newer ? " dd" : " dd (older way)";
   }
 
  private:
@@ -341,6 +473,9 @@ class Capture {
   UINT w_ = 0, h_ = 0, level_ = 0;
   DXGI_FORMAT fmt_ = DXGI_FORMAT_UNKNOWN;
   float white_ = 1 / 2.5f;  // an HDR screen's SDR white, as the scale that makes it 1.0
+#if CASETA_WGC
+  std::unique_ptr<WgcSource> wgc_;
+#endif
   bool held_ = false, described_ = false;
   double checked_at_ = -1e9;
   std::string last_logged_;
@@ -587,6 +722,9 @@ class Sync {
   }
 
   void run() {
+#if CASETA_WGC
+    try { winrt::init_apartment(winrt::apartment_type::multi_threaded); } catch (...) {}
+#endif
     Capture cap;
     core::Cells cells{}, last{};
     bool have = false;
@@ -935,6 +1073,9 @@ static void run_quietly() {
 
 // ---------- --selftest: look at the screen, say what it saw and what it cost ----------
 static int selftest() {
+#if CASETA_WGC
+  try { winrt::init_apartment(winrt::apartment_type::multi_threaded); } catch (...) {}
+#endif
   Capture cap;
   core::Cells cells{};
   const double t0 = mono();
@@ -948,7 +1089,7 @@ static int selftest() {
   long long sum[3] = {0, 0, 0};
   for (int i = 0; i < core::CELLS; i++) sum[i % 3] += cells[i];
   Json out = Json::object();
-  out.o["capture"] = Json::of(std::string(got == 1 ? (cap.gpu ? "dxgi, shrunk by the graphics card" : "dxgi, read whole") : "none"));
+  out.o["capture"] = Json::of(got == 1 ? cap.describe() : std::string("none"));
   out.o["displays"] = displays_json(list_displays());
   Json sample = Json::array();
   sample.a.push_back(Json::of(double(cap.sh)));
@@ -977,10 +1118,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
   bool open_settings = false;
   for (int i = 1; i < argc; i++) {
     const std::wstring a = argv[i];
-    if (a == L"--selftest") return selftest();
+    if (a == L"--wgc") g_force_wgc = true;
     if (a == L"--settings") open_settings = true;
     if (a == L"--pi" && i + 1 < argc) pi = narrow(argv[++i]);
   }
+  for (int i = 1; i < argc; i++) if (std::wstring(argv[i]) == L"--selftest") return selftest();
   g_log_path = env_dir(L"LOCALAPPDATA") + L"\\log.txt";
   // one copy at a time (the earlier app took the same port, so the two never run together either)
   SOCKET lock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);

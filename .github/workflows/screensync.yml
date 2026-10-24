@@ -55,6 +55,10 @@ jobs:
           $out
           "::notice title=Windows selftest::$out"
           if ($p.ExitCode -ne 0) { exit 1 }
+          # and through Windows Graphics Capture, the way an HDR screen is looked at
+          $w = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--wgc','--selftest' -RedirectStandardOutput selftest-wgc.txt -Wait -PassThru -NoNewWindow
+          $wout = (Get-Content selftest-wgc.txt -ErrorAction SilentlyContinue) -join ' '
+          "::notice title=Windows selftest (Graphics Capture)::exit $($w.ExitCode) $wout"
 
       # The tray app itself, left running for a while, with how much memory and processor it used
       - name: The .exe runs in the tray
