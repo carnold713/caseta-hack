@@ -127,6 +127,7 @@ function phoneGroup(c) {
       ${mode === 'live' ? '' : toggle('Quiet notification instead', mode === 'quiet', 'phone-quiet')}
       ${toggle('House computer offline', p.houseAlerts !== false, 'phone-house', !p.notifications ? 'Notifications are off for this app' : 'After 5 minutes')}
       ${row(c, 'Widgets', p.widgets ? plural(p.widgets, 'widget') : 'None', 'widgets')}
+      ${row(c, 'Calls and texts', (c.S.config.settings.alerts || {}).on ? 'On' : 'Off', 'alerts')}
     </div>`;
 }
 

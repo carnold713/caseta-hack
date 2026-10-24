@@ -465,6 +465,28 @@ computer is offline", with the time it went) and replaces it, silently, with "Ho
 returns. Settings, This phone, House computer offline turns it off. The hub keeps when the connector went away
 (`agent.offline_since` in `/api/snapshot`) through its own restarts.
 
+### 5. Calls and texts on the lights (optional)
+
+The Android app can show a call or a text on Hue lights: Settings, This phone, **Calls and texts**.
+
+1. **Allow notification access**, then switch Caseta on in the page Android opens. Android 13 and later grey that
+   switch out for an app installed from a download until it is let through once: **Greyed out?** on the same page
+   opens the app's info, where ⋮ has **Allow restricted settings**.
+2. Switch on **Show them on the lights**. The office's Hue colour lights are chosen to begin with; any Hue light can
+   be (a Hue plug is never offered: a relay clicked on and off for every text is worn out for nothing).
+3. For calls and for texts, pick a pattern (**Flash**, **Breathe**, **Two colours**, **Glow**) and its colours.
+   **Try it** plays it on the lights.
+
+A call shows until it is answered or stops ringing (at most a minute); a text for a few seconds, and a burst of them
+once. Afterwards every light goes back exactly as it was. A light following the PC screen shows it in the screen's
+stream and then goes back to the screen. Touching a light from the app or a remote meanwhile takes it out.
+**People** gives someone a colour of their own: a call or text whose sender's name holds theirs comes in it. Texts
+come from the phone's own texting app unless **From other messaging apps too** is on. **Not during Do Not Disturb**
+(on to begin with) keeps the lights dark when the phone would stay quiet, except for people allowed through it.
+
+Only the sender's name reaches the hub, never what a message says, and only to pick a colour. The phone reads
+notifications (any app's call or message kind), so nothing needs the SMS or call log permissions.
+
 ## Configure
 
 1. **Remotes** tab: press any button on a Pico and its remote opens. Tap a

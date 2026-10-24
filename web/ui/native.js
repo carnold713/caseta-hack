@@ -87,3 +87,10 @@ export function backable(can) {
   lastBack = can;
   call('backable', { can });
 }
+
+// ---------- calls and texts ----------
+// Whether this phone tells the lights of its calls and texts: notification access, given in Android's own settings
+// (openCalls), and on a sideloaded app first let through on the app's own page (openAppInfo). {access, android}.
+export async function calls() { const r = await call('calls'); return r || { access: false, android: 0 }; }
+export async function openCalls() { return call('openCalls'); }
+export async function openAppInfo() { return call('openAppInfo'); }

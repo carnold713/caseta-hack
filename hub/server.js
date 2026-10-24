@@ -13,6 +13,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 const store = require('./store');
 const { validateConfig, validateAction, validateLevels } = require('./validate');
 const lightHistory = require('./history');
+const { normalizeAlerts, decideAlert } = require('./alerts');
 
 const PORT = Number(process.env.PORT) || 4400;
 const APP_PASSWORD = process.env.APP_PASSWORD || '';
@@ -186,6 +187,25 @@ app.post('/api/screensync', requireAuth, async (req, res) => {
   if (!['on', 'off', 'resume', 'watch'].includes(op)) return res.status(400).json({ error: 'op must be on or off' });
   try { res.json(await sendCommand({ type: `screensync_${op}` })); }
   catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+// Calls and texts (hub/alerts.js): the phone says a call is ringing or stopped, or a text came; the settings say which
+// lights show it and how. "test" plays one from the Calls and texts page with what it shows, saved or not yet.
+const alertMemo = {};
+app.post('/api/alert', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  let alerts = config.settings.alerts || normalizeAlerts(null), ev = b;
+  if (b.kind === 'test') {
+    alerts = { ...normalizeAlerts(b.alerts || alerts), on: true, dnd: false, only_on: false };
+    ev = { kind: b.of === 'call' ? 'call' : 'text', state: 'start', key: 'test', from: String(b.from || '') };
+  }
+  const d = decideAlert(alerts, ev, Date.now(), b.kind === 'test' ? {} : alertMemo);
+  if (!d.action) return res.json({ ok: true, skipped: d.skip });
+  if (b.kind === 'test') d.action.seconds = Math.min(d.action.seconds, 4);
+  try {
+    const r = await sendCommand(d.action);
+    if (b.kind !== 'test' && d.action.op === 'start') record({ kind: 'alert', what: ev.kind });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 // Nanoleaf: unlike Hue there is no bridge, so this covers a list of directly-paired controllers, each with
 // its own address and its own held-button pairing. "forget" names which one by its serial.

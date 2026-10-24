@@ -38,12 +38,13 @@ from zoneinfo import ZoneInfo
 import daylight
 from engine import ActionRunner, GestureEngine, in_night_window
 from adddevice import AddSession
+from alerts import Alerts
 from hue import Hue, color_state
 from nanoleaf import Nanoleaf
 from screensync import ScreenSync
 from sun import solar_noon, sun_times
 
-VERSION = "0.34.0"
+VERSION = "0.35.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -247,6 +248,7 @@ class Agent:
                                config=lambda: self.config, send=self.send, room_name=self._room_name, data_dir=DATA_DIR,
                                nanoleaf=self.nanoleaf, app_url=_app_url(HUB_URL))
         self.runner.screen_sync = self.sync.remote  # a remote's "PC screen on or off"
+        self.alerts = Alerts(self.hue, self.sync)    # a call or a text on the phone, shown on the lights
         self.runner.hue_set = self._level_set_bridge
         self.runner.hue_color = self._color_set
         self.runner.hue_scene = self._scene_recall
@@ -449,6 +451,7 @@ class Agent:
         return None
 
     async def _level_set_bridge(self, device_id: str, level: int, fade_s: Optional[float]) -> None:
+        self.alerts.yield_for(device_id)
         await self.sync.yield_for(device_id)
         backend = self._backend_for(device_id)
         if backend is None:
@@ -463,6 +466,7 @@ class Agent:
         return await backend.verify(device_id, adopt)
 
     async def _color_set(self, device_id: str, kelvin: Optional[float] = None, hex: Optional[str] = None, fade_s: Optional[float] = None, level: Optional[int] = None) -> None:  # noqa: A002
+        self.alerts.yield_for(device_id)
         await self.sync.yield_for(device_id)
         backend = self._backend_for(device_id)
         if backend is None:
@@ -479,7 +483,7 @@ class Agent:
         """Follow the day's own path to a lamp (agent.py's _follow_apply), one backend removed: same three
         promises as Hue.set_warmth and Nanoleaf.set_warmth, for whichever backend this id belongs to."""
         backend = self._backend_for(device_id)
-        if backend is None or self.sync.owns(device_id):  # following the screen: the day can wait
+        if backend is None or self.sync.owns(device_id) or self.alerts.owns(device_id):  # following the screen or showing a call: the day can wait
             return False
         return await backend.set_warmth(device_id, kelvin, fade_s=fade_s, level=level, while_off=while_off)
 
@@ -1337,6 +1341,9 @@ class Agent:
                 elif kind == "hue_pair":
                     detail = await self.hue.pair(str(action.get("host") or ""))
                     self.send({"type": "hue", "hue": self.hue.info()})
+                elif kind == "alert":
+                    # a call or a text on the phone (alerts.py); "stop" when a call is answered or over
+                    detail = await (self.alerts.stop(str(action.get("id") or "")) if action.get("op") == "stop" else self.alerts.start(action))
                 elif kind == "screensync_watch":
                     self.sync.watch()  # the positions page is open: it is shown the screen and the lights, live
                     detail = {"watching": True}

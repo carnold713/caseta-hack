@@ -36,6 +36,7 @@ import * as beyond from '/ui/beyond.js';
 import * as native from '/ui/native.js';
 import * as nightstandScreen from '/ui/screens/nightstand.js';
 import * as widgetsScreen from '/ui/screens/widgets.js';
+import * as alertsScreen from '/ui/screens/alerts.js';
 import * as widgetData from '/ui/widgetdata.js';
 import * as depth from '/ui/depth.js';
 
@@ -273,9 +274,9 @@ const SCREENS = {
   home: homeScreen, rooms: roomsScreen, room: roomScreen, light: deviceScreen, scenes: scenesScreen,
   remotes: remotesScreen, remote: remoteScreen, timing: timingScreen,
   routines: routinesScreen, routine: routineScreen, setup: guidedScreen, activity: activityScreen,
-  settings: settingsScreen, add: addScreen, nightstand: nightstandScreen, widgets: widgetsScreen, screen: screenEditScreen,
+  settings: settingsScreen, add: addScreen, nightstand: nightstandScreen, widgets: widgetsScreen, alerts: alertsScreen, screen: screenEditScreen,
 };
-const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', screen: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'settings', add: 'settings', widgets: 'settings', activity: 'home' };
+const TAB_OF = { home: 'home', rooms: 'rooms', room: 'rooms', screen: 'rooms', light: 'rooms', scenes: 'rooms', remotes: 'remotes', remote: 'remotes', timing: 'remotes', routines: 'routines', routine: 'routines', setup: 'routines', settings: 'settings', add: 'settings', widgets: 'settings', alerts: 'settings', activity: 'home' };
 const TABS = [['home', 'home', 'Home'], ['rooms', 'grid', 'Rooms'], ['remotes', 'remote', 'Remotes'], ['routines', 'clock', 'Routines'], ['settings', 'gear', 'Settings']];
 // A screen draws the pages under it that it declares (screen.subs); any other sub page is not built yet.
 function screenFor(r) {
@@ -696,6 +697,15 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   closePicker();
 }, true);
+// A page's own form (a name typed and Add, or Enter): its screen's action named by data-submit
+document.addEventListener('submit', e => {
+  const name = e.target.dataset && e.target.dataset.submit;
+  if (!name) return;
+  e.preventDefault();
+  const r = route(); const screen = screenFor(r);
+  const fn = screen.actions && screen.actions[name];
+  if (fn) fn(ctx, e.target, r);
+});
 document.addEventListener('submit', async e => {
   if (e.target.dataset.form !== 'login') return;
   e.preventDefault();

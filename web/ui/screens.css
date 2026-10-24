@@ -1443,3 +1443,22 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .wgp-dim em { flex: none; font-style: normal; font-size: 13px; color: var(--wg-sub); }
 .wgp.compact .wgp-dim b { font-size: 13px; }
 .wgp-dim .wgp-pwr { width: 40px; height: 40px; margin-left: 2px; }
+/* Calls and texts (alerts.js): the lights that show them, and for a call and a text each a pattern and its colours */
+.al-page { padding-bottom: 40px; }
+.al-page .t-over.sec { margin: 28px var(--gutter) 12px; }
+.al-lede { margin: 8px var(--gutter) 0; }
+.al-access, .al-main { margin-top: 16px; }
+.al-room { margin: 14px var(--gutter) 8px; }
+.al-room:first-of-type { margin-top: 0; }
+.al-pats { margin-bottom: 14px; }
+.al-sw { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 var(--gutter); }
+.al-sw .sw { width: 32px; height: 32px; border-radius: 16px; border: 0; padding: 0; flex: none; }
+.al-sw .sw.sel { box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 4px #fff; }
+.al-and { margin: 10px var(--gutter) 8px; }
+.al-try { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px var(--gutter) 0; }
+.al-kind + .group { margin-top: 16px; }
+.al-dot { width: 20px; height: 20px; border-radius: 10px; flex: none; margin-right: 14px; }
+.al-pedit { padding: 6px 0 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.al-pedit .pill { margin-left: var(--gutter); }
+.al-add { gap: 10px; }
+.al-add .field { flex: 1; min-width: 0; }

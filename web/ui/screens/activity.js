@@ -64,6 +64,7 @@ function line(c, e) {
     if (a.type === 'timer') return { icon: 'timer', text: `Sleep timer: ${result(c, [a])}` };
     return { icon: 'user', text: result(c, [a]) || data.describe([a]) };
   }
+  if (e.kind === 'alert') return { icon: 'pulse', text: e.what === 'call' ? 'The lights showed a call' : 'The lights showed a text' };
   if (e.kind === 'agent') return { icon: 'wifi', text: e.online ? 'The house computer came back' : 'Lost touch with the house computer' };
   return { icon: 'pulse', text: e.kind || 'Something happened' };
 }

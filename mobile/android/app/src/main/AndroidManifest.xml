@@ -116,6 +116,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Calls and texts on the lights (CallsListener): Android binds it once notification access is given -->
+        <service
+            android:name=".CallsListener"
+            android:exported="true"
+            android:label="@string/calls_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Off now and Add 15 min on a sleep timer's notification -->
         <receiver android:name=".TimerActionReceiver" android:exported="false" />
 

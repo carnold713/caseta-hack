@@ -249,6 +249,9 @@ class ScreenSync:
         self._snapshot: Dict[str, dict] = {}
         self._wts: Dict[tuple, List[float]] = {}
         self._gains: Dict[str, float] = {}       # each light's brightness from the positions page (1 as the screen is)
+        # a call or a text showing on a light that follows the screen (alerts.py): light -> f(now) -> linear rgb,
+        # sent in place of the screen's colour until it is taken away
+        self.overlay: Dict[str, Callable[[float], Tuple[float, float, float]]] = {}
         self._watch_until = 0.0                  # the positions page is watching until then (monotonic)
         self._live_at = 0.0
         self._wts_for: Optional[Tuple[int, int]] = None
@@ -803,6 +806,9 @@ class ScreenSync:
     def _sent(self, k: tuple, c: Tuple[float, float, float]) -> Tuple[float, float, float]:
         """What a channel or panel is sent: its colour, at its light's brightness from the positions page"""
         d = self._chan_light.get(k[1]) if k[0] == "h" else k[1]
+        if d in self.overlay:
+            o = self.overlay[d](time.monotonic())
+            return _enc(o[0]), _enc(o[1]), _enc(o[2])
         g = self._gains.get(d, 1.0) if d else 1.0
         return _enc(c[0] * g), _enc(c[1] * g), _enc(c[2] * g)
 

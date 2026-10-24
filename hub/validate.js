@@ -7,6 +7,7 @@ const ACTION_TYPES = new Set(['restore', 'level', 'step', 'raise', 'lower', 'sto
 const FAN_SPEEDS = new Set(['Off', 'Low', 'Medium', 'MediumHigh', 'High']);
 // The kinds of light and their roles, the same table the app loads (it works as a script and as a module).
 const KIND_DEF = require('../web/js/kinds.js');
+const { normalizeAlerts } = require('./alerts.js');
 
 function fail(msg) { const e = new Error(msg); e.status = 400; throw e; }
 
@@ -223,6 +224,8 @@ function validateConfig(cfg) {
       out.settings.screen_sync.display = { id: String(d.id), at: Math.round(d.at), ...(typeof d.pc === 'string' && d.pc ? { pc: d.pc.slice(0, 40) } : {}) };
     }
   }
+  // Calls and texts on the lights (hub/alerts.js)
+  out.settings.alerts = normalizeAlerts(s.alerts);
   out.settings.night_look = ['auto', 'always', 'never'].includes(s.night_look) ? s.night_look : 'auto';
   // The light Nightstand's night light turns on (a device id); unset, the app picks a bedroom lamp.
   out.settings.night_light = /^[A-Za-z0-9_-]{1,64}$/.test(s.night_light || '') ? s.night_light : null;

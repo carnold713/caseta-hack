@@ -182,6 +182,8 @@ ws.on('message', raw => {
     if (m.action.type && m.action.type.startsWith('screensync_')) { syncCommand(m); return; }
     if (m.action.type && m.action.type.startsWith('nanoleaf_')) { nanoleafCommand(m); return; }
     if (m.action.type && m.action.type.startsWith('room_')) { roomCommand(m); return; }
+    // a call or a text on the phone (agent/alerts.py): said back, so a test can see what the hub asked for
+    if (m.action.type === 'alert') { send({ type: 'result', id: m.id, ok: true, detail: m.action.op === 'stop' ? { stopped: true, action: m.action } : { lights: (m.action.lights || []).length, streamed: 0, action: m.action } }); return; }
     if (m.action.type === 'remove_device') { const id = m.action.id; if (!inventory.devices[id]) { send({ type: 'result', id: m.id, ok: false, error: 'Bridge returned 404 NotFound' }); return; }
       // STUBBORN_REMOVE: the bridge says yes and goes on listing the device, as the owner's did
       if (process.env.STUBBORN_REMOVE) { send({ type: 'result', id: m.id, ok: true, detail: { removed: { status: '204 NoContent' }, id, still_listed: true } }); send({ type: 'inventory', inventory }); return; }

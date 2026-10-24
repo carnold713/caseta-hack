@@ -1,6 +1,7 @@
 package app.caseta.home;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -35,6 +36,10 @@ import org.json.JSONObject;
  *   phone / setPhone                    this phone's own choices: how a running timer shows (status bar, quiet, none),
  *                                       and whether it says when the house computer is offline (HouseWatch)
  *   lastCrash                           the last thing that went wrong on the Android side, once, for the hub's log
+ *   calls / openCalls / openAppInfo     whether calls and texts reach the lights (notification access, CallsListener),
+ *                                       and Android's pages to allow it: its notification access page, and the app's
+ *                                       own page, where a sideloaded app first has to be let through Android's lock
+ *                                       on that kind of access ("Allow restricted settings")
  */
 @CapacitorPlugin(
     name = "Hub",
@@ -216,6 +221,45 @@ public class HubPlugin extends Plugin {
             });
         }
         phone(call);
+    }
+
+    // ---------- calls and texts ----------
+    @PluginMethod
+    public void calls(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("access", CallsListener.allowed(getContext()));
+        r.put("android", Build.VERSION.SDK_INT);
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void openCalls(PluginCall call) {
+        Context c = getContext();
+        Intent i;
+        if (Build.VERSION.SDK_INT >= 30) {
+            i = new Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, new ComponentName(c, CallsListener.class).flattenToString());
+        } else {
+            i = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
+        }
+        open(call, i, new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
+    }
+
+    @PluginMethod
+    public void openAppInfo(PluginCall call) {
+        Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", getContext().getPackageName(), null));
+        open(call, i, null);
+    }
+
+    private void open(PluginCall call, Intent first, Intent fallback) {
+        Activity a = getActivity();
+        try {
+            a.startActivity(first);
+        } catch (Exception e) {
+            if (fallback == null) { call.reject("cannot open it"); return; }
+            try { a.startActivity(fallback); } catch (Exception e2) { call.reject("cannot open it"); return; }
+        }
+        call.resolve();
     }
 
     @PluginMethod
