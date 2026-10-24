@@ -60,14 +60,17 @@ jobs:
       - name: The .exe runs in the tray
         shell: pwsh
         run: |
+          # a pretend connector beside it (pc/fake_connector.py): it has to be found, told the displays, sent frames
+          $c = Start-Process -FilePath python -ArgumentList 'pc\fake_connector.py','30' -RedirectStandardOutput connector.txt -PassThru -NoNewWindow
+          Start-Sleep -Seconds 1
           $p = Start-Process -FilePath dist\CasetaScreenSync.exe -ArgumentList '--pi','127.0.0.1' -PassThru
           Start-Sleep -Seconds 5
           # its Settings page answers, and a change from it is kept
           $url = (Select-String -Path "$env:LOCALAPPDATA\CasetaScreenSync\log.txt" -Pattern 'settings at (\S+)').Matches[0].Groups[1].Value
           $page = (Invoke-WebRequest -UseBasicParsing $url).Content
-          $set = Invoke-RestMethod -Method Post ($url + 'set?b=' + [uri]::EscapeDataString('{"fps":30,"game":"pause"}'))
+          $set = Invoke-RestMethod -Method Post ($url + 'set?b=' + [uri]::EscapeDataString('{"fps":30,"game":"full"}'))
           $kept = Get-Content "$env:APPDATA\CasetaScreenSync\settings.json" -Raw
-          $settingsOk = $page.Contains('Light positions') -and $set.fps -eq 30 -and $set.game -eq 'pause' -and $set.os -eq 'windows' -and $kept.Contains('"fps":30')
+          $settingsOk = $page.Contains('Light positions') -and $set.fps -eq 30 -and $set.game -eq 'full' -and $set.os -eq 'windows' -and $kept.Contains('"fps":30')
           "::notice title=Windows settings page::page $($page.Length) bytes, after a change: fps $($set.fps), game $($set.game), status '$($set.status)'; kept: $kept"
           Start-Sleep -Seconds 15
           $p.Refresh()
@@ -76,7 +79,10 @@ jobs:
           Stop-Process -Id $p.Id -ErrorAction SilentlyContinue
           $log = (Get-Content "$env:LOCALAPPDATA\CasetaScreenSync\log.txt" -ErrorAction SilentlyContinue) -join ' | '
           "::notice title=Windows tray run::$cost | $log"
-          if (-not $alive -or -not $settingsOk) { exit 1 }
+          $c.WaitForExit()
+          $heard = Get-Content connector.txt -Raw
+          "::notice title=Windows to the connector::$heard"
+          if (-not $alive -or -not $settingsOk -or $c.ExitCode -ne 0) { exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -151,6 +157,9 @@ jobs:
       # The menu-bar app itself, left running for a while, with how much memory and processor it used
       - name: The app runs in the menu bar
         run: |
+          python3 pc/fake_connector.py 30 > connector.txt &
+          cpid=$!
+          sleep 1
           dist/CasetaScreenSync.app/Contents/MacOS/CasetaScreenSync --pi 127.0.0.1 &
           pid=$!
           sleep 20
@@ -159,7 +168,9 @@ jobs:
           kill $pid 2>/dev/null || true
           log=$(tr '\n' '|' < ~/Library/Logs/CasetaScreenSync/log.txt 2>/dev/null || true)
           echo "::notice title=Mac menu-bar run::alive $alive, $cost | $log"
-          test $alive = 1
+          heard=0; wait $cpid && heard=1
+          echo "::notice title=Mac to the connector::$(cat connector.txt)"
+          test $alive = 1 && test $heard = 1
 
       - uses: actions/upload-artifact@v4
         with:
