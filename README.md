@@ -371,6 +371,14 @@ computer with more than one display offers them at the top of the page too: the 
 picked there is the one it follows, and the newer choice wins between the app and the
 computer's own Settings. Changes apply while it is running.
 
+It keeps out of the way: while the room is not following (off or paused in the app) it
+glances at the screen once a second, only so the Pi knows it is there, and while
+nothing on the screen moves it looks four times a second, back to full speed on the
+first change. Protected video (Netflix, Disney+, Apple TV in a browser) is blacked out
+of every screen capture by the system itself, and the menu says so when the screen
+looks black. In Chrome or Edge, turning off "Use graphics acceleration when
+available" lets it be read, at a lower picture quality; Safari cannot.
+
 It stops a few seconds after the PC goes quiet (closed, locked, asleep) and puts the
 lights back as they were. Changing one of those lights from the app, a remote or a
 routine pauses it; switch it on again, or choose Resume in the tray. A remote's

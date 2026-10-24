@@ -87,6 +87,16 @@ other = json.dumps({"bug_type": "298"}) + "\n" + json.dumps({"processes": [{"nam
 check("one about other apps is left out", P.crash_summary(other), None)
 check("another app's crash is left out", P.crash_summary(json.dumps({"app_name": "Mail"}) + "\n{}"), None)
 
+# how often it looks: as asked while the room follows and the screen moves, a glance a second while the room is not
+# following, a few a second while nothing on the screen moves, and as asked while the Pi's answers are not heard
+check("following, with the screen moving: as asked", P.pace(30, "syncing", 0.2), 30)
+check("the room off in the app: a glance a second", P.pace(30, "off", 0), 1.0)
+check("paused by a hand on a light: the same", P.pace(240, "paused", 0), 1.0)
+check("nothing on the screen moving: a few a second", P.pace(60, "syncing", 2.0), 4.0)
+check("no answer from the Pi: as asked, since it cannot be told", P.pace(30, None, 0), 30)
+check("a game set to pause: not at all", P.pace(0, "syncing", 0), 0.0)
+check("a gentle rate is not raised by a still screen", P.pace(2, "syncing", 5), 2)
+
 fr = P.frame_bytes(bytes(16 * 9 * 3), resume=True)
 check("a frame says what it is", (fr[:4], fr[4], fr[5], fr[6], len(fr)), (b"CSY1", 1, 16, 9, 7 + 432))
 
@@ -153,11 +163,15 @@ class FakeSync(P.Sync):
         self.link, self.paused, self.gaming, self.fps = link, False, False, 20.0
         self.settings = settings or P.Settings(pathlib.Path(tempfile.mkdtemp()) / "s.json")
         self.screen = FakeScreen()
+        self.black = False
 
 
 P._allowed = True  # (on a Mac build machine, Screen Recording is not this test's business)
 s = FakeSync(link)
 check("the tray says what the room is doing", s.status_line(), "Office · following")
+s.black = True
+check("a screen that has looked black for a while says why the lights are dark", "protected video" in s.status_line(), True)
+s.black = False
 s.paused = True
 check("paused here says so", s.status_line(), "Paused")
 done.set()

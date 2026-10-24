@@ -57,12 +57,15 @@ GRID_W, GRID_H = 16, 9
 LOST_S = 10.0           # no answer from the connector for this long: look for it again
 TELL_S = 10.0           # and how often, while it answers, this computer says which displays it has
 APP = "CasetaScreenSync"
-VERSION = "1.5"
+VERSION = "1.6"
 # How many times a second to look at the screen: Settings' choices. The lights are sent 50 updates a second and show
 # about 25, so past 50 a faster look makes them no smoother; it only lets a change reach them a few milliseconds
 # sooner, for many times the work here (a full-screen game still follows its own setting).
 RATES = (12, 20, 30, 60, 120, 240)
 GAME_RATE = 6           # "gently", while a game fills the screen
+STANDBY_RATE = 1.0      # the room not following (off or paused in the app): a glance a second keeps the Pi aware of it
+STILL_RATE = 4.0        # nothing on the screen has moved for a second: look this often until something does
+STILL_AFTER_S = 1.0
 
 LOG = logging.getLogger("screensync")
 
@@ -211,7 +214,7 @@ class Screen:
             try:
                 import dxcam  # noqa: WPS433  (Windows only)
 
-                self._cam = dxcam.create(output_color="RGB")
+                self._cam = dxcam.create(output_color="BGRA")  # as the screen is: no conversion of the whole frame
                 self.kind = "dxcam"
                 return
             except Exception as exc:  # noqa: BLE001
@@ -256,7 +259,7 @@ class Screen:
                 self._cam.release()
             except Exception:  # noqa: BLE001
                 pass
-            self._cam = dxcam.create(device_idx=dev, output_idx=out, output_color="RGB")
+            self._cam = dxcam.create(device_idx=dev, output_idx=out, output_color="BGRA")
         self.display = pick
         LOG.info("following %s", ids[pick]["name"] if pick else "the main display")
 
@@ -287,7 +290,9 @@ class Screen:
                 self._cam, self._mss, self.kind = None, _plain_grab(), "mss"
                 return self.grab()
             if f is not None:
-                self._last = f
+                # only the pixels grid() looks at, turned to RGB: a few hundred, not the whole 4K frame
+                sy, sx = _steps(f.shape[0], f.shape[1])
+                self._last = np.ascontiguousarray(f[::sy, ::sx, 2::-1])
             return self._last
         mons = self._mss.monitors
         k = int(self.display[1:]) if self.display and self.display.startswith("m") else 1
@@ -502,6 +507,21 @@ def run_quietly() -> None:
 
 
 # ---------- the loop ----------
+def pace(rate: float, room_state: Optional[str], still_for: float) -> float:
+    """How often to look now: `rate` while the room is following and the screen moves; a glance a second while the
+    Pi says the room is not following (off, paused, or stuck on a problem), since there is nothing to show then but
+    the Pi still needs to know the computer is there to start; and STILL_RATE once the screen has not changed for
+    STILL_AFTER_S, back to `rate` on the first look that finds a change. While the Pi has not answered (a firewall,
+    or not found yet), it is not known whether the room follows, so the full rate stands."""
+    if rate <= 0:
+        return 0.0
+    if room_state in ("off", "paused", "problem"):
+        return min(rate, STANDBY_RATE)
+    if still_for >= STILL_AFTER_S:
+        return min(rate, STILL_RATE)
+    return rate
+
+
 class Sync:
     def __init__(self, pi: Optional[str], fps: float, settings: Optional[Settings] = None) -> None:
         self.settings = settings or Settings(Path(os.devnull))
@@ -516,6 +536,7 @@ class Sync:
         self.gaming = False            # a game fills the screen (Windows), and Settings says to go gently or stop
         self.stop = threading.Event()
         self.sent = 0
+        self.black = False             # the screen has looked black for a while: protected video (Netflix) shows so
 
     def set_display(self, display: Optional[str], at: Optional[float] = None) -> None:
         """Follow this display (None: the main one), picked here or in the app at `at` (ms)."""
@@ -548,6 +569,7 @@ class Sync:
         nxt = time.monotonic()
         rate, rate_at = float(self.fps), 0.0
         found, noted_at, noted_sent = False, nxt, 0
+        last_cells, still_from, black_from = b"", nxt, None
         while not self.stop.is_set():
             now = time.monotonic()
             if now - rate_at > 2:  # what is in front is looked at every two seconds, not every frame
@@ -573,11 +595,19 @@ class Sync:
                     f = None
                 if f is not None:
                     cells = grid(f)
-                    a = np.frombuffer(cells, dtype=np.uint8).reshape(-1, 3).mean(axis=0)
-                    self.colour = tuple(int(v) for v in a)
+                    px = np.frombuffer(cells, dtype=np.uint8).reshape(-1, 3)
+                    self.colour = tuple(int(v) for v in px.mean(axis=0))
+                    if last_cells and np.abs(px.astype(np.int16) - np.frombuffer(last_cells, dtype=np.uint8).reshape(-1, 3)).max() > 3:
+                        still_from = now
+                    last_cells = cells
+                    dark = int(px.max()) < 8
+                    black_from = (black_from or now) if dark else None
+                    self.black = bool(black_from and now - black_from > 5)
                     self.link.send(frame_bytes(cells, resume=time.monotonic() < self.resume_until))
                     self.sent += 1
-            nxt += 1 / (rate or 2)
+            room_state = (self.link.state or {}).get("state") if self.link.found else None
+            looking = pace(rate, room_state, now - still_from)
+            nxt += 1 / (looking or 2)
             time.sleep(max(0.0, nxt - time.monotonic()))
             if time.monotonic() - nxt > 1:
                 nxt = time.monotonic()  # the PC slept: start the beat again rather than catch up
@@ -593,6 +623,8 @@ class Sync:
             return "Paused"
         if self.gaming and self.settings["game"] == "pause":
             return "Paused while a game is full screen"
+        if self.black and (self.link.state or {}).get("state") == "syncing":
+            return "The screen looks black (protected video like Netflix can't be read)"
         if not self.link.found:
             if self.link.addr:
                 return f"Sending to {self.link.addr[0]}, no answer yet"
