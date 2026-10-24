@@ -84,6 +84,40 @@ inline Cells grid(const uint8_t* px, int w, int h, int stride) {
   return out;
 }
 
+// ---------- an HDR screen ----------
+// Windows hands over an HDR screen as 16-bit floats a channel (R, G, B, A), linear light where 1.0 is 80 nits. `scale`
+// is what brings the screen's own SDR white (Settings' "SDR content brightness") to 1.0; brighter than that is the
+// brightest the lights show. Turned into the B, G, R, A bytes grid() reads, at the picture's own size.
+inline float half(uint16_t h) {
+  const int e = (h >> 10) & 31, m = h & 1023;
+  const float v = e == 0 ? std::ldexp(float(m), -24) : e == 31 ? 0.f : std::ldexp(float(m | 1024), e - 25);
+  return (h & 0x8000) ? -v : v;
+}
+inline std::vector<uint8_t> scrgb_to_bgra(const uint8_t* px, int w, int h, int stride, float scale) {
+  static const std::array<uint8_t, 4097> enc = [] {  // linear 0..1 in 4096 steps to sRGB
+    std::array<uint8_t, 4097> t{};
+    for (int i = 0; i <= 4096; i++) {
+      const double v = i / 4096.0;
+      const double e = v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1 / 2.4) - 0.055;
+      t[size_t(i)] = static_cast<uint8_t>(std::lround(std::clamp(e, 0.0, 1.0) * 255));
+    }
+    return t;
+  }();
+  std::vector<uint8_t> out(static_cast<size_t>(w) * h * 4);
+  for (int y = 0; y < h; y++) {
+    const uint16_t* row = reinterpret_cast<const uint16_t*>(px + static_cast<size_t>(y) * stride);
+    uint8_t* o = &out[static_cast<size_t>(y) * w * 4];
+    for (int x = 0; x < w; x++) {
+      for (int k = 0; k < 3; k++) {
+        const float v = std::clamp(half(row[x * 4 + k]) * scale, 0.f, 1.f);
+        o[x * 4 + (2 - k)] = enc[size_t(v * 4096 + 0.5f)];  // R, G, B in; B, G, R out
+      }
+      o[x * 4 + 3] = 255;
+    }
+  }
+  return out;
+}
+
 inline std::string frame_bytes(const Cells& cells, bool resume) {
   std::string f = "CSY1";
   f += static_cast<char>(resume ? FLAG_RESUME : 0);

@@ -23,6 +23,9 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00  // Windows 10's calls (an HDR screen's SDR white)
+#endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -57,7 +60,7 @@
 using Microsoft::WRL::ComPtr;
 using core::Json;
 
-static const char* VERSION = "2.2";
+static const char* VERSION = "2.3";
 static const wchar_t* APP = L"CasetaScreenSync";
 
 // ---------- small things ----------
@@ -202,6 +205,32 @@ static Json displays_json(const std::vector<Display>& ds) {
   return a;
 }
 
+// ---------- an HDR screen's SDR white ----------
+// What "SDR content brightness" in Windows' display settings makes white, as the scale that brings it to 1.0 in the
+// linear picture Windows hands over (1.0 there is 80 nits). 200 nits when Windows will not say.
+static float sdr_white_scale(const wchar_t* gdi_name) {
+  UINT32 np = 0, nm = 0;
+  if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &np, &nm) != ERROR_SUCCESS) return 1 / 2.5f;
+  std::vector<DISPLAYCONFIG_PATH_INFO> paths(np);
+  std::vector<DISPLAYCONFIG_MODE_INFO> modes(nm);
+  if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &np, paths.data(), &nm, modes.data(), nullptr) != ERROR_SUCCESS) return 1 / 2.5f;
+  for (UINT32 i = 0; i < np; i++) {
+    DISPLAYCONFIG_SOURCE_DEVICE_NAME src{};
+    src.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+    src.header.size = sizeof src;
+    src.header.adapterId = paths[i].sourceInfo.adapterId;
+    src.header.id = paths[i].sourceInfo.id;
+    if (DisplayConfigGetDeviceInfo(&src.header) != ERROR_SUCCESS || wcscmp(src.viewGdiDeviceName, gdi_name) != 0) continue;
+    struct { DISPLAYCONFIG_DEVICE_INFO_HEADER header; ULONG level; } white{};  // DISPLAYCONFIG_SDR_WHITE_LEVEL
+    white.header.type = static_cast<DISPLAYCONFIG_DEVICE_INFO_TYPE>(11);       // ..._GET_SDR_WHITE_LEVEL
+    white.header.size = sizeof white;
+    white.header.adapterId = paths[i].targetInfo.adapterId;
+    white.header.id = paths[i].targetInfo.id;
+    if (DisplayConfigGetDeviceInfo(&white.header) == ERROR_SUCCESS && white.level >= 1000) return 1000.f / float(white.level);
+  }
+  return 1 / 2.5f;
+}
+
 // ---------- the screen: Desktop Duplication, shrunk by the graphics card ----------
 class Capture {
  public:
@@ -231,6 +260,8 @@ class Capture {
     // An HDR screen: asked for as an ordinary 8-bit picture, which Windows makes from it (the older way of asking
     // gives some cards' HDR screens back black). The older way stays for a Windows without the newer one.
     hdr = false;
+    DXGI_OUTPUT_DESC od;
+    white_ = SUCCEEDED(o->GetDesc(&od)) ? sdr_white_scale(od.DeviceName) : 1 / 2.5f;
     ComPtr<IDXGIOutput6> o6;
     if (SUCCEEDED(o.As(&o6))) {
       DXGI_OUTPUT_DESC1 d1;
@@ -297,7 +328,8 @@ class Capture {
   }
   std::string describe() const {
     return std::string(gpu ? "shrunk " : "whole ") + std::to_string(sw) + "x" + std::to_string(sh) + " of " + std::to_string(w_) + "x" +
-           std::to_string(h_) + (hdr ? " hdr" : "") + (newer ? "" : " (older way)") + " fmt " + std::to_string(int(fmt_));
+           std::to_string(h_) + (hdr ? " hdr, white " + std::to_string(int(80 / white_ + 0.5f)) + " nits" : "") + (newer ? "" : " (older way)") +
+           " fmt " + std::to_string(int(fmt_));
   }
 
  private:
@@ -308,6 +340,7 @@ class Capture {
   ComPtr<ID3D11ShaderResourceView> srv_;
   UINT w_ = 0, h_ = 0, level_ = 0;
   DXGI_FORMAT fmt_ = DXGI_FORMAT_UNKNOWN;
+  float white_ = 1 / 2.5f;  // an HDR screen's SDR white, as the scale that makes it 1.0
   bool held_ = false, described_ = false;
   double checked_at_ = -1e9;
   std::string last_logged_;
@@ -318,9 +351,18 @@ class Capture {
     ctx_->CopySubresourceRegion(staging_.Get(), 0, 0, 0, 0, mip_.Get(), level_, nullptr);
     D3D11_MAPPED_SUBRESOURCE m;
     if (FAILED(ctx_->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &m))) return false;
-    cells = core::grid(static_cast<const uint8_t*>(m.pData), sw, sh, int(m.RowPitch));
+    cells = cells_of(m, sw, sh);
     ctx_->Unmap(staging_.Get(), 0);
     return true;
+  }
+  // An 8-bit screen is read as it is; an HDR one (16-bit floats, which Windows hands over for an HDR screen even
+  // when asked for 8 bits) is turned into 8-bit colour first, its own SDR white as white
+  core::Cells cells_of(const D3D11_MAPPED_SUBRESOURCE& m, int w, int h) const {
+    if (fmt_ == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+      const auto bgra = core::scrgb_to_bgra(static_cast<const uint8_t*>(m.pData), w, h, int(m.RowPitch), white_);
+      return core::grid(bgra.data(), w, h, w * 4);
+    }
+    return core::grid(static_cast<const uint8_t*>(m.pData), w, h, int(m.RowPitch));
   }
   bool make_whole() {
     if (whole_) return true;
@@ -334,7 +376,7 @@ class Capture {
     ctx_->CopySubresourceRegion(whole_.Get(), 0, 0, 0, 0, mip_.Get(), 0, nullptr);
     D3D11_MAPPED_SUBRESOURCE m;
     if (FAILED(ctx_->Map(whole_.Get(), 0, D3D11_MAP_READ, 0, &m))) return false;
-    cells = core::grid(static_cast<const uint8_t*>(m.pData), int(w_), int(h_), int(m.RowPitch));
+    cells = cells_of(m, int(w_), int(h_));
     ctx_->Unmap(whole_.Get(), 0);
     return true;
   }

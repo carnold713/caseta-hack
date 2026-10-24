@@ -67,6 +67,27 @@ int main() {
     Pic p(8, 4);
     check("a picture too small for a grid is black", brightest(p.cells()), 0);
   }
+  {  // an HDR screen: 16-bit floats, linear, 1.0 = 80 nits; its SDR white at 200 nits (2.5) is the lights' white
+    const int w = 240, h = 135;
+    std::vector<uint16_t> f(size_t(w) * h * 4, 0);
+    auto put = [&](int x0, int x1, float r, float g, float b) {
+      auto to_half = [](float v) -> uint16_t {  // enough of the conversion for these values
+        if (v <= 0) return 0;
+        int e;
+        const float m = std::frexp(v, &e);  // v = m * 2^e, m in [0.5, 1)
+        return static_cast<uint16_t>(((e + 14) << 10) | (int((m * 2 - 1) * 1024) & 1023));
+      };
+      for (int y = 0; y < h; y++)
+        for (int x = x0; x < x1; x++) { uint16_t* p = &f[(size_t(y) * w + x) * 4]; p[0] = to_half(r); p[1] = to_half(g); p[2] = to_half(b); p[3] = to_half(1); }
+    };
+    put(0, w / 2, 2.5f, 0, 0);
+    put(w / 2, w, 0, 0, 0.5f);
+    check("a half float reads back", half(0x3C00), 1.0f);
+    const auto bgra = scrgb_to_bgra(reinterpret_cast<const uint8_t*>(f.data()), w, h, w * 8, 1 / 2.5f);
+    const Cells c = grid(bgra.data(), w, h, w * 4);
+    check("an HDR screen's SDR white red is full red", all(c, 0, 8, 255, 0, 0), true);
+    check("and a dimmer blue is a dimmer blue, as sRGB", all(c, 8, 16, 0, 0, 124, 2), true);
+  }
   Cells z{};
   const std::string fr = frame_bytes(z, true);
   check("a frame says what it is", fr.substr(0, 4) + char('0' + fr[4]) + std::to_string(int(fr[5])) + "x" + std::to_string(int(fr[6])), std::string("CSY11") + "16x9");
