@@ -42,7 +42,7 @@ jobs:
         run: |
           python pc\windows\embed_page.py pc\settings.html pc\windows\page.h
           New-Item -ItemType Directory -Force dist | Out-Null
-          $out = cl /nologo /O2 /GL /MT /EHsc /std:c++17 /W3 /utf-8 /DUNICODE /D_UNICODE /Fe:dist\CasetaScreenSync.exe pc\windows\main.cpp /link /LTCG /SUBSYSTEM:WINDOWS d3d11.lib dxgi.lib ws2_32.lib psapi.lib shell32.lib user32.lib gdi32.lib advapi32.lib 2>&1
+          $out = cl /nologo /O2 /GL /MT /EHsc /std:c++20 /W3 /utf-8 /DUNICODE /D_UNICODE /Fe:dist\CasetaScreenSync.exe pc\windows\main.cpp /link /LTCG /SUBSYSTEM:WINDOWS d3d11.lib dxgi.lib ws2_32.lib psapi.lib shell32.lib user32.lib gdi32.lib advapi32.lib 2>&1
           $code = $LASTEXITCODE
           $out
           # the compiler's errors, where the run's page shows them
