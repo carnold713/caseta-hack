@@ -472,15 +472,22 @@ The Android app can show a call or a text on Hue lights: Settings, This phone, *
 1. **Allow notification access**, then switch Caseta on in the page Android opens. Android 13 and later grey that
    switch out for an app installed from a download until it is let through once: **Greyed out?** on the same page
    opens the app's info, where ⋮ has **Allow restricted settings**.
-2. Switch on **Show them on the lights**. The office's Hue colour lights are chosen to begin with; any Hue light can
-   be (a Hue plug is never offered: a relay clicked on and off for every text is worn out for nothing).
+2. Switch on **Show them on the lights**. The office's Hue colour lights are chosen to begin with; any light that
+   dims can be: Hue and Nanoleaf in colour, a Lutron dimmer or a Hue white bulb in brightness alone. A switch (a Hue
+   plug, a Lutron switch) is never offered: a relay clicked on and off for every text is worn out for nothing.
 3. For calls and for texts, pick a pattern (**Flash**, **Breathe**, **Two colours**, **Glow**) and its colours.
    **Try it** plays it on the lights.
 
 A call shows until it is answered or stops ringing (at most a minute); a text for a few seconds, and a burst of them
-once. Afterwards every light goes back exactly as it was. A light following the PC screen shows it in the screen's
-stream and then goes back to the screen. Touching a light from the app or a remote meanwhile takes it out.
-**People** gives someone a colour of their own: a call or text whose sender's name holds theirs comes in it. Texts
+once. Every light changes at the same moment: the Hue colour lights are streamed to together (Hue's entertainment
+mode, through an area named "Caseta alerts", or the screen's own when it holds the same lights), a Nanoleaf through
+its own streaming mode, and a Lutron dimmer or a Hue white bulb is sent each step a moment early, on the same clock.
+Afterwards every light goes back exactly as it was. A light following the PC screen shows it in the screen's
+stream and then goes back to the screen. Touching a light from the app or a remote meanwhile ends it, and that
+light stays as you left it. A text during a call shows over it, and the call carries on after.
+**Apps** gives an app a look of its own (Add an app offers the ones that have notified lately first): everything it
+notifies shows in that look, whether or not it is a message, and its texts and calls take its colour.
+**People** gives someone a colour of their own (it comes before an app's): a call or text whose sender's name holds theirs comes in it. Texts
 come from the phone's own texting app unless **From other messaging apps too** is on. **Not during Do Not Disturb**
 (on to begin with) keeps the lights dark when the phone would stay quiet, except for people allowed through it.
 

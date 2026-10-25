@@ -1459,6 +1459,10 @@ body.nightlook::after { content: ''; position: fixed; inset: 0; z-index: 40; poi
 .al-kind + .group { margin-top: 16px; }
 .al-dot { width: 20px; height: 20px; border-radius: 10px; flex: none; margin-right: 14px; }
 .al-pedit { padding: 6px 0 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-.al-pedit .pill { margin-left: var(--gutter); }
+.al-pedit > .pill { margin-left: var(--gutter); }
 .al-add { gap: 10px; }
 .al-add .field { flex: 1; min-width: 0; }
+.al-btns { display: flex; gap: 8px; }
+.al-pedit .al-kind { width: 100%; }
+.al-appq { padding: 0 var(--gutter) 12px; }
+.al-appq .field { width: 100%; }

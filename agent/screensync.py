@@ -735,45 +735,8 @@ class ScreenSync:
 
     async def _area_for(self, room: str, lights: List[str]) -> dict:
         """The entertainment area holding exactly these lights, made if there is none."""
-        hue = self.hue
-        want = {hue.devices[d]["zone"] for d in lights}
-        configs = (await hue._get("/clip/v2/resource/entertainment_configuration")).get("data", [])  # noqa: SLF001
-        for cfg in configs:
-            have = {ls.get("rid") for ls in cfg.get("light_services") or []}
-            if have == want:
-                if cfg.get("status") == "active":
-                    LOG.info("screen sync: %s is already streaming; taking it over", (cfg.get("metadata") or {}).get("name"))
-                return _area(cfg)
-        ents = (await hue._get("/clip/v2/resource/entertainment")).get("data", [])  # noqa: SLF001
-        by_owner = {(e.get("owner") or {}).get("rid"): e["id"] for e in ents if e.get("renderer")}
-        where = {p["id"]: (p["x"], p["y"]) for p in self.placed(room)}
-        locations = []
-        for d in sorted(lights, key=lambda d: str(hue.devices[d].get("name") or "")):
-            ent = by_owner.get(hue.devices[d].get("hue_owner"))
-            if not ent:
-                raise RuntimeError(f"{hue.devices[d].get('name') or d} cannot take part in Hue's streaming")
-            x, y = where.get(d, (0.0, 0.0))
-            # Hue's own room coordinates, for the Hue app's picture of the area: x across, z up, y towards the screen.
-            # A gradient light is given its start and its end, so its sections lie along it there too (the bridge takes
-            # no more than two positions for one light, and refuses the whole area with a 400 for a third).
-            hx, hz = max(-1.0, min(1.0, x / 2)), max(-1.0, min(1.0, -y / 2))
-            if int(hue.devices[d].get("segments") or 1) > 1 and (hue.devices[d].get("product") or {}).get("form") in UPRIGHT:
-                half = UPRIGHT_SPAN / 4  # a standing lamp's run from its foot up
-                pos = [{"x": hx, "y": 0.8, "z": max(-1.0, min(1.0, hz + k * half))} for k in (-1, 1)]
-            elif int(hue.devices[d].get("segments") or 1) > 1:
-                half = GRADIENT_SPAN / 4
-                pos = [{"x": max(-1.0, min(1.0, hx + k * half)), "y": 0.8, "z": hz} for k in (-1, 1)]
-            else:
-                pos = [{"x": hx, "y": 0.8, "z": hz}]
-            locations.append({"service": {"rid": ent, "rtype": "entertainment"}, "positions": pos})
-        name = f"{self.room_name(room) or 'Room'} screen"[:32]
-        made = await hue._post("/clip/v2/resource/entertainment_configuration", {  # noqa: SLF001
-            "type": "entertainment_configuration", "metadata": {"name": name}, "configuration_type": "screen",
-            "locations": {"service_locations": locations}})
-        new_id = ((made.get("data") or [{}])[0]).get("rid")
-        LOG.info("screen sync: made the entertainment area %s (%s)", name, new_id)
-        cfg = (await hue._get(f"/clip/v2/resource/entertainment_configuration/{new_id}")).get("data", [{}])[0]  # noqa: SLF001
-        return _area(cfg)
+        return await area_for(self.hue, lights, f"{self.room_name(room) or 'Room'} screen"[:32],
+                              {p["id"]: (p["x"], p["y"]) for p in self.placed(room)})
 
     # ----- colours -----
     def _aim(self, w: int, h: int, rgb: bytes) -> None:
@@ -857,6 +820,61 @@ def lan_address(towards: str) -> Optional[str]:
             return s.getsockname()[0]
     except OSError:
         return None
+
+
+async def area_for(hue: Any, lights: List[str], name: str, where: Optional[Dict[str, Tuple[float, float]]] = None) -> dict:
+    """The Hue entertainment area holding exactly these lights, made (named `name`) if there is none. `where` places
+    each light for Hue's own picture of the area, in screen units; screen sync's positions, or nothing for an alert."""
+    where = where or {}
+    want = {hue.devices[d]["zone"] for d in lights}
+    configs = (await hue._get("/clip/v2/resource/entertainment_configuration")).get("data", [])  # noqa: SLF001
+    for cfg in configs:
+        have = {ls.get("rid") for ls in cfg.get("light_services") or []}
+        if have == want:
+            if cfg.get("status") == "active":
+                LOG.info("screen sync: %s is already streaming; taking it over", (cfg.get("metadata") or {}).get("name"))
+            return _area(cfg)
+    ents = (await hue._get("/clip/v2/resource/entertainment")).get("data", [])  # noqa: SLF001
+    by_owner = {(e.get("owner") or {}).get("rid"): e["id"] for e in ents if e.get("renderer")}
+    locations = []
+    for d in sorted(lights, key=lambda d: str(hue.devices[d].get("name") or "")):
+        ent = by_owner.get(hue.devices[d].get("hue_owner"))
+        if not ent:
+            raise RuntimeError(f"{hue.devices[d].get('name') or d} cannot take part in Hue's streaming")
+        x, y = where.get(d, (0.0, 0.0))
+        # Hue's own room coordinates, for the Hue app's picture of the area: x across, z up, y towards the screen.
+        # A gradient light is given its start and its end, so its sections lie along it there too (the bridge takes
+        # no more than two positions for one light, and refuses the whole area with a 400 for a third).
+        hx, hz = max(-1.0, min(1.0, x / 2)), max(-1.0, min(1.0, -y / 2))
+        if int(hue.devices[d].get("segments") or 1) > 1 and (hue.devices[d].get("product") or {}).get("form") in UPRIGHT:
+            half = UPRIGHT_SPAN / 4  # a standing lamp's run from its foot up
+            pos = [{"x": hx, "y": 0.8, "z": max(-1.0, min(1.0, hz + k * half))} for k in (-1, 1)]
+        elif int(hue.devices[d].get("segments") or 1) > 1:
+            half = GRADIENT_SPAN / 4
+            pos = [{"x": max(-1.0, min(1.0, hx + k * half)), "y": 0.8, "z": hz} for k in (-1, 1)]
+        else:
+            pos = [{"x": hx, "y": 0.8, "z": hz}]
+        locations.append({"service": {"rid": ent, "rtype": "entertainment"}, "positions": pos})
+    made = await hue._post("/clip/v2/resource/entertainment_configuration", {  # noqa: SLF001
+        "type": "entertainment_configuration", "metadata": {"name": name}, "configuration_type": "screen",
+        "locations": {"service_locations": locations}})
+    new_id = ((made.get("data") or [{}])[0]).get("rid")
+    LOG.info("screen sync: made the entertainment area %s (%s)", name, new_id)
+    cfg = (await hue._get(f"/clip/v2/resource/entertainment_configuration/{new_id}")).get("data", [{}])[0]  # noqa: SLF001
+    return _area(cfg)
+
+
+async def channel_lights(hue: Any, area: dict, lights: List[str]) -> Dict[int, str]:
+    """Which light each of an area's channels belongs to: channel -> entertainment service -> device -> light."""
+    ents = (await hue._get("/clip/v2/resource/entertainment")).get("data", [])  # noqa: SLF001
+    owner_of = {e["id"]: (e.get("owner") or {}).get("rid") for e in ents}
+    light_of_owner = {hue.devices[d].get("hue_owner"): d for d in lights}
+    out: Dict[int, str] = {}
+    for ch, rid in area["members"]:
+        d = light_of_owner.get(owner_of.get(rid))
+        if d:
+            out[ch] = d
+    return out
 
 
 def _area(cfg: dict) -> dict:

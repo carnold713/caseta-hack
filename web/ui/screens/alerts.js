@@ -2,6 +2,8 @@
 // pattern and colour of their own, and in a person's own colour when they have one. The phone tells the hub
 // (mobile/, CallsListener.java), the hub decides from these settings (hub/alerts.js), the connector plays it and puts
 // the lights back (agent/alerts.py). Saved as settings.alerts; this phone's half is Android's notification access.
+// Any light can show them: a Hue or Nanoleaf in colour, a Lutron dimmer or a Hue white bulb in brightness. An app
+// can have a look of its own (by_app): any notification it makes shows, and its texts and calls take its colour.
 import * as native from '/ui/native.js';
 import { LAMP_COLOURS, colourName, sameHex } from '/ui/colour.js';
 
@@ -22,20 +24,26 @@ function alerts(c) {
   a.text = { ...DEFAULTS.text, ...(a.text || {}) };
   if (!Array.isArray(a.people)) a.people = [];
   if (!Array.isArray(a.lights)) a.lights = [];
+  if (!Array.isArray(a.by_app)) a.by_app = [];
   if (!a.lights.length && !a.on && !c.ui.alSeeded) {
     c.ui.alSeeded = true;
     const office = c.data.areas().find(r => /office/i.test(r.name || ''));
-    if (office) a.lights = hueLights(c, office.id).filter(d => d.color).map(d => d.device_id);
+    if (office) a.lights = showLights(c, office.id).filter(d => d.color && String(d.device_id).startsWith('hue_')).map(d => d.device_id);
   }
   return a;
 }
 
-// Hue lights by room: the ones the connector can show a call on. A Hue plug is left out: a relay clicked on and off
-// for every text is worn out for nothing.
-const hueLights = (c, aid) => c.H.roomLights(aid).filter(d => String(d.device_id).startsWith('hue_') && d.domain === 'light');
-function hueRooms(c) {
-  return c.data.areas().map(r => ({ id: r.id, name: r.name, lights: hueLights(c, r.id) })).filter(r => r.lights.length);
+// The lights that can show one, by room: anything that dims (Hue, Nanoleaf, a Lutron dimmer). A switch is left out,
+// a Hue plug or a Lutron one alike: a relay clicked on and off for every text is worn out for nothing.
+const showLights = (c, aid) => c.H.roomLights(aid).filter(d => d.domain === 'light');
+function lightRooms(c) {
+  return c.data.areas().map(r => ({ id: r.id, name: r.name, lights: showLights(c, r.id) })).filter(r => r.lights.length);
 }
+// A look by its key: "call", "text", or "app:<n>" for the nth app with one of its own
+const lookOf = (a, key) => (String(key).startsWith('app:') ? a.by_app[Number(String(key).slice(4))] : a[key]);
+
+// The phone's apps, for choosing one: lately notifying first, then all of them (native.js alertAppList)
+let appList = null;
 
 let access = null;   // this phone's notification access, once asked
 function askAccess(c) {
@@ -64,12 +72,12 @@ export function view(c) {
       </div>`;
   }
   const chosen = new Set(a.lights);
-  const rooms = hueRooms(c);
+  const rooms = lightRooms(c);
   const lights = rooms.length ? rooms.map(r => `<div class="t-cap muted al-room">${esc(r.name)}</div>
       <div class="group">${r.lights.map(d => `<button class="row way ${chosen.has(d.device_id) ? 'sel' : ''}" data-act="al-light" data-id="${esc(d.device_id)}" aria-pressed="${chosen.has(d.device_id)}">
         <span class="radio ${chosen.has(d.device_id) ? 'on' : ''}">${chosen.has(d.device_id) ? icon('check', 14, 2.2) : ''}</span>
         <span class="row-txt"><span class="t">${esc(d.name)}</span>${d.color ? '' : '<span class="d">Brightness only</span>'}</span></button>`).join('')}</div>`).join('')
-    : '<p class="t-cap muted al-lede">No Hue lights yet.</p>';
+    : '<p class="t-cap muted al-lede">No lights that dim yet.</p>';
   return `<div class="al-page">${head}
     ${phone}
     <div class="group al-main">${toggle('Show them on the lights', a.on, 'al-on')}</div>
@@ -78,6 +86,7 @@ export function view(c) {
     ${kindBlock(c, a, 'call', 'Calls')}
     ${kindBlock(c, a, 'text', 'Texts')}
     <div class="group">${toggle('From other messaging apps too', a.apps === 'all', 'al-apps', 'WhatsApp, Signal and the like')}</div>
+    ${appsBlock(c, a)}
     ${peopleBlock(c, a)}
     <div class="t-over sec">When</div>
     <div class="group">
@@ -89,16 +98,51 @@ export function view(c) {
 
 const swatches = (c, sel, act, kind) => `<div class="al-sw" role="radiogroup">${LAMP_COLOURS.map(([n, x]) => `<button class="sw ${sameHex(x, sel) ? 'sel' : ''}" style="background:${x}" data-act="${act}" data-kind="${kind}" data-hex="${x.toLowerCase()}" role="radio" aria-checked="${sameHex(x, sel)}" aria-label="${n}"></button>`).join('')}</div>`;
 
-function kindBlock(c, a, kind, title) {
-  const k = a[kind];
-  return `<div class="t-over sec">${title}</div>
-    <div class="al-kind" data-al="${kind}">
-      <div class="chip-wrap al-pats">${PATTERNS.map(([p, t]) => `<button class="chip sm" data-act="al-pattern" data-kind="${kind}" data-p="${p}" aria-pressed="${k.pattern === p}">${t}</button>`).join('')}</div>
-      ${swatches(c, k.color, 'al-color', kind)}
-      ${k.pattern === 'alternate' ? `<p class="t-cap muted al-and">and</p>${swatches(c, k.color2, 'al-color2', kind)}` : ''}
+// A pattern and its colours, with Try it: a call's, a text's, or an app's own
+function lookBlock(c, k, key, extra = '') {
+  return `<div class="al-kind" data-al="${c.esc(key)}">
+      <div class="chip-wrap al-pats">${PATTERNS.map(([p, t]) => `<button class="chip sm" data-act="al-pattern" data-kind="${c.esc(key)}" data-p="${p}" aria-pressed="${k.pattern === p}">${t}</button>`).join('')}</div>
+      ${swatches(c, k.color, 'al-color', key)}
+      ${k.pattern === 'alternate' ? `<p class="t-cap muted al-and">and</p>${swatches(c, k.color2, 'al-color2', key)}` : ''}
       <div class="al-try"><span class="t-cap muted">${c.esc(colourName(k.color))}${k.pattern === 'alternate' ? ` and ${c.esc(colourName(k.color2))}` : ''}</span>
-        <button class="pill ghost sm" data-act="al-test" data-kind="${kind}">Try it</button></div>
+        <span class="al-btns">${extra}<button class="pill ghost sm" data-act="al-test" data-kind="${c.esc(key)}">Try it</button></span></div>
     </div>`;
+}
+const kindBlock = (c, a, kind, title) => `<div class="t-over sec">${title}</div>${lookBlock(c, a[kind], kind)}`;
+
+const PATTERN_NAME = Object.fromEntries(PATTERNS);
+function appsBlock(c, a) {
+  const { esc, icon } = c;
+  const open = c.ui.alApp;
+  return `<div class="t-over sec">Apps</div>
+    <div class="group al-apps">${a.by_app.map((r, i) => `<button class="row" data-act="al-app" data-i="${i}" aria-expanded="${open === i}">
+        <span class="al-dot" style="background:${esc(r.color)}"></span><span class="row-txt"><span class="t">${esc(r.name)}</span><span class="d">${esc(PATTERN_NAME[r.pattern] || 'Flash')} · ${esc(colourName(r.color))}</span></span></button>
+        ${open === i ? `<div class="al-pedit">${lookBlock(c, r, `app:${i}`, `<button class="pill ghost sm" data-act="al-aremove" data-i="${i}">Remove</button>`)}</div>` : ''}`).join('')}
+      ${native.isNative ? `<button class="row" data-go="alerts/apps"><span class="row-txt"><span class="t">Add an app</span><span class="d">Everything it notifies shows, in its own colour</span></span><span class="row-chev">${icon('chev', 16, 1.8)}</span></button>`
+        : a.by_app.length ? '' : '<div class="row"><span class="row-txt"><span class="d">Apps are added from the Android app</span></span></div>'}
+    </div>`;
+}
+
+// ---------- choosing an app (#alerts/apps) ----------
+function appRows(c) {
+  const { esc } = c;
+  const have = new Set(alerts(c).by_app.map(r => r.pkg));
+  const q = String(c.ui.alAppQ || '').trim().toLowerCase();
+  const pick = l => (l || []).filter(x => !have.has(x.pkg) && (!q || x.name.toLowerCase().includes(q)));
+  const recent = pick(appList && appList.recent), seen = new Set(recent.map(x => x.pkg));
+  const rest = pick(appList && appList.all).filter(x => !seen.has(x.pkg));
+  const rows = l => l.map(x => `<button class="row" data-act="al-apick" data-pkg="${esc(x.pkg)}" data-name="${esc(x.name)}"><span class="row-txt"><span class="t">${esc(x.name)}</span></span></button>`).join('');
+  if (!appList) return '<div class="group"><div class="row"><span class="row-txt"><span class="d">Looking</span></span></div></div>';
+  return `${recent.length ? `<div class="t-over sec-s">Notified lately</div><div class="group">${rows(recent)}</div>` : ''}
+    ${rest.length ? `<div class="t-over sec-s">All apps</div><div class="group">${rows(rest)}</div>` : ''}
+    ${!recent.length && !rest.length ? '<p class="t-cap muted sheet-p">None found</p>' : ''}`;
+}
+export function sheetFor(c, r) {
+  if (r.id !== 'apps') return null;
+  if (!appList) native.alertAppList().then(l => { appList = l; c.render(); });
+  return { parent: 'alerts', spec: { over: 'Calls and texts', title: 'Add an app', body: `
+    <div class="al-appq"><input class="field" data-input="al-appq" value="${c.esc(c.ui.alAppQ || '')}" placeholder="Search" aria-label="Search apps" autocomplete="off"></div>
+    <div class="al-applist">${appRows(c)}</div>` } };
 }
 
 function peopleBlock(c, a) {
@@ -127,15 +171,29 @@ export const actions = {
     a.lights = a.lights.includes(id) ? a.lights.filter(x => x !== id) : [...a.lights, id];
     save(c);
   },
-  'al-pattern'(c, el) { alerts(c)[el.dataset.kind].pattern = el.dataset.p; save(c); },
-  'al-color'(c, el) { alerts(c)[el.dataset.kind].color = el.dataset.hex; save(c); },
-  'al-color2'(c, el) { alerts(c)[el.dataset.kind].color2 = el.dataset.hex; save(c); },
+  'al-pattern'(c, el) { const k = lookOf(alerts(c), el.dataset.kind); if (k) { k.pattern = el.dataset.p; save(c); } },
+  'al-color'(c, el) { const k = lookOf(alerts(c), el.dataset.kind); if (k) { k.color = el.dataset.hex; save(c); } },
+  'al-color2'(c, el) { const k = lookOf(alerts(c), el.dataset.kind); if (k) { k.color2 = el.dataset.hex; save(c); } },
   async 'al-test'(c, el) {
-    const a = alerts(c);
+    const a = alerts(c), key = el.dataset.kind;
+    const app = key.startsWith('app:') ? lookOf(a, key) : null;
     try {
-      const r = await c.data.api('/api/alert', { method: 'POST', body: JSON.stringify({ kind: 'test', of: el.dataset.kind, alerts: a }) });
+      const r = await c.data.api('/api/alert', { method: 'POST', body: JSON.stringify({ kind: 'test', of: app ? 'app' : key, app: app ? app.pkg : undefined, alerts: a }) });
       if (r && r.skipped === 'no lights') c.toast('Choose a light first', { err: true });
     } catch (e) { c.toast(e.message || 'The house computer did not answer', { err: true }); }
+  },
+  'al-app'(c, el) { const i = Number(el.dataset.i); c.ui.alApp = c.ui.alApp === i ? null : i; c.render(); },
+  'al-aremove'(c, el) { alerts(c).by_app.splice(Number(el.dataset.i), 1); c.ui.alApp = null; save(c); },
+  'al-appq'(c, el, r, v) { c.ui.alAppQ = v; const l = document.querySelector('#sheet-root .al-applist'); if (l) l.innerHTML = appRows(c); },
+  'al-apick'(c, el) {
+    const a = alerts(c);
+    const used = new Set([...a.by_app.map(x => x.color), a.call.color, a.text.color].map(x => x.toLowerCase()));
+    const color = LAMP_COLOURS.map(([, x]) => x.toLowerCase()).find(x => !used.has(x)) || LAMP_COLOURS[0][1].toLowerCase();
+    a.by_app.push({ pkg: el.dataset.pkg, name: el.dataset.name, pattern: 'flash', color, color2: DEFAULTS.text.color2 });
+    c.ui.alApp = a.by_app.length - 1;
+    c.ui.alAppQ = '';
+    c.dismiss();
+    save(c);
   },
   'al-person'(c, el) { const i = Number(el.dataset.i); c.ui.alPerson = c.ui.alPerson === i ? null : i; c.render(); },
   'al-pcolor'(c, el) { const p = alerts(c).people[Number(el.dataset.kind)]; if (p) { p.color = el.dataset.hex; save(c); } },

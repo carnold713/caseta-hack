@@ -196,7 +196,7 @@ app.post('/api/alert', requireAuth, async (req, res) => {
   let alerts = config.settings.alerts || normalizeAlerts(null), ev = b;
   if (b.kind === 'test') {
     alerts = { ...normalizeAlerts(b.alerts || alerts), on: true, dnd: false, only_on: false };
-    ev = { kind: b.of === 'call' ? 'call' : 'text', state: 'start', key: 'test', from: String(b.from || '') };
+    ev = { kind: ['call', 'app'].includes(b.of) ? b.of : 'text', state: 'start', key: 'test', from: String(b.from || ''), app: String(b.app || '') };
   }
   const d = decideAlert(alerts, ev, Date.now(), b.kind === 'test' ? {} : alertMemo);
   if (!d.action) return res.json({ ok: true, skipped: d.skip });

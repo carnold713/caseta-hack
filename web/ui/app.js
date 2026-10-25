@@ -412,6 +412,8 @@ function render() {
   if (!S.ready || !S.config) { wasScreen = false; app.className = 'plain'; tabs.hidden = true; scr.innerHTML = onboard.loadingHTML(); return; }
   // the Android app's widget shows the house as Home says it
   native.house(H.litLights().length, Math.round(H.houseLevel()));
+  // and the apps with a look of their own on the lights, whose every notification it sends (Calls and texts)
+  native.alertApps((((S.config.settings || {}).alerts || {}).by_app || []).map(r => r.pkg));
   // and its ten widgets the home as this page sees it, a moment after the redraws stop (only in the Android app)
   widgetData.soon(ctx);
   const r = route();

@@ -41,6 +41,14 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   check('the office lights are chosen to begin with', office && JSON.stringify(sel.sort()) === JSON.stringify([...office.hue].sort()), sel);
   if (office && office.plug.length) check('a Hue plug is not offered', !(await page.$(`[data-act="al-light"][data-id="${office.plug[0]}"]`)), office.plug);
   check('and it is off', (await C(() => document.querySelector('[data-act="al-on"]').getAttribute('aria-checked'))) === 'false', null);
+  const offered = await C(() => { const c = window.__copper; const ids = [...document.querySelectorAll('[data-act="al-light"]')].map(b => b.dataset.id);
+    const all = c.data.devices ? c.data.devices() : [];
+    const dimmer = c.data.areas().flatMap(r => c.H.roomLights(r.id)).find(d => d.domain === 'light' && !/^(hue_|nanoleaf_)/.test(String(d.device_id)));
+    const sw = c.data.areas().flatMap(r => c.H.roomLights(r.id)).find(d => d.domain === 'switch' && !/^(hue_|nanoleaf_)/.test(String(d.device_id)));
+    const nano = c.data.areas().flatMap(r => c.H.roomLights(r.id)).find(d => String(d.device_id).startsWith('nanoleaf_'));
+    return { dimmer: dimmer && ids.includes(dimmer.device_id), sw: sw ? ids.includes(sw.device_id) : false, nano: nano ? ids.includes(nano.device_id) : null }; });
+  check('a Lutron dimmer is offered, a switch is not', offered.dimmer === true && offered.sw === false, offered);
+  if (offered.nano !== null) check('a Nanoleaf is offered', offered.nano === true, offered);
 
   await page.click('[data-act="al-on"]'); await wait(1200);
   let a = await hubAl();
@@ -103,6 +111,59 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.click('[data-act="al-premove"]'); await wait(1000);
   a = await hubAl();
   check('a person can be removed', a.people.length === 0, a.people);
+
+  // the Android app: an app of its own, chosen from the phone's apps
+  const BRIDGE = () => {
+    window.__set = [];
+    window.Capacitor = {
+      isNativePlatform: () => true,
+      nativePromise(plugin, method, opts) {
+        if (method === 'setAlertApps') window.__set.push(opts.pkgs);
+        const r = method === 'calls' ? { access: true, android: 35 }
+          : method === 'alertAppList' ? { recent: [{ pkg: 'com.ring.app', name: 'Ring', at: 1 }], all: [{ pkg: 'com.ring.app', name: 'Ring' }, { pkg: 'com.whatsapp', name: 'WhatsApp' }, { pkg: 'com.spotify.music', name: 'Spotify' }] }
+          : {};
+        return Promise.resolve(r);
+      },
+    };
+  };
+  const nctx = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true });
+  if (process.env.APP_TOKEN) await nctx.addInitScript(t => { try { localStorage.setItem('token', t); localStorage.setItem('onboarded', '1'); sessionStorage.setItem('next:shown', 'none'); } catch (_) {} }, process.env.APP_TOKEN);
+  await nctx.addInitScript(BRIDGE);
+  const np = await nctx.newPage();
+  np.on('pageerror', e => errors.push('pageerror (app): ' + e.message));
+  const N = (fn, arg) => np.evaluate(fn, arg);
+  await np.goto(`http://127.0.0.1:${PORT}/#alerts`);
+  await np.waitForFunction(() => window.__copper && window.__copper.S.ready, null, { timeout: 15000 });
+  await wait(1200);
+  check('with notification access, nothing asks for it', !(await np.$('[data-act="al-allow"]')), null);
+  await np.click('[data-go="alerts/apps"]'); await wait(1000);
+  const listed = await N(() => [...document.querySelectorAll('#sheet-root [data-act="al-apick"]')].map(b => b.dataset.name));
+  check('the phone\'s apps are offered, those lately notifying first', JSON.stringify(listed) === JSON.stringify(['Ring', 'WhatsApp', 'Spotify']), listed);
+  await np.fill('#sheet-root [data-input="al-appq"]', 'wha'); await wait(300);
+  const found = await N(() => [...document.querySelectorAll('#sheet-root [data-act="al-apick"]')].map(b => b.dataset.name));
+  check('and can be searched', JSON.stringify(found) === JSON.stringify(['WhatsApp']), found);
+  await np.click('#sheet-root [data-act="al-apick"][data-pkg="com.whatsapp"]'); await wait(1400);
+  a = await hubAl();
+  const wa = (a.by_app || [])[0];
+  check('an app chosen gets a look of its own, in a colour not taken', !!wa && wa.pkg === 'com.whatsapp' && wa.name === 'WhatsApp' && wa.pattern === 'flash' && ![a.call.color, a.text.color].includes(wa.color), a.by_app);
+  check('and the phone is told to send its notifications', (await N(() => window.__set)).some(l => JSON.stringify(l) === '["com.whatsapp"]'), await N(() => window.__set));
+  await np.click('[data-al="app:0"] [data-act="al-pattern"][data-p="glow"]'); await wait(800);
+  await np.click('[data-al="app:0"] [data-act="al-color"][aria-label="Green"]'); await wait(1200);
+  a = await hubAl();
+  check('its pattern and colour are kept', a.by_app[0].pattern === 'glow' && a.by_app[0].color === '#4fd39a', a.by_app);
+  const tried2 = np.waitForResponse(r => r.url().endsWith('/api/alert'));
+  await np.click('[data-al="app:0"] [data-act="al-test"]');
+  const t2 = await (await tried2).json();
+  check('Try it plays its look', t2.detail && t2.detail.action.pattern === 'glow' && t2.detail.action.colors[0] === '#4fd39a', t2);
+  r = await post({ kind: 'app', state: 'start', key: 'n1', app: 'com.whatsapp', from: 'Group chat', dnd: false });
+  check('anything it notifies shows in its look', r.ok && r.detail && r.detail.action.pattern === 'glow' && r.detail.action.colors[0] === '#4fd39a', r);
+  r = await post({ kind: 'app', state: 'start', key: 'n2', app: 'com.spotify.music', dnd: false });
+  check('an app without one does not', r.skipped === 'app', r);
+  await np.screenshot({ path: path.join(process.env.SHOTS || '/tmp', 'alerts-apps.png'), fullPage: true });
+  await np.click('[data-act="al-aremove"]'); await wait(1200);
+  a = await hubAl();
+  check('an app can be removed', a.by_app.length === 0 && (await N(() => window.__set)).some(l => l.length === 0), a.by_app);
+  await nctx.close();
 
   const text = await C(() => document.querySelector('.al-page').innerText);
   check('no dashes in what it says', !/[\u2013\u2014]/.test(text), null);

@@ -36,6 +36,7 @@ import org.json.JSONObject;
  *   phone / setPhone                    this phone's own choices: how a running timer shows (status bar, quiet, none),
  *                                       and whether it says when the house computer is offline (HouseWatch)
  *   lastCrash                           the last thing that went wrong on the Android side, once, for the hub's log
+ *   alertAppList / setAlertApps         the apps to offer a look of their own, and the ones that have one
  *   calls / openCalls / openAppInfo     whether calls and texts reach the lights (notification access, CallsListener),
  *                                       and Android's pages to allow it: its notification access page, and the app's
  *                                       own page, where a sideloaded app first has to be let through Android's lock
@@ -243,6 +244,22 @@ public class HubPlugin extends Plugin {
             i = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
         }
         open(call, i, new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
+    }
+
+    /** The apps to offer for a look of their own: lately notifying, then every app. */
+    @PluginMethod
+    public void alertAppList(PluginCall call) {
+        call.resolve(AlertApps.list(getContext()));
+    }
+
+    /** The apps with a look of their own, whose every notification the listener sends: {pkgs: [...]}. */
+    @PluginMethod
+    public void setAlertApps(PluginCall call) {
+        JSArray list = call.getArray("pkgs", new JSArray());
+        java.util.Set<String> pkgs = new java.util.HashSet<>();
+        for (int i = 0; i < list.length(); i++) { String p = list.optString(i, ""); if (!p.isEmpty()) pkgs.add(p); }
+        AlertApps.setChosen(getContext(), pkgs);
+        call.resolve();
     }
 
     @PluginMethod

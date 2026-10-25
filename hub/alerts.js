@@ -13,6 +13,9 @@
 //   dnd       stay dark while the phone is on Do Not Disturb (unless that person or app is let through it)
 //   only_on   only lights that are already on show it
 //   apps      texts from "sms" (the phone's own texting app) or "all" messaging apps
+//   by_app    [{pkg, name, pattern, color, color2}]: an app of its own. Any notification it makes shows, in its colour and
+//             pattern; a text or call from it takes its colour (a person's own colour still comes first). The phone
+//             is handed the list (native.js alertApps) and sends only those apps' other notifications.
 
 const PATTERNS = ['flash', 'breathe', 'alternate', 'glow'];
 const DEFAULTS = {
@@ -25,6 +28,8 @@ const TEXT_GAP_MS = 2500; // texts closer together than this (a burst of message
 
 const isHex = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 const isDev = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v);
+// an Android package name: com.whatsapp, org.thoughtcrime.securesms
+const isPkg = v => typeof v === 'string' && /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/.test(v) && v.length <= 120;
 
 function look(v, d) {
   const o = v && typeof v === 'object' ? v : {};
@@ -42,6 +47,12 @@ function normalizeAlerts(v) {
     const name = p && typeof p.name === 'string' ? p.name.replace(/\s+/g, ' ').trim().slice(0, 40) : '';
     if (name && isHex(p.color) && people.length < 20) people.push({ name, color: p.color.toLowerCase() });
   }
+  const byApp = [];
+  for (const r of Array.isArray(a.by_app) ? a.by_app : []) {
+    if (!r || !isPkg(r.pkg) || byApp.some(x => x.pkg === r.pkg) || byApp.length >= 30) continue;
+    const name = typeof r.name === 'string' && r.name.trim() ? r.name.replace(/\s+/g, ' ').trim().slice(0, 40) : r.pkg;
+    byApp.push({ pkg: r.pkg, name, ...look(r, { pattern: 'flash', color: DEFAULTS.text.color, color2: DEFAULTS.text.color2 }) });
+  }
   return {
     on: a.on === true,
     lights: [...new Set(Array.isArray(a.lights) ? a.lights.filter(isDev) : [])].slice(0, 32),
@@ -51,6 +62,7 @@ function normalizeAlerts(v) {
     dnd: a.dnd !== false,
     only_on: a.only_on === true,
     apps: a.apps === 'all' ? 'all' : 'sms',
+    by_app: byApp,
   };
 }
 
@@ -63,10 +75,10 @@ function personColour(alerts, from) {
 }
 
 // What to do with one event from the phone: {action} for the connector, or {skip: why}.
-//   ev = {kind: call | text, state: start | stop, key, from, sms, dnd}
-// memo keeps when the last text showed, for the burst rule.
+//   ev = {kind: call | text | app, state: start | stop, key, from, sms, dnd, app}
+// memo keeps when the last text, and each app's last notification, showed, for the burst rule.
 function decideAlert(alerts, ev, now = Date.now(), memo = {}) {
-  const kind = ev.kind === 'call' ? 'call' : ev.kind === 'text' ? 'text' : null;
+  const kind = ['call', 'text', 'app'].includes(ev.kind) ? ev.kind : null;
   if (!kind) return { skip: 'kind' };
   const key = /^[A-Za-z0-9_-]{1,64}$/.test(String(ev.key || '')) ? String(ev.key) : 'one';
   // a call that stopped ringing always stops, whatever has changed since it started
@@ -74,12 +86,18 @@ function decideAlert(alerts, ev, now = Date.now(), memo = {}) {
   if (!alerts.on) return { skip: 'off' };
   if (!alerts.lights.length) return { skip: 'no lights' };
   if (alerts.dnd && ev.dnd === true) return { skip: 'do not disturb' };
-  if (kind === 'text' && alerts.apps === 'sms' && ev.sms === false) return { skip: 'app' };
-  if (kind === 'text') {
-    if (memo.textAt != null && now - memo.textAt < TEXT_GAP_MS) return { skip: 'burst' };
-    memo.textAt = now;
+  const rule = (alerts.by_app || []).find(r => r.pkg === ev.app) || null;
+  if (kind === 'app' && !rule) return { skip: 'app' };
+  if (kind === 'text' && alerts.apps === 'sms' && ev.sms === false && !rule) return { skip: 'app' };
+  if (kind !== 'call') {
+    const slot = kind === 'app' ? `app:${rule.pkg}` : 'textAt';
+    if (memo[slot] != null && now - memo[slot] < TEXT_GAP_MS) return { skip: 'burst' };
+    memo[slot] = now;
   }
-  const lk = alerts[kind];
+  // a call keeps the call's pattern in its app's colour; a text or anything else from an app with a look of its own
+  // takes that look; a person's own colour comes first whatever it came through
+  const base = kind === 'app' ? rule : alerts[kind];
+  const lk = rule && kind !== 'call' ? rule : { ...base, ...(rule ? { color: rule.color } : {}) };
   const mine = personColour(alerts, ev.from);
   const colors = lk.pattern === 'alternate' ? [mine || lk.color, lk.color2] : [mine || lk.color];
   return {

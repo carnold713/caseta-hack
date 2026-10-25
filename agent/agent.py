@@ -44,7 +44,7 @@ from nanoleaf import Nanoleaf
 from screensync import ScreenSync
 from sun import solar_noon, sun_times
 
-VERSION = "0.35.0"
+VERSION = "0.36.0"
 # How long to wait before each fresh ask when the bridge refuses to report button presses. A test
 # shortens these; nothing else should.
 RESUB_WAITS = (2, 4, 6)
@@ -248,7 +248,9 @@ class Agent:
                                config=lambda: self.config, send=self.send, room_name=self._room_name, data_dir=DATA_DIR,
                                nanoleaf=self.nanoleaf, app_url=_app_url(HUB_URL))
         self.runner.screen_sync = self.sync.remote  # a remote's "PC screen on or off"
-        self.alerts = Alerts(self.hue, self.sync)    # a call or a text on the phone, shown on the lights
+        # a call or a text on the phone, shown on the lights: Hue, Nanoleaf and Lutron dimmers, all on one beat
+        self.alerts = Alerts(self.hue, self.sync, nanoleaf=self.nanoleaf, lutron=lambda: self.bridge)
+        self.runner.before_set = self.alerts.yield_for   # a person's command ends an alert on that light first
         self.runner.hue_set = self._level_set_bridge
         self.runner.hue_color = self._color_set
         self.runner.hue_scene = self._scene_recall
@@ -451,7 +453,7 @@ class Agent:
         return None
 
     async def _level_set_bridge(self, device_id: str, level: int, fade_s: Optional[float]) -> None:
-        self.alerts.yield_for(device_id)
+        await self.alerts.yield_for(device_id)
         await self.sync.yield_for(device_id)
         backend = self._backend_for(device_id)
         if backend is None:
@@ -466,7 +468,7 @@ class Agent:
         return await backend.verify(device_id, adopt)
 
     async def _color_set(self, device_id: str, kelvin: Optional[float] = None, hex: Optional[str] = None, fade_s: Optional[float] = None, level: Optional[int] = None) -> None:  # noqa: A002
-        self.alerts.yield_for(device_id)
+        await self.alerts.yield_for(device_id)
         await self.sync.yield_for(device_id)
         backend = self._backend_for(device_id)
         if backend is None:
@@ -534,7 +536,7 @@ class Agent:
         """Shared by every backend's on_state callback: update what the app is told, and let follow-the-day
         and a hold-to-dim ramp react the same way regardless of whose light this is."""
         d = devices.get(device_id)
-        if not d:
+        if not d or self.alerts.owns(device_id):  # flashing for a call or a text: not news, and not remembered
             return
         st = _state_of(d)
         self._dirty_states[device_id] = st
@@ -885,6 +887,8 @@ class Agent:
 
     def _on_zone(self, device_id: str) -> None:
         assert self.bridge
+        if self.alerts.owns(device_id):  # flashing for a call or a text: not news, and not remembered
+            return
         st = _state_of(self.bridge.devices[device_id])
         self._dirty_states[device_id] = st
         self._follow_zone(device_id, st.get("level"))

@@ -141,6 +141,14 @@
         </provider>
     </application>
 
+    <!-- Calls and texts, Apps: the apps on the phone with a launcher icon, to choose one from (AlertApps) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

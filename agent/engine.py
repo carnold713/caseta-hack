@@ -208,6 +208,8 @@ class ActionRunner:
         # "this lamp is about to be turned on": agent.py uses it to give a lamp that follows the day
         # today's white while the lamp is still dark. Nothing else is allowed to light a lamp from here.
         self.before_on: Optional[Callable[[str], Awaitable[None]]] = None
+        # awaited before any level is sent to a light: a call or a text showing on it ends first (alerts.py)
+        self.before_set: Optional[Callable[[str], Awaitable[None]]] = None
         # "|".join(scene ids) -> the one this loop last ran, so a pair of buttons stepping the same
         # scenes forwards and backwards agree on where they are. Trusted only while the lights still
         # match it, so anything else touching them puts the loop back on closeness.
@@ -398,6 +400,8 @@ class ActionRunner:
         return self._seq[device_id]
 
     async def _set_level(self, device_id: str, level: int, fade: Optional[float]) -> None:
+        if self.before_set is not None:
+            await self.before_set(device_id)
         seq = self._claim(device_id)
         async with self._locks.setdefault(device_id, asyncio.Lock()):
             if self._seq.get(device_id) != seq:

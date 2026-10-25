@@ -94,3 +94,14 @@ export function backable(can) {
 export async function calls() { const r = await call('calls'); return r || { access: false, android: 0 }; }
 export async function openCalls() { return call('openCalls'); }
 export async function openAppInfo() { return call('openAppInfo'); }
+// The apps to offer a look of their own ({recent, all}), and the ones that have one, for the listener to send
+// their every notification. Sent only when the list changes.
+export async function alertAppList() { const r = await call('alertAppList'); return r || { recent: [], all: [] }; }
+let lastApps = null;
+export function alertApps(pkgs) {
+  if (!isNative) return;
+  const k = JSON.stringify(pkgs);
+  if (k === lastApps) return;
+  lastApps = k;
+  call('setAlertApps', { pkgs });
+}
