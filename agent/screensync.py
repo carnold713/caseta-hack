@@ -769,7 +769,7 @@ class ScreenSync:
         now = len(await channel_lights(hue, area, lights))
         best, tried = None, []
         for kind in ("screen", "3dspace", "monitor"):
-            for lie in ("v", "h"):
+            for lie in (None, "v", "h"):   # each as its form says (lamps up, strips across), then all one way
                 try:
                     trial = await make_area(hue, lights, f"{name} trial"[:32], where, kind, lie)
                 except Exception as exc:  # noqa: BLE001

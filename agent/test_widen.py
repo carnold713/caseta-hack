@@ -105,7 +105,7 @@ async def main():
     sync = sync_for(hue)
     await sync._begin_hue("office", ["hue_s", "hue_l"])
     trials = [m for m in hue.made if m[0] == "Office screen trial"]
-    check("the layouts are tried", len(trials) == 6 and {k for _n, k in trials} == {"screen", "3dspace", "monitor"}, hue.made)
+    check("the layouts are tried", len(trials) == 9 and {k for _n, k in trials} == {"screen", "3dspace", "monitor"}, hue.made)
     check("every trial is deleted", not [c for c in hue.configs if c["metadata"]["name"].endswith("trial")], [c["metadata"]["name"] for c in hue.configs])
     check("the old area of the room's own is deleted", "old-ours" in hue.deleted, hue.deleted)
     final = [c for c in hue.configs if c["metadata"]["name"] == "Office screen"]
