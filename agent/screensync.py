@@ -889,12 +889,13 @@ def lan_address(towards: str) -> Optional[str]:
 
 async def area_for(hue: Any, lights: List[str], name: str, where: Optional[Dict[str, Tuple[float, float]]] = None) -> dict:
     """The Hue entertainment area holding exactly these lights, made (named `name`) if there is none; of several, the
-    one named `name`. `where` places each light for Hue's own picture of the area, in screen units; screen sync's
+    one in the most channels, then the one named `name`. `where` places each light for Hue's own picture of the area, in screen units; screen sync's
     positions, or nothing for an alert."""
     want = {hue.devices[d]["zone"] for d in lights}
     configs = (await hue._get("/clip/v2/resource/entertainment_configuration")).get("data", [])  # noqa: SLF001
     same = [c for c in configs if {ls.get("rid") for ls in c.get("light_services") or []} == want]
-    same.sort(key=lambda c: (c.get("metadata") or {}).get("name") != name)
+    # the one in the most parts (an area made in the Hue app may split its lights better), then the one named so
+    same.sort(key=lambda c: (-len(c.get("channels") or []), (c.get("metadata") or {}).get("name") != name))
     if same:
         if same[0].get("status") == "active":
             LOG.info("screen sync: %s is already streaming; taking it over", (same[0].get("metadata") or {}).get("name"))
