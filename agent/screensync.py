@@ -249,6 +249,7 @@ class ScreenSync:
         self._snapshot: Dict[str, dict] = {}
         self._wts: Dict[tuple, List[float]] = {}
         self._detail: Dict[str, dict] = {}       # each streamed light as the bridge describes it, for the log
+        self._widened: set = set()               # sets of lights whose area's layouts have been tried (_widen)
         self._gains: Dict[str, float] = {}       # each light's brightness from the positions page (1 as the screen is)
         # a call or a text showing on a light that follows the screen (alerts.py): light -> f(now) -> linear rgb,
         # sent in place of the screen's colour until it is taken away
@@ -644,6 +645,9 @@ class ScreenSync:
             d = light_of_owner.get(owner_of.get(rid))
             if d:
                 self._chan_light[ch] = d
+        if any(int(hue.devices[d].get("segments") or 1) > 1 and list(self._chan_light.values()).count(d) <= 1 for d in lights):
+            area = await self._widen(room, lights, area)
+            self._chan_light = await channel_lights(hue, area, lights)
         self.area = area
         # what the bridge says of each light, for the log: a gradient lamp that streams as one colour shows why here
         seg_of = {(e.get("owner") or {}).get("rid"): e.get("segments") or {} for e in ents}
@@ -746,6 +750,50 @@ class ScreenSync:
         self._points, self._members = {}, None
         self._room_streaming = None
 
+    async def _widen(self, room: str, lights: List[str], area: dict) -> dict:
+        """A gradient light the area streams as one colour (a Hue Play table lamp in a screen area has been seen to):
+        try the area's other types, and its gradient lights laid upright and across, each as a trial area read back
+        and deleted, and keep whichever gives the lights the most channels, as this room's own area. Once a run for a
+        set of lights; the area found then has its channels, so it is not tried again after a restart."""
+        key = "|".join(sorted(lights))
+        if key in self._widened:
+            return area
+        self._widened.add(key)
+        hue = self.hue
+        name = f"{self.room_name(room) or 'Room'} screen"[:32]
+        where = {p["id"]: (p["x"], p["y"]) for p in self.placed(room)}
+        now = len(await channel_lights(hue, area, lights))
+        best, tried = None, []
+        for kind in ("screen", "3dspace", "monitor"):
+            for lie in ("v", "h"):
+                try:
+                    trial = await make_area(hue, lights, f"{name} trial"[:32], where, kind, lie)
+                except Exception as exc:  # noqa: BLE001
+                    tried.append(f"{kind}/{lie}: {exc}")
+                    continue
+                try:
+                    n = len(await channel_lights(hue, trial, lights))
+                    tried.append(f"{kind}/{lie}: {n}")
+                    if n > now and (best is None or n > best[0]):
+                        best = (n, kind, lie)
+                finally:
+                    try:
+                        await hue._delete(f"/clip/v2/resource/entertainment_configuration/{trial['id']}")  # noqa: SLF001
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.warning("screen sync: could not delete a trial area: %s", exc)
+        LOG.info("screen sync: %d channels in %s; tried %s", now, area.get("name"), "; ".join(tried))
+        if best is None:
+            return area
+        # the room's own area is made again the better way; one made in the Hue app is left as it was
+        if area.get("name") == name:
+            try:
+                await hue._delete(f"/clip/v2/resource/entertainment_configuration/{area['id']}")  # noqa: SLF001
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("screen sync: could not delete the old area: %s", exc)
+        made = await make_area(hue, lights, name, where, best[1], best[2])
+        LOG.info("screen sync: %s made again as %s/%s, %d channels where it had %d", name, best[1], best[2], best[0], now)
+        return made
+
     async def _area_for(self, room: str, lights: List[str]) -> dict:
         """The entertainment area holding exactly these lights, made if there is none."""
         return await area_for(self.hue, lights, f"{self.room_name(room) or 'Room'} screen"[:32],
@@ -836,17 +884,26 @@ def lan_address(towards: str) -> Optional[str]:
 
 
 async def area_for(hue: Any, lights: List[str], name: str, where: Optional[Dict[str, Tuple[float, float]]] = None) -> dict:
-    """The Hue entertainment area holding exactly these lights, made (named `name`) if there is none. `where` places
-    each light for Hue's own picture of the area, in screen units; screen sync's positions, or nothing for an alert."""
-    where = where or {}
+    """The Hue entertainment area holding exactly these lights, made (named `name`) if there is none; of several, the
+    one named `name`. `where` places each light for Hue's own picture of the area, in screen units; screen sync's
+    positions, or nothing for an alert."""
     want = {hue.devices[d]["zone"] for d in lights}
     configs = (await hue._get("/clip/v2/resource/entertainment_configuration")).get("data", [])  # noqa: SLF001
-    for cfg in configs:
-        have = {ls.get("rid") for ls in cfg.get("light_services") or []}
-        if have == want:
-            if cfg.get("status") == "active":
-                LOG.info("screen sync: %s is already streaming; taking it over", (cfg.get("metadata") or {}).get("name"))
-            return _area(cfg)
+    same = [c for c in configs if {ls.get("rid") for ls in c.get("light_services") or []} == want]
+    same.sort(key=lambda c: (c.get("metadata") or {}).get("name") != name)
+    if same:
+        if same[0].get("status") == "active":
+            LOG.info("screen sync: %s is already streaming; taking it over", (same[0].get("metadata") or {}).get("name"))
+        return _area(same[0])
+    return await make_area(hue, lights, name, where)
+
+
+async def make_area(hue: Any, lights: List[str], name: str, where: Optional[Dict[str, Tuple[float, float]]] = None,
+                    kind: str = "screen", lie: Optional[str] = None) -> dict:
+    """A new entertainment area of these lights. `kind` is the area's type; `lie` lays every gradient light out
+    upright ("v") or across ("h") rather than as its form says: how many channels the bridge gives a gradient light
+    depends on both, and it does not say how (ScreenSync._widen tries them)."""
+    where = where or {}
     ents = (await hue._get("/clip/v2/resource/entertainment")).get("data", [])  # noqa: SLF001
     by_owner = {(e.get("owner") or {}).get("rid"): e["id"] for e in ents if e.get("renderer")}
     locations = []
@@ -859,20 +916,22 @@ async def area_for(hue: Any, lights: List[str], name: str, where: Optional[Dict[
         # A gradient light is given its start and its end, so its sections lie along it there too (the bridge takes
         # no more than two positions for one light, and refuses the whole area with a 400 for a third).
         hx, hz = max(-1.0, min(1.0, x / 2)), max(-1.0, min(1.0, -y / 2))
-        if int(hue.devices[d].get("segments") or 1) > 1 and (hue.devices[d].get("product") or {}).get("form") in UPRIGHT:
+        gradient = int(hue.devices[d].get("segments") or 1) > 1
+        upright = (hue.devices[d].get("product") or {}).get("form") in UPRIGHT
+        if gradient and (lie == "v" or (lie is None and upright)):
             half = UPRIGHT_SPAN / 4  # a standing lamp's run from its foot up
             pos = [{"x": hx, "y": 0.8, "z": max(-1.0, min(1.0, hz + k * half))} for k in (-1, 1)]
-        elif int(hue.devices[d].get("segments") or 1) > 1:
+        elif gradient:
             half = GRADIENT_SPAN / 4
             pos = [{"x": max(-1.0, min(1.0, hx + k * half)), "y": 0.8, "z": hz} for k in (-1, 1)]
         else:
             pos = [{"x": hx, "y": 0.8, "z": hz}]
         locations.append({"service": {"rid": ent, "rtype": "entertainment"}, "positions": pos})
     made = await hue._post("/clip/v2/resource/entertainment_configuration", {  # noqa: SLF001
-        "type": "entertainment_configuration", "metadata": {"name": name}, "configuration_type": "screen",
+        "type": "entertainment_configuration", "metadata": {"name": name}, "configuration_type": kind,
         "locations": {"service_locations": locations}})
     new_id = ((made.get("data") or [{}])[0]).get("rid")
-    LOG.info("screen sync: made the entertainment area %s (%s)", name, new_id)
+    LOG.info("screen sync: made the entertainment area %s (%s, %s)", name, kind, new_id)
     cfg = (await hue._get(f"/clip/v2/resource/entertainment_configuration/{new_id}")).get("data", [{}])[0]  # noqa: SLF001
     return _area(cfg)
 
