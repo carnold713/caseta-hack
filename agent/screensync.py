@@ -248,6 +248,7 @@ class ScreenSync:
         self._dtls: Optional[huestream.DtlsPsk] = None
         self._snapshot: Dict[str, dict] = {}
         self._wts: Dict[tuple, List[float]] = {}
+        self._detail: Dict[str, dict] = {}       # each streamed light as the bridge describes it, for the log
         self._gains: Dict[str, float] = {}       # each light's brightness from the positions page (1 as the screen is)
         # a call or a text showing on a light that follows the screen (alerts.py): light -> f(now) -> linear rgb,
         # sent in place of the screen's colour until it is taken away
@@ -591,7 +592,7 @@ class ScreenSync:
                 "pc": {k: (pc or {}).get(k) for k in ("name", "v", "capture")},
                 "channels": len((self.area or {}).get("channels") or []), "matched": len(self._chan_light),
                 "points": len(self._points), "lights": {names[d]: v for d, v in per_light.items()},
-                "dtls": bool(self._dtls is not None and getattr(self._dtls, "connected", True))}
+                "dtls": bool(self._dtls is not None and getattr(self._dtls, "connected", True)), "about": self._detail}
         LOG.info("screen sync: %s", beat)
         self.send({"type": "screen_sync_beat", "beat": beat})
 
@@ -644,6 +645,18 @@ class ScreenSync:
             if d:
                 self._chan_light[ch] = d
         self.area = area
+        # what the bridge says of each light, for the log: a gradient lamp that streams as one colour shows why here
+        seg_of = {(e.get("owner") or {}).get("rid"): e.get("segments") or {} for e in ents}
+        self._detail = {}
+        for d in lights:
+            dev, lt = hue.devices[d], self._snapshot.get(d) or {}
+            seg, prod = seg_of.get(dev.get("hue_owner")) or {}, dev.get("product") or {}
+            self._detail[str(dev.get("name") or d)] = {
+                "product": prod.get("name"), "form": prod.get("form"), "model": prod.get("model"),
+                "gradient": (lt.get("gradient") or {}).get("points_capable"),
+                "segments": [seg.get("configurable"), seg.get("max_segments"), len(seg.get("segments") or [])],
+                "channels": sum(1 for x in self._chan_light.values() if x == d)}
+        LOG.info("screen sync: the lights as the bridge has them: %s", self._detail)
         self._started = True
         await hue._put(f"/clip/v2/resource/entertainment_configuration/{area['id']}", {"action": "start"})  # noqa: SLF001
         self.lights.extend(lights)
