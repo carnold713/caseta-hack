@@ -70,6 +70,7 @@ GRADIENT_SPAN = 2.0      # and a gradient light's sections, the screen's width u
 BEAT_S = 30.0            # how often a running sync says how it is going, for the hub's log
 UPRIGHT_SPAN = 1.2       # a standing one's (a gradient Signe), up its height: most of the screen's
 NANO_EVERY = 2           # a Nanoleaf takes every second beat, 25 a second: it glides between them by itself
+WANT_POINTS = 5          # the parts a gradient light should show the screen in, when the bridge allows that many
 REACH = 3.0              # how far outside the screen a light may stand, in screen units
 RETRY_S = 15.0           # after a start that failed, how long before trying again
 REPLY_EVERY_S = 0.5      # how often a frame is answered with the state
@@ -645,7 +646,9 @@ class ScreenSync:
             d = light_of_owner.get(owner_of.get(rid))
             if d:
                 self._chan_light[ch] = d
-        if any(int(hue.devices[d].get("segments") or 1) > 1 and list(self._chan_light.values()).count(d) <= 1 for d in lights):
+        # a gradient light with fewer channels than it could have (WANT_POINTS, or its own points if fewer)
+        if any(1 < int(hue.devices[d].get("segments") or 1) and list(self._chan_light.values()).count(d) < min(WANT_POINTS, int(hue.devices[d].get("segments") or 1))
+               for d in lights):
             area = await self._widen(room, lights, area)
             self._chan_light = await channel_lights(hue, area, lights)
         self.area = area
@@ -751,7 +754,8 @@ class ScreenSync:
         self._room_streaming = None
 
     async def _widen(self, room: str, lights: List[str], area: dict) -> dict:
-        """A gradient light the area streams as one colour (a Hue Play table lamp in a screen area has been seen to):
+        """A gradient light the area streams in fewer parts than WANT_POINTS (a Hue Play table lamp in a screen area has
+        been seen to get one):
         try the area's other types, and its gradient lights laid upright and across, each as a trial area read back
         and deleted, and keep whichever gives the lights the most channels, as this room's own area. Once a run for a
         set of lights; the area found then has its channels, so it is not tried again after a restart."""
